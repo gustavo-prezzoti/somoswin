@@ -458,42 +458,35 @@ public class MarketingService {
         if (conn.getAdAccountId() == null)
             return;
 
-        syncCampaigns(conn);
-        syncInsights(conn);
-        syncInstagramData(conn);
+        try {
+            syncCampaigns(conn);
+            Thread.sleep(2000); // Breathing room
+            syncInsights(conn);
+            Thread.sleep(2000); // Breathing room
+            syncInstagramData(conn);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            log.error("Error during syncAccountData for company {}", conn.getCompany().getId(), e);
+        }
     }
 
     private void syncCampaigns(MetaConnection conn) {
         try {
+            // Using field expansion to get campaigns, adsets, and ads in fewer calls to
+            // avoid rate limits
             String url = String.format(
-                    "%s/%s/campaigns?fields=id,name,status,objective,start_time,stop_time&access_token=%s",
+                    "%s/%s/campaigns?fields=id,name,status,objective,start_time,stop_time,adsets{id,name,status,daily_budget,lifetime_budget,ads{id,name,status}}&access_token=%s",
                     metaApiBaseUrl, conn.getAdAccountId(), conn.getAccessToken());
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+
+            ResponseEntity<String> response = getWithRetry(url);
             JsonNode data = objectMapper.readTree(response.getBody()).get("data");
 
             if (data != null && data.isArray()) {
-                for (JsonNode node : data) {
-                    String metaId = node.get("id").asText();
-                    com.backend.winai.entity.MetaCampaign campaign = metaCampaignRepository.findByMetaId(metaId)
-                            .orElse(new com.backend.winai.entity.MetaCampaign());
-
-                    campaign.setCompany(conn.getCompany());
-                    campaign.setMetaId(metaId);
-                    campaign.setName(node.get("name").asText());
-                    campaign.setStatus(node.get("status").asText());
-                    campaign.setObjective(node.get("objective").asText());
-
-                    java.time.format.DateTimeFormatter metaFormatter = java.time.format.DateTimeFormatter
-                            .ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
-                    if (node.has("start_time")) {
-                        campaign.setStartTime(ZonedDateTime.parse(node.get("start_time").asText(), metaFormatter));
-                    }
-                    if (node.has("stop_time") && !node.get("stop_time").isNull()) {
-                        campaign.setStopTime(ZonedDateTime.parse(node.get("stop_time").asText(), metaFormatter));
-                    }
-
-                    com.backend.winai.entity.MetaCampaign savedCampaign = metaCampaignRepository.save(campaign);
-                    syncAdSets(conn, savedCampaign);
+                for (JsonNode campaignNode : data) {
+                    processCampaignNode(conn, campaignNode);
+                    // Small breathing room between campaigns processing if there are many
+                    Thread.sleep(200);
                 }
             }
         } catch (Exception e) {
@@ -501,64 +494,87 @@ public class MarketingService {
         }
     }
 
-    private void syncAdSets(MetaConnection conn, com.backend.winai.entity.MetaCampaign campaign) {
+    private void processCampaignNode(MetaConnection conn, JsonNode node) {
         try {
-            String url = String.format(
-                    "%s/%s/adsets?fields=id,name,status,daily_budget,lifetime_budget&access_token=%s",
-                    metaApiBaseUrl, campaign.getMetaId(), conn.getAccessToken());
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
+            String metaId = node.get("id").asText();
+            com.backend.winai.entity.MetaCampaign campaign = metaCampaignRepository.findByMetaId(metaId)
+                    .orElse(new com.backend.winai.entity.MetaCampaign());
 
-            if (data != null && data.isArray()) {
-                for (JsonNode node : data) {
-                    String metaId = node.get("id").asText();
-                    com.backend.winai.entity.MetaAdSet adSet = metaAdSetRepository.findByMetaId(metaId)
-                            .orElse(new com.backend.winai.entity.MetaAdSet());
+            campaign.setCompany(conn.getCompany());
+            campaign.setMetaId(metaId);
+            campaign.setName(node.get("name").asText());
+            campaign.setStatus(node.get("status").asText());
+            campaign.setObjective(node.get("objective").asText());
 
-                    adSet.setCompany(conn.getCompany());
-                    adSet.setCampaign(campaign);
-                    adSet.setMetaId(metaId);
-                    adSet.setName(node.get("name").asText());
-                    adSet.setStatus(node.get("status").asText());
+            java.time.format.DateTimeFormatter metaFormatter = java.time.format.DateTimeFormatter
+                    .ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
+            if (node.has("start_time")) {
+                campaign.setStartTime(ZonedDateTime.parse(node.get("start_time").asText(), metaFormatter));
+            }
+            if (node.has("stop_time") && !node.get("stop_time").isNull()) {
+                campaign.setStopTime(ZonedDateTime.parse(node.get("stop_time").asText(), metaFormatter));
+            }
 
-                    if (node.has("daily_budget"))
-                        adSet.setDailyBudget(node.get("daily_budget").asLong());
-                    if (node.has("lifetime_budget"))
-                        adSet.setLifetimeBudget(node.get("lifetime_budget").asLong());
+            com.backend.winai.entity.MetaCampaign savedCampaign = metaCampaignRepository.save(campaign);
 
-                    com.backend.winai.entity.MetaAdSet savedAdSet = metaAdSetRepository.save(adSet);
-                    syncAds(conn, savedAdSet);
+            // Process nested AdSets
+            if (node.has("adsets") && node.get("adsets").has("data")) {
+                JsonNode adsetsData = node.get("adsets").get("data");
+                for (JsonNode adsetNode : adsetsData) {
+                    processAdSetNode(conn, savedCampaign, adsetNode);
                 }
             }
         } catch (Exception e) {
-            log.error("Error syncing adsets for campaign {}", campaign.getMetaId(), e);
+            log.error("Error processing campaign node {}", node.get("id").asText(), e);
         }
     }
 
-    private void syncAds(MetaConnection conn, com.backend.winai.entity.MetaAdSet adSet) {
+    private void processAdSetNode(MetaConnection conn, com.backend.winai.entity.MetaCampaign campaign, JsonNode node) {
         try {
-            String url = String.format("%s/%s/ads?fields=id,name,status&access_token=%s",
-                    metaApiBaseUrl, adSet.getMetaId(), conn.getAccessToken());
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
+            String metaId = node.get("id").asText();
+            com.backend.winai.entity.MetaAdSet adSet = metaAdSetRepository.findByMetaId(metaId)
+                    .orElse(new com.backend.winai.entity.MetaAdSet());
 
-            if (data != null && data.isArray()) {
-                for (JsonNode node : data) {
-                    String metaId = node.get("id").asText();
-                    com.backend.winai.entity.MetaAd ad = metaAdRepository.findByMetaId(metaId)
-                            .orElse(new com.backend.winai.entity.MetaAd());
+            adSet.setCompany(conn.getCompany());
+            adSet.setCampaign(campaign);
+            adSet.setMetaId(metaId);
+            adSet.setName(node.get("name").asText());
+            adSet.setStatus(node.get("status").asText());
 
-                    ad.setCompany(conn.getCompany());
-                    ad.setAdSet(adSet);
-                    ad.setMetaId(metaId);
-                    ad.setName(node.get("name").asText());
-                    ad.setStatus(node.get("status").asText());
+            if (node.has("daily_budget"))
+                adSet.setDailyBudget(node.get("daily_budget").asLong());
+            if (node.has("lifetime_budget"))
+                adSet.setLifetimeBudget(node.get("lifetime_budget").asLong());
 
-                    metaAdRepository.save(ad);
+            com.backend.winai.entity.MetaAdSet savedAdSet = metaAdSetRepository.save(adSet);
+
+            // Process nested Ads
+            if (node.has("ads") && node.get("ads").has("data")) {
+                JsonNode adsData = node.get("ads").get("data");
+                for (JsonNode adNode : adsData) {
+                    processAdNode(conn, savedAdSet, adNode);
                 }
             }
         } catch (Exception e) {
-            log.error("Error syncing ads for adset {}", adSet.getMetaId(), e);
+            log.error("Error processing adset node {}", node.get("id").asText(), e);
+        }
+    }
+
+    private void processAdNode(MetaConnection conn, com.backend.winai.entity.MetaAdSet adSet, JsonNode node) {
+        try {
+            String metaId = node.get("id").asText();
+            com.backend.winai.entity.MetaAd ad = metaAdRepository.findByMetaId(metaId)
+                    .orElse(new com.backend.winai.entity.MetaAd());
+
+            ad.setCompany(conn.getCompany());
+            ad.setAdSet(adSet);
+            ad.setMetaId(metaId);
+            ad.setName(node.get("name").asText());
+            ad.setStatus(node.get("status").asText());
+
+            metaAdRepository.save(ad);
+        } catch (Exception e) {
+            log.error("Error processing ad node {}", node.get("id").asText(), e);
         }
     }
 
@@ -567,7 +583,7 @@ public class MarketingService {
             String url = String.format(
                     "%s/%s/insights?fields=spend,impressions,clicks,reach,inline_link_clicks,actions&date_preset=last_7d&time_increment=1&access_token=%s",
                     metaApiBaseUrl, conn.getAdAccountId(), conn.getAccessToken());
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            ResponseEntity<String> response = getWithRetry(url);
             JsonNode data = objectMapper.readTree(response.getBody()).get("data");
 
             if (data != null && data.isArray()) {
@@ -612,7 +628,7 @@ public class MarketingService {
         try {
             String igAccountUrl = String.format("%s/%s?fields=instagram_business_account&access_token=%s",
                     metaApiBaseUrl, conn.getPageId(), conn.getAccessToken());
-            ResponseEntity<String> igAccountRes = restTemplate.getForEntity(igAccountUrl, String.class);
+            ResponseEntity<String> igAccountRes = getWithRetry(igAccountUrl);
             JsonNode igNode = objectMapper.readTree(igAccountRes.getBody()).get("instagram_business_account");
             if (igNode == null)
                 return;
@@ -622,14 +638,14 @@ public class MarketingService {
             String reachUrl = String.format(
                     "%s/%s/insights?metric=reach&period=day&access_token=%s",
                     metaApiBaseUrl, igId, conn.getAccessToken());
-            ResponseEntity<String> reachRes = restTemplate.getForEntity(reachUrl, String.class);
+            ResponseEntity<String> reachRes = getWithRetry(reachUrl);
             JsonNode reachData = objectMapper.readTree(reachRes.getBody()).get("data");
 
             // Fetch Profile Views
             String profileViewsUrl = String.format(
                     "%s/%s/insights?metric=profile_views&period=day&metric_type=total_value&access_token=%s",
                     metaApiBaseUrl, igId, conn.getAccessToken());
-            ResponseEntity<String> profileViewsRes = restTemplate.getForEntity(profileViewsUrl, String.class);
+            ResponseEntity<String> profileViewsRes = getWithRetry(profileViewsUrl);
             JsonNode profileViewsData = objectMapper.readTree(profileViewsRes.getBody()).get("data");
 
             Map<LocalDate, com.backend.winai.entity.InstagramMetric> metricMap = new HashMap<>();
@@ -641,7 +657,7 @@ public class MarketingService {
 
             String baseFieldsUrl = String.format("%s/%s?fields=followers_count&access_token=%s", metaApiBaseUrl, igId,
                     conn.getAccessToken());
-            ResponseEntity<String> baseInfoRes = restTemplate.getForEntity(baseFieldsUrl, String.class);
+            ResponseEntity<String> baseInfoRes = getWithRetry(baseFieldsUrl);
             JsonNode baseInfo = objectMapper.readTree(baseInfoRes.getBody());
             long followers = baseInfo.has("followers_count") ? baseInfo.get("followers_count").asLong() : 0;
 
@@ -746,5 +762,31 @@ public class MarketingService {
                 .conversations(createDetail("0", "0%", true))
                 .performanceHistory(new ArrayList<>())
                 .build();
+    }
+
+    private ResponseEntity<String> getWithRetry(String url) {
+        int maxAttempts = 3;
+        for (int i = 0; i < maxAttempts; i++) {
+            try {
+                return restTemplate.getForEntity(url, String.class);
+            } catch (org.springframework.web.client.HttpClientErrorException e) {
+                // Code 17 is "User request limit reached"
+                boolean isRateLimit = e.getStatusCode().value() == 429 ||
+                        (e.getStatusCode().value() == 400 && e.getResponseBodyAsString().contains("\"code\": 17"));
+
+                if (isRateLimit && i < maxAttempts - 1) {
+                    log.warn("Meta API rate limit reached. Waiting 5s before retry... (Attempt {})", i + 1);
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw e;
+                    }
+                    continue;
+                }
+                throw e;
+            }
+        }
+        return null; // Should not be reached
     }
 }
