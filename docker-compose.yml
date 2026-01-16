@@ -1,0 +1,142 @@
+# =====================================
+# Win AI - Docker Compose
+# Full stack: Backend + Frontend
+# =====================================
+
+services:
+  # =====================================
+  # Backend - Spring Boot
+  # =====================================
+  # =====================================
+  # Redis - Cache & Message Broker
+  # =====================================
+  redis:
+    image: redis:alpine
+    container_name: winai-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - winai-network
+    restart: unless-stopped
+
+  # =====================================
+  # Backend - Spring Boot
+  # =====================================
+  backend:
+    build:
+      context: ./winai-backend
+      dockerfile: Dockerfile
+    container_name: winai-backend
+    ports:
+      - "8080:8080"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      # Spring Profile for Docker
+      - SPRING_PROFILES_ACTIVE=docker
+
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:6543/postgres?currentSchema=winai&binaryTransfer=false&prepareThreshold=0
+      - SPRING_DATASOURCE_USERNAME=postgres.wtfheobvaamelqifttjj
+      - SPRING_DATASOURCE_PASSWORD=JYAvOfrciMaY4m0j
+      - DATABASE_USERNAME=postgres.wtfheobvaamelqifttjj
+      - DATABASE_PASSWORD=JYAvOfrciMaY4m0j
+      # JPA/Hibernate
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA=winai
+      # Flyway
+      - SPRING_FLYWAY_SCHEMAS=winai
+      - SPRING_FLYWAY_DEFAULT_SCHEMA=winai
+      # JWT
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
+
+      # Supabase
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+
+      # Google OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+
+      # App URLs
+      - APP_FRONTEND_URL=${FRONTEND_URL}
+
+      # UaZap (WhatsApp)
+      - UAZAP_DEFAULT_BASE_URL=${UAZAP_BASE_URL}
+      - UAZAP_DEFAULT_TOKEN=${UAZAP_TOKEN}
+      - UAZAP_DEFAULT_INSTANCE=${UAZAP_INSTANCE}
+      - UAZAP_ADMIN_TOKEN=${UAZAP_ADMIN_TOKEN}
+
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    networks:
+      - winai-network
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # =====================================
+  # Python Backend - Clinicorp Sync
+  # =====================================
+  python-backend:
+    build:
+      context: ./clinicorp
+      dockerfile: Dockerfile
+    container_name: winai-python-backend
+    ports:
+      - "5000:5000"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - FLASK_ENV=production
+      - CLINICORP_USERNAME=${CLINICORP_USERNAME}
+      - CLINICORP_PASSWORD=${CLINICORP_PASSWORD}
+      - CLINICORP_CLINIC_ID=${CLINICORP_CLINIC_ID}
+      - DATABASE_URL=${DATABASE_URL}
+      - SCHEDULER_ENABLED=${SCHEDULER_ENABLED}
+      - SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS}
+    networks:
+      - winai-network
+    restart: unless-stopped
+
+  # =====================================
+  # Frontend - Vite + React + Nginx
+  # =====================================
+  frontend:
+    build:
+      context: ./winai
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL}
+    container_name: winai-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - winai-network
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+# =====================================
+# Networks
+# =====================================
+networks:
+  winai-network:
+    driver: bridge

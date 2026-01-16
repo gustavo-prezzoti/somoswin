@@ -1,0 +1,375 @@
+package com.backend.winai.service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.backend.winai.entity.KnowledgeBase;
+import com.backend.winai.entity.KnowledgeBaseConnection;
+import com.backend.winai.entity.UserWhatsAppConnection;
+import com.backend.winai.entity.WhatsAppConversation;
+import com.backend.winai.entity.WhatsAppMessage;
+import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
+import com.backend.winai.repository.UserWhatsAppConnectionRepository;
+import com.backend.winai.repository.WhatsAppConversationRepository;
+import com.backend.winai.repository.WhatsAppMessageRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class AIAgentService {
+
+    private final OpenAiService openAiService;
+    private final KnowledgeBaseConnectionRepository connectionRepository;
+    private final UserWhatsAppConnectionRepository whatsAppConnectionRepository;
+    private final WhatsAppMessageRepository messageRepository;
+    private final UazapService uazapService;
+    private final WhatsAppConversationRepository conversationRepository;
+    private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+
+    @Transactional
+    public String processMessageWithAI(WhatsAppConversation conversation, String userMessage, String leadName) {
+        try {
+            // Recarregar a conversation com a company para evitar
+            // LazyInitializationException
+            WhatsAppConversation conv = conversationRepository.findByIdWithCompany(conversation.getId())
+                    .orElse(conversation);
+
+            if (!openAiService.isChatEnabled()) {
+                log.warn("OpenAI service is not enabled, skipping AI processing");
+                return null;
+            }
+
+            KnowledgeBase knowledgeBase = findKnowledgeBaseForConversation(conv);
+
+            if (knowledgeBase == null) {
+                log.debug("No knowledge base found for conversation: {}", conv.getId());
+                return null;
+            }
+
+            if (!Boolean.TRUE.equals(knowledgeBase.getIsActive())) {
+                log.debug("Knowledge base is not active: {}", knowledgeBase.getId());
+                return null;
+            }
+
+            log.info("Processing message with AI for conversation: {}, using knowledge base: {}",
+                    conv.getId(), knowledgeBase.getName());
+
+            List<String> recentMessages = getRecentConversationHistory(conv.getId(), 10);
+
+            // BRANCHING: Check for Essencialis Mode
+            if (conv.getCompany() != null && Boolean.TRUE.equals(conv.getCompany().getEssencialis())) {
+                log.info("Activate Essencialis Clinicorp Mode for conversation: {}", conv.getId());
+                String contextInfo = "Data atual: " + java.time.LocalDateTime.now() +
+                        "\nNome do Paciente/Lead: " + (leadName != null ? leadName : "Não identificado");
+
+                String aiResponse = openAiService.generateClinicorpResponse(userMessage, recentMessages, contextInfo);
+
+                if (aiResponse != null) {
+                    return aiResponse;
+                }
+            }
+
+            // Standard Flow
+            // Enhance Prompt with Lead Name if available
+            String enhancedAgentPrompt = knowledgeBase.getAgentPrompt();
+            if (leadName != null && !leadName.isEmpty()) {
+                enhancedAgentPrompt = (enhancedAgentPrompt != null ? enhancedAgentPrompt : "")
+                        + "\n[CONTEXTO DO USUÁRIO]\nNome do usuário: " + leadName;
+            }
+
+            String aiResponse = openAiService.generateResponseWithContext(
+                    enhancedAgentPrompt,
+                    knowledgeBase.getContent(),
+                    userMessage,
+                    recentMessages);
+
+            if (aiResponse != null && !aiResponse.isEmpty()) {
+                log.info("AI generated response for conversation {}: {} chars",
+                        conv.getId(), aiResponse.length());
+                return aiResponse;
+            }
+
+            log.warn("AI returned empty response for conversation: {}", conv.getId());
+            return null;
+
+        } catch (Exception e) {
+            log.error("Error processing message with AI for conversation {}: {}",
+                    conversation.getId(), e.getMessage(), e);
+            return null;
+        }
+    }
+
+    public boolean sendAIResponse(WhatsAppConversation conversation, String aiResponse) {
+        try {
+            if (aiResponse == null || aiResponse.isEmpty()) {
+                return false;
+            }
+
+            String phoneNumber = conversation.getPhoneNumber();
+            String baseUrl = conversation.getUazapBaseUrl();
+            String token = conversation.getUazapToken();
+
+            if (baseUrl == null || token == null) {
+                UserWhatsAppConnection connection = findConnectionForConversation(conversation);
+                if (connection != null) {
+                    baseUrl = connection.getInstanceBaseUrl();
+                    token = connection.getInstanceToken();
+                }
+            }
+
+            if (baseUrl == null || token == null || phoneNumber == null) {
+                log.warn("Missing credentials to send AI response for conversation: {}", conversation.getId());
+                return false;
+            }
+
+            uazapService.sendTextMessage(phoneNumber, aiResponse, baseUrl, token);
+            log.info("AI response sent successfully to {} for conversation {}", phoneNumber, conversation.getId());
+            return true;
+
+        } catch (Exception e) {
+            log.error("Failed to send AI response for conversation {}: {}",
+                    conversation.getId(), e.getMessage(), e);
+            return false;
+        }
+    }
+
+    @Transactional
+    public String processAndRespond(WhatsAppConversation conversation, String userMessage, String leadName) {
+        log.info("Starting processAndRespond for conversation: {}, user message: {} chars",
+                conversation.getId(), userMessage != null ? userMessage.length() : 0);
+
+        String aiResponse = processMessageWithAI(conversation, userMessage, leadName);
+
+        if (aiResponse != null && !aiResponse.isEmpty()) {
+            log.info("AI generated response: {} chars", aiResponse.length());
+            List<String> chunks = splitMessage(aiResponse);
+            log.info("Split response into {} chunks", chunks.size());
+
+            for (String chunk : chunks) {
+                log.debug("Processing chunk: {} chars", chunk.length());
+                // Enviar msg via Uazap
+                boolean sent = sendAIResponse(conversation, chunk);
+
+                if (sent) {
+                    log.debug("Chunk sent via Uazap, now persisting and notifying");
+                    // Persistir e Notificar cada fragmento como uma mensagem separada
+                    persistAndNotify(conversation, chunk);
+
+                    // Pequeno delay entre mensagens para parecer mais natural (humano digitando)
+                    try {
+                        Thread.sleep(1500); // 1.5s entre mensagens
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                } else {
+                    log.warn("Failed to send chunk via Uazap");
+                }
+            }
+            return aiResponse;
+        } else {
+            log.warn("AI response is null or empty");
+        }
+
+        return null;
+    }
+
+    /**
+     * Divide a resposta da IA em partes lógicas para envio separado no WhatsApp.
+     * Prioriza parágrafos (\n\n) e depois quebras de linha (\n).
+     */
+    private List<String> splitMessage(String content) {
+        List<String> chunks = new ArrayList<>();
+        if (content == null || content.isEmpty())
+            return chunks;
+
+        // Divide por parágrafos duplos primeiro
+        String[] paragraphs = content.split("\\n\\n+");
+
+        for (String p : paragraphs) {
+            String trimmed = p.trim();
+            if (trimmed.isEmpty())
+                continue;
+
+            // Se o parágrafo ainda for muito longo (> 500 chars), divide por quebra de
+            // linha simples
+            if (trimmed.length() > 500) {
+                String[] lines = trimmed.split("\\n+");
+                for (String line : lines) {
+                    String lineTrimmed = line.trim();
+                    if (!lineTrimmed.isEmpty())
+                        chunks.add(lineTrimmed);
+                }
+            } else {
+                chunks.add(trimmed);
+            }
+        }
+
+        return chunks;
+    }
+
+    private void persistAndNotify(WhatsAppConversation conversation, String aiResponse) {
+        try {
+            if (aiResponse == null || aiResponse.trim().isEmpty()) {
+                log.warn("Received empty AI response for conversation: {}", conversation.getId());
+                return;
+            }
+
+            // Salvar a resposta da IA como mensagem
+            WhatsAppMessage aiMessage = WhatsAppMessage.builder()
+                    .conversation(conversation)
+                    .lead(conversation.getLead())
+                    .messageId(UUID.randomUUID().toString())
+                    .content(aiResponse)
+                    .fromMe(true)
+                    .messageType("text")
+                    .messageTimestamp(System.currentTimeMillis())
+                    .status("sent")
+                    .isGroup(false)
+                    .build();
+
+            log.debug("Before saving - Message content length: {}, content preview: {}",
+                    aiResponse.length(), aiResponse.substring(0, Math.min(100, aiResponse.length())));
+
+            aiMessage = messageRepository.save(aiMessage);
+
+            log.info("AI message persisted successfully with ID: {}, content: {} chars",
+                    aiMessage.getId(), aiMessage.getContent() != null ? aiMessage.getContent().length() : 0);
+
+            // Atualizar conversa
+            conversation.setLastMessageText(
+                    aiResponse.length() > 250 ? aiResponse.substring(0, 247) + "..." : aiResponse);
+            conversation.setLastMessageTimestamp(aiMessage.getMessageTimestamp());
+            conversationRepository.save(conversation);
+
+            log.debug("Conversation updated with last message timestamp: {}", conversation.getLastMessageTimestamp());
+
+            // Enviar atualização WebSocket
+            sendWebSocketUpdate(conversation.getCompany().getId(), aiMessage, conversation);
+
+        } catch (Exception e) {
+            log.error("Erro ao persistir/notificar resposta da IA: {}", e.getMessage(), e);
+        }
+    }
+
+    private void sendWebSocketUpdate(UUID companyId, WhatsAppMessage message, WhatsAppConversation conversation) {
+        try {
+            log.debug("Sending WebSocket update - Message ID: {}, Content length: {}, From me: {}",
+                    message.getId(), 
+                    message.getContent() != null ? message.getContent().length() : 0,
+                    message.getFromMe());
+
+            java.util.Map<String, Object> update = new java.util.HashMap<>();
+            update.put("type", "NEW_MESSAGE");
+            update.put("message", message);
+            update.put("conversationId", conversation.getId());
+
+            log.debug("Message object before sending - ID: {}, Content: {}",
+                    message.getId(), message.getContent());
+
+            messagingTemplate.convertAndSend((String) ("/topic/company/" + companyId), (Object) update);
+
+            java.util.Map<String, Object> chatUpdate = new java.util.HashMap<>();
+            chatUpdate.put("type", "UPDATE_CHAT");
+            chatUpdate.put("conversation", conversation);
+            messagingTemplate.convertAndSend((String) ("/topic/company/" + companyId), (Object) chatUpdate);
+            
+            log.info("WebSocket updates sent successfully for company: {}", companyId);
+        } catch (Exception e) {
+            log.error("Erro ao enviar update WebSocket: {}", e.getMessage(), e);
+        }
+    }
+
+    private KnowledgeBase findKnowledgeBaseForConversation(WhatsAppConversation conversation) {
+        try {
+            UserWhatsAppConnection whatsAppConnection = findConnectionForConversation(conversation);
+
+            if (whatsAppConnection == null) {
+                log.debug("No WhatsApp connection found for conversation: {}", conversation.getId());
+                return null;
+            }
+
+            Optional<KnowledgeBaseConnection> kbConnection = connectionRepository.findByConnection(whatsAppConnection);
+
+            if (kbConnection.isPresent()) {
+                return kbConnection.get().getKnowledgeBase();
+            }
+
+            log.debug("No knowledge base linked to connection: {}", whatsAppConnection.getId());
+            return null;
+
+        } catch (Exception e) {
+            log.error("Error finding knowledge base for conversation: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private UserWhatsAppConnection findConnectionForConversation(WhatsAppConversation conversation) {
+        try {
+            String instanceName = conversation.getUazapInstance();
+
+            if (instanceName != null && !instanceName.isEmpty()) {
+                return whatsAppConnectionRepository.findByInstanceName(instanceName)
+                        .stream()
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            String baseUrl = conversation.getUazapBaseUrl();
+            String token = conversation.getUazapToken();
+
+            if (baseUrl != null && token != null) {
+                return whatsAppConnectionRepository.findByInstanceBaseUrlAndInstanceToken(baseUrl, token)
+                        .orElse(null);
+            }
+
+            return null;
+
+        } catch (Exception e) {
+            log.error("Error finding connection for conversation: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private List<String> getRecentConversationHistory(UUID conversationId, int limit) {
+        try {
+            List<WhatsAppMessage> recentMessages = messageRepository
+                    .findByConversationIdOrderByMessageTimestampDesc(conversationId)
+                    .stream()
+                    .limit(limit)
+                    .collect(Collectors.toList());
+
+            java.util.Collections.reverse(recentMessages);
+
+            List<String> history = new ArrayList<>();
+            for (WhatsAppMessage msg : recentMessages) {
+                if (msg.getContent() != null && !msg.getContent().isEmpty()) {
+                    history.add(msg.getContent());
+                }
+            }
+
+            return history;
+
+        } catch (Exception e) {
+            log.error("Error getting conversation history: {}", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    public boolean isAIEnabledForConversation(WhatsAppConversation conversation) {
+        if (!openAiService.isChatEnabled()) {
+            return false;
+        }
+
+        KnowledgeBase kb = findKnowledgeBaseForConversation(conversation);
+        return kb != null && Boolean.TRUE.equals(kb.getIsActive());
+    }
+}

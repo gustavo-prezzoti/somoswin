@@ -1,0 +1,141 @@
+/* Admin Sidebar - Minimalist White/Gray Design */
+.admin-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 260px;
+    height: 100vh;
+    background: #ffffff;
+    border-right: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+}
+
+.admin-sidebar-header {
+    padding: 24px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.admin-logo-icon {
+    width: 36px;
+    height: 36px;
+    background: #111827;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.admin-logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-logo-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.025em;
+}
+
+.admin-logo-subtitle {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.admin-nav {
+    flex: 1;
+    padding: 16px 12px;
+    overflow-y: auto;
+}
+
+.admin-nav-section {
+    margin-bottom: 24px;
+}
+
+.admin-nav-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0 12px;
+    margin-bottom: 8px;
+}
+
+.admin-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    color: #4b5563;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    margin-bottom: 2px;
+}
+
+.admin-nav-item:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.admin-nav-item.active {
+    background: #111827;
+    color: #ffffff;
+}
+
+.admin-nav-item.active .admin-nav-icon {
+    color: #ffffff;
+}
+
+.admin-nav-icon {
+    width: 20px;
+    height: 20px;
+    color: #6b7280;
+    flex-shrink: 0;
+}
+
+.admin-nav-item:hover .admin-nav-icon {
+    color: #374151;
+}
+
+.admin-nav-item.active .admin-nav-icon {
+    color: #ffffff;
+}
+
+.admin-sidebar-footer {
+    padding: 16px 12px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.admin-sidebar-footer .admin-nav-item {
+    color: #6b7280;
+}
+
+.admin-sidebar-footer .admin-nav-item:hover {
+    color: #111827;
+    background: #f3f4f6;
+}
+
+@media (max-width: 768px) {
+    .admin-sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+
+    .admin-sidebar.open {
+        transform: translateX(0);
+    }
+}

@@ -1,0 +1,35 @@
+# Dependências
+node_modules/
+**/node_modules/
+target/
+**/target/
+
+# Build
+dist/
+**/dist/
+build/
+**/build/
+.next/
+**/ .next/
+
+# Logs
+*.log
+logs/
+**/logs/
+logs_utf8.txt
+
+# IDEs e Editores
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Ignorar configurações e segredos
+.env
+.env.local
+.env.*
+winai-backend/src/main/resources/application.properties

@@ -1,0 +1,97 @@
+# =====================================
+# Win AI - Docker Compose DEV
+# Hot reload - sem rebuild do Maven
+# =====================================
+
+services:
+  # =====================================
+  # Backend - Spring Boot DEV Mode
+  # =====================================
+  backend:
+    image: maven:3.9-eclipse-temurin-17-alpine
+    container_name: winai-backend-dev
+    working_dir: /app
+    ports:
+      - "8080:8080"
+    volumes:
+      # Monta o código fonte (hot reload)
+      - ./winai-backend:/app
+      # Cache do Maven persistente
+      - maven-cache:/root/.m2
+    environment:
+      # Spring Profile for Docker
+      - SPRING_PROFILES_ACTIVE=docker
+
+      # Database (Supabase)
+      - SPRING_DATASOURCE_URL=${DATABASE_URL}
+      - SPRING_DATASOURCE_USERNAME=${DATABASE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${DATABASE_PASSWORD}
+
+      # JPA/Hibernate
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA=winai
+
+      # Flyway
+      - SPRING_FLYWAY_SCHEMAS=winai
+      - SPRING_FLYWAY_DEFAULT_SCHEMA=winai
+
+      # JWT
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION}
+
+      # Supabase
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+
+      # Google OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+
+      # App URLs
+      - APP_FRONTEND_URL=${FRONTEND_URL}
+
+      # UaZap
+      - UAZAP_BASE_URL=${UAZAP_BASE_URL}
+      - UAZAP_TOKEN=${UAZAP_TOKEN}
+      - UAZAP_INSTANCE=${UAZAP_INSTANCE}
+      - UAZAP_ADMIN_TOKEN=${UAZAP_ADMIN_TOKEN}
+
+      # DevTools
+      - SPRING_DEVTOOLS_RESTART_ENABLED=true
+    command: mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Djava.net.preferIPv4Stack=true"
+    networks:
+      - winai-network
+    restart: unless-stopped
+
+  # =====================================
+  # Frontend - Vite DEV Mode
+  # =====================================
+  frontend:
+    image: node:20-alpine
+    container_name: winai-frontend-dev
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./winai:/app
+      - /app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    networks:
+      - winai-network
+    restart: unless-stopped
+
+# =====================================
+# Volumes
+# =====================================
+volumes:
+  maven-cache:
+
+    # =====================================
+    # Networks
+    # =====================================
+networks:
+  winai-network:
+    driver: bridge

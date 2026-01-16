@@ -1,0 +1,8 @@
+{
+  "name": "WIN.AI - Alta Performance & Conversão",
+  "description": "Plataforma executiva de alta performance focada em geração de demanda, tráfego pago e conversão via agentes de IA.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
