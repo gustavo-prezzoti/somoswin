@@ -49,6 +49,12 @@ public class MarketingService {
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
+    @Value("${meta.sync.enabled:true}")
+    private boolean metaSyncEnabled;
+
+    @Value("${meta.sync.cron:0 */30 * * * *}")
+    private String syncCron;
+
     private final MetaConnectionRepository metaConnectionRepository;
     private final MetaCampaignRepository metaCampaignRepository;
     private final MetaAdSetRepository metaAdSetRepository;
@@ -260,6 +266,20 @@ public class MarketingService {
 
             metaConnectionRepository.save(connection);
 
+            // Trigger initial sync in background
+            try {
+                final MetaConnection finalConn = connection;
+                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    try {
+                        syncAccountData(finalConn);
+                    } catch (Exception e) {
+                        log.error("Initial Meta sync failed for company {}", companyId, e);
+                    }
+                });
+            } catch (Exception e) {
+                log.warn("Failed to schedule initial Meta sync", e);
+            }
+
             return frontendUrl + "/#/configuracoes?meta=connected";
         } catch (Exception e) {
             log.error("Error in meta callback", e);
@@ -382,8 +402,12 @@ public class MarketingService {
     }
 
     // Cron job to sync everything automatically every 6 hours
-    @org.springframework.scheduling.annotation.Scheduled(cron = "0 0 */6 * * *")
+    // Cron job to sync everything automatically every 30 minutes (configurable)
+    @org.springframework.scheduling.annotation.Scheduled(cron = "${meta.sync.cron:0 */30 * * * *}")
     public void syncAllCompaniesMetaData() {
+        if (!metaSyncEnabled) {
+            return;
+        }
         log.info("Starting automatic Meta synchronization for all companies...");
         List<MetaConnection> connections = metaConnectionRepository.findAll();
         for (MetaConnection conn : connections) {

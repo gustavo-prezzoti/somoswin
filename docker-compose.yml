@@ -74,6 +74,9 @@ services:
       # Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+
+      # Meta Sync
+      - META_SYNC_ENABLED=false
     depends_on:
       - redis
     networks:
@@ -84,6 +87,35 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    restart: unless-stopped
+
+  # =====================================
+  # Meta Sync Worker - Background Tasks
+  # =====================================
+  meta-sync:
+    build:
+      context: ./winai-backend
+      dockerfile: Dockerfile
+    container_name: winai-meta-sync
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:6543/postgres?currentSchema=winai&binaryTransfer=false&prepareThreshold=0
+      - SPRING_DATASOURCE_USERNAME=postgres.wtfheobvaamelqifttjj
+      - SPRING_DATASOURCE_PASSWORD=JYAvOfrciMaY4m0j
+      - JWT_SECRET=${JWT_SECRET}
+      - META_CLIENT_ID=${META_CLIENT_ID}
+      - META_CLIENT_SECRET=${META_CLIENT_SECRET}
+      - META_SYNC_ENABLED=true
+      - META_SYNC_CRON=0 */30 * * * *
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    networks:
+      - winai-network
     restart: unless-stopped
 
   # =====================================
