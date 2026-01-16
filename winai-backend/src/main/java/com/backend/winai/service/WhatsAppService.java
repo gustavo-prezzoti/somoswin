@@ -677,9 +677,12 @@ public class WhatsAppService {
      */
     @Transactional
     public Map<String, Object> connectSDRAgent(User user) {
-        Company company = user.getCompany();
-        if (company == null)
-            throw new RuntimeException("Empresa não encontrada");
+        if (user.getCompany() == null)
+            throw new RuntimeException("Empresa não encontrada para o usuário");
+
+        // Recarrega a empresa do banco para evitar LazyInitializationException
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada no banco"));
 
         // Buscar a instância configurada no banco (pela primeira conversa associada ou
         // default)
@@ -734,9 +737,12 @@ public class WhatsAppService {
      */
     @Transactional
     public void disconnectSDRAgent(User user) {
-        Company company = user.getCompany();
-        if (company == null)
-            throw new RuntimeException("Empresa não encontrada");
+        if (user.getCompany() == null)
+            throw new RuntimeException("Empresa não encontrada para o usuário");
+
+        // Recarrega a empresa do banco para evitar LazyInitializationException
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada no banco"));
 
         String instanceName = conversationRepository.findByCompanyOrderByLastMessageTimestampDesc(company)
                 .stream()
