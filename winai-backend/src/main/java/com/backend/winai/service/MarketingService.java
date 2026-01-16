@@ -460,9 +460,9 @@ public class MarketingService {
 
         try {
             syncCampaigns(conn);
-            Thread.sleep(2000); // Breathing room
+            Thread.sleep(30000); // 30s Breathing room
             syncInsights(conn);
-            Thread.sleep(2000); // Breathing room
+            Thread.sleep(30000); // 30s Breathing room
             syncInstagramData(conn);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -503,8 +503,9 @@ public class MarketingService {
 
                         com.backend.winai.entity.MetaCampaign savedCampaign = metaCampaignRepository.save(campaign);
 
-                        // Pacing: Wait 500ms before fetching adsets for this campaign
-                        Thread.sleep(500);
+                        // Pacing: Wait 30 seconds before fetching adsets for this campaign (Requested
+                        // by user)
+                        Thread.sleep(30000);
                         syncAdSets(conn, savedCampaign);
                     } catch (Exception e) {
                         log.error("Error processing campaign {}", node.get("id").asText(), e);
@@ -544,8 +545,9 @@ public class MarketingService {
 
                         com.backend.winai.entity.MetaAdSet savedAdSet = metaAdSetRepository.save(adSet);
 
-                        // Pacing: Wait 500ms before fetching ads for this adset
-                        Thread.sleep(500);
+                        // Pacing: Wait 30 seconds before fetching ads for this adset (Requested by
+                        // user)
+                        Thread.sleep(30000);
                         syncAds(conn, savedAdSet);
                     } catch (Exception e) {
                         log.error("Error processing adset {}", node.get("id").asText(), e);
@@ -788,9 +790,9 @@ public class MarketingService {
                         (e.getStatusCode().value() == 400 && e.getResponseBodyAsString().contains("\"code\": 17"));
 
                 if (isRateLimit && i < maxAttempts - 1) {
-                    log.warn("Meta API rate limit reached. Waiting 5s before retry... (Attempt {})", i + 1);
+                    log.warn("Meta API rate limit reached. Waiting 60s before retry... (Attempt {})", i + 1);
                     try {
-                        Thread.sleep(5000);
+                        Thread.sleep(60000);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         throw e;
