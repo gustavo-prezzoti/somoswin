@@ -18,6 +18,8 @@ import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
+import com.backend.winai.dto.response.WhatsAppConversationResponse;
+import com.backend.winai.dto.response.WhatsAppMessageResponse;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -263,29 +265,73 @@ public class AIAgentService {
     private void sendWebSocketUpdate(UUID companyId, WhatsAppMessage message, WhatsAppConversation conversation) {
         try {
             log.debug("Sending WebSocket update - Message ID: {}, Content length: {}, From me: {}",
-                    message.getId(), 
+                    message.getId(),
                     message.getContent() != null ? message.getContent().length() : 0,
                     message.getFromMe());
 
+            // Converter para DTOs para evitar LazyInitializationException durante
+            // serialização JSON
+            WhatsAppMessageResponse messageDto = toMessageResponse(message);
+            WhatsAppConversationResponse conversationDto = toConversationResponse(conversation);
+
             java.util.Map<String, Object> update = new java.util.HashMap<>();
             update.put("type", "NEW_MESSAGE");
-            update.put("message", message);
+            update.put("message", messageDto);
             update.put("conversationId", conversation.getId());
 
-            log.debug("Message object before sending - ID: {}, Content: {}",
-                    message.getId(), message.getContent());
+            log.debug("Message DTO before sending - ID: {}, Content: {}",
+                    messageDto.getId(), messageDto.getContent());
 
             messagingTemplate.convertAndSend((String) ("/topic/company/" + companyId), (Object) update);
 
             java.util.Map<String, Object> chatUpdate = new java.util.HashMap<>();
             chatUpdate.put("type", "UPDATE_CHAT");
-            chatUpdate.put("conversation", conversation);
+            chatUpdate.put("conversation", conversationDto);
             messagingTemplate.convertAndSend((String) ("/topic/company/" + companyId), (Object) chatUpdate);
-            
+
             log.info("WebSocket updates sent successfully for company: {}", companyId);
         } catch (Exception e) {
             log.error("Erro ao enviar update WebSocket: {}", e.getMessage(), e);
         }
+    }
+
+    private WhatsAppMessageResponse toMessageResponse(WhatsAppMessage message) {
+        return WhatsAppMessageResponse.builder()
+                .id(message.getId())
+                .conversationId(message.getConversation().getId())
+                .leadId(message.getLead() != null ? message.getLead().getId() : null)
+                .messageId(message.getMessageId())
+                .content(message.getContent())
+                .fromMe(message.getFromMe())
+                .messageType(message.getMessageType())
+                .mediaType(message.getMediaType())
+                .mediaUrl(message.getMediaUrl())
+                .mediaDuration(message.getMediaDuration())
+                .transcription(message.getTranscription())
+                .status(message.getStatus())
+                .messageTimestamp(message.getMessageTimestamp())
+                .createdAt(message.getCreatedAt())
+                .build();
+    }
+
+    private WhatsAppConversationResponse toConversationResponse(WhatsAppConversation conversation) {
+        return WhatsAppConversationResponse.builder()
+                .id(conversation.getId())
+                .companyId(conversation.getCompany() != null ? conversation.getCompany().getId() : null)
+                .leadId(conversation.getLead() != null ? conversation.getLead().getId() : null)
+                .phoneNumber(conversation.getPhoneNumber())
+                .waChatId(conversation.getWaChatId())
+                .contactName(conversation.getContactName())
+                .profilePictureUrl(conversation.getProfilePictureUrl())
+                .unreadCount(conversation.getUnreadCount())
+                .lastMessageText(conversation.getLastMessageText())
+                .lastMessageTimestamp(conversation.getLastMessageTimestamp())
+                .isArchived(conversation.getIsArchived())
+                .isBlocked(conversation.getIsBlocked())
+                .uazapInstance(conversation.getUazapInstance())
+                .createdAt(conversation.getCreatedAt())
+                .updatedAt(conversation.getUpdatedAt())
+                .build();
     }
 
     private KnowledgeBase findKnowledgeBaseForConversation(WhatsAppConversation conversation) {
