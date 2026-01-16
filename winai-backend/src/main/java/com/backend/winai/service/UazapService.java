@@ -781,23 +781,20 @@ public class UazapService {
             return null;
         }
 
-        // Adiciona o nome da instância na URL (Padrão Evolution API)
-        String url = baseUrl.replaceAll("/$", "") + "/chat/fetchProfilePictureUrl/" + instanceName;
+        // Adiciona o número como parâmetro na URL (Padrão Evolution API para GET)
+        String url = baseUrl.replaceAll("/$", "") + "/chat/fetchProfilePictureUrl/" + instanceName + "?number="
+                + phoneNumber;
 
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("apikey", adminToken);
         headers.set("token", token);
 
-        Map<String, String> body = new HashMap<>();
-        body.put("number", phoneNumber);
-
-        HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
 
         try {
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
-                    HttpMethod.POST,
+                    HttpMethod.GET,
                     requestEntity,
                     new ParameterizedTypeReference<Map<String, Object>>() {
                     });
