@@ -83,7 +83,9 @@ public class SecurityConfig {
                                 "http://localhost:*",
                                 "http://127.0.0.1:*",
                                 "https://winai.com.br",
-                                "https://*.winai.com.br"));
+                                "https://*.winai.com.br",
+                                "https://somoswin.com.br",
+                                "https://*.somoswin.com.br"));
                 configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
                 configuration.setAllowedHeaders(List.of("*"));
                 configuration.setExposedHeaders(List.of("Authorization"));
