@@ -460,12 +460,20 @@ public class MarketingService {
 
         try {
             syncCampaigns(conn);
-            Thread.sleep(30000); // 30s Breathing room
+            Thread.sleep(60000); // 1 minute breath
             syncInsights(conn);
-            Thread.sleep(30000); // 30s Breathing room
+            Thread.sleep(60000); // 1 minute breath
             syncInstagramData(conn);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
+            if (e.getResponseBodyAsString().contains("\"code\":17")
+                    || e.getResponseBodyAsString().contains("\"code\": 17")) {
+                log.error("Company {} reached Meta Rate Limit. Skipping further sync for this cycle.",
+                        conn.getCompany().getId());
+            } else {
+                log.error("Error during syncAccountData for company {}", conn.getCompany().getId(), e);
+            }
         } catch (Exception e) {
             log.error("Error during syncAccountData for company {}", conn.getCompany().getId(), e);
         }
@@ -494,7 +502,7 @@ public class MarketingService {
 
                         java.time.format.DateTimeFormatter metaFormatter = java.time.format.DateTimeFormatter
                                 .ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
-                        if (node.has("start_time")) {
+                        if (node.has("start_time") && !node.get("start_time").isNull()) {
                             campaign.setStartTime(ZonedDateTime.parse(node.get("start_time").asText(), metaFormatter));
                         }
                         if (node.has("stop_time") && !node.get("stop_time").isNull()) {
@@ -503,15 +511,21 @@ public class MarketingService {
 
                         com.backend.winai.entity.MetaCampaign savedCampaign = metaCampaignRepository.save(campaign);
 
-                        // Pacing: Wait 30 seconds before fetching adsets for this campaign (Requested
-                        // by user)
-                        Thread.sleep(30000);
+                        log.info("Campaign {} synced. Waiting 60s as requested...", metaId);
+                        Thread.sleep(60000);
+
                         syncAdSets(conn, savedCampaign);
                     } catch (Exception e) {
                         log.error("Error processing campaign {}", node.get("id").asText(), e);
                     }
                 }
             }
+        } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
+            if (e.getResponseBodyAsString().contains("\"code\":17")
+                    || e.getResponseBodyAsString().contains("\"code\": 17")) {
+                throw e;
+            }
+            log.error("Error syncing campaigns for company {}", conn.getCompany().getId(), e);
         } catch (Exception e) {
             log.error("Error syncing campaigns for company {}", conn.getCompany().getId(), e);
         }
@@ -545,9 +559,9 @@ public class MarketingService {
 
                         com.backend.winai.entity.MetaAdSet savedAdSet = metaAdSetRepository.save(adSet);
 
-                        // Pacing: Wait 30 seconds before fetching ads for this adset (Requested by
-                        // user)
-                        Thread.sleep(30000);
+                        log.info("AdSet {} synced. Waiting 60s as requested...", metaId);
+                        Thread.sleep(60000);
+
                         syncAds(conn, savedAdSet);
                     } catch (Exception e) {
                         log.error("Error processing adset {}", node.get("id").asText(), e);
@@ -580,6 +594,9 @@ public class MarketingService {
                         ad.setStatus(node.get("status").asText());
 
                         metaAdRepository.save(ad);
+
+                        log.info("Ad {} synced. Waiting 60s as requested...", metaId);
+                        Thread.sleep(60000);
                     } catch (Exception e) {
                         log.error("Error processing ad {}", node.get("id").asText(), e);
                     }
@@ -777,22 +794,27 @@ public class MarketingService {
     }
 
     private ResponseEntity<String> getWithRetry(String url) {
-        // Encode curly braces to prevent RestTemplate from trying to expand them as URI
-        // templates (Meta API uses {} for field expansion)
-        String safeUrl = url.replace("{", "%7B").replace("}", "%7D");
+        // Use java.net.URI to avoid RestTemplate's template expansion of curly braces
+        // {}
+        // Meta API needs {} for field expansion and doesn't like them encoded as
+        // %7B/%7D in some parameters.
+        java.net.URI uri = java.net.URI.create(url);
         int maxAttempts = 3;
         for (int i = 0; i < maxAttempts; i++) {
             try {
-                return restTemplate.getForEntity(safeUrl, String.class);
+                return restTemplate.getForEntity(uri, String.class);
             } catch (org.springframework.web.client.HttpClientErrorException e) {
-                // Code 17 is "User request limit reached"
+                String body = e.getResponseBodyAsString();
+                // Code 17 is "User request limit reached", also check 429 status
                 boolean isRateLimit = e.getStatusCode().value() == 429 ||
-                        (e.getStatusCode().value() == 400 && e.getResponseBodyAsString().contains("\"code\": 17"));
+                        (e.getStatusCode().value() == 400
+                                && (body.contains("\"code\":17") || body.contains("\"code\": 17")));
 
                 if (isRateLimit && i < maxAttempts - 1) {
-                    log.warn("Meta API rate limit reached. Waiting 60s before retry... (Attempt {})", i + 1);
+                    log.warn("Meta API rate limit reached. Waiting 120s (2 minutes) before retry... (Attempt {})",
+                            i + 1);
                     try {
-                        Thread.sleep(60000);
+                        Thread.sleep(120000); // Wait 2 minutes for recovery
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         throw e;
