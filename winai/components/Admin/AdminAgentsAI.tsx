@@ -55,7 +55,7 @@ const AdminAgentsAI = () => {
                 await knowledgeBaseService.update(currentBase.id, {
                     name: currentBase.name,
                     content: currentBase.content || '',
-                    agentPrompt: currentBase.agentPrompt,
+                    agentPrompt: currentBase.agentPrompt || '',
                     isActive: currentBase.isActive ?? true,
                     systemTemplate: currentBase.systemTemplate
                 });
@@ -63,7 +63,7 @@ const AdminAgentsAI = () => {
                 await knowledgeBaseService.create({
                     name: currentBase.name,
                     content: currentBase.content || '',
-                    agentPrompt: currentBase.agentPrompt,
+                    agentPrompt: currentBase.agentPrompt || '',
                     systemTemplate: currentBase.systemTemplate
                 });
             }

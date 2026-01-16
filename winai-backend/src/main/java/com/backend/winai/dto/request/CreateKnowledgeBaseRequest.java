@@ -7,4 +7,5 @@ public class CreateKnowledgeBaseRequest {
     private String name;
     private String content;
     private String agentPrompt;
+    private String systemTemplate;
 }

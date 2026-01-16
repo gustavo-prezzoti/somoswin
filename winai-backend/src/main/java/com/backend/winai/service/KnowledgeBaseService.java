@@ -35,7 +35,7 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
-    public KnowledgeBase create(User user, String name, String content, String agentPrompt) {
+    public KnowledgeBase create(User user, String name, String content, String agentPrompt, String systemTemplate) {
         if (user.getCompany() == null)
             throw new RuntimeException("Usuário sem empresa");
 
@@ -44,6 +44,7 @@ public class KnowledgeBaseService {
                 .name(name)
                 .content(content)
                 .agentPrompt(agentPrompt)
+                .systemTemplate(systemTemplate)
                 .isActive(true)
                 .build();
 
@@ -55,7 +56,8 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
-    public KnowledgeBase update(User user, UUID id, String name, String content, String agentPrompt, Boolean isActive) {
+    public KnowledgeBase update(User user, UUID id, String name, String content, String agentPrompt, Boolean isActive,
+            String systemTemplate) {
         KnowledgeBase kb = repository.findById(id).orElseThrow(() -> new RuntimeException("Base não encontrada"));
         if (!kb.getCompany().getId().equals(user.getCompany().getId())) {
             throw new RuntimeException("Acesso negado");
@@ -69,6 +71,7 @@ public class KnowledgeBaseService {
             kb.setAgentPrompt(agentPrompt);
         if (isActive != null)
             kb.setIsActive(isActive);
+        kb.setSystemTemplate(systemTemplate);
 
         kb = repository.save(kb);
 

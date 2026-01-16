@@ -14,6 +14,7 @@ public class KnowledgeBaseResponse {
     private String content;
     private String agentPrompt;
     private Boolean isActive;
+    private String systemTemplate;
     private ZonedDateTime createdAt;
     private ZonedDateTime updatedAt;
 }

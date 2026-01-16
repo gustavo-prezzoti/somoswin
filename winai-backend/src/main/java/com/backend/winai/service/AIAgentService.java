@@ -86,7 +86,8 @@ public class AIAgentService {
                 String contextInfo = "Data atual: " + java.time.LocalDateTime.now() +
                         "\nNome do Paciente/Lead: " + (leadName != null ? leadName : "Não identificado");
 
-                String aiResponse = openAiService.generateClinicorpResponse(userMessage, recentMessages, contextInfo);
+                String aiResponse = openAiService.generateClinicorpResponse(userMessage, recentMessages, contextInfo,
+                        knowledgeBase.getAgentPrompt());
 
                 if (aiResponse != null) {
                     return aiResponse;

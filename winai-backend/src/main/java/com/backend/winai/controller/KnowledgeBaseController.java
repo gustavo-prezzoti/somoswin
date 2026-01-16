@@ -34,7 +34,8 @@ public class KnowledgeBaseController {
     @PostMapping
     public ResponseEntity<KnowledgeBaseResponse> create(@AuthenticationPrincipal User user,
             @RequestBody CreateKnowledgeBaseRequest request) {
-        KnowledgeBase kb = service.create(user, request.getName(), request.getContent(), request.getAgentPrompt());
+        KnowledgeBase kb = service.create(user, request.getName(), request.getContent(), request.getAgentPrompt(),
+                request.getSystemTemplate());
         return ResponseEntity.ok(toResponse(kb));
     }
 
@@ -42,7 +43,7 @@ public class KnowledgeBaseController {
     public ResponseEntity<KnowledgeBaseResponse> update(@AuthenticationPrincipal User user, @PathVariable UUID id,
             @RequestBody UpdateKnowledgeBaseRequest request) {
         KnowledgeBase kb = service.update(user, id, request.getName(), request.getContent(), request.getAgentPrompt(),
-                request.getIsActive());
+                request.getIsActive(), request.getSystemTemplate());
         return ResponseEntity.ok(toResponse(kb));
     }
 
@@ -84,6 +85,7 @@ public class KnowledgeBaseController {
                 .name(kb.getName())
                 .content(kb.getContent())
                 .agentPrompt(kb.getAgentPrompt())
+                .systemTemplate(kb.getSystemTemplate())
                 .isActive(kb.getIsActive())
                 .createdAt(kb.getCreatedAt())
                 .updatedAt(kb.getUpdatedAt())

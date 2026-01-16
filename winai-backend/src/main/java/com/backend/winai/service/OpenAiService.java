@@ -368,7 +368,8 @@ public class OpenAiService {
     private ClinicorpService clinicorpService;
 
     @SuppressWarnings("unchecked")
-    public String generateClinicorpResponse(String userMessage, List<String> recentMessages, String contextInfo) {
+    public String generateClinicorpResponse(String userMessage, List<String> recentMessages, String contextInfo,
+            String agentPrompt) {
         if (!isChatEnabled())
             return null;
 
@@ -448,9 +449,13 @@ public class OpenAiService {
             sysPrompt.append("Use as ferramentas certas para cada situação:\n\n");
             sysPrompt.append("* `consultar_base_essenciallis`: Para ler sobre dúvidas técnicas/preços.\n");
             sysPrompt.append(
-                    "* `Buscar_profissionais_disponiveis`: Use SEMPRE que for oferecer horário. Você pode passar o parâmetro `dias` (ex: 7) para ver horários de uma semana inteira de uma vez.\n");
-            sysPrompt.append(
-                    "* `Salvar_nome_paciente` + `Criar_paciente_clinicorp` + `Criar_agendamento_local`: Apenas para confirmar o agendamento.\n");
+                    "* `Salvar_nome_paciente` + `Criar_paciente_clinicorp` + `Criar_agendamento_local`: Apenas para confirmar o agendamento.\n\n");
+
+            if (agentPrompt != null && !agentPrompt.trim().isEmpty()) {
+                sysPrompt.append("---\n\n");
+                sysPrompt.append("### 5. INSTRUÇÕES ESPECÍFICAS DO CLIENTE (CUSTOM PROMPT)\n");
+                sysPrompt.append(agentPrompt).append("\n\n");
+            }
             sysPrompt.append(
                     "* `reagendar_atendimento`: **Use IMEDIATAMENTE** se o usuário quiser alterar, mudar, ajustar ou reagendar um horário.\n");
             sysPrompt.append(

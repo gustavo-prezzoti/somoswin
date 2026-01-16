@@ -8,4 +8,5 @@ public class UpdateKnowledgeBaseRequest {
     private String content;
     private String agentPrompt;
     private Boolean isActive;
+    private String systemTemplate;
 }
