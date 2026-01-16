@@ -189,7 +189,7 @@ const AdminAgentsAI = () => {
                         </div>
 
                         <div>
-                            <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-transparent cursor-pointer hover:bg-gray-100 transition-colors group">
+                            <label htmlFor="customized-toggle" className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-transparent cursor-pointer hover:bg-gray-100 transition-colors group">
                                 <span className="flex items-center gap-2 text-xs font-bold text-gray-600 uppercase tracking-widest">
                                     <Bot size={14} className="text-emerald-600" />
                                     Agente Customizado
