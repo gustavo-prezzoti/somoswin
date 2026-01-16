@@ -61,6 +61,7 @@ public class MarketingService {
     private final MetaAdRepository metaAdRepository;
     private final MetaInsightRepository metaInsightRepository;
     private final InstagramMetricRepository instagramMetricRepository;
+    private final MetricsSyncService metricsSyncService;
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -464,6 +465,9 @@ public class MarketingService {
             syncInsights(conn);
             Thread.sleep(60000); // 1 minute breath
             syncInstagramData(conn);
+
+            // Sync dashboard metrics after raw data is updated
+            metricsSyncService.syncDashboardMetrics(conn.getCompany(), 7);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {

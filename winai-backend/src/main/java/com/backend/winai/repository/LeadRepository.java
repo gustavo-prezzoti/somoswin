@@ -37,6 +37,8 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     long countByCompanyAndStatus(Company company, LeadStatus status);
 
+    long countByCompanyAndCreatedAtBetween(Company company, java.time.LocalDateTime start, java.time.LocalDateTime end);
+
     // Método removido - usando CriteriaBuilder no serviço para evitar problemas com
     // tipos null no PostgreSQL
 }

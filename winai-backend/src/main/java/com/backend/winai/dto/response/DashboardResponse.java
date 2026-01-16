@@ -19,8 +19,23 @@ public class DashboardResponse {
     private List<ChartDataPoint> chartData;
     private List<GoalDTO> goals;
     private List<InsightDTO> insights;
+    private List<CampaignSummaryDTO> campaigns;
+    private List<LeadResponse> recentLeads;
     private Integer performanceScore;
     private String operationStatus;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CampaignSummaryDTO {
+        private String name;
+        private String status;
+        private Integer leads;
+        private String spend;
+        private String cpl;
+        private String conversion;
+    }
 
     @Data
     @Builder
@@ -42,6 +57,9 @@ public class DashboardResponse {
         private MetricCard cplAverage;
         private MetricCard conversionRate;
         private MetricCard roi;
+        private MetricCard investment;
+        private MetricCard impressions;
+        private MetricCard clicks;
     }
 
     @Data

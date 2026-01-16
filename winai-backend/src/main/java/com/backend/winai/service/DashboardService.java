@@ -1,9 +1,11 @@
 package com.backend.winai.service;
 
 import com.backend.winai.dto.response.DashboardResponse;
+import com.backend.winai.dto.response.LeadResponse;
 import com.backend.winai.entity.*;
 import com.backend.winai.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,8 +23,18 @@ public class DashboardService {
         private final DashboardMetricsRepository metricsRepository;
         private final GoalRepository goalRepository;
         private final AIInsightRepository insightRepository;
+        private final MetricsSyncService metricsSyncService;
+        private final MetaCampaignRepository campaignRepository;
+        private final MetaInsightRepository metaInsightRepository;
+        private final OpenAiService openAiService;
+        private final LeadRepository leadRepository;
 
         private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM");
+
+        @Transactional
+        public void syncMetrics(Company company) {
+                metricsSyncService.syncDashboardMetrics(company, 7);
+        }
 
         /**
          * Obtém os dados completos do dashboard para um usuário
@@ -39,12 +51,6 @@ public class DashboardService {
                 List<DashboardMetrics> currentMetrics = company != null
                                 ? metricsRepository.findByCompanyAndDateBetweenOrderByDateAsc(company, startDate,
                                                 endDate)
-                                : List.of();
-
-                // Busca métricas do período anterior
-                List<DashboardMetrics> previousMetrics = company != null
-                                ? metricsRepository.findByCompanyAndDateBetweenOrderByDateAsc(company,
-                                                previousStartDate, previousEndDate)
                                 : List.of();
 
                 // Calcula sumários
@@ -67,6 +73,13 @@ public class DashboardService {
                                                                 company)
                                 : List.of();
 
+                // Se não houver insights de otimização, tenta gerar alguns
+                if (insights.isEmpty() && company != null) {
+                        refreshAIInsights(company);
+                        insights = insightRepository
+                                        .findTop5ByCompanyAndIsDismissedFalseOrderByPriorityDescCreatedAtDesc(company);
+                }
+
                 // Performance score médio
                 Double avgScore = company != null
                                 ? metricsRepository.avgPerformanceScoreByCompanyAndDateBetween(company, startDate,
@@ -75,15 +88,80 @@ public class DashboardService {
                 int performanceScore = avgScore != null ? avgScore.intValue() : 0;
 
                 // Monta response
-                return DashboardResponse.builder()
+                DashboardResponse response = DashboardResponse.builder()
                                 .user(buildUserSummary(user))
                                 .metrics(buildMetricsSummary(currentSummary, previousSummary))
                                 .chartData(buildChartData(currentMetrics, startDate, days))
                                 .goals(buildGoalDTOs(goals))
                                 .insights(buildInsightDTOs(insights))
+                                .campaigns(buildCampaignSummaries(company))
+                                .recentLeads(buildRecentLeads(company))
                                 .performanceScore(performanceScore)
                                 .operationStatus(determineOperationStatus(performanceScore))
                                 .build();
+
+                return response;
+        }
+
+        private List<LeadResponse> buildRecentLeads(Company company) {
+                if (company == null)
+                        return List.of();
+
+                return leadRepository.findByCompanyOrderByCreatedAtDesc(company, PageRequest.of(0, 5))
+                                .getContent()
+                                .stream()
+                                .map(l -> LeadResponse.builder()
+                                                .id(l.getId())
+                                                .name(l.getName())
+                                                .email(l.getEmail())
+                                                .phone(l.getPhone())
+                                                .status(l.getStatus().name())
+                                                .statusLabel(l.getStatus().name()) // Simplificado
+                                                .createdAt(l.getCreatedAt())
+                                                .build())
+                                .collect(Collectors.toList());
+        }
+
+        private List<DashboardResponse.CampaignSummaryDTO> buildCampaignSummaries(Company company) {
+                if (company == null)
+                        return List.of();
+
+                List<MetaCampaign> campaigns = campaignRepository.findByCompanyId(company.getId());
+                return campaigns.stream().map(c -> {
+                        List<MetaInsight> insights = metaInsightRepository.findByCompanyIdAndDateBetween(
+                                        company.getId(), LocalDate.now().minusDays(30), LocalDate.now());
+
+                        // Filtra insights desta campanha
+                        double spend = insights.stream()
+                                        .filter(i -> c.getMetaId().equals(i.getExternalId()))
+                                        .filter(i -> i.getSpend() != null)
+                                        .mapToDouble(MetaInsight::getSpend)
+                                        .sum();
+
+                        long clicks = insights.stream()
+                                        .filter(i -> c.getMetaId().equals(i.getExternalId()))
+                                        .filter(i -> i.getClicks() != null)
+                                        .mapToLong(MetaInsight::getClicks)
+                                        .sum();
+
+                        long conversions = insights.stream()
+                                        .filter(i -> c.getMetaId().equals(i.getExternalId()))
+                                        .filter(i -> i.getConversions() != null)
+                                        .mapToLong(MetaInsight::getConversions)
+                                        .sum();
+
+                        double cpl = conversions > 0 ? spend / conversions : 0;
+                        double convRate = clicks > 0 ? (double) conversions / clicks * 100 : 0;
+
+                        return DashboardResponse.CampaignSummaryDTO.builder()
+                                        .name(c.getName())
+                                        .status(c.getStatus())
+                                        .leads((int) conversions)
+                                        .spend(formatCurrency(spend))
+                                        .cpl(formatCurrency(cpl))
+                                        .conversion(formatPercentage(convRate))
+                                        .build();
+                }).collect(Collectors.toList());
         }
 
         /**
@@ -174,6 +252,22 @@ public class DashboardService {
 
         private DashboardResponse.MetricsSummary buildMetricsSummary(MetricsSummaryData current,
                         MetricsSummaryData previous) {
+
+                // Cálculos baseados no modelo do usuário
+                double currentConv = current.totalClicks > 0 ? (double) current.totalLeads / current.totalClicks * 100
+                                : 0;
+                double previousConv = previous.totalClicks > 0
+                                ? (double) previous.totalLeads / previous.totalClicks * 100
+                                : 0;
+
+                // ROI Estimado: Supondo Valor de Lead de R$ 100,00 para o cálculo do "retorno
+                // de leads"
+                double currentRoi = current.totalInvestment > 0 ? (current.totalLeads * 100.0) / current.totalInvestment
+                                : 0;
+                double previousRoi = previous.totalInvestment > 0
+                                ? (previous.totalLeads * 100.0) / previous.totalInvestment
+                                : 0;
+
                 return DashboardResponse.MetricsSummary.builder()
                                 .leadsCaptured(buildMetricCard(
                                                 String.valueOf(current.totalLeads),
@@ -182,15 +276,27 @@ public class DashboardService {
                                 .cplAverage(buildMetricCard(
                                                 formatCurrency(current.avgCpl),
                                                 calculateTrend(current.avgCpl, previous.avgCpl),
-                                                current.avgCpl <= previous.avgCpl)) // CPL menor é melhor
+                                                current.avgCpl <= previous.avgCpl))
                                 .conversionRate(buildMetricCard(
-                                                formatPercentage(current.avgConversion),
-                                                calculateTrend(current.avgConversion, previous.avgConversion),
-                                                current.avgConversion >= previous.avgConversion))
+                                                formatPercentage(currentConv),
+                                                calculateTrend(currentConv, previousConv),
+                                                currentConv >= previousConv))
                                 .roi(buildMetricCard(
-                                                formatRoi(current.avgRoi),
-                                                calculateTrend(current.avgRoi, previous.avgRoi),
-                                                current.avgRoi >= previous.avgRoi))
+                                                formatRoi(currentRoi),
+                                                calculateTrend(currentRoi, previousRoi),
+                                                currentRoi >= previousRoi))
+                                .investment(buildMetricCard(
+                                                formatCurrency(current.totalInvestment),
+                                                calculateTrend(current.totalInvestment, previous.totalInvestment),
+                                                current.totalInvestment <= previous.totalInvestment))
+                                .impressions(buildMetricCard(
+                                                String.valueOf(current.totalImpressions),
+                                                calculateTrend(current.totalImpressions, previous.totalImpressions),
+                                                current.totalImpressions >= previous.totalImpressions))
+                                .clicks(buildMetricCard(
+                                                String.valueOf(current.totalClicks),
+                                                calculateTrend(current.totalClicks, previous.totalClicks),
+                                                current.totalClicks >= previous.totalClicks))
                                 .build();
         }
 
@@ -270,7 +376,7 @@ public class DashboardService {
 
         private MetricsSummaryData calculateSummary(Company company, LocalDate startDate, LocalDate endDate) {
                 if (company == null) {
-                        return new MetricsSummaryData(0, 0.0, 0.0, 0.0);
+                        return new MetricsSummaryData(0, 0.0, 0.0, 0.0, 0.0, 0, 0L);
                 }
 
                 Integer totalLeads = metricsRepository.sumLeadsCapturedByCompanyAndDateBetween(company, startDate,
@@ -280,11 +386,21 @@ public class DashboardService {
                                 endDate);
                 Double avgRoi = metricsRepository.avgRoiByCompanyAndDateBetween(company, startDate, endDate);
 
+                // New fields
+                Double totalInvestment = metricsRepository.sumInvestmentByCompanyAndDateBetween(company, startDate,
+                                endDate);
+                Integer totalClicks = metricsRepository.sumClicksByCompanyAndDateBetween(company, startDate, endDate);
+                Long totalImpressions = metricsRepository.sumImpressionsByCompanyAndDateBetween(company, startDate,
+                                endDate);
+
                 return new MetricsSummaryData(
                                 totalLeads != null ? totalLeads : 0,
                                 avgCpl != null ? avgCpl : 0.0,
                                 avgConversion != null ? avgConversion : 0.0,
-                                avgRoi != null ? avgRoi : 0.0);
+                                avgRoi != null ? avgRoi : 0.0,
+                                totalInvestment != null ? totalInvestment : 0.0,
+                                totalClicks != null ? totalClicks : 0,
+                                totalImpressions != null ? totalImpressions : 0L);
         }
 
         private String calculateTrend(double current, double previous) {
@@ -439,7 +555,71 @@ public class DashboardService {
                 return buildGoalDTOs(List.of(goal)).get(0);
         }
 
+        /**
+         * Gera insights usando IA com base nos dados das campanhas
+         */
+        @Transactional
+        public void refreshAIInsights(Company company) {
+                if (company == null || !openAiService.isChatEnabled())
+                        return;
+
+                List<DashboardResponse.CampaignSummaryDTO> campaigns = buildCampaignSummaries(company);
+                if (campaigns.isEmpty())
+                        return;
+
+                StringBuilder analysisData = new StringBuilder();
+                analysisData.append(
+                                "Analise estas campanhas de marketing no Meta Ads e gere 3 insights estratégicos:\n\n");
+                for (DashboardResponse.CampaignSummaryDTO c : campaigns) {
+                        analysisData.append(String.format(
+                                        "- Campanha: %s | Status: %s | Leads: %d | Spend: %s | CPL: %s | Conv: %s\n",
+                                        c.getName(), c.getStatus(), c.getLeads(), c.getSpend(), c.getCpl(),
+                                        c.getConversion()));
+                }
+
+                String systemPrompt = "Você é um especialista em Marketing Digital e Gestão de Tráfego Pago. " +
+                                "Sua tarefa é analisar os dados das campanhas e sugerir melhorias práticas. " +
+                                "Responda em formato de lista, onde cada item tem um título curto e uma descrição objetiva.";
+
+                String aiResponse = openAiService.generateResponse(systemPrompt, analysisData.toString());
+                if (aiResponse == null || aiResponse.isEmpty())
+                        return;
+
+                // Limpa insights antigos de otimização (opcional, ou apenas adiciona novos)
+                // insightRepository.deleteByCompanyAndInsightType(company,
+                // InsightType.OPTIMIZATION);
+
+                // Lógica simples para extrair insights da resposta da IA
+                // (Para um sistema real, pediríamos JSON, mas aqui vamos processar o texto)
+                String[] lines = aiResponse.split("\n");
+                for (String line : lines) {
+                        if (line.trim().length() > 20 && (line.contains(":") || line.trim().startsWith("-")
+                                        || Character.isDigit(line.trim().charAt(0)))) {
+                                String title = "Insight de Performance";
+                                String desc = line.trim().replaceAll("^[-0-9. ]+", "");
+
+                                if (desc.contains(":")) {
+                                        title = desc.split(":")[0].trim();
+                                        desc = desc.split(":")[1].trim();
+                                }
+
+                                AIInsight insight = AIInsight.builder()
+                                                .company(company)
+                                                .title(title)
+                                                .description(desc)
+                                                .suggestionSource("WIN.AI Intelligence")
+                                                .insightType(InsightType.OPTIMIZATION)
+                                                .priority(InsightPriority.HIGH)
+                                                .isDismissed(false)
+                                                .isRead(false)
+                                                .build();
+                                insightRepository.save(insight);
+                        }
+                }
+        }
+
         // Inner class para dados calculados
-        private record MetricsSummaryData(int totalLeads, double avgCpl, double avgConversion, double avgRoi) {
+        private record MetricsSummaryData(int totalLeads, double avgCpl, double avgConversion, double avgRoi,
+                        double totalInvestment, int totalClicks, long totalImpressions) {
         }
 }

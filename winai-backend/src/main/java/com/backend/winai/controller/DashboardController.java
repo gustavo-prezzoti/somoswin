@@ -46,6 +46,17 @@ public class DashboardController {
                 return ResponseEntity.ok(dashboard);
         }
 
+        @PostMapping("/refresh")
+        public ResponseEntity<Void> refreshMetrics(@AuthenticationPrincipal User user) {
+                User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
+                                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+                if (userWithCompany.getCompany() != null) {
+                        dashboardService.syncMetrics(userWithCompany.getCompany());
+                }
+                return ResponseEntity.ok().build();
+        }
+
         /**
          * POST /api/v1/dashboard/generate-demo
          * Gera dados de demonstração para a empresa do usuário

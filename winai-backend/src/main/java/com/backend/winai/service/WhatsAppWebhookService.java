@@ -39,6 +39,7 @@ public class WhatsAppWebhookService {
     private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
     private final com.backend.winai.queue.AiResponseProducer aiResponseProducer;
     private final UserWhatsAppConnectionRepository userWhatsAppConnectionRepository;
+    private final MetricsSyncService metricsSyncService;
 
     /**
      * Processa webhook do Uazap recebido via n8n
@@ -147,6 +148,9 @@ public class WhatsAppWebhookService {
 
             // Enviar via WebSocket para atualização em tempo real
             sendWebSocketUpdate(company.getId(), message, conversation);
+
+            // Atualizar métricas do dashboard para hoje
+            metricsSyncService.syncDashboardMetrics(company, 1);
 
             log.info("Webhook processado com sucesso. MessageId: {}, Phone: {}, LeadId: {}",
                     messageId, phoneNumber, lead != null ? lead.getId() : null);

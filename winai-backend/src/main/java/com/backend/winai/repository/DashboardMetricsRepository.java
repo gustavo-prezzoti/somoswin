@@ -49,5 +49,23 @@ public interface DashboardMetricsRepository extends JpaRepository<DashboardMetri
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate);
 
+        @Query("SELECT SUM(d.investment) FROM DashboardMetrics d WHERE d.company = :company AND d.date BETWEEN :startDate AND :endDate")
+        Double sumInvestmentByCompanyAndDateBetween(
+                        @Param("company") Company company,
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate);
+
+        @Query("SELECT SUM(d.clicks) FROM DashboardMetrics d WHERE d.company = :company AND d.date BETWEEN :startDate AND :endDate")
+        Integer sumClicksByCompanyAndDateBetween(
+                        @Param("company") Company company,
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate);
+
+        @Query("SELECT SUM(d.impressions) FROM DashboardMetrics d WHERE d.company = :company AND d.date BETWEEN :startDate AND :endDate")
+        Long sumImpressionsByCompanyAndDateBetween(
+                        @Param("company") Company company,
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate);
+
         void deleteByCompany(Company company);
 }

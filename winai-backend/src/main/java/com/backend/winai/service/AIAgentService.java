@@ -189,7 +189,7 @@ public class AIAgentService {
 
                     // Pequeno delay entre mensagens para parecer mais natural (humano digitando)
                     try {
-                        Thread.sleep(1500); // 1.5s entre mensagens
+                        Thread.sleep(2500); // 2.5s entre mensagens
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }

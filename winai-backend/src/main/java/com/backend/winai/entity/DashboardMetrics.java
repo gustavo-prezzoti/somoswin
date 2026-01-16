@@ -43,6 +43,18 @@ public class DashboardMetrics {
     @Builder.Default
     private BigDecimal roi = BigDecimal.ZERO;
 
+    @Column(name = "investment", precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal investment = BigDecimal.ZERO;
+
+    @Column(name = "clicks")
+    @Builder.Default
+    private Integer clicks = 0;
+
+    @Column(name = "impressions")
+    @Builder.Default
+    private Long impressions = 0L;
+
     // Métricas do gráfico
     @Column(name = "leads_current_period")
     @Builder.Default
