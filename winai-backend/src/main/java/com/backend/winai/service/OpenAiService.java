@@ -29,7 +29,7 @@ public class OpenAiService {
     @Value("${openai.api-key:${openai.api.key:}}")
     private String apiKey;
 
-    @Value("${openai.model:gpt-5}")
+    @Value("${openai.model:gpt-4o}")
     private String model;
 
     @Value("${openai.temperature:0.7}")
