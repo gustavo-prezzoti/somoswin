@@ -14,7 +14,7 @@ services:
     image: redis:alpine
     container_name: winai-redis
     ports:
-      - "6379:6379"
+      - "16379:6379"
     networks:
       - winai-network
     restart: unless-stopped
@@ -28,7 +28,7 @@ services:
       dockerfile: Dockerfile
     container_name: winai-backend
     ports:
-      - "8080:8080"
+      - "18080:8080"
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -95,7 +95,7 @@ services:
       dockerfile: Dockerfile
     container_name: winai-python-backend
     ports:
-      - "5000:5000"
+      - "15000:5000"
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -122,7 +122,7 @@ services:
         - VITE_API_URL=${VITE_API_URL}
     container_name: winai-frontend
     ports:
-      - "3000:80"
+      - "13000:80"
     depends_on:
       - backend
     networks:
