@@ -27,7 +27,7 @@ public class AiResponseConsumer {
             .newCachedThreadPool();
 
     private static final String QUEUE_NAME = "ai_response_queue";
-    private static final long DEBOUNCE_DELAY_MS = 7000; // Aguardar 7 segundos de silêncio
+    private static final long DEBOUNCE_DELAY_MS = 3000; // Aguardar 3 segundos de silêncio
 
     @Scheduled(fixedDelay = 500) // Poll mais frequente
     public void processQueue() {

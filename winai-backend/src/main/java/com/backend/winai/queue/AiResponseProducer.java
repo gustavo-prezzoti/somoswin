@@ -16,18 +16,27 @@ public class AiResponseProducer {
 
     public boolean sendMessage(AiQueueMessage message) {
         try {
-            log.info("Enqueuing AI request for conversation: {}, Lead: {}",
-                    message.getConversationId(), message.getLeadName());
+            String convId = message.getConversationId();
+            String bufferKey = "ai_buffer:" + convId;
+            String metaKey = "ai_metadata:" + convId;
+            String silenceKey = "ai_silence_timer:" + convId;
 
-            // Registrar timestamp desta mensagem como a última para esta conversa (Debounce
-            // control)
-            String lastMsgKey = "ai_last_timestamp:" + message.getConversationId();
-            redisTemplate.opsForValue().set(lastMsgKey, message.getTimestamp());
+            // 1. Acumula o texto da mensagem na lista do Redis
+            redisTemplate.opsForList().rightPush(bufferKey, message.getUserMessage());
 
-            redisTemplate.opsForList().leftPush(QUEUE_NAME, message);
+            // 2. Salva metadados (sobrescreve com os mais recentes)
+            redisTemplate.opsForValue().set(metaKey, message);
+
+            // 3. Atualiza o timer de silêncio para AGORA
+            redisTemplate.opsForValue().set(silenceKey, System.currentTimeMillis());
+
+            // 4. Adiciona a conversa na lista de "Vigilância" (Set para evitar duplicados)
+            redisTemplate.opsForSet().add("ai_active_debounces", convId);
+
+            log.info("Mensagem acumulada para buffer da IA: {}. Lead: {}", convId, message.getLeadName());
             return true;
         } catch (Exception e) {
-            log.error("Failed to enqueue AI request: {}", e.getMessage());
+            log.error("Erro ao acumular mensagem para IA: {}", e.getMessage());
             return false;
         }
     }
