@@ -18,6 +18,10 @@ import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
+import com.backend.winai.entity.Notification;
+import com.backend.winai.entity.User;
+import com.backend.winai.repository.UserRepository;
+import com.backend.winai.repository.NotificationRepository;
 import com.backend.winai.dto.response.WhatsAppConversationResponse;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
 
@@ -35,6 +39,8 @@ public class AIAgentService {
     private final WhatsAppMessageRepository messageRepository;
     private final UazapService uazapService;
     private final WhatsAppConversationRepository conversationRepository;
+    private final UserRepository userRepository;
+    private final NotificationRepository notificationRepository;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
 
     @Transactional
@@ -44,6 +50,12 @@ public class AIAgentService {
             // LazyInitializationException
             WhatsAppConversation conv = conversationRepository.findByIdWithCompany(conversation.getId())
                     .orElse(conversation);
+
+            // REGRA: Se estiver no modo HUMANO, a IA não responde mais
+            if ("HUMAN".equalsIgnoreCase(conv.getSupportMode())) {
+                log.info("Conversation {} is in HUMAN mode, skipping AI response", conv.getId());
+                return null;
+            }
 
             if (!openAiService.isChatEnabled()) {
                 log.warn("OpenAI service is not enabled, skipping AI processing");
@@ -153,6 +165,13 @@ public class AIAgentService {
 
         if (aiResponse != null && !aiResponse.isEmpty()) {
             log.info("AI generated response: {} chars", aiResponse.length());
+
+            // Check for Human Handoff Request from Tool Call
+            if ("HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
+                handleHumanHandoff(conversation);
+                return "HUMAN_HANDOFF_REQUESTED";
+            }
+
             List<String> chunks = splitMessage(aiResponse);
             log.info("Split response into {} chunks", chunks.size());
 
@@ -296,6 +315,45 @@ public class AIAgentService {
             log.info("WebSocket updates sent successfully for company: {}", companyId);
         } catch (Exception e) {
             log.error("Erro ao enviar update WebSocket: {}", e.getMessage(), e);
+        }
+    }
+
+    @Transactional
+    public void handleHumanHandoff(WhatsAppConversation conversation) {
+        log.info("Initiating human handoff for conversation: {}", conversation.getId());
+
+        // 1. Update support mode
+        conversation.setSupportMode("HUMAN");
+        conversationRepository.save(conversation);
+
+        // 2. Send handoff message to client
+        String handoffMsg = "Entendi! Vou chamar nossa especialista humana para continuar seu atendimento agora mesmo. 🧡 Aguarde só um momento. 🌿✨";
+        sendAIResponse(conversation, handoffMsg);
+        persistAndNotify(conversation, handoffMsg);
+
+        // 3. Create notifications for all company users
+        if (conversation.getCompany() != null) {
+            List<User> companyUsers = userRepository.findByCompanyId(conversation.getCompany().getId());
+            String title = "Atendimento Humano Solicitado";
+            String message = "O contato " + (conversation.getContactName() != null ? conversation.getContactName()
+                    : conversation.getPhoneNumber()) + " solicitou um atendente.";
+
+            for (User user : companyUsers) {
+                Notification notification = Notification.builder()
+                        .user(user)
+                        .title(title)
+                        .message(message)
+                        .type("WARNING")
+                        .relatedEntityType("CONVERSATION")
+                        .relatedEntityId(conversation.getId())
+                        .actionUrl("/whatsapp?chatId=" + conversation.getId())
+                        .read(false)
+                        .build();
+                notificationRepository.save(notification);
+            }
+
+            // 4. Also notify via WebSocket about the mode change for agents online
+            sendWebSocketUpdate(conversation.getCompany().getId(), null, conversation);
         }
     }
 

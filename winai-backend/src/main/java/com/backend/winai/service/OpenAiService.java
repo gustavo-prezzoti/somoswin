@@ -451,6 +451,10 @@ public class OpenAiService {
                     "* `Buscar_profissionais_disponiveis`: Use SEMPRE que for oferecer horário. Você pode passar o parâmetro `dias` (ex: 7) para ver horários de uma semana inteira de uma vez.\n");
             sysPrompt.append(
                     "* `Salvar_nome_paciente` + `Criar_paciente_clinicorp` + `Criar_agendamento_local`: Apenas para confirmar o agendamento.\n");
+            sysPrompt.append(
+                    "* `reagendar_atendimento`: **Use IMEDIATAMENTE** se o usuário quiser alterar, mudar, ajustar ou reagendar um horário.\n");
+            sysPrompt.append(
+                    "* `cancelar_atendimento`: **Use IMEDIATAMENTE** se o usuário quiser cancelar um agendamento.\n");
             sysPrompt.append("* `escalar_humano`: **Use IMEDIATAMENTE** se:\n");
             sysPrompt.append("    1. O cliente pedir para falar com humano/atendente.\n");
             sysPrompt.append("    2. O cliente estiver irritado.\n");
@@ -691,7 +695,9 @@ public class OpenAiService {
                 }
                 return "Erro ao realizar agendamento.";
             }
-            if ("escalar_humano".equalsIgnoreCase(functionName)) {
+            if ("escalar_humano".equalsIgnoreCase(functionName) ||
+                    "reagendar_atendimento".equalsIgnoreCase(functionName) ||
+                    "cancelar_atendimento".equalsIgnoreCase(functionName)) {
                 return "HUMAN_HANDOFF_REQUESTED";
             }
             return "Ferramenta desconhecida";
@@ -742,7 +748,16 @@ public class OpenAiService {
                         "hora", Map.of("type", "string", "description", "Hora HH:MM."))));
 
         // Tool: escalar_humano
-        tools.add(createTool("escalar_humano", "Transfere o atendimento para um humano.", new HashMap<>()));
+        tools.add(createTool("escalar_humano", "Chama um atendente humano para continuar o atendimento.",
+                new HashMap<>()));
+
+        // Tool: reagendar_atendimento
+        tools.add(
+                createTool("reagendar_atendimento", "Escala para humano para reagendar um horário.", new HashMap<>()));
+
+        // Tool: cancelar_atendimento
+        tools.add(createTool("cancelar_atendimento", "Escala para humano para cancelar um agendamento.",
+                new HashMap<>()));
 
         return tools;
     }

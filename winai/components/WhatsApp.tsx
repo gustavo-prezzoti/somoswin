@@ -3,6 +3,7 @@ import { Search, Send, Phone, Video, Paperclip, Smile, CheckCheck, ChevronRight,
 import { whatsappService, WhatsAppConversation, WhatsAppMessage } from '../services/api/whatsapp.service';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { userService } from '../services/api/user.service';
+import { useSearchParams } from 'react-router-dom';
 
 const WhatsApp: React.FC = () => {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
@@ -21,6 +22,8 @@ const WhatsApp: React.FC = () => {
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [totalContacts, setTotalContacts] = useState(0);
+  const [searchParams] = useSearchParams();
+  const chatId = searchParams.get('chatId');
 
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -98,8 +101,21 @@ const WhatsApp: React.FC = () => {
       setConversations(data);
       setTotalContacts(data.length);
 
-      if (data.length > 0 && !activeConversation && !silent) {
-        setActiveConversation(data[0]);
+      let selectedConv: WhatsAppConversation | null = null;
+
+      // Se houver um chatId na URL, prioridade para ele
+      if (chatId) {
+        selectedConv = data.find(c => c.id === chatId) || null;
+      }
+
+      // Se não encontrou pelo chatId ou não tinha chatId, pega a primeira se não tiver ativa
+      if (!selectedConv && data.length > 0 && !activeConversation && !silent) {
+        selectedConv = data[0];
+      }
+
+      if (selectedConv) {
+        setActiveConversation(selectedConv);
+        // Limpar o chatId da URL se quiser (opcional)
       }
     } catch (error) {
       console.error('Erro ao carregar conversas', error);
