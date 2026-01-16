@@ -29,16 +29,31 @@ public class AiResponseConsumer {
     private static final String QUEUE_NAME = "ai_response_queue";
     private static final long DEBOUNCE_DELAY_MS = 3000; // Aguardar 3 segundos de silêncio
 
-    @Scheduled(fixedDelay = 500) // Poll mais frequente
+    @Scheduled(fixedDelay = 500) // Verifica a cada meio segundo
     public void processQueue() {
         try {
-            Object messageObj = redisTemplate.opsForList().rightPop(QUEUE_NAME);
+            // Busca todas as conversas que estão aguardando silêncio
+            java.util.Set<Object> activeConvIds = redisTemplate.opsForSet().members("ai_active_debounces");
+            if (activeConvIds == null || activeConvIds.isEmpty()) {
+                return;
+            }
 
-            if (messageObj instanceof AiQueueMessage) {
-                AiQueueMessage message = (AiQueueMessage) messageObj;
+            long now = System.currentTimeMillis();
 
-                // Processar em thread separada para não travar a fila para outros usuários
-                executorService.submit(() -> processMessage(message));
+            for (Object objId : activeConvIds) {
+                String convId = (String) objId;
+                String silenceKey = "ai_silence_timer:" + convId;
+
+                Object lastTimestampObj = redisTemplate.opsForValue().get(silenceKey);
+                if (lastTimestampObj == null)
+                    continue;
+
+                long lastTimestamp = Long.parseLong(lastTimestampObj.toString());
+
+                // Se houveram 3 segundos de silêncio (DEBOUNCE_DELAY_MS), processamos
+                if (now - lastTimestamp >= DEBOUNCE_DELAY_MS) {
+                    processMergedMessages(convId);
+                }
             }
         } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
             log.warn("Redis connection failed in Consumer: {}", e.getMessage());
@@ -47,56 +62,66 @@ public class AiResponseConsumer {
         }
     }
 
-    private void processMessage(AiQueueMessage message) {
-        String lastMsgKey = "ai_last_timestamp:" + message.getConversationId();
-        try {
-            // 1. Verificação inicial: Se já existe uma mensagem mais nova no Redis,
-            // descarta esta
-            Object lastTimestampObj = redisTemplate.opsForValue().get(lastMsgKey);
-            if (lastTimestampObj instanceof Long) {
-                Long lastTimestamp = (Long) lastTimestampObj;
-                if (lastTimestamp > message.getTimestamp()) {
-                    log.info("Descartando mensagem antiga da conversa {}. (Timestamp: {}, Mais nova: {})",
-                            message.getConversationId(), message.getTimestamp(), lastTimestamp);
+    private void processMergedMessages(String convId) {
+        executorService.submit(() -> {
+            try {
+                // 1. Tira do Set de vigilância ANTES do processamento (evita duplicidade)
+                redisTemplate.opsForSet().remove("ai_active_debounces", convId);
+
+                String bufferKey = "ai_buffer:" + convId;
+                String metaKey = "ai_metadata:" + convId;
+                String silenceKey = "ai_silence_timer:" + convId;
+
+                // 2. Coleta mensagens acumuladas e metadados
+                java.util.List<Object> messages = redisTemplate.opsForList().range(bufferKey, 0, -1);
+                Object metaObj = redisTemplate.opsForValue().get(metaKey);
+
+                if (messages == null || messages.isEmpty() || !(metaObj instanceof AiQueueMessage)) {
+                    // Limpeza de segurança se não houver o que processar
+                    redisTemplate.delete(bufferKey);
+                    redisTemplate.delete(metaKey);
+                    redisTemplate.delete(silenceKey);
                     return;
                 }
-            }
 
-            // 2. Debounce Delay: Aguarda um pouco para ver se o usuário manda mais
-            // mensagens
-            log.info("Aguardando {}ms de silêncio para conversa {}", DEBOUNCE_DELAY_MS, message.getConversationId());
-            Thread.sleep(DEBOUNCE_DELAY_MS);
+                AiQueueMessage metadata = (AiQueueMessage) metaObj;
 
-            // 3. Verificação final: Após o delay, esta mensagem ainda é a última?
-            lastTimestampObj = redisTemplate.opsForValue().get(lastMsgKey);
-            if (lastTimestampObj instanceof Long) {
-                Long lastTimestamp = (Long) lastTimestampObj;
-                if (!lastTimestamp.equals(message.getTimestamp())) {
-                    log.info(
-                            "Usuário mandou nova mensagem durante o delay. Descartando mensagem anterior da conversa {}.",
-                            message.getConversationId());
-                    return;
+                // 3. Junta as mensagens em um único texto contextual
+                StringBuilder mergedText = new StringBuilder();
+                for (Object msg : messages) {
+                    String text = msg.toString();
+                    if (mergedText.length() > 0)
+                        mergedText.append(" ");
+                    mergedText.append(text);
+                    if (!text.endsWith(".") && !text.endsWith("!") && !text.endsWith("?")) {
+                        mergedText.append(".");
+                    }
                 }
+
+                log.info("Processando {} mensagens agrupadas para conversa: {} | Texto: {}",
+                        messages.size(), convId, mergedText);
+
+                // 4. Limpa o Redis ANTES de chamar a IA (evita rastro se falhar)
+                redisTemplate.delete(bufferKey);
+                redisTemplate.delete(metaKey);
+                redisTemplate.delete(silenceKey);
+
+                // 5. Busca as entidades e processa!
+                UUID conversationId = UUID.fromString(metadata.getConversationId());
+                UUID companyId = UUID.fromString(metadata.getCompanyId());
+
+                WhatsAppConversation conversation = conversationRepository.findById(conversationId).orElse(null);
+                Company company = companyRepository.findById(companyId).orElse(null);
+
+                if (conversation != null && company != null) {
+                    aiAgentService.processAndRespond(conversation, mergedText.toString(), metadata.getLeadName());
+                } else {
+                    log.warn("Conversation or Company not found for accumulated message: {}", metadata);
+                }
+
+            } catch (Exception e) {
+                log.error("Erro ao processar mensagens acumuladas para: " + convId, e);
             }
-
-            // 4. Se chegou aqui, é a última mensagem após o período de silêncio. Processa!
-            UUID conversationId = UUID.fromString(message.getConversationId());
-            UUID companyId = UUID.fromString(message.getCompanyId());
-
-            WhatsAppConversation conversation = conversationRepository.findById(conversationId).orElse(null);
-            Company company = companyRepository.findById(companyId).orElse(null);
-
-            if (conversation != null && company != null) {
-                log.info("Iniciando resposta da IA para conversa {} (Última mensagem confirmada)", conversationId);
-                aiAgentService.processAndRespond(conversation, message.getUserMessage(), message.getLeadName());
-            } else {
-                log.warn("Conversation or Company not found for queued message: {}", message);
-            }
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            log.error("Failed to process AI message logic", e);
-        }
+        });
     }
 }
