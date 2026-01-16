@@ -46,7 +46,7 @@ const Login: React.FC = () => {
 
             {/* Left Side: Login Form */}
             <div className="p-10 md:p-20 space-y-10 flex flex-col justify-center bg-white">
-               <div className="w-fit flex flex-col items-center space-y-6">
+               <div className="w-fit flex flex-col items-center space-y-6 -mt-12">
                   <img src={logoDark} alt="WIN.AI" className="h-16 w-auto object-contain" />
 
                   <div className="space-y-4 text-left w-full">
