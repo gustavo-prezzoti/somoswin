@@ -473,20 +473,42 @@ public class MarketingService {
 
     private void syncCampaigns(MetaConnection conn) {
         try {
-            // Using field expansion to get campaigns, adsets, and ads in fewer calls to
-            // avoid rate limits
             String url = String.format(
-                    "%s/%s/campaigns?fields=id,name,status,objective,start_time,stop_time,adsets{id,name,status,daily_budget,lifetime_budget,ads{id,name,status}}&access_token=%s",
+                    "%s/%s/campaigns?fields=id,name,status,objective,start_time,stop_time&access_token=%s",
                     metaApiBaseUrl, conn.getAdAccountId(), conn.getAccessToken());
-
             ResponseEntity<String> response = getWithRetry(url);
             JsonNode data = objectMapper.readTree(response.getBody()).get("data");
 
             if (data != null && data.isArray()) {
-                for (JsonNode campaignNode : data) {
-                    processCampaignNode(conn, campaignNode);
-                    // Small breathing room between campaigns processing if there are many
-                    Thread.sleep(200);
+                for (JsonNode node : data) {
+                    try {
+                        String metaId = node.get("id").asText();
+                        com.backend.winai.entity.MetaCampaign campaign = metaCampaignRepository.findByMetaId(metaId)
+                                .orElse(new com.backend.winai.entity.MetaCampaign());
+
+                        campaign.setCompany(conn.getCompany());
+                        campaign.setMetaId(metaId);
+                        campaign.setName(node.get("name").asText());
+                        campaign.setStatus(node.get("status").asText());
+                        campaign.setObjective(node.get("objective").asText());
+
+                        java.time.format.DateTimeFormatter metaFormatter = java.time.format.DateTimeFormatter
+                                .ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
+                        if (node.has("start_time")) {
+                            campaign.setStartTime(ZonedDateTime.parse(node.get("start_time").asText(), metaFormatter));
+                        }
+                        if (node.has("stop_time") && !node.get("stop_time").isNull()) {
+                            campaign.setStopTime(ZonedDateTime.parse(node.get("stop_time").asText(), metaFormatter));
+                        }
+
+                        com.backend.winai.entity.MetaCampaign savedCampaign = metaCampaignRepository.save(campaign);
+
+                        // Pacing: Wait 500ms before fetching adsets for this campaign
+                        Thread.sleep(500);
+                        syncAdSets(conn, savedCampaign);
+                    } catch (Exception e) {
+                        log.error("Error processing campaign {}", node.get("id").asText(), e);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -494,87 +516,75 @@ public class MarketingService {
         }
     }
 
-    private void processCampaignNode(MetaConnection conn, JsonNode node) {
+    private void syncAdSets(MetaConnection conn, com.backend.winai.entity.MetaCampaign campaign) {
         try {
-            String metaId = node.get("id").asText();
-            com.backend.winai.entity.MetaCampaign campaign = metaCampaignRepository.findByMetaId(metaId)
-                    .orElse(new com.backend.winai.entity.MetaCampaign());
+            String url = String.format(
+                    "%s/%s/adsets?fields=id,name,status,daily_budget,lifetime_budget&access_token=%s",
+                    metaApiBaseUrl, campaign.getMetaId(), conn.getAccessToken());
+            ResponseEntity<String> response = getWithRetry(url);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
 
-            campaign.setCompany(conn.getCompany());
-            campaign.setMetaId(metaId);
-            campaign.setName(node.get("name").asText());
-            campaign.setStatus(node.get("status").asText());
-            campaign.setObjective(node.get("objective").asText());
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    try {
+                        String metaId = node.get("id").asText();
+                        com.backend.winai.entity.MetaAdSet adSet = metaAdSetRepository.findByMetaId(metaId)
+                                .orElse(new com.backend.winai.entity.MetaAdSet());
 
-            java.time.format.DateTimeFormatter metaFormatter = java.time.format.DateTimeFormatter
-                    .ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
-            if (node.has("start_time")) {
-                campaign.setStartTime(ZonedDateTime.parse(node.get("start_time").asText(), metaFormatter));
-            }
-            if (node.has("stop_time") && !node.get("stop_time").isNull()) {
-                campaign.setStopTime(ZonedDateTime.parse(node.get("stop_time").asText(), metaFormatter));
-            }
+                        adSet.setCompany(conn.getCompany());
+                        adSet.setCampaign(campaign);
+                        adSet.setMetaId(metaId);
+                        adSet.setName(node.get("name").asText());
+                        adSet.setStatus(node.get("status").asText());
 
-            com.backend.winai.entity.MetaCampaign savedCampaign = metaCampaignRepository.save(campaign);
+                        if (node.has("daily_budget"))
+                            adSet.setDailyBudget(node.get("daily_budget").asLong());
+                        if (node.has("lifetime_budget"))
+                            adSet.setLifetimeBudget(node.get("lifetime_budget").asLong());
 
-            // Process nested AdSets
-            if (node.has("adsets") && node.get("adsets").has("data")) {
-                JsonNode adsetsData = node.get("adsets").get("data");
-                for (JsonNode adsetNode : adsetsData) {
-                    processAdSetNode(conn, savedCampaign, adsetNode);
+                        com.backend.winai.entity.MetaAdSet savedAdSet = metaAdSetRepository.save(adSet);
+
+                        // Pacing: Wait 500ms before fetching ads for this adset
+                        Thread.sleep(500);
+                        syncAds(conn, savedAdSet);
+                    } catch (Exception e) {
+                        log.error("Error processing adset {}", node.get("id").asText(), e);
+                    }
                 }
             }
         } catch (Exception e) {
-            log.error("Error processing campaign node {}", node.get("id").asText(), e);
+            log.error("Error syncing adsets for campaign {}", campaign.getMetaId(), e);
         }
     }
 
-    private void processAdSetNode(MetaConnection conn, com.backend.winai.entity.MetaCampaign campaign, JsonNode node) {
+    private void syncAds(MetaConnection conn, com.backend.winai.entity.MetaAdSet adSet) {
         try {
-            String metaId = node.get("id").asText();
-            com.backend.winai.entity.MetaAdSet adSet = metaAdSetRepository.findByMetaId(metaId)
-                    .orElse(new com.backend.winai.entity.MetaAdSet());
+            String url = String.format("%s/%s/ads?fields=id,name,status&access_token=%s",
+                    metaApiBaseUrl, adSet.getMetaId(), conn.getAccessToken());
+            ResponseEntity<String> response = getWithRetry(url);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
 
-            adSet.setCompany(conn.getCompany());
-            adSet.setCampaign(campaign);
-            adSet.setMetaId(metaId);
-            adSet.setName(node.get("name").asText());
-            adSet.setStatus(node.get("status").asText());
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    try {
+                        String metaId = node.get("id").asText();
+                        com.backend.winai.entity.MetaAd ad = metaAdRepository.findByMetaId(metaId)
+                                .orElse(new com.backend.winai.entity.MetaAd());
 
-            if (node.has("daily_budget"))
-                adSet.setDailyBudget(node.get("daily_budget").asLong());
-            if (node.has("lifetime_budget"))
-                adSet.setLifetimeBudget(node.get("lifetime_budget").asLong());
+                        ad.setCompany(conn.getCompany());
+                        ad.setAdSet(adSet);
+                        ad.setMetaId(metaId);
+                        ad.setName(node.get("name").asText());
+                        ad.setStatus(node.get("status").asText());
 
-            com.backend.winai.entity.MetaAdSet savedAdSet = metaAdSetRepository.save(adSet);
-
-            // Process nested Ads
-            if (node.has("ads") && node.get("ads").has("data")) {
-                JsonNode adsData = node.get("ads").get("data");
-                for (JsonNode adNode : adsData) {
-                    processAdNode(conn, savedAdSet, adNode);
+                        metaAdRepository.save(ad);
+                    } catch (Exception e) {
+                        log.error("Error processing ad {}", node.get("id").asText(), e);
+                    }
                 }
             }
         } catch (Exception e) {
-            log.error("Error processing adset node {}", node.get("id").asText(), e);
-        }
-    }
-
-    private void processAdNode(MetaConnection conn, com.backend.winai.entity.MetaAdSet adSet, JsonNode node) {
-        try {
-            String metaId = node.get("id").asText();
-            com.backend.winai.entity.MetaAd ad = metaAdRepository.findByMetaId(metaId)
-                    .orElse(new com.backend.winai.entity.MetaAd());
-
-            ad.setCompany(conn.getCompany());
-            ad.setAdSet(adSet);
-            ad.setMetaId(metaId);
-            ad.setName(node.get("name").asText());
-            ad.setStatus(node.get("status").asText());
-
-            metaAdRepository.save(ad);
-        } catch (Exception e) {
-            log.error("Error processing ad node {}", node.get("id").asText(), e);
+            log.error("Error syncing ads for adset {}", adSet.getMetaId(), e);
         }
     }
 
