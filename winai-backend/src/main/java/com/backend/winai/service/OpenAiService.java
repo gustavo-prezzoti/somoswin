@@ -447,7 +447,8 @@ public class OpenAiService {
             sysPrompt.append("### 4. MAPA DE FERRAMENTAS\n");
             sysPrompt.append("Use as ferramentas certas para cada situação:\n\n");
             sysPrompt.append("* `consultar_base_essenciallis`: Para ler sobre dúvidas técnicas/preços.\n");
-            sysPrompt.append("* `Buscar_profissionais_disponiveis`: Use SEMPRE que for oferecer horário.\n");
+            sysPrompt.append(
+                    "* `Buscar_profissionais_disponiveis`: Use SEMPRE que for oferecer horário. Você pode passar o parâmetro `dias` (ex: 7) para ver horários de uma semana inteira de uma vez.\n");
             sysPrompt.append(
                     "* `Salvar_nome_paciente` + `Criar_paciente_clinicorp` + `Criar_agendamento_local`: Apenas para confirmar o agendamento.\n");
             sysPrompt.append("* `escalar_humano`: **Use IMEDIATAMENTE** se:\n");
@@ -616,15 +617,20 @@ public class OpenAiService {
             }
             if ("Buscar_profissionais_disponiveis".equalsIgnoreCase(functionName)) {
                 java.time.LocalDate data = java.time.LocalDate.now();
+                int dias = 3; // Default
                 if (args.has("data")) {
                     try {
                         data = java.time.LocalDate.parse(args.get("data").asText());
                     } catch (Exception e) {
+                        log.warn("Formato de data inválido: {}", args.get("data").asText());
                     }
                 }
-                List<String> slots = clinicorpService.getAvailableSlots(data);
-                return slots.isEmpty() ? "Nenhum horário disponível para esta data."
-                        : "Horários disponíveis: " + String.join(", ", slots);
+                if (args.has("dias")) {
+                    dias = args.get("dias").asInt();
+                }
+                List<String> slots = clinicorpService.getAvailableSlots(data, dias);
+                return slots.isEmpty() ? "Nenhum horário disponível nos próximos " + dias + " dias."
+                        : "Horários encontrados nos próximos " + dias + " dias:\n" + String.join(", ", slots);
             }
             if ("buscar_meus_agendamentos".equalsIgnoreCase(functionName)) {
                 String telefone = args.has("telefone") ? args.get("telefone").asText() : phoneNumber;
@@ -705,7 +711,10 @@ public class OpenAiService {
 
         // Tool: Buscar_profissionais_disponiveis
         tools.add(createTool("Buscar_profissionais_disponiveis", "Busca horários disponíveis para agendamento.",
-                Map.of("data", Map.of("type", "string", "description", "Data opcional no formato YYYY-MM-DD."))));
+                Map.of(
+                        "data", Map.of("type", "string", "description", "Data opcional no formato YYYY-MM-DD."),
+                        "dias", Map.of("type", "integer", "description",
+                                "Número de dias para buscar a partir da data (padrão: 3)."))));
 
         // Tool: buscar_meus_agendamentos
         tools.add(createTool("buscar_meus_agendamentos",

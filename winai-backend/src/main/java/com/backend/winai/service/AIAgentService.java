@@ -274,20 +274,24 @@ public class AIAgentService {
             WhatsAppMessageResponse messageDto = toMessageResponse(message);
             WhatsAppConversationResponse conversationDto = toConversationResponse(conversation);
 
-            java.util.Map<String, Object> update = new java.util.HashMap<>();
-            update.put("type", "NEW_MESSAGE");
-            update.put("message", messageDto);
-            update.put("conversationId", conversation.getId());
+            com.backend.winai.dto.response.WebSocketMessage wsMessage = com.backend.winai.dto.response.WebSocketMessage
+                    .builder()
+                    .type("NEW_MESSAGE")
+                    .message(messageDto)
+                    .conversation(conversationDto)
+                    .companyId(companyId)
+                    .build();
 
-            log.debug("Message DTO before sending - ID: {}, Content: {}",
-                    messageDto.getId(), messageDto.getContent());
+            messagingTemplate.convertAndSend("/topic/whatsapp/" + companyId, wsMessage);
 
-            messagingTemplate.convertAndSend((String) ("/topic/company/" + companyId), (Object) update);
+            com.backend.winai.dto.response.WebSocketMessage convUpdate = com.backend.winai.dto.response.WebSocketMessage
+                    .builder()
+                    .type("CONVERSATION_UPDATED")
+                    .conversation(conversationDto)
+                    .companyId(companyId)
+                    .build();
 
-            java.util.Map<String, Object> chatUpdate = new java.util.HashMap<>();
-            chatUpdate.put("type", "UPDATE_CHAT");
-            chatUpdate.put("conversation", conversationDto);
-            messagingTemplate.convertAndSend((String) ("/topic/company/" + companyId), (Object) chatUpdate);
+            messagingTemplate.convertAndSend("/topic/whatsapp/conversations/" + companyId, convUpdate);
 
             log.info("WebSocket updates sent successfully for company: {}", companyId);
         } catch (Exception e) {

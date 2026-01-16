@@ -140,24 +140,24 @@ const WhatsApp: React.FC = () => {
   };
 
   useEffect(() => {
-    // Polling de conversas (a cada 15 segundos)
+    // Polling de conversas como fallback (a cada 60 segundos)
     const intervalId = setInterval(() => {
       if (user?.id && user?.company?.id) {
         loadConversations(true); // silent load
       }
-    }, 15000);
+    }, 60000);
 
     return () => clearInterval(intervalId);
   }, [user, loadConversations]);
 
   useEffect(() => {
-    // Polling de mensagens da conversa ativa (a cada 5 segundos)
+    // Polling de mensagens da conversa ativa como fallback (a cada 30 segundos)
     let msgIntervalId: NodeJS.Timeout;
 
     if (activeConversation?.id) {
       msgIntervalId = setInterval(() => {
         loadNewMessages(activeConversation.id);
-      }, 5000);
+      }, 30000);
     }
 
     return () => {
@@ -190,8 +190,8 @@ const WhatsApp: React.FC = () => {
         console.log('Message is not from active conversation, skipping');
         return prev;
       });
-      // Atualizar lista de conversas
-      loadConversations();
+      // Atualizar lista de conversas silenciosamente
+      loadConversations(true);
     } else if (data.type === 'CONVERSATION_UPDATED' && data.conversation) {
       // Atualizar conversa na lista
       setConversations(prev => {
@@ -456,7 +456,7 @@ const WhatsApp: React.FC = () => {
 
   const FormattedText: React.FC<{ text: string; className?: string }> = ({ text, className }) => {
     if (!text) return null;
-    
+
     const parseMarkdown = (content: string) => {
       const elements: React.ReactNode[] = [];
       let lastIndex = 0;
@@ -473,7 +473,7 @@ const WhatsApp: React.FC = () => {
 
       // Dividir por linhas e processar
       const lines = content.split('\n');
-      
+
       return lines.map((line, idx) => {
         // Títulos
         if (line.match(/^# [^#]/)) {
@@ -549,7 +549,7 @@ const WhatsApp: React.FC = () => {
     const formatInlineMarkdown = (text: string) => {
       const elements: React.ReactNode[] = [];
       let lastIndex = 0;
-      
+
       // Padrões: **bold**, *italic*, `code`
       const regex = /\*\*(.*?)\*\*|\*(.*?)\*|`(.*?)`/g;
       let match;

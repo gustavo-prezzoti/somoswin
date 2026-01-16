@@ -8,6 +8,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
+import org.springframework.beans.factory.annotation.Value;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,7 +21,8 @@ import java.util.Map;
 public class ClinicorpService {
 
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String PYTHON_BACKEND_URL = "http://winai-python-backend:5000/api";
+    @Value("${python.backend.url:http://python-backend:5000/api}")
+    private String pythonBackendUrl;
 
     /**
      * Searches for information in the simulated knowledge base.
@@ -34,9 +36,18 @@ public class ClinicorpService {
 
     @SuppressWarnings("unchecked")
     public List<String> getAvailableSlots(LocalDate date) {
-        log.info("Clinicorp Tool: Searching slots for date {}", date);
+        return getAvailableSlots(date, 3); // Default to 3 days if called without range
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<String> getAvailableSlots(LocalDate date, int days) {
+        log.info("Clinicorp Tool: Searching slots starting from {} for {} days", date, days);
         try {
-            String url = PYTHON_BACKEND_URL + "/agenda/disponiveis?data=" + date + "&hora_inicio=9&hora_fim=19";
+            // Using the /agenda/profissionais endpoint with com_agendas=true to get a
+            // bigger picture
+            String url = pythonBackendUrl + "/agenda/profissionais?com_agendas=true&data=" + date + "&dias_futuros="
+                    + days;
+
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     org.springframework.http.HttpMethod.GET,
@@ -44,21 +55,31 @@ public class ClinicorpService {
                     new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
                     });
 
-            if (response.getBody() != null && response.getBody().containsKey("agendas")) {
-                List<Map<String, Object>> agendas = (List<Map<String, Object>>) response.getBody().get("agendas");
-                List<String> slots = new ArrayList<>();
-                for (Map<String, Object> agenda : agendas) {
-                    // Extract available times from the agenda structure
-                    // Assuming structure based on Python code behavior
-                    Object hora = agenda.get("hora");
-                    if (hora != null) {
-                        slots.add(date + " " + hora);
+            if (response.getBody() != null && response.getBody().containsKey("profissionais")) {
+                List<Map<String, Object>> profissionais = (List<Map<String, Object>>) response.getBody()
+                        .get("profissionais");
+                List<String> allSlots = new ArrayList<>();
+
+                for (Map<String, Object> prof : profissionais) {
+                    String profNome = (String) prof.get("nome");
+                    List<Map<String, Object>> agendasPorDia = (List<Map<String, Object>>) prof.get("agendas_por_dia");
+
+                    if (agendasPorDia != null) {
+                        for (Map<String, Object> dia : agendasPorDia) {
+                            String dataStr = (String) dia.get("data");
+                            List<Map<String, Object>> slots = (List<Map<String, Object>>) dia.get("agendas");
+                            if (slots != null) {
+                                for (Map<String, Object> slot : slots) {
+                                    allSlots.add(dataStr + " " + slot.get("hora_inicio") + " (" + profNome + ")");
+                                }
+                            }
+                        }
                     }
                 }
-                return slots.isEmpty() ? Collections.emptyList() : slots;
+                return allSlots;
             }
         } catch (Exception e) {
-            log.error("Error fetching available slots from Python backend", e);
+            log.error("Error fetching available slots from Python backend at {}", pythonBackendUrl, e);
         }
         return Collections.emptyList();
     }
@@ -66,7 +87,7 @@ public class ClinicorpService {
     public boolean createPatient(String name, String phone) {
         log.info("Clinicorp Tool: Creating patient - Name: {}, Phone: {}", name, phone);
         try {
-            String url = PYTHON_BACKEND_URL + "/paciente/criar";
+            String url = pythonBackendUrl + "/paciente/criar";
             Map<String, String> requestBody = new HashMap<>();
             requestBody.put("nome", name);
             requestBody.put("telefone", phone);
@@ -97,9 +118,9 @@ public class ClinicorpService {
         log.info("Clinicorp Tool: Creating appointment for {} ({}) at {} {}", patientName, phone, date, time);
         try {
             // 1. Need a professional ID. Fetch one first.
-            String proUrl = PYTHON_BACKEND_URL + "/agenda/profissionais";
+            String url = pythonBackendUrl + "/agenda/profissionais";
             ResponseEntity<Map<String, Object>> proResponse = restTemplate.exchange(
-                    proUrl,
+                    url,
                     org.springframework.http.HttpMethod.GET,
                     null,
                     new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
@@ -119,7 +140,7 @@ public class ClinicorpService {
             }
 
             // 2. Create Appointment
-            String url = PYTHON_BACKEND_URL + "/agenda/criar";
+            url = pythonBackendUrl + "/agenda/criar";
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("profissional_id", professionalId);
             requestBody.put("data", date);
@@ -161,7 +182,7 @@ public class ClinicorpService {
     public List<Map<String, Object>> getAppointmentsByPhone(String phone) {
         log.info("Clinicorp Tool: Searching appointments for phone {}", phone);
         try {
-            String url = PYTHON_BACKEND_URL + "/paciente/agendamentos?telefone=" + phone;
+            String url = pythonBackendUrl + "/paciente/agendamentos?telefone=" + phone;
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     org.springframework.http.HttpMethod.GET,
@@ -181,7 +202,7 @@ public class ClinicorpService {
     public boolean confirmAppointment(String appointmentId) {
         log.info("Clinicorp Tool: Confirming appointment ID {}", appointmentId);
         try {
-            String url = PYTHON_BACKEND_URL + "/agenda/confirmar";
+            String url = pythonBackendUrl + "/agenda/confirmar";
             Map<String, String> body = Map.of("id", appointmentId);
 
             HttpHeaders headers = new HttpHeaders();
@@ -204,7 +225,7 @@ public class ClinicorpService {
     public boolean cancelAppointmentLocal(String appointmentId) {
         log.info("Clinicorp Tool: Canceling local appointment ID {}", appointmentId);
         try {
-            String url = PYTHON_BACKEND_URL + "/agenda/cancelar-local";
+            String url = pythonBackendUrl + "/agenda/cancelar-local";
             Map<String, String> body = Map.of("id", appointmentId);
 
             HttpHeaders headers = new HttpHeaders();
@@ -227,7 +248,7 @@ public class ClinicorpService {
     public boolean savePatientName(String name, String phone) {
         log.info("Clinicorp Tool: Saving patient name {} for phone {}", name, phone);
         try {
-            String url = PYTHON_BACKEND_URL + "/paciente/salvar-nome";
+            String url = pythonBackendUrl + "/paciente/salvar-nome";
             Map<String, String> body = Map.of("nome", name, "telefone", phone);
 
             HttpHeaders headers = new HttpHeaders();
