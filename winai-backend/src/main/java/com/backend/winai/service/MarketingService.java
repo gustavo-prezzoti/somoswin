@@ -504,8 +504,8 @@ public class MarketingService {
             String url = String.format(
                     "%s/%s/adsets?fields=id,name,status,daily_budget,lifetime_budget&access_token=%s",
                     metaApiBaseUrl, campaign.getMetaId(), conn.getAccessToken());
-            ResponseEntity<JsonNode> response = restTemplate.getForEntity(url, JsonNode.class);
-            JsonNode data = response.getBody().get("data");
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
 
             if (data != null && data.isArray()) {
                 for (JsonNode node : data) {
@@ -537,8 +537,8 @@ public class MarketingService {
         try {
             String url = String.format("%s/%s/ads?fields=id,name,status&access_token=%s",
                     metaApiBaseUrl, adSet.getMetaId(), conn.getAccessToken());
-            ResponseEntity<JsonNode> response = restTemplate.getForEntity(url, JsonNode.class);
-            JsonNode data = response.getBody().get("data");
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
 
             if (data != null && data.isArray()) {
                 for (JsonNode node : data) {
@@ -565,8 +565,8 @@ public class MarketingService {
             String url = String.format(
                     "%s/%s/insights?fields=spend,impressions,clicks,reach,inline_link_clicks,actions&date_preset=last_7d&time_increment=1&access_token=%s",
                     metaApiBaseUrl, conn.getAdAccountId(), conn.getAccessToken());
-            ResponseEntity<JsonNode> response = restTemplate.getForEntity(url, JsonNode.class);
-            JsonNode data = response.getBody().get("data");
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
 
             if (data != null && data.isArray()) {
                 for (JsonNode node : data) {
