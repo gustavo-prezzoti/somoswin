@@ -112,8 +112,8 @@ public class KnowledgeBaseService {
                 .orElseThrow(() -> new RuntimeException("Conexão não encontrada"));
 
         // UserWhatsAppConnection agora pertence diretamente à Company
-        if (!conn.getCompany().getId().equals(user.getCompany().getId())) {
-            throw new RuntimeException("Conexão pertence a outra organização");
+        if (!conn.getCompany().getId().equals(kb.getCompany().getId())) {
+            throw new RuntimeException("A Conexão e o Agente devem pertencer à mesma empresa");
         }
 
         // Remover link anterior se houver (para garantir unique por conexão)
