@@ -173,11 +173,9 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
       <aside
         className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-[#002a1e] flex flex-col transition-all duration-500 relative z-50 shadow-[10px_0_50px_rgba(0,0,0,0.2)] border-r border-white/5`}
       >
-        <div className="p-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
-              <img src={logoLight} alt="WIN.AI" className={`${isSidebarOpen ? 'h-8' : 'h-6'} w-auto object-contain`} />
-            </div>
+        <div className="p-6 flex items-center justify-center">
+          <div className="flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
+            <img src={logoLight} alt="WIN.AI" className={`${isSidebarOpen ? 'h-8' : 'h-6'} w-auto object-contain`} />
           </div>
         </div>
 

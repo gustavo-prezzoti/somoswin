@@ -24,15 +24,16 @@
 }
 
 .admin-login-logo {
-    width: 56px;
-    height: 56px;
-    background: #111827;
-    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 20px;
-    color: #ffffff;
+    margin: 0 auto 24px;
+}
+
+.admin-logo-img {
+    height: 48px;
+    width: auto;
+    object-fit: contain;
 }
 
 .admin-login-title {

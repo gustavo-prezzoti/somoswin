@@ -46,7 +46,7 @@ const Login: React.FC = () => {
 
             {/* Left Side: Login Form */}
             <div className="p-10 md:p-20 space-y-10 flex flex-col justify-center bg-white">
-               <div className="mb-4">
+               <div className="mb-4 flex justify-center">
                   <img src={logoDark} alt="WIN.AI" className="h-12 w-auto object-contain" />
                </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Zap, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 import { authService } from '../../services/api/auth.service';
+import logoBlack from '../../logo_black.png';
 import './AdminLogin.css';
 
 const AdminLogin: React.FC = () => {
@@ -46,10 +47,9 @@ const AdminLogin: React.FC = () => {
             <div className="admin-login-box">
                 <div className="admin-login-header">
                     <div className="admin-login-logo">
-                        <Zap size={24} />
+                        <img src={logoBlack} alt="Win AI" className="admin-logo-img" />
                     </div>
                     <h1 className="admin-login-title">Admin Panel</h1>
-                    <p className="admin-login-subtitle">Win AI</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="admin-login-form">
