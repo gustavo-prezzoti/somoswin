@@ -646,7 +646,7 @@ public class MarketingService {
             long followers = baseInfo.has("followers_count") ? baseInfo.get("followers_count").asLong() : 0;
 
             for (com.backend.winai.entity.InstagramMetric m : metricMap.values()) {
-                if (m.getDate().equals(LocalDate.now())) {
+                if (m.getDate() != null && m.getDate().equals(LocalDate.now())) {
                     m.setFollowerCount(followers);
                 }
                 instagramMetricRepository.save(m);
@@ -671,6 +671,7 @@ public class MarketingService {
                                         .orElse(new com.backend.winai.entity.InstagramMetric()));
 
                         m.setCompany(conn.getCompany());
+                        m.setDate(date);
                         long v = val.get("value").asLong();
                         if ("reach".equals(name))
                             m.setReach(v);
