@@ -44,10 +44,6 @@ public class Company {
     @Builder.Default
     private AccountStatus status = AccountStatus.PENDING;
 
-    @Column(nullable = false, columnDefinition = "boolean default false")
-    @Builder.Default
-    private Boolean essencialis = false;
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;

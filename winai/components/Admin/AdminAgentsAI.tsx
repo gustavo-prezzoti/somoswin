@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { knowledgeBaseService, KnowledgeBase } from '../../services/api/knowledge-base.service';
-import { Plus, Edit2, Trash2, Save, X, Bot, FileText, Database, Link as LinkIcon, Unlink, Smartphone, Toggle2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Bot, FileText, Database, Link as LinkIcon, Unlink, Smartphone } from 'lucide-react';
 import { httpClient } from '../../services/api/http-client';
 import ConfirmModal from './ConfirmModal';
 
@@ -56,13 +56,15 @@ const AdminAgentsAI = () => {
                     name: currentBase.name,
                     content: currentBase.content || '',
                     agentPrompt: currentBase.agentPrompt,
-                    isActive: currentBase.isActive ?? true
+                    isActive: currentBase.isActive ?? true,
+                    systemTemplate: currentBase.systemTemplate
                 });
             } else {
                 await knowledgeBaseService.create({
                     name: currentBase.name,
                     content: currentBase.content || '',
-                    agentPrompt: currentBase.agentPrompt
+                    agentPrompt: currentBase.agentPrompt,
+                    systemTemplate: currentBase.systemTemplate
                 });
             }
             setIsEditing(false);
@@ -172,28 +174,41 @@ const AdminAgentsAI = () => {
                         </div>
 
                         <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Modelo de Atendimento (System Prompt)</label>
+                            <select
+                                value={currentBase.systemTemplate || 'standard'}
+                                onChange={e => setCurrentBase({ ...currentBase, systemTemplate: e.target.value === 'standard' ? undefined : e.target.value })}
+                                className="w-full p-3 bg-gray-50 rounded-xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none transition-all font-medium"
+                            >
+                                <option value="standard">Padrão (Geral)</option>
+                                <option value="clinicorp">Clinicorp / Essencialis (Agendamentos)</option>
+                            </select>
+                            <p className="text-[10px] text-gray-400 mt-1 px-1">
+                                Selecione um modelo de comportamento pré-definido pelo sistema.
+                            </p>
+                        </div>
+
+                        <div>
                             <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-transparent cursor-pointer hover:bg-gray-100 transition-colors group">
                                 <span className="flex items-center gap-2 text-xs font-bold text-gray-600 uppercase tracking-widest">
                                     <Bot size={14} className="text-emerald-600" />
                                     Agente Customizado
                                 </span>
-                                <div className={`w-10 h-6 rounded-full transition-colors flex items-center p-0.5 ${
-                                    isCustomized ? 'bg-emerald-600' : 'bg-gray-300'
-                                }`}>
-                                    <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                                        isCustomized ? 'translate-x-4' : 'translate-x-0'
-                                    }`}></div>
+                                <div className={`w-10 h-6 rounded-full transition-colors flex items-center p-0.5 ${isCustomized ? 'bg-emerald-600' : 'bg-gray-300'
+                                    }`}>
+                                    <div className={`w-5 h-5 bg-white rounded-full transition-transform ${isCustomized ? 'translate-x-4' : 'translate-x-0'
+                                        }`}></div>
                                 </div>
                             </label>
                             <p className="text-xs text-gray-400 mt-2 px-3">
-                                {isCustomized 
+                                {isCustomized
                                     ? '✓ Ative para adicionar prompt personalizado com instruções específicas'
                                     : 'Use um agente padrão ou ative para customizar com prompt próprio'}
                             </p>
                         </div>
 
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             checked={isCustomized}
                             onChange={e => setIsCustomized(e.target.checked)}
                             className="hidden"
@@ -344,7 +359,14 @@ const AdminAgentsAI = () => {
                             </div>
                         </div>
 
-                        <h3 className="font-black text-gray-800 text-lg mb-2 line-clamp-1">{base.name}</h3>
+                        <h3 className="font-black text-gray-800 text-lg mb-2 line-clamp-1 flex items-center gap-2">
+                            {base.name}
+                            {base.systemTemplate && (
+                                <span className="text-[9px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold uppercase">
+                                    {base.systemTemplate}
+                                </span>
+                            )}
+                        </h3>
                         <p className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1">{base.content}</p>
 
                         <div className="flex items-center justify-between pt-4 border-t border-gray-50 mt-auto">

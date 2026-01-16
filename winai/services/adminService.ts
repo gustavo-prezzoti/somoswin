@@ -87,7 +87,6 @@ export interface Company {
     id: string;
     name: string;
     createdAt?: string;
-    essencialis?: boolean;
 }
 
 export interface CreateCompanyRequest {
@@ -96,7 +95,6 @@ export interface CreateCompanyRequest {
 
 export interface UpdateCompanyRequest {
     name?: string;
-    essencialis?: boolean;
 }
 
 export interface CreateUserWhatsAppConnectionRequest {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2, Building2, X, Loader2, Zap } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Building2, X, Loader2 } from 'lucide-react';
 import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest } from '../../services/adminService';
 
 const AdminCompanies: React.FC = () => {
@@ -120,31 +120,6 @@ const AdminCompanies: React.FC = () => {
         }
     };
 
-    const handleToggleEssencialis = async (company: Company) => {
-        try {
-            const newStatus = !company.essencialis;
-            const action = newStatus ? 'ativar' : 'desativar';
-            if (!window.confirm(`Deseja realmente ${action} o modo Essencialis (Clinicorp) para ${company.name}?`)) {
-                return;
-            }
-
-            await adminService.updateCompany(company.id, {
-                // Preserva o nome atual, envia apenas o flag
-                name: company.name,
-                essencialis: newStatus
-            });
-
-            // Atualiza localmente para feedback instantâneo e depois faz refetch
-            setCompanies(prev => prev.map(c =>
-                c.id === company.id ? { ...c, essencialis: newStatus } : c
-            ));
-
-        } catch (error) {
-            console.error('Failed to toggle Essencialis:', error);
-            alert('Erro ao atualizar status.');
-        }
-    };
-
     const filteredCompanies = companies.filter(company =>
         company.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -195,26 +170,14 @@ const AdminCompanies: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredCompanies.map(company => (
                     <div key={company.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow relative overflow-hidden">
-                        {/* Status Strip */}
-                        <div className={`absolute top-0 left-0 w-1 h-full ${company.essencialis ? 'bg-purple-500' : 'bg-gray-200'}`} />
-
                         <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${company.essencialis ? 'bg-purple-100' : 'bg-emerald-100'}`}>
-                                    {company.essencialis ? (
-                                        <span className="text-xl">🌸</span>
-                                    ) : (
-                                        <Building2 className="w-6 h-6 text-emerald-600" />
-                                    )}
+                                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-100">
+                                    <Building2 className="w-6 h-6 text-emerald-600" />
                                 </div>
                                 <div>
                                     <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                                         {company.name}
-                                        {company.essencialis && (
-                                            <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">
-                                                Essencialis
-                                            </span>
-                                        )}
                                     </h3>
                                     {company.createdAt && (
                                         <span className="text-xs text-gray-400">
@@ -224,16 +187,6 @@ const AdminCompanies: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <button
-                                    onClick={() => handleToggleEssencialis(company)}
-                                    title={company.essencialis ? "Desativar Modo Essencialis" : "Ativar Modo Essencialis"}
-                                    className={`p-2 rounded-lg transition-colors ${company.essencialis
-                                        ? 'text-purple-600 hover:bg-purple-50'
-                                        : 'text-gray-300 hover:text-purple-500 hover:bg-purple-50'
-                                        }`}
-                                >
-                                    <Zap size={16} className={company.essencialis ? "fill-purple-600" : ""} />
-                                </button>
                                 <button
                                     onClick={() => handleOpenEditModal(company)}
                                     className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"

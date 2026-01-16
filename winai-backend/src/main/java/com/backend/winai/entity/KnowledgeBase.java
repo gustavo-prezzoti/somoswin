@@ -38,6 +38,9 @@ public class KnowledgeBase {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Column(name = "system_template")
+    private String systemTemplate; // Ex: 'clinicorp'
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;

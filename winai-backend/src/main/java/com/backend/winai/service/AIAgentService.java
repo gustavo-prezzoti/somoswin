@@ -79,9 +79,10 @@ public class AIAgentService {
 
             List<String> recentMessages = getRecentConversationHistory(conv.getId(), 10);
 
-            // BRANCHING: Check for Essencialis Mode
-            if (conv.getCompany() != null && Boolean.TRUE.equals(conv.getCompany().getEssencialis())) {
-                log.info("Activate Essencialis Clinicorp Mode for conversation: {}", conv.getId());
+            // BRANCHING: Check for Custom System Templates (e.g., Clinicorp)
+            if ("clinicorp".equalsIgnoreCase(knowledgeBase.getSystemTemplate())) {
+                log.info("Activate Clinicorp System Template for conversation: {} using KB: {}", conv.getId(),
+                        knowledgeBase.getId());
                 String contextInfo = "Data atual: " + java.time.LocalDateTime.now() +
                         "\nNome do Paciente/Lead: " + (leadName != null ? leadName : "Não identificado");
 

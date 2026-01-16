@@ -279,7 +279,6 @@ public class AdminService {
                     map.put("id", company.getId().toString());
                     map.put("name", company.getName());
                     map.put("createdAt", company.getCreatedAt() != null ? company.getCreatedAt().toString() : null);
-                    map.put("essencialis", company.getEssencialis());
                     return map;
                 })
                 .collect(Collectors.toList());
@@ -304,9 +303,6 @@ public class AdminService {
         }
         if (company.getStatus() == null) {
             company.setStatus(com.backend.winai.entity.AccountStatus.ACTIVE);
-        }
-        if (company.getEssencialis() == null) {
-            company.setEssencialis(false);
         }
 
         Company savedCompany = companyRepository.save(company);
@@ -339,9 +335,6 @@ public class AdminService {
         }
         if (companyDetails.getLeadVolume() != null) {
             company.setLeadVolume(companyDetails.getLeadVolume());
-        }
-        if (companyDetails.getEssencialis() != null) {
-            company.setEssencialis(companyDetails.getEssencialis());
         }
 
         Company savedCompany = companyRepository.save(company);
