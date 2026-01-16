@@ -285,10 +285,14 @@ public class AIAgentService {
 
     private void sendWebSocketUpdate(UUID companyId, WhatsAppMessage message, WhatsAppConversation conversation) {
         try {
-            log.debug("Sending WebSocket update - Message ID: {}, Content length: {}, From me: {}",
-                    message.getId(),
-                    message.getContent() != null ? message.getContent().length() : 0,
-                    message.getFromMe());
+            if (message != null) {
+                log.debug("Sending WebSocket update - Message ID: {}, Content length: {}, From me: {}",
+                        message.getId(),
+                        message.getContent() != null ? message.getContent().length() : 0,
+                        message.getFromMe());
+            } else {
+                log.debug("Sending WebSocket update for conversation: {}", conversation.getId());
+            }
 
             // Converter para DTOs para evitar LazyInitializationException durante
             // serialização JSON
@@ -356,6 +360,23 @@ public class AIAgentService {
 
             // 4. Also notify via WebSocket about the mode change for agents online
             sendWebSocketUpdate(conversation.getCompany().getId(), null, conversation);
+
+            // 5. Send explicit mode change and notification events
+            com.backend.winai.dto.response.WebSocketMessage modeChange = com.backend.winai.dto.response.WebSocketMessage
+                    .builder()
+                    .type("SUPPORT_MODE_CHANGED")
+                    .conversationId(conversation.getId().toString())
+                    .mode("HUMAN")
+                    .companyId(conversation.getCompany().getId())
+                    .build();
+            messagingTemplate.convertAndSend("/topic/whatsapp/" + conversation.getCompany().getId(), modeChange);
+
+            com.backend.winai.dto.response.WebSocketMessage notificationEvent = com.backend.winai.dto.response.WebSocketMessage
+                    .builder()
+                    .type("NOTIFICATION_RECEIVED")
+                    .companyId(conversation.getCompany().getId())
+                    .build();
+            messagingTemplate.convertAndSend("/topic/whatsapp/" + conversation.getCompany().getId(), notificationEvent);
         }
     }
 

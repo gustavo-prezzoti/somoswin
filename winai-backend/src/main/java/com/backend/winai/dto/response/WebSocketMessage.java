@@ -16,5 +16,6 @@ public class WebSocketMessage {
     private WhatsAppMessageResponse message;
     private WhatsAppConversationResponse conversation;
     private UUID companyId;
+    private String conversationId;
+    private String mode;
 }
-

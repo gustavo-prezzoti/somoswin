@@ -584,6 +584,11 @@ public class OpenAiService {
                         // Utiliza o id_conversa ou telefone como identificador para Redis
                         String result = executeClinicorpTool(functionName, arguments, memoryKey, telefone);
 
+                        // If tool requested handoff, stop everything and return token
+                        if ("HUMAN_HANDOFF_REQUESTED".equals(result)) {
+                            return "HUMAN_HANDOFF_REQUESTED";
+                        }
+
                         Map<String, Object> toolMsg = new HashMap<>();
                         toolMsg.put("role", "tool");
                         toolMsg.put("tool_call_id", toolCallId);

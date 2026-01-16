@@ -7,6 +7,8 @@ interface WebSocketMessage {
     message?: any;
     conversation?: any;
     companyId: string;
+    conversationId?: string;
+    mode?: string;
 }
 
 export const useWebSocket = (
@@ -39,7 +41,7 @@ export const useWebSocket = (
             onConnect: () => {
                 setIsConnected(true);
                 console.log('WebSocket conectado');
-                
+
                 // Subscrever aos tópicos da empresa
                 client.subscribe(`/topic/whatsapp/${companyId}`, (message: IMessage) => {
                     try {

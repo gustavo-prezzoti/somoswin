@@ -47,6 +47,7 @@ import AdminAgentsAI from './components/Admin/AdminAgentsAI';
 import AdminCompanies from './components/Admin/AdminCompanies';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
+import { useWebSocket } from './hooks/useWebSocket';
 
 const SidebarItem = ({ to, icon: Icon, label, isActive, isCollapsed }: { to: string, icon: any, label: string, isActive: boolean, isCollapsed: boolean }) => (
   <Link
@@ -123,6 +124,18 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
       clearInterval(interval);
     };
   }, []);
+
+  // WebSocket for real-time notifications
+  useWebSocket(
+    user?.company?.id || null,
+    (data) => {
+      if (data.type === 'NOTIFICATION_RECEIVED') {
+        console.log('Real-time notification received, refreshing count...');
+        loadUnreadCount();
+      }
+    },
+    !!user?.company?.id
+  );
 
   const loadUser = async () => {
     try {
