@@ -49,7 +49,7 @@ const Login: React.FC = () => {
                <div className="w-fit flex flex-col items-center space-y-6">
                   <img src={logoDark} alt="WIN.AI" className="h-16 w-auto object-contain" />
 
-                  <div className="space-y-4 text-center">
+                  <div className="space-y-4 text-left w-full">
                      <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter leading-none italic uppercase">
                         Acesso à <br />
                         <span className="text-emerald-600">Operação.</span>
