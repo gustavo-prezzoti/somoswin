@@ -11,6 +11,8 @@ import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
+import com.backend.winai.repository.UserWhatsAppConnectionRepository;
+import com.backend.winai.entity.UserWhatsAppConnection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -35,6 +37,7 @@ public class WhatsAppWebhookService {
     private final AIAgentService aiAgentService;
     private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
     private final com.backend.winai.queue.AiResponseProducer aiResponseProducer;
+    private final UserWhatsAppConnectionRepository userWhatsAppConnectionRepository;
 
     /**
      * Processa webhook do Uazap recebido via n8n
@@ -470,8 +473,35 @@ public class WhatsAppWebhookService {
     }
 
     private Company findCompanyByWebhook(UazapWebhookRequest webhook) {
-        // Por enquanto, busca a primeira empresa
-        // Futuramente pode mapear por token/instance
+        String token = webhook.getToken();
+        String instanceName = webhook.getInstanceName();
+
+        if (token != null && !token.isEmpty()) {
+            // Tenta buscar primeiro pelo token/URL que é mais preciso
+            Optional<UserWhatsAppConnection> conn = userWhatsAppConnectionRepository
+                    .findByInstanceBaseUrlAndInstanceToken(webhook.getBaseUrl(), token);
+
+            if (conn.isPresent()) {
+                return conn.get().getCompany();
+            }
+        }
+
+        if (instanceName != null && !instanceName.isEmpty()) {
+            // Tenta buscar pelo nome da instância
+            List<UserWhatsAppConnection> conns = userWhatsAppConnectionRepository.findByInstanceName(instanceName);
+            if (!conns.isEmpty()) {
+                // Se houver mais de uma empresa com o mesmo nome de instância (raro por causa
+                // do prefixo),
+                // pega a primeira ou tenta filtrar melhor no futuro
+                return conns.get(0).getCompany();
+            }
+        }
+
+        log.warn(
+                "Nenhuma conexão de WhatsApp encontrada para Token: {} ou Instância: {}. Usando fallback para primeira empresa.",
+                token, instanceName);
+
+        // Fallback apenas se nada for encontrado, para não quebrar fluxos legados
         return companyRepository.findAll().stream().findFirst().orElse(null);
     }
 
