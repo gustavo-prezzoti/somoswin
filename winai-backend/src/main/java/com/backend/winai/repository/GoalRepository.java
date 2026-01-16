@@ -17,4 +17,6 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
             GoalStatus status);
 
     List<Goal> findByCompanyOrderByCreatedAtDesc(Company company);
+
+    void deleteByCompany(Company company);
 }

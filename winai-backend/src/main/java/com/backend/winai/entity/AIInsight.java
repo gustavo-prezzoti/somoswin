@@ -36,6 +36,7 @@ public class AIInsight {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private InsightPriority priority = InsightPriority.MEDIUM;
 
     @Column(name = "action_url")
@@ -45,9 +46,11 @@ public class AIInsight {
     private String actionLabel;
 
     @Column(name = "is_read")
+    @Builder.Default
     private Boolean isRead = false;
 
     @Column(name = "is_dismissed")
+    @Builder.Default
     private Boolean isDismissed = false;
 
     @Column(name = "created_at")

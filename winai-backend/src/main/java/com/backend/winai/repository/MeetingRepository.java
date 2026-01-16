@@ -37,4 +37,6 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
                         @Param("endDate") LocalDate endDate);
 
         List<Meeting> findByCompanyAndGoogleEventIdIsNotNull(Company company);
+
+        void deleteByCompany(Company company);
 }

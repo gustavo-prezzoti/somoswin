@@ -15,7 +15,22 @@ import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
+import com.backend.winai.repository.LeadRepository;
+import com.backend.winai.repository.KnowledgeBaseRepository;
+import com.backend.winai.repository.KnowledgeBaseChunkRepository;
+import com.backend.winai.repository.MeetingRepository;
+import com.backend.winai.repository.SocialMediaProfileRepository;
+import com.backend.winai.repository.SocialGrowthChatRepository;
+import com.backend.winai.repository.MetaConnectionRepository;
+import com.backend.winai.repository.GoogleDriveConnectionRepository;
+import com.backend.winai.repository.GoalRepository;
+import com.backend.winai.repository.NotificationRepository;
+import com.backend.winai.repository.RefreshTokenRepository;
+import com.backend.winai.repository.AIInsightRepository;
+import com.backend.winai.repository.DashboardMetricsRepository;
 import com.backend.winai.entity.UserWhatsAppConnection;
+import com.backend.winai.entity.WhatsAppConversation;
+import com.backend.winai.entity.KnowledgeBase;
 import com.backend.winai.dto.request.CreateUserWhatsAppConnectionRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +58,19 @@ public class AdminService {
     private final WhatsAppConversationRepository conversationRepository;
     private final UserWhatsAppConnectionRepository connectionRepository;
     private final KnowledgeBaseConnectionRepository knowledgeBaseConnectionRepository;
+    private final LeadRepository leadRepository;
+    private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final KnowledgeBaseChunkRepository knowledgeBaseChunkRepository;
+    private final MeetingRepository meetingRepository;
+    private final SocialMediaProfileRepository socialMediaProfileRepository;
+    private final SocialGrowthChatRepository socialGrowthChatRepository;
+    private final MetaConnectionRepository metaConnectionRepository;
+    private final GoogleDriveConnectionRepository googleDriveConnectionRepository;
+    private final GoalRepository goalRepository;
+    private final NotificationRepository notificationRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final AIInsightRepository aiInsightRepository;
+    private final DashboardMetricsRepository dashboardMetricsRepository;
     private final UazapService uazapService;
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -222,11 +250,20 @@ public class AdminService {
      */
     @Transactional
     public void hardDeleteUser(UUID userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new RuntimeException("Usuário não encontrado");
-        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
-        userRepository.deleteById(userId);
+        // Cascade delete dependências do usuário
+        refreshTokenRepository.deleteByUser(user);
+        notificationRepository.deleteByUser(user);
+
+        // Limpar referências em conexões WhatsApp
+        connectionRepository.findByCreatedById(userId).forEach(conn -> {
+            conn.setCreatedBy(null);
+            connectionRepository.save(conn);
+        });
+
+        userRepository.delete(user);
         log.info("Usuário {} excluído permanentemente", userId);
     }
 
@@ -317,28 +354,56 @@ public class AdminService {
      */
     @Transactional
     public void deleteCompany(UUID companyId) {
-        if (!companyRepository.existsById(companyId)) {
-            throw new RuntimeException("Empresa não encontrada");
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        log.info("Iniciando exclusão em cascata da empresa: {} ({})", company.getName(), companyId);
+
+        // 1. WhatsApp e Mensagens
+        List<WhatsAppConversation> conversations = conversationRepository.findByCompany(company);
+        for (WhatsAppConversation conv : conversations) {
+            messageRepository.deleteAll(messageRepository.findByConversationOrderByMessageTimestampAsc(conv));
+        }
+        conversationRepository.deleteAll(conversations);
+
+        // 2. Conexões e IA
+        List<UserWhatsAppConnection> connections = connectionRepository.findByCompanyId(companyId);
+        for (UserWhatsAppConnection conn : connections) {
+            knowledgeBaseConnectionRepository.deleteByConnection(conn);
+        }
+        connectionRepository.deleteAll(connections);
+
+        List<KnowledgeBase> kbs = knowledgeBaseRepository.findByCompanyOrderByUpdatedAtDesc(company);
+        for (KnowledgeBase kb : kbs) {
+            knowledgeBaseChunkRepository.deleteByKnowledgeBase(kb);
+        }
+        knowledgeBaseRepository.deleteAll(kbs);
+
+        // 3. Leads e Insights
+        leadRepository.deleteAll(leadRepository.findByCompanyOrderByCreatedAtDesc(company));
+        aiInsightRepository.deleteByCompany(company);
+        dashboardMetricsRepository.deleteByCompany(company);
+
+        // 4. Integrações Sociais e Outros
+        socialMediaProfileRepository.findByCompany(company).ifPresent(socialMediaProfileRepository::delete);
+        socialGrowthChatRepository.deleteByCompany(company);
+        metaConnectionRepository.findByCompany(company).ifPresent(metaConnectionRepository::delete);
+        googleDriveConnectionRepository.findByCompany(company).ifPresent(googleDriveConnectionRepository::delete);
+
+        meetingRepository.deleteByCompany(company);
+        goalRepository.deleteByCompany(company);
+
+        // 5. Usuários (incluindo dependências do usuário)
+        List<User> users = userRepository.findByCompanyId(companyId);
+        for (User user : users) {
+            refreshTokenRepository.deleteByUser(user);
+            notificationRepository.deleteByUser(user);
+            userRepository.delete(user);
         }
 
-        // Verificar se há usuários associados
-        List<User> usersWithCompany = userRepository.findByCompanyId(companyId);
-        if (!usersWithCompany.isEmpty()) {
-            String userNames = usersWithCompany.stream()
-                    .limit(5)
-                    .map(User::getName)
-                    .collect(Collectors.joining(", "));
-            int remaining = usersWithCompany.size() - 5;
-            String message = "Não é possível excluir esta empresa. Existem " + usersWithCompany.size()
-                    + " usuário(s) associado(s): " + userNames;
-            if (remaining > 0) {
-                message += " e mais " + remaining + " outro(s)";
-            }
-            throw new RuntimeException(message);
-        }
-
-        companyRepository.deleteById(companyId);
-        log.info("Empresa excluída: {}", companyId);
+        // 6. Por fim, a empresa
+        companyRepository.delete(company);
+        log.info("Empresa {} e todos os seus dados foram excluídos com sucesso", companyId);
     }
 
     // ========== INSTÂNCIAS WHATSAPP ==========

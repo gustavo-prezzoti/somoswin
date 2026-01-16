@@ -17,4 +17,6 @@ public interface AIInsightRepository extends JpaRepository<AIInsight, Long> {
     List<AIInsight> findByCompanyAndIsReadFalseAndIsDismissedFalse(Company company);
 
     long countByCompanyAndIsReadFalseAndIsDismissedFalse(Company company);
+
+    void deleteByCompany(Company company);
 }

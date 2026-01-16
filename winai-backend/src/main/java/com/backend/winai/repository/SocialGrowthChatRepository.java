@@ -11,4 +11,6 @@ import java.util.UUID;
 @Repository
 public interface SocialGrowthChatRepository extends JpaRepository<SocialGrowthChat, UUID> {
     List<SocialGrowthChat> findByCompanyOrderByCreatedAtDesc(Company company);
+
+    void deleteByCompany(Company company);
 }

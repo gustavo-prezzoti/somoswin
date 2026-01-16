@@ -28,26 +28,33 @@ public class DashboardMetrics {
 
     // Métricas principais
     @Column(name = "leads_captured")
+    @Builder.Default
     private Integer leadsCaptured = 0;
 
     @Column(name = "cpl_average", precision = 10, scale = 2)
+    @Builder.Default
     private BigDecimal cplAverage = BigDecimal.ZERO;
 
     @Column(name = "conversion_rate", precision = 5, scale = 2)
+    @Builder.Default
     private BigDecimal conversionRate = BigDecimal.ZERO;
 
     @Column(name = "roi", precision = 5, scale = 2)
+    @Builder.Default
     private BigDecimal roi = BigDecimal.ZERO;
 
     // Métricas do gráfico
     @Column(name = "leads_current_period")
+    @Builder.Default
     private Integer leadsCurrentPeriod = 0;
 
     @Column(name = "leads_previous_period")
+    @Builder.Default
     private Integer leadsPreviousPeriod = 0;
 
     // Score de performance
     @Column(name = "performance_score")
+    @Builder.Default
     private Integer performanceScore = 0;
 
     @Column(name = "created_at")
