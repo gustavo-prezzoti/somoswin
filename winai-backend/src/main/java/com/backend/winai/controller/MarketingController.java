@@ -59,4 +59,16 @@ public class MarketingController {
         marketingService.disconnectMeta(user);
         return ResponseEntity.ok().build();
     }
+
+    @PostMapping("/auth/meta/deauthorize")
+    public ResponseEntity<Void> handleMetaDeauthorize(@RequestParam("signed_request") String signedRequest) {
+        marketingService.handleMetaDeauthorize(signedRequest);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/auth/meta/data-deletion")
+    public ResponseEntity<Map<String, String>> handleMetaDataDeletion(
+            @RequestParam("signed_request") String signedRequest) {
+        return ResponseEntity.ok(marketingService.handleMetaDataDeletion(signedRequest));
+    }
 }

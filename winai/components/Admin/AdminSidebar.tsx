@@ -2,19 +2,14 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Users, Smartphone, Settings, ArrowLeft, Zap, Link, Bot, Building2 } from 'lucide-react';
 import './AdminSidebar.css';
+import logoBlack from '../../logo_black.png';
 
 const AdminSidebar: React.FC = () => {
     return (
         <div className="admin-sidebar">
             <div className="admin-sidebar-header">
                 <div className="admin-logo">
-                    <div className="admin-logo-icon">
-                        <Zap size={20} />
-                    </div>
-                    <div className="admin-logo-text">
-                        <span className="admin-logo-title">Win AI</span>
-                        <span className="admin-logo-subtitle">Admin Panel</span>
-                    </div>
+                    <img src={logoBlack} alt="Win AI Admin" className="admin-logo-img" style={{ height: '32px', width: 'auto' }} />
                 </div>
             </div>
 

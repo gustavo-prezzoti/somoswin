@@ -28,11 +28,23 @@ public class MetaConnection {
     @Column(name = "access_token", columnDefinition = "TEXT")
     private String accessToken;
 
+    @Column(name = "meta_user_id")
+    private String metaUserId;
+
+    @Column(name = "token_expires_at")
+    private ZonedDateTime tokenExpiresAt;
+
+    @Column(name = "is_long_lived")
+    private boolean isLongLived;
+
     @Column(name = "ad_account_id")
     private String adAccountId;
 
     @Column(name = "page_id")
     private String pageId;
+
+    @Column(name = "instagram_business_id")
+    private String instagramBusinessId;
 
     @Column(name = "business_id")
     private String businessId;

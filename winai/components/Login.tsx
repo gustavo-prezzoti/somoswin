@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowRight, Zap, Check, ShieldCheck, Cpu, TrendingUp, Loader2 } from 'lucide-react';
 import { authService } from '../services';
-
+import logoDark from '../logo_dark.png';
 
 const Login: React.FC = () => {
    const [email, setEmail] = useState('');
@@ -47,11 +46,8 @@ const Login: React.FC = () => {
 
             {/* Left Side: Login Form */}
             <div className="p-10 md:p-20 space-y-10 flex flex-col justify-center bg-white">
-               <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-600/30">
-                     <span className="text-white font-black text-2xl">W</span>
-                  </div>
-                  <span className="text-2xl font-black text-gray-800 tracking-tighter italic">WIN.AI</span>
+               <div className="mb-4">
+                  <img src={logoDark} alt="WIN.AI" className="h-12 w-auto object-contain" />
                </div>
 
                <div className="space-y-4">

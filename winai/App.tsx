@@ -49,6 +49,8 @@ import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
 import { useWebSocket } from './hooks/useWebSocket';
 
+import logoLight from './logo_light.png';
+
 const SidebarItem = ({ to, icon: Icon, label, isActive, isCollapsed }: { to: string, icon: any, label: string, isActive: boolean, isCollapsed: boolean }) => (
   <Link
     to={to}
@@ -173,15 +175,9 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
       >
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.3)] group cursor-pointer hover:rotate-12 transition-transform">
-              <span className="text-white font-black text-xl italic">W</span>
+            <div className="flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
+              <img src={logoLight} alt="WIN.AI" className={`${isSidebarOpen ? 'h-8' : 'h-6'} w-auto object-contain`} />
             </div>
-            {isSidebarOpen && (
-              <div className="flex flex-col">
-                <span className="text-white font-black text-lg tracking-tighter italic leading-none">WIN.AI</span>
-                <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Performance</span>
-              </div>
-            )}
           </div>
         </div>
 

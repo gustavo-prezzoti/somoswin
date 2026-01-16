@@ -13,4 +13,6 @@ public interface MetaConnectionRepository extends JpaRepository<MetaConnection, 
     Optional<MetaConnection> findByCompany(Company company);
 
     Optional<MetaConnection> findByCompanyId(UUID companyId);
+
+    Optional<MetaConnection> findByMetaUserId(String metaUserId);
 }

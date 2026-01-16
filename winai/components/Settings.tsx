@@ -61,6 +61,16 @@ const Settings: React.FC = () => {
       showToast('Meta Ads conectado com sucesso!', 'success');
       window.history.replaceState({}, document.title, window.location.hash.split('?')[0]);
     }
+    if (window.location.href.includes('error=meta_auth_failed')) {
+      showToast('Falha na autenticação com a Meta. Tente novamente.', 'error');
+      window.history.replaceState({}, document.title, window.location.hash.split('?')[0]);
+    }
+    if (window.location.href.includes('deletion_id=')) {
+      const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
+      const deletionId = urlParams.get('deletion_id');
+      showToast(`Solicitação de exclusão de dados processada. ID: ${deletionId}`, 'success');
+      window.history.replaceState({}, document.title, window.location.hash.split('?')[0]);
+    }
   }, []);
 
   const loadUser = async () => {
@@ -173,7 +183,7 @@ const Settings: React.FC = () => {
         setWhatsappConnected(true);
         showToast('WhatsApp já está conectado', 'success');
       } else {
-        showToast('Solicitação enviada. Verifique seu WhatsApp.', 'default');
+        showToast('Solicitação enviada. Verifique seu WhatsApp.', 'info');
       }
     } catch (error) {
       console.error('Failed to connect whatsapp', error);
