@@ -143,7 +143,7 @@ public class MarketingService {
 
             // 3. Fetch Insights (last 30 days)
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=impressions,reach&period=day&access_token=%s",
+                    "%s/%s/insights?metric=reach&period=day&access_token=%s",
                     metaApiBaseUrl, igId, accessToken);
             JsonNode insightsData = objectMapper
                     .readTree(restTemplate.getForEntity(insightsUrl, String.class).getBody()).get("data");
@@ -163,7 +163,7 @@ public class MarketingService {
         if (insights != null && insights.isArray()) {
             for (JsonNode metric : insights) {
                 String name = metric.get("name").asText();
-                if ("impressions".equals(name)) {
+                if ("impressions".equals(name) || "reach".equals(name)) {
                     JsonNode values = metric.get("values");
                     for (JsonNode val : values) {
                         long v = val.get("value").asLong();
