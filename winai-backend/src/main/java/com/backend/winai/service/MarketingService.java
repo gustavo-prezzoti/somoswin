@@ -483,11 +483,13 @@ public class MarketingService {
                     campaign.setStatus(node.get("status").asText());
                     campaign.setObjective(node.get("objective").asText());
 
+                    java.time.format.DateTimeFormatter metaFormatter = java.time.format.DateTimeFormatter
+                            .ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
                     if (node.has("start_time")) {
-                        campaign.setStartTime(ZonedDateTime.parse(node.get("start_time").asText()));
+                        campaign.setStartTime(ZonedDateTime.parse(node.get("start_time").asText(), metaFormatter));
                     }
                     if (node.has("stop_time") && !node.get("stop_time").isNull()) {
-                        campaign.setStopTime(ZonedDateTime.parse(node.get("stop_time").asText()));
+                        campaign.setStopTime(ZonedDateTime.parse(node.get("stop_time").asText(), metaFormatter));
                     }
 
                     com.backend.winai.entity.MetaCampaign savedCampaign = metaCampaignRepository.save(campaign);
@@ -617,7 +619,7 @@ public class MarketingService {
             String igId = igNode.get("id").asText();
 
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=impressions,reach,profile_views&period=day&access_token=%s",
+                    "%s/%s/insights?metric=reach,profile_views&period=day&access_token=%s",
                     metaApiBaseUrl, igId, conn.getAccessToken());
             ResponseEntity<String> insightsRes = restTemplate.getForEntity(insightsUrl, String.class);
             JsonNode insights = objectMapper.readTree(insightsRes.getBody()).get("data");
