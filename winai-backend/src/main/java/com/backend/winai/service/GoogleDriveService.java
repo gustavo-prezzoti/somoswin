@@ -104,7 +104,7 @@ public class GoogleDriveService {
     @Transactional
     public String handleCallback(String code, String companyId) {
         if (clientId.isEmpty() || clientSecret.isEmpty()) {
-            return frontendUrl + "/#/configuracoes?error=credentials_not_configured";
+            return frontendUrl + "/configuracoes?error=credentials_not_configured";
         }
 
         try {
@@ -140,11 +140,11 @@ public class GoogleDriveService {
                 log.error("Initial sync failed", e);
             }
 
-            return frontendUrl + "/#/configuracoes?google=connected";
+            return frontendUrl + "/configuracoes?google=connected";
 
         } catch (Exception e) {
             log.error("Error handling OAuth callback", e);
-            return frontendUrl + "/#/configuracoes?error=oauth_failed";
+            return frontendUrl + "/configuracoes?error=oauth_failed";
         }
     }
 
@@ -382,7 +382,8 @@ public class GoogleDriveService {
         boolean hasRefreshToken = refreshToken != null && !refreshToken.trim().isEmpty();
 
         // Usar UserCredentials que suporta refresh automático
-        com.google.auth.oauth2.UserCredentials.Builder credentialsBuilder = com.google.auth.oauth2.UserCredentials.newBuilder()
+        com.google.auth.oauth2.UserCredentials.Builder credentialsBuilder = com.google.auth.oauth2.UserCredentials
+                .newBuilder()
                 .setClientId(clientId)
                 .setClientSecret(clientSecret)
                 .setAccessToken(new AccessToken(
@@ -406,9 +407,10 @@ public class GoogleDriveService {
                 driveConnectionRepository.save(connection);
                 log.info("Token refreshed successfully");
             } catch (Exception e) {
-                log.warn("Failed to refresh token for company {}: {}. Connection may need to be re-authenticated.", 
+                log.warn("Failed to refresh token for company {}: {}. Connection may need to be re-authenticated.",
                         connection.getCompany().getId(), e.getMessage());
-                // Se não conseguir fazer refresh e o token está expirado, marcar como desconectado
+                // Se não conseguir fazer refresh e o token está expirado, marcar como
+                // desconectado
                 if (connection.getTokenExpiresAt().isBefore(java.time.ZonedDateTime.now())) {
                     connection.setConnected(false);
                     driveConnectionRepository.save(connection);
@@ -417,7 +419,7 @@ public class GoogleDriveService {
             }
         } else if (!hasRefreshToken && connection.getTokenExpiresAt().isBefore(java.time.ZonedDateTime.now())) {
             // Token expirado sem refresh token - marcar como desconectado
-            log.warn("Token expired for company {} without refresh token. Marking as disconnected.", 
+            log.warn("Token expired for company {} without refresh token. Marking as disconnected.",
                     connection.getCompany().getId());
             connection.setConnected(false);
             driveConnectionRepository.save(connection);

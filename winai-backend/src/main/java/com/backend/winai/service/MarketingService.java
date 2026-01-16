@@ -286,10 +286,10 @@ public class MarketingService {
                 log.warn("Failed to schedule initial Meta sync", e);
             }
 
-            return frontendUrl + "/#/configuracoes?meta=connected";
+            return frontendUrl + "/configuracoes?meta=connected";
         } catch (Exception e) {
             log.error("Error in meta callback", e);
-            return frontendUrl + "/#/configuracoes?error=meta_auth_failed";
+            return frontendUrl + "/configuracoes?error=meta_auth_failed";
         }
     }
 
@@ -328,7 +328,7 @@ public class MarketingService {
 
                 String confirmationCode = UUID.randomUUID().toString();
                 return Map.of(
-                        "url", frontendUrl + "/#/configuracoes?deletion_id=" + confirmationCode,
+                        "url", frontendUrl + "/configuracoes?deletion_id=" + confirmationCode,
                         "confirmation_code", confirmationCode);
             }
         } catch (Exception e) {
@@ -618,37 +618,26 @@ public class MarketingService {
                 return;
             String igId = igNode.get("id").asText();
 
-            String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach,profile_views&period=day&access_token=%s",
+            // Fetch Reach
+            String reachUrl = String.format(
+                    "%s/%s/insights?metric=reach&period=day&access_token=%s",
                     metaApiBaseUrl, igId, conn.getAccessToken());
-            ResponseEntity<String> insightsRes = restTemplate.getForEntity(insightsUrl, String.class);
-            JsonNode insights = objectMapper.readTree(insightsRes.getBody()).get("data");
+            ResponseEntity<String> reachRes = restTemplate.getForEntity(reachUrl, String.class);
+            JsonNode reachData = objectMapper.readTree(reachRes.getBody()).get("data");
+
+            // Fetch Profile Views
+            String profileViewsUrl = String.format(
+                    "%s/%s/insights?metric=profile_views&period=day&metric_type=total_value&access_token=%s",
+                    metaApiBaseUrl, igId, conn.getAccessToken());
+            ResponseEntity<String> profileViewsRes = restTemplate.getForEntity(profileViewsUrl, String.class);
+            JsonNode profileViewsData = objectMapper.readTree(profileViewsRes.getBody()).get("data");
 
             Map<LocalDate, com.backend.winai.entity.InstagramMetric> metricMap = new HashMap<>();
 
-            if (insights != null && insights.isArray()) {
-                for (JsonNode metric : insights) {
-                    String name = metric.get("name").asText();
-                    JsonNode values = metric.get("values");
-                    for (JsonNode val : values) {
-                        LocalDate date = LocalDate.parse(val.get("end_time").asText().split("T")[0]);
-                        com.backend.winai.entity.InstagramMetric m = metricMap.computeIfAbsent(date,
-                                d -> instagramMetricRepository.findByCompanyIdAndDate(conn.getCompany().getId(), d)
-                                        .orElse(new com.backend.winai.entity.InstagramMetric()));
-
-                        m.setCompany(conn.getCompany());
-                        m.setDate(date);
-
-                        long v = val.get("value").asLong();
-                        if ("impressions".equals(name))
-                            m.setImpressions(v);
-                        else if ("reach".equals(name))
-                            m.setReach(v);
-                        else if ("profile_views".equals(name))
-                            m.setProfileViews(v);
-                    }
-                }
-            }
+            // Process Reach
+            processInstagramInsights(reachData, metricMap, conn);
+            // Process Profile Views
+            processInstagramInsights(profileViewsData, metricMap, conn);
 
             String baseFieldsUrl = String.format("%s/%s?fields=followers_count&access_token=%s", metaApiBaseUrl, igId,
                     conn.getAccessToken());
@@ -664,6 +653,32 @@ public class MarketingService {
             }
         } catch (Exception e) {
             log.error("Error syncing Instagram for company {}", conn.getCompany().getId(), e);
+        }
+    }
+
+    private void processInstagramInsights(JsonNode data,
+            Map<LocalDate, com.backend.winai.entity.InstagramMetric> metricMap,
+            MetaConnection conn) {
+        if (data != null && data.isArray()) {
+            for (JsonNode metric : data) {
+                String name = metric.get("name").asText();
+                JsonNode values = metric.get("values");
+                if (values != null && values.isArray()) {
+                    for (JsonNode val : values) {
+                        LocalDate date = LocalDate.parse(val.get("end_time").asText().split("T")[0]);
+                        com.backend.winai.entity.InstagramMetric m = metricMap.computeIfAbsent(date,
+                                d -> instagramMetricRepository.findByCompanyIdAndDate(conn.getCompany().getId(), d)
+                                        .orElse(new com.backend.winai.entity.InstagramMetric()));
+
+                        m.setCompany(conn.getCompany());
+                        long v = val.get("value").asLong();
+                        if ("reach".equals(name))
+                            m.setReach(v);
+                        else if ("profile_views".equals(name))
+                            m.setProfileViews(v);
+                    }
+                }
+            }
         }
     }
 
