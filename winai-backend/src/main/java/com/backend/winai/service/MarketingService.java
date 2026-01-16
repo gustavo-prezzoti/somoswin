@@ -62,6 +62,7 @@ public class MarketingService {
     private final MetaInsightRepository metaInsightRepository;
     private final InstagramMetricRepository instagramMetricRepository;
     private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public TrafficMetricsResponse getTrafficMetrics() {
         return buildEmptyMetrics();
@@ -89,16 +90,17 @@ public class MarketingService {
                     "%s/%s/insights?fields=spend,impressions,clicks,actions&date_preset=this_month&access_token=%s",
                     metaApiBaseUrl, adAccountId, accessToken);
 
-            ResponseEntity<JsonNode> summaryResponse = restTemplate.getForEntity(summaryUrl, JsonNode.class);
-            JsonNode dataNode = summaryResponse.getBody().get("data");
+            ResponseEntity<String> summaryResponse = restTemplate.getForEntity(summaryUrl, String.class);
+            JsonNode body = objectMapper.readTree(summaryResponse.getBody());
+            JsonNode dataNode = body.get("data");
             JsonNode summaryData = (dataNode != null && dataNode.size() > 0) ? dataNode.get(0) : null;
 
             // Fetch History (Last 30 days)
             String historyUrl = String.format(
                     "%s/%s/insights?fields=spend,date_start&date_preset=last_30d&time_increment=1&access_token=%s",
                     metaApiBaseUrl, adAccountId, accessToken);
-            ResponseEntity<JsonNode> historyResponse = restTemplate.getForEntity(historyUrl, JsonNode.class);
-            JsonNode historyData = historyResponse.getBody().get("data");
+            ResponseEntity<String> historyResponse = restTemplate.getForEntity(historyUrl, String.class);
+            JsonNode historyData = objectMapper.readTree(historyResponse.getBody()).get("data");
 
             return mapToResponse(summaryData, historyData);
 
@@ -123,8 +125,8 @@ public class MarketingService {
             // 1. Get Instagram Business Account ID
             String igAccountUrl = String.format("%s/%s?fields=instagram_business_account&access_token=%s",
                     metaApiBaseUrl, pageId, accessToken);
-            ResponseEntity<JsonNode> igAccountRes = restTemplate.getForEntity(igAccountUrl, JsonNode.class);
-            JsonNode igAccountNode = igAccountRes.getBody().get("instagram_business_account");
+            ResponseEntity<String> igAccountRes = restTemplate.getForEntity(igAccountUrl, String.class);
+            JsonNode igAccountNode = objectMapper.readTree(igAccountRes.getBody()).get("instagram_business_account");
 
             if (igAccountNode == null) {
                 log.warn("No Instagram Business Account linked to page {}", pageId);
@@ -136,14 +138,15 @@ public class MarketingService {
             // 2. Fetch User basic info (followers count)
             String basicInfoUrl = String.format("%s/%s?fields=followers_count,media_count&access_token=%s",
                     metaApiBaseUrl, igId, accessToken);
-            JsonNode basicInfo = restTemplate.getForEntity(basicInfoUrl, JsonNode.class).getBody();
+            JsonNode basicInfo = objectMapper.readTree(restTemplate.getForEntity(basicInfoUrl, String.class).getBody());
             long followers = basicInfo.has("followers_count") ? basicInfo.get("followers_count").asLong() : 0;
 
             // 3. Fetch Insights (last 30 days)
             String insightsUrl = String.format(
                     "%s/%s/insights?metric=impressions,reach&period=day&access_token=%s",
                     metaApiBaseUrl, igId, accessToken);
-            JsonNode insightsData = restTemplate.getForEntity(insightsUrl, JsonNode.class).getBody().get("data");
+            JsonNode insightsData = objectMapper
+                    .readTree(restTemplate.getForEntity(insightsUrl, String.class).getBody()).get("data");
 
             return mapToInstagramResponse(followers, insightsData);
 
@@ -228,23 +231,26 @@ public class MarketingService {
                     "https://graph.facebook.com/v19.0/oauth/access_token?client_id=%s&redirect_uri=%s&client_secret=%s&code=%s",
                     clientId, redirectUri, clientSecret, code);
 
-            ResponseEntity<JsonNode> response = restTemplate.getForEntity(tokenUrl, JsonNode.class);
-            String accessToken = response.getBody().get("access_token").asText();
+            ResponseEntity<String> response = restTemplate.getForEntity(tokenUrl, String.class);
+            JsonNode tokenBody = objectMapper.readTree(response.getBody());
+            String accessToken = tokenBody.get("access_token").asText();
 
             // Transform to Long Lived Token (60 days)
             String longLivedUrl = String.format(
                     "https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=%s&client_secret=%s&fb_exchange_token=%s",
                     clientId, clientSecret, accessToken);
-            ResponseEntity<JsonNode> llResponse = restTemplate.getForEntity(longLivedUrl, JsonNode.class);
-            String longLivedToken = llResponse.getBody().get("access_token").asText();
+            ResponseEntity<String> llResponse = restTemplate.getForEntity(longLivedUrl, String.class);
+            JsonNode llBody = objectMapper.readTree(llResponse.getBody());
+            String longLivedToken = llBody.get("access_token").asText();
 
             // Get user ID
             String meUrl = String.format("https://graph.facebook.com/me?access_token=%s", longLivedToken);
-            ResponseEntity<JsonNode> meResponse = restTemplate.getForEntity(meUrl, JsonNode.class);
-            String metaUserId = meResponse.getBody().get("id").asText();
+            ResponseEntity<String> meResponse = restTemplate.getForEntity(meUrl, String.class);
+            JsonNode meBody = objectMapper.readTree(meResponse.getBody());
+            String metaUserId = meBody.get("id").asText();
 
             // Get expiration if available
-            long expiresIn = llResponse.getBody().has("expires_in") ? llResponse.getBody().get("expires_in").asLong()
+            long expiresIn = llBody.has("expires_in") ? llBody.get("expires_in").asLong()
                     : 5184000; // 60 days default
 
             MetaConnection connection = metaConnectionRepository.findByCompanyId(java.util.UUID.fromString(companyId))
@@ -360,12 +366,12 @@ public class MarketingService {
         return mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
     }
 
-    private void fetchDefaultAccounts(MetaConnection connection) {
+    private void fetchDefaultAccounts(MetaConnection connection) throws Exception {
         // Fetch Ad Accounts
         String adAccountsUrl = String.format("%s/me/adaccounts?fields=id,name&access_token=%s", metaApiBaseUrl,
                 connection.getAccessToken());
-        ResponseEntity<JsonNode> adAccountsResponse = restTemplate.getForEntity(adAccountsUrl, JsonNode.class);
-        JsonNode adAccountsData = adAccountsResponse.getBody().get("data");
+        ResponseEntity<String> adAccountsResponse = restTemplate.getForEntity(adAccountsUrl, String.class);
+        JsonNode adAccountsData = objectMapper.readTree(adAccountsResponse.getBody()).get("data");
         if (adAccountsData != null && adAccountsData.size() > 0) {
             connection.setAdAccountId(adAccountsData.get(0).get("id").asText());
         }
@@ -373,8 +379,8 @@ public class MarketingService {
         // Fetch Pages
         String pagesUrl = String.format("%s/me/accounts?fields=id,name&access_token=%s", metaApiBaseUrl,
                 connection.getAccessToken());
-        ResponseEntity<JsonNode> pagesResponse = restTemplate.getForEntity(pagesUrl, JsonNode.class);
-        JsonNode pagesData = pagesResponse.getBody().get("data");
+        ResponseEntity<String> pagesResponse = restTemplate.getForEntity(pagesUrl, String.class);
+        JsonNode pagesData = objectMapper.readTree(pagesResponse.getBody()).get("data");
         if (pagesData != null && pagesData.size() > 0) {
             connection.setPageId(pagesData.get(0).get("id").asText());
         }
@@ -431,10 +437,11 @@ public class MarketingService {
                 String refreshUrl = String.format(
                         "https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=%s&client_secret=%s&fb_exchange_token=%s",
                         clientId, clientSecret, conn.getAccessToken());
-                ResponseEntity<JsonNode> res = restTemplate.getForEntity(refreshUrl, JsonNode.class);
-                if (res.getBody() != null && res.getBody().has("access_token")) {
-                    conn.setAccessToken(res.getBody().get("access_token").asText());
-                    long expiresIn = res.getBody().has("expires_in") ? res.getBody().get("expires_in").asLong()
+                ResponseEntity<String> res = restTemplate.getForEntity(refreshUrl, String.class);
+                JsonNode body = objectMapper.readTree(res.getBody());
+                if (body != null && body.has("access_token")) {
+                    conn.setAccessToken(body.get("access_token").asText());
+                    long expiresIn = body.has("expires_in") ? body.get("expires_in").asLong()
                             : 5184000;
                     conn.setTokenExpiresAt(ZonedDateTime.now().plusSeconds(expiresIn));
                     metaConnectionRepository.save(conn);
@@ -461,8 +468,8 @@ public class MarketingService {
             String url = String.format(
                     "%s/%s/campaigns?fields=id,name,status,objective,start_time,stop_time&access_token=%s",
                     metaApiBaseUrl, conn.getAdAccountId(), conn.getAccessToken());
-            ResponseEntity<JsonNode> response = restTemplate.getForEntity(url, JsonNode.class);
-            JsonNode data = response.getBody().get("data");
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
 
             if (data != null && data.isArray()) {
                 for (JsonNode node : data) {
@@ -603,8 +610,8 @@ public class MarketingService {
         try {
             String igAccountUrl = String.format("%s/%s?fields=instagram_business_account&access_token=%s",
                     metaApiBaseUrl, conn.getPageId(), conn.getAccessToken());
-            JsonNode igNode = restTemplate.getForEntity(igAccountUrl, JsonNode.class).getBody()
-                    .get("instagram_business_account");
+            ResponseEntity<String> igAccountRes = restTemplate.getForEntity(igAccountUrl, String.class);
+            JsonNode igNode = objectMapper.readTree(igAccountRes.getBody()).get("instagram_business_account");
             if (igNode == null)
                 return;
             String igId = igNode.get("id").asText();
@@ -612,7 +619,8 @@ public class MarketingService {
             String insightsUrl = String.format(
                     "%s/%s/insights?metric=impressions,reach,profile_views&period=day&access_token=%s",
                     metaApiBaseUrl, igId, conn.getAccessToken());
-            JsonNode insights = restTemplate.getForEntity(insightsUrl, JsonNode.class).getBody().get("data");
+            ResponseEntity<String> insightsRes = restTemplate.getForEntity(insightsUrl, String.class);
+            JsonNode insights = objectMapper.readTree(insightsRes.getBody()).get("data");
 
             Map<LocalDate, com.backend.winai.entity.InstagramMetric> metricMap = new HashMap<>();
 
@@ -642,7 +650,8 @@ public class MarketingService {
 
             String baseFieldsUrl = String.format("%s/%s?fields=followers_count&access_token=%s", metaApiBaseUrl, igId,
                     conn.getAccessToken());
-            JsonNode baseInfo = restTemplate.getForEntity(baseFieldsUrl, JsonNode.class).getBody();
+            ResponseEntity<String> baseInfoRes = restTemplate.getForEntity(baseFieldsUrl, String.class);
+            JsonNode baseInfo = objectMapper.readTree(baseInfoRes.getBody());
             long followers = baseInfo.has("followers_count") ? baseInfo.get("followers_count").asLong() : 0;
 
             for (com.backend.winai.entity.InstagramMetric m : metricMap.values()) {
