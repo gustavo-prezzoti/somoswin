@@ -176,23 +176,50 @@ public class UazapService {
 
         HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
 
-        try {
-            @SuppressWarnings("unchecked")
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.POST,
-                    requestEntity,
-                    (Class<Map<String, Object>>) (Class<?>) Map.class);
+        int maxRetries = 3;
+        int delayMs = 4000; // 4 segundos entre tentativas
 
-            if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("AI message sent successfully to: {}", phoneNumber);
-            } else {
-                log.error("Failed to send AI message. Status: {}", response.getStatusCode());
-                throw new RuntimeException("Erro ao enviar mensagem de IA via Uazap");
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                @SuppressWarnings("unchecked")
+                ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                        url,
+                        HttpMethod.POST,
+                        requestEntity,
+                        (Class<Map<String, Object>>) (Class<?>) Map.class);
+
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    log.info("Mensagem da IA enviada com sucesso para: {} (Tentativa {})", phoneNumber, attempt);
+                    return; // Sucesso!
+                } else {
+                    log.error("Falha ao enviar mensagem de IA. Status: {}. Tentativa {}/{}",
+                            response.getStatusCode(), attempt, maxRetries);
+                }
+            } catch (Exception e) {
+                String errorMsg = e.getMessage() != null ? e.getMessage() : "";
+                log.warn("Tentativa {}/{} falhou para {}: {}", attempt, maxRetries, phoneNumber, errorMsg);
+
+                // Se for erro de desconexão ou servidor indisponível, vale a pena tentar de
+                // novo
+                if (attempt < maxRetries && (errorMsg.contains("disconnected") || errorMsg.contains("503")
+                        || errorMsg.contains("500"))) {
+                    try {
+                        log.info("Aguardando {}ms para re-tentativa devido a desconexão temporária...", delayMs);
+                        Thread.sleep(delayMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                } else {
+                    // Se for outro erro ou já esgotou as tentativas, joga a exceção
+                    if (attempt == maxRetries) {
+                        log.error("Esgotadas as tentativas de envio para {}", phoneNumber);
+                        throw new RuntimeException(
+                                "Erro ao enviar mensagem de IA após " + maxRetries + " tentativas: " + e.getMessage(),
+                                e);
+                    }
+                }
             }
-        } catch (Exception e) {
-            log.error("Error sending AI message via Uazap", e);
-            throw new RuntimeException("Erro ao enviar mensagem de IA via Uazap: " + e.getMessage(), e);
         }
     }
 
