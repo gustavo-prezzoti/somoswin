@@ -46,15 +46,16 @@ const Login: React.FC = () => {
 
             {/* Left Side: Login Form */}
             <div className="p-10 md:p-20 space-y-10 flex flex-col justify-center bg-white">
-               <div className="flex flex-col items-center text-center space-y-6">
+               <div className="mb-4 flex justify-center">
                   <img src={logoDark} alt="WIN.AI" className="h-16 w-auto object-contain" />
-                  <div className="space-y-4">
-                     <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter leading-none italic uppercase">
-                        Acesso à <br />
-                        <span className="text-emerald-600">Operação.</span>
-                     </h1>
-                     <p className="text-gray-500 font-medium text-lg max-w-md">Insira suas credenciais para gerenciar sua demanda assistida por IA.</p>
-                  </div>
+               </div>
+
+               <div className="space-y-4">
+                  <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter leading-none italic uppercase text-left">
+                     Acesso à <br />
+                     <span className="text-emerald-600">Operação.</span>
+                  </h1>
+                  <p className="text-gray-500 font-medium text-lg text-left">Insira suas credenciais para gerenciar sua demanda assistida por IA.</p>
                </div>
 
                {error && (
