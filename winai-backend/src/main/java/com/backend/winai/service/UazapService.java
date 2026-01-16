@@ -241,16 +241,16 @@ public class UazapService {
         headers.set("admintoken", adminToken);
         headers.set("apikey", adminToken);
 
-        // 1. Tentar endpoint padrao Evolution
-        String url1 = defaultBaseUrl.replaceAll("/$", "") + "/instance/fetchInstances";
+        // 1. Tentar primeiro endpoint alternativo (/instance/all), que é mais comum
+        String url1 = defaultBaseUrl.replaceAll("/$", "") + "/instance/all";
         try {
             return fetchAndParseInstances(url1, headers);
         } catch (Exception e) {
-            log.warn("Endpoint {} falhou ou nao existe (404): {}", url1, e.getMessage());
+            log.warn("Endpoint {} falhou ou nao existe (normale): {}", url1, e.getMessage());
         }
 
-        // 2. Tentar endpoint alternativo (/instance/all)
-        String url2 = defaultBaseUrl.replaceAll("/$", "") + "/instance/all";
+        // 2. Tentar endpoint padrão Evolution (/instance/fetchInstances)
+        String url2 = defaultBaseUrl.replaceAll("/$", "") + "/instance/fetchInstances";
         try {
             return fetchAndParseInstances(url2, headers);
         } catch (Exception e) {

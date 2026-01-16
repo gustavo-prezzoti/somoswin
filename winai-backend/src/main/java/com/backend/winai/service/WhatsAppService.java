@@ -675,6 +675,7 @@ public class WhatsAppService {
     /**
      * Conecta o Agente SDR (Gera QR Code se necessário)
      */
+    @Transactional
     public Map<String, Object> connectSDRAgent(User user) {
         Company company = user.getCompany();
         if (company == null)
@@ -731,6 +732,7 @@ public class WhatsAppService {
     /**
      * Desconecta o Agente SDR
      */
+    @Transactional
     public void disconnectSDRAgent(User user) {
         Company company = user.getCompany();
         if (company == null)

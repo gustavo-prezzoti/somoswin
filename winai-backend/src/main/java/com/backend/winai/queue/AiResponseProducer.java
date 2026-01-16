@@ -18,6 +18,12 @@ public class AiResponseProducer {
         try {
             log.info("Enqueuing AI request for conversation: {}, Lead: {}",
                     message.getConversationId(), message.getLeadName());
+
+            // Registrar timestamp desta mensagem como a última para esta conversa (Debounce
+            // control)
+            String lastMsgKey = "ai_last_timestamp:" + message.getConversationId();
+            redisTemplate.opsForValue().set(lastMsgKey, message.getTimestamp());
+
             redisTemplate.opsForList().leftPush(QUEUE_NAME, message);
             return true;
         } catch (Exception e) {

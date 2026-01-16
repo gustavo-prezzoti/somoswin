@@ -45,7 +45,7 @@ public class OpenAiService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Fallback models if primary model fails
-    private static final String[] FALLBACK_MODELS = {"gpt-4o", "gpt-4-turbo", "gpt-4o-mini", "gpt-4"};
+    private static final String[] FALLBACK_MODELS = { "gpt-4o", "gpt-4-turbo", "gpt-4o-mini", "gpt-4" };
     private String currentModel;
 
     @PostConstruct
@@ -119,7 +119,7 @@ public class OpenAiService {
 
             ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
             Map<String, Object> responseBody = response.getBody();
-            
+
             if (responseBody == null) {
                 log.error("❌ OpenAI returned NULL response body");
                 return null;
@@ -134,20 +134,18 @@ public class OpenAiService {
                 String errorType = (String) error.get("type");
                 String errorMessage = (String) error.get("message");
                 log.error("❌ OpenAI API Error [{}]: {}", errorType, errorMessage);
-                
+
                 // Check if it's a model authorization error
-                if (errorMessage != null && (
-                    errorMessage.contains("does not exist") ||
-                    errorMessage.contains("not available") ||
-                    errorMessage.contains("not supported") ||
-                    errorMessage.contains("access") ||
-                    errorMessage.contains("unauthorized")
-                )) {
+                if (errorMessage != null && (errorMessage.contains("does not exist") ||
+                        errorMessage.contains("not available") ||
+                        errorMessage.contains("not supported") ||
+                        errorMessage.contains("access") ||
+                        errorMessage.contains("unauthorized"))) {
                     log.error("🚨 MODEL ERROR DETECTED: '{}' | Error: {}", currentModel, errorMessage);
                     log.warn("⚠️ Attempting fallback to alternative models...");
                     return tryFallbackModels(systemPrompt, userMessage, conversationHistory, currentModel);
                 }
-                
+
                 return null;
             }
 
@@ -176,15 +174,15 @@ public class OpenAiService {
 
             String content = (String) messageObj.get("content");
             String refusal = (String) messageObj.get("refusal");
-            
-            log.debug("📊 Response Details | Content: {} chars | Refusal: {} | Full message: {}", 
-                content != null ? content.length() : "null", 
-                refusal, 
-                messageObj);
-            
+
+            log.debug("📊 Response Details | Content: {} chars | Refusal: {} | Full message: {}",
+                    content != null ? content.length() : "null",
+                    refusal,
+                    messageObj);
+
             if (content == null || content.trim().isEmpty()) {
-                log.warn("⚠️ OpenAI returned EMPTY content | Model: {} | Refusal: {} | Message obj: {}", 
-                    currentModel, refusal, messageObj);
+                log.warn("⚠️ OpenAI returned EMPTY content | Model: {} | Refusal: {} | Message obj: {}",
+                        currentModel, refusal, messageObj);
                 // Try fallback if content is empty but no explicit error
                 if (refusal == null) {
                     log.warn("📌 Content is empty but no refusal - trying fallback models");
@@ -203,20 +201,20 @@ public class OpenAiService {
     }
 
     @SuppressWarnings("unchecked")
-    private String tryFallbackModels(String systemPrompt, String userMessage, 
-                                     List<ChatMessage> conversationHistory, String failedModel) {
+    private String tryFallbackModels(String systemPrompt, String userMessage,
+            List<ChatMessage> conversationHistory, String failedModel) {
         log.warn("🔄 Trying fallback models after failure with: {}", failedModel);
-        
+
         for (String fallbackModel : FALLBACK_MODELS) {
             if (fallbackModel.equals(failedModel)) {
                 continue; // Skip the model that already failed
             }
-            
+
             try {
                 log.info("🔄 Fallback attempt with model: {}", fallbackModel);
-                
+
                 List<Map<String, String>> messages = new ArrayList<>();
-                
+
                 // System Message
                 Map<String, String> sysMsg = new HashMap<>();
                 sysMsg.put("role", "system");
@@ -253,7 +251,7 @@ public class OpenAiService {
 
                 ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
                 Map<String, Object> responseBody = response.getBody();
-                
+
                 if (responseBody != null && !responseBody.containsKey("error")) {
                     List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
                     if (choices != null && !choices.isEmpty()) {
@@ -261,8 +259,8 @@ public class OpenAiService {
                         if (messageObj != null) {
                             String content = (String) messageObj.get("content");
                             if (content != null && !content.trim().isEmpty()) {
-                                log.info("✅ SUCCESS with fallback model: {} | Content: {} chars", 
-                                    fallbackModel, content.length());
+                                log.info("✅ SUCCESS with fallback model: {} | Content: {} chars",
+                                        fallbackModel, content.length());
                                 currentModel = fallbackModel;
                                 log.warn("📝 Model automatically switched to: {}", fallbackModel);
                                 return content;
@@ -270,14 +268,14 @@ public class OpenAiService {
                         }
                     }
                 }
-                
+
                 log.warn("❌ Fallback model {} failed or returned empty", fallbackModel);
-                
+
             } catch (Exception e) {
                 log.warn("❌ Fallback model {} threw exception: {}", fallbackModel, e.getMessage());
             }
         }
-        
+
         log.error("🚨 All fallback models failed. Original model: {}", failedModel);
         return null;
     }
