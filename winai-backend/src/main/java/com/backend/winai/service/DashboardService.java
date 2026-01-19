@@ -73,12 +73,8 @@ public class DashboardService {
                                                                 company)
                                 : List.of();
 
-                // Se não houver insights de otimização, tenta gerar alguns
-                if (insights.isEmpty() && company != null) {
-                        refreshAIInsights(company);
-                        insights = insightRepository
-                                        .findTop5ByCompanyAndIsDismissedFalseOrderByPriorityDescCreatedAtDesc(company);
-                }
+                // Insights são gerados em background pelo AIInsightsScheduler a cada hora
+                // O dashboard apenas consulta os insights já salvos no banco
 
                 // Performance score médio
                 Double avgScore = company != null
