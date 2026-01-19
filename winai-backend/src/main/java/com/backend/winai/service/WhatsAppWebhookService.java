@@ -258,15 +258,29 @@ public class WhatsAppWebhookService {
             UazapWebhookRequest webhook,
             Company company) {
         String waChatId = webhook.getChat() != null ? webhook.getChat().getWa_chatid() : null;
+        String instanceName = webhook.getInstanceName();
 
         WhatsAppConversation conversation;
-        Optional<WhatsAppConversation> existing = waChatId != null
-                ? conversationRepository.findByWaChatIdAndCompany(waChatId, company)
-                : conversationRepository.findByPhoneNumberAndCompany(phoneNumber, company);
+        Optional<WhatsAppConversation> existing;
+
+        // Buscar conversa por telefone/chatId + empresa + instância
+        // Cada instância tem suas próprias conversas separadas
+        if (instanceName != null && !instanceName.isEmpty()) {
+            // Busca considerando a instância específica
+            existing = waChatId != null
+                    ? conversationRepository.findByWaChatIdAndCompanyAndUazapInstance(waChatId, company, instanceName)
+                    : conversationRepository.findByPhoneNumberAndCompanyAndUazapInstance(phoneNumber, company,
+                            instanceName);
+        } else {
+            // Fallback para busca sem instância (compatibilidade com dados antigos)
+            existing = waChatId != null
+                    ? conversationRepository.findByWaChatIdAndCompany(waChatId, company)
+                    : conversationRepository.findByPhoneNumberAndCompany(phoneNumber, company);
+        }
 
         if (existing.isPresent()) {
             conversation = existing.get();
-            // Atualizar dados se necessário
+            // Atualizar nome do contato se necessário
             if (contactName != null && !contactName.isEmpty() &&
                     (conversation.getContactName() == null || conversation.getContactName().isEmpty())) {
                 conversation.setContactName(contactName);
@@ -275,7 +289,8 @@ public class WhatsAppWebhookService {
                 conversation.setWaChatId(waChatId);
             }
         } else {
-            // Criar nova conversa
+            // Criar nova conversa para esta instância
+            log.info("Criando nova conversa para telefone {} na instância {}", phoneNumber, instanceName);
             conversation = WhatsAppConversation.builder()
                     .company(company)
                     .phoneNumber(phoneNumber)
@@ -286,7 +301,7 @@ public class WhatsAppWebhookService {
                     .isBlocked(false)
                     .uazapBaseUrl(webhook.getBaseUrl())
                     .uazapToken(webhook.getToken())
-                    .uazapInstance(webhook.getInstanceName())
+                    .uazapInstance(instanceName)
                     .build();
         }
 

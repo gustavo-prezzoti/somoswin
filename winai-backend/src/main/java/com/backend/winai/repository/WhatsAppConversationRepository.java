@@ -18,6 +18,15 @@ public interface WhatsAppConversationRepository extends JpaRepository<WhatsAppCo
 
     Optional<WhatsAppConversation> findByWaChatIdAndCompany(String waChatId, Company company);
 
+    // Busca por telefone + empresa + instância (cada instância tem suas próprias
+    // conversas)
+    Optional<WhatsAppConversation> findByPhoneNumberAndCompanyAndUazapInstance(
+            String phoneNumber, Company company, String uazapInstance);
+
+    // Busca por chatId + empresa + instância
+    Optional<WhatsAppConversation> findByWaChatIdAndCompanyAndUazapInstance(
+            String waChatId, Company company, String uazapInstance);
+
     Optional<WhatsAppConversation> findFirstByUazapInstance(String uazapInstance);
 
     List<WhatsAppConversation> findByCompany(Company company);

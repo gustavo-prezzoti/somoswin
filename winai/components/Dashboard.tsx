@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, DollarSign, Percent, Zap, MessageCircle, AlertCircle, Calendar, Sparkles, Settings2, CheckCircle2, Loader2, RefreshCw, Target, PlusCircle, X, Save, Plus, Download } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, Percent, Zap, MessageCircle, AlertCircle, Calendar, Sparkles, Settings2, CheckCircle2, Loader2, RefreshCw, Target, PlusCircle, X, Save, Plus, Download, ArrowRight } from 'lucide-react';
 import { dashboardService, DashboardData } from '../services';
 import { marketingService } from '../services/api/marketing.service';
 import { useNavigate } from 'react-router-dom';
@@ -45,14 +45,13 @@ const EmptyState: React.FC<{ title: string; description: string; actionLabel?: s
       </div>
     )}
     {actionLabel && onAction && (
-      <button 
-        onClick={onAction} 
+      <button
+        onClick={onAction}
         disabled={disabled}
-        className={`mt-4 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-          disabled 
-            ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-            : 'bg-emerald-600 text-white hover:bg-emerald-700'
-        }`}
+        className={`mt-4 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${disabled
+          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          : 'bg-emerald-600 text-white hover:bg-emerald-700'
+          }`}
       >
         <PlusCircle size={14} /> {actionLabel}
       </button>
@@ -313,8 +312,8 @@ const Dashboard: React.FC = () => {
                       <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
                         <div
                           className={`h-full ${index === 0 ? 'bg-emerald-500 shadow-[0_0_15px_#10b981]' :
-                              index === 1 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]' :
-                                'bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.5)]'
+                            index === 1 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]' :
+                              'bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.5)]'
                             } rounded-full transition-all duration-1000`}
                           style={{ width: `${goal.progressPercentage}%` }}
                         ></div>
@@ -353,28 +352,68 @@ const Dashboard: React.FC = () => {
         {hasInsights ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-12">
             {data.insights.map((insight, index) => {
-              const colors = [
-                { bg: 'bg-amber-50', text: 'text-amber-600', hover: 'hover:border-emerald-500', bgHover: 'group-hover:bg-amber-100' },
-                { bg: 'bg-rose-50', text: 'text-rose-600', hover: 'hover:border-rose-500', bgHover: 'group-hover:bg-rose-100' },
-                { bg: 'bg-sky-50', text: 'text-sky-600', hover: 'hover:border-sky-500', bgHover: 'group-hover:bg-sky-100' },
-              ];
-              const icons = [Zap, AlertCircle, Sparkles];
-              const color = colors[index % 3];
-              const Icon = icons[index % 3];
+              const Icon = index % 3 === 0 ? Zap : index % 3 === 1 ? Target : Sparkles;
+              const priorityColor =
+                insight.priority === 'HIGH' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                  insight.priority === 'MEDIUM' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                    'bg-emerald-50 text-emerald-600 border-emerald-100';
 
               return (
-                <div key={insight.id} className={`bg-white p-10 rounded-[40px] border border-gray-100 shadow-sm flex flex-col justify-between group cursor-pointer ${color.hover} transition-all hover:shadow-2xl`}>
-                  <div className="flex items-center gap-5 mb-6">
-                    <div className={`p-4 ${color.bg} ${color.text} rounded-2xl ${color.bgHover} transition-colors`}><Icon size={28} /></div>
-                    <div>
-                      <h3 className="font-black text-gray-900 tracking-tight uppercase text-lg">{insight.title}</h3>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sugestão: {insight.suggestionSource}</p>
+                <div
+                  key={insight.id}
+                  className="group relative bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm transition-all hover:shadow-2xl hover:border-emerald-500/30 flex flex-col"
+                >
+                  {/* Priority Badge */}
+                  <div className="flex justify-between items-start mb-6">
+                    <div className={`p-4 rounded-2xl bg-gray-50 text-gray-900 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-500`}>
+                      <Icon size={24} />
+                    </div>
+                    <div className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${priorityColor}`}>
+                      Prio: {insight.priority}
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600 mb-8 leading-relaxed font-medium">{insight.description}</p>
-                  <button className={`w-full ${index === 0 ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700' : index === 1 ? 'bg-gray-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-50' : 'bg-sky-600 text-white shadow-lg shadow-sky-600/20 hover:bg-sky-700'} font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 uppercase text-xs tracking-widest`}>
-                    {insight.actionLabel} {index === 0 ? <TrendingUp size={18} /> : index === 1 ? <MessageCircle size={18} /> : <Sparkles size={18} />}
-                  </button>
+
+                  <div className="space-y-2 mb-6">
+                    <h3 className="font-black text-gray-900 tracking-tight uppercase text-lg leading-tight group-hover:text-emerald-700 transition-colors">
+                      {insight.title}
+                    </h3>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        Sugestão: <span className="text-emerald-600">{insight.suggestionSource}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 bg-gray-50/50 rounded-3xl p-6 border border-gray-100/50 group-hover:bg-white transition-colors">
+                    <p className="text-sm text-gray-600 leading-relaxed font-medium">
+                      {insight.description.split('**').map((part, i) =>
+                        i % 2 === 1 ? <strong key={i} className="text-gray-900 font-black italic">{part}</strong> : part
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Se houver URL ou Label, mostra o botão, caso contrário mostra apenas um feedback visual */}
+                  {insight.actionLabel && (
+                    <button
+                      onClick={() => insight.actionUrl && window.open(insight.actionUrl, '_blank')}
+                      className={`w-full mt-6 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 
+                        ${insight.actionUrl
+                          ? 'bg-gray-900 text-white hover:bg-emerald-600 shadow-xl shadow-gray-900/10 hover:shadow-emerald-600/20 active:scale-95 cursor-pointer'
+                          : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-default'
+                        }`}
+                    >
+                      {insight.actionLabel}
+                      {insight.actionUrl && <ArrowRight size={16} />}
+                    </button>
+                  )}
+
+                  {!insight.actionLabel && (
+                    <div className="mt-6 flex items-center justify-center gap-2 py-4 border border-dashed border-gray-200 rounded-2xl">
+                      <CheckCircle2 size={14} className="text-emerald-500" />
+                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Ação Sugerida pela IA</span>
+                    </div>
+                  )}
                 </div>
               );
             })}
