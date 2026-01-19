@@ -72,13 +72,16 @@ public class MetricsSyncService {
             }
 
             BigDecimal conversionRate = BigDecimal.ZERO;
-            if (leadsCaptured > 0) {
-                conversionRate = BigDecimal.valueOf((double) meetingsCount / leadsCaptured * 100).setScale(2,
+            if (totalClicks > 0) {
+                conversionRate = BigDecimal.valueOf((double) leadsCaptured / totalClicks * 100).setScale(2,
                         RoundingMode.HALF_UP);
             }
 
-            // ROI Simplificado
+            // ROI Estimado: (Leads * 100.0) / Investimento
             BigDecimal roi = BigDecimal.ZERO;
+            if (totalSpend > 0) {
+                roi = BigDecimal.valueOf((leadsCaptured * 100.0) / totalSpend).setScale(2, RoundingMode.HALF_UP);
+            }
 
             // Busca ou cria registro de métrica
             DashboardMetrics metrics = dashboardMetricsRepository.findByCompanyAndDate(company, date)

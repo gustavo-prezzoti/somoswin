@@ -39,7 +39,7 @@ public class DashboardService {
         /**
          * Obtém os dados completos do dashboard para um usuário
          */
-        @Transactional(readOnly = true)
+        @Transactional
         public DashboardResponse getDashboardData(User user, int days) {
                 Company company = user.getCompany();
                 LocalDate endDate = LocalDate.now();
@@ -268,15 +268,19 @@ public class DashboardService {
                                 ? (previous.totalLeads * 100.0) / previous.totalInvestment
                                 : 0;
 
+                // CPL Médio do Período: Investimento / Leads
+                double currentCpl = current.totalLeads > 0 ? current.totalInvestment / current.totalLeads : 0;
+                double previousCpl = previous.totalLeads > 0 ? previous.totalInvestment / previous.totalLeads : 0;
+
                 return DashboardResponse.MetricsSummary.builder()
                                 .leadsCaptured(buildMetricCard(
                                                 String.valueOf(current.totalLeads),
                                                 calculateTrend(current.totalLeads, previous.totalLeads),
                                                 current.totalLeads >= previous.totalLeads))
                                 .cplAverage(buildMetricCard(
-                                                formatCurrency(current.avgCpl),
-                                                calculateTrend(current.avgCpl, previous.avgCpl),
-                                                current.avgCpl <= previous.avgCpl))
+                                                formatCurrency(currentCpl),
+                                                calculateTrend(currentCpl, previousCpl),
+                                                currentCpl <= previousCpl))
                                 .conversionRate(buildMetricCard(
                                                 formatPercentage(currentConv),
                                                 calculateTrend(currentConv, previousConv),
