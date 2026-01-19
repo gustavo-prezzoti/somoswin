@@ -36,10 +36,10 @@ services:
       # Spring Profile for Docker
       - SPRING_PROFILES_ACTIVE=docker
 
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db.wtfheobvaamelqifttjj.supabase.co:5432/postgres?sslmode=require&currentSchema=winai
-      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require&currentSchema=winai
+      - SPRING_DATASOURCE_USERNAME=postgres.wtfheobvaamelqifttjj
       - SPRING_DATASOURCE_PASSWORD=JYAvOfrciMaY4m0j
-      - DATABASE_USERNAME=postgres
+      - DATABASE_USERNAME=postgres.wtfheobvaamelqifttjj
       - DATABASE_PASSWORD=JYAvOfrciMaY4m0j
       # JPA/Hibernate
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
@@ -102,8 +102,8 @@ services:
       - 8.8.4.4
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db.wtfheobvaamelqifttjj.supabase.co:5432/postgres?sslmode=require&currentSchema=winai
-      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require&currentSchema=winai
+      - SPRING_DATASOURCE_USERNAME=postgres.wtfheobvaamelqifttjj
       - SPRING_DATASOURCE_PASSWORD=JYAvOfrciMaY4m0j
       - JWT_SECRET=${JWT_SECRET}
       - META_CLIENT_ID=${META_CLIENT_ID}
