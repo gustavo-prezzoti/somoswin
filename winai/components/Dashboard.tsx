@@ -346,10 +346,11 @@ const Dashboard: React.FC = () => {
         <div className="flex items-center gap-2 text-emerald-600">
           <Zap size={22} className="fill-emerald-600" />
           <h2 className="text-2xl font-black tracking-tighter uppercase italic">Inteligência Estratégica</h2>
-          <span className="ml-auto text-[10px] bg-white border border-gray-100 px-3 py-1.5 rounded-full font-black text-gray-400 uppercase tracking-widest shadow-sm">IA WIN.AI {hasInsights ? 'ATIVA' : 'AGUARDANDO'}</span>
+          <span className="ml-auto text-[10px] bg-white border border-gray-100 px-3 py-1.5 rounded-full font-black text-gray-400 uppercase tracking-widest shadow-sm">IA WIN.AI AGUARDANDO</span>
         </div>
 
-        {hasInsights ? (
+        {/* Forçamos o estado vazio enquanto o usuário valida os dados internamente */}
+        {false && hasInsights ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-12">
             {data.insights.map((insight, index) => {
               const Icon = index % 3 === 0 ? Zap : index % 3 === 1 ? Target : Sparkles;
