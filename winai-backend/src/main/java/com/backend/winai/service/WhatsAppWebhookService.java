@@ -359,6 +359,8 @@ public class WhatsAppWebhookService {
      */
     private void sendWebSocketUpdate(UUID companyId, WhatsAppMessage message, WhatsAppConversation conversation) {
         try {
+            log.info("Enviando WebSocket para empresa {} - Canal: /topic/whatsapp/{}", companyId, companyId);
+
             WebSocketMessage wsMessage = WebSocketMessage.builder()
                     .type("NEW_MESSAGE")
                     .message(toMessageResponse(message))
@@ -377,6 +379,7 @@ public class WhatsAppWebhookService {
                     .build();
 
             messagingTemplate.convertAndSend("/topic/whatsapp/conversations/" + companyId, convUpdate);
+            log.info("WebSocket enviado com sucesso para empresa {}", companyId);
         } catch (Exception e) {
             log.error("Erro ao enviar mensagem WebSocket", e);
         }
@@ -473,8 +476,12 @@ public class WhatsAppWebhookService {
         if (webhook.getMessage() != null) {
             String type = webhook.getMessage().getMessageType();
 
-            // Normalizar "Conversation" para "text"
-            if (type != null && type.equalsIgnoreCase("Conversation")) {
+            // Normalizar tipos de texto para "text"
+            // - "Conversation" = mensagem de texto simples
+            // - "ExtendedTextMessage" = mensagem de texto com contexto/formatação
+            if (type != null && (type.equalsIgnoreCase("Conversation") ||
+                    type.equalsIgnoreCase("ExtendedTextMessage") ||
+                    type.toLowerCase().contains("text"))) {
                 return "text";
             }
 
