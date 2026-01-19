@@ -14,14 +14,14 @@ import org.springframework.web.client.RestTemplate;
 public class RestTemplateConfig {
 
     /**
-     * RestTemplate padrão com timeout de 30 segundos
+     * RestTemplate padrão com timeout de 90 segundos (1 minuto e meio)
      */
     @Bean
     @Primary
     public RestTemplate restTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(30000); // 30 segundos
-        factory.setReadTimeout(30000); // 30 segundos
+        factory.setConnectTimeout(90000); // 90 segundos
+        factory.setReadTimeout(90000); // 90 segundos
         return new RestTemplate(factory);
     }
 

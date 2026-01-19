@@ -671,6 +671,21 @@ public class UazapService {
                         response.getStatusCode(), response.getBody());
                 throw new RuntimeException("Erro ao conectar instância no UaZap");
             }
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            // Tratar 408 Request Timeout como "conexão em progresso"
+            // A API UaZap demora para gerar QR code e retorna 408, mas o QR code chega via
+            // webhook
+            if (e.getStatusCode().value() == 408) {
+                log.info("Conexão em progresso para instância {}. QR code será recebido via webhook.", instanceName);
+                Map<String, Object> progressResponse = new HashMap<>();
+                progressResponse.put("status", "connecting");
+                progressResponse.put("message",
+                        "Conexão em progresso. O QR code será enviado via webhook em instantes.");
+                progressResponse.put("instanceName", instanceName);
+                return progressResponse;
+            }
+            log.error("Erro HTTP ao conectar instância no UaZap: {}", e.getMessage());
+            throw new RuntimeException("Erro ao conectar instância no UaZap: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Erro ao conectar instância no UaZap", e);
             throw new RuntimeException("Erro ao conectar instância no UaZap: " + e.getMessage(), e);

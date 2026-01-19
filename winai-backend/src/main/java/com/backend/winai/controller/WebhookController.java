@@ -6,6 +6,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.HashMap;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @Slf4j
 @RestController
@@ -15,6 +17,7 @@ public class WebhookController {
 
     private final com.backend.winai.service.WhatsAppWebhookService whatsAppWebhookService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final SimpMessagingTemplate messagingTemplate;
 
     /**
      * Endpoint para receber webhooks do WhatsApp (Evolution API / UaZap)
@@ -89,7 +92,7 @@ public class WebhookController {
                 break;
             case "connection.update":
             case "connection":
-                log.info("Evento de conexão recebido: {}", payload);
+                handleConnectionEvent(instance, payload);
                 break;
             default:
                 log.info("Evento não tratado: {}", eventType);
@@ -151,6 +154,55 @@ public class WebhookController {
             // Exemplos:
             // - Registrar quando contatos ficam online/offline
             // - Atualizar status de disponibilidade
+        }
+    }
+
+    /**
+     * Processa eventos de conexão (QR code, status de conexão)
+     */
+    @SuppressWarnings("unchecked")
+    private void handleConnectionEvent(String instance, Map<String, Object> payload) {
+        log.info("Processando evento de conexão - Instância: {}", instance);
+
+        try {
+            // Extrair dados da instância
+            Map<String, Object> instanceData = (Map<String, Object>) payload.get("instance");
+            if (instanceData == null) {
+                instanceData = new HashMap<>();
+            }
+
+            String qrcode = (String) instanceData.get("qrcode");
+            String status = (String) instanceData.get("status");
+            String instanceName = instance;
+
+            if (instanceName == null) {
+                instanceName = (String) instanceData.get("name");
+            }
+
+            // Preparar mensagem para WebSocket
+            Map<String, Object> wsMessage = new HashMap<>();
+            wsMessage.put("type", "CONNECTION_UPDATE");
+            wsMessage.put("instanceName", instanceName);
+            wsMessage.put("status", status);
+
+            if (qrcode != null && !qrcode.isEmpty()) {
+                wsMessage.put("qrcode", qrcode);
+                log.info("QR code recebido para instância {}. Enviando via WebSocket.", instanceName);
+            }
+
+            // Enviar para canal global de conexões WhatsApp
+            messagingTemplate.convertAndSend("/topic/whatsapp/connection", (Object) wsMessage);
+
+            // Também enviar para canal específico da instância
+            if (instanceName != null) {
+                messagingTemplate.convertAndSend("/topic/whatsapp/connection/" + instanceName, (Object) wsMessage);
+            }
+
+            log.info("Evento de conexão enviado via WebSocket: instance={}, status={}, hasQrCode={}",
+                    instanceName, status, qrcode != null);
+
+        } catch (Exception e) {
+            log.error("Erro ao processar evento de conexão", e);
         }
     }
 
