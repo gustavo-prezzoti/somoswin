@@ -14,6 +14,7 @@ import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
+import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,7 +48,8 @@ public class WhatsAppService {
     private final CompanyRepository companyRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final SupabaseStorageService storageService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final UserWhatsAppConnectionRepository connectionRepository;
+    private final RestTemplate restTemplate;
 
     @Value("${uazap.default-token:}")
     private String defaultToken;
@@ -512,16 +514,26 @@ public class WhatsAppService {
         final Company company = companyRepository.findById(user.getCompany().getId())
                 .orElse(user.getCompany());
 
-        // Obter nome da instância
-        String instanceName = conversationRepository.findByCompanyOrderByLastMessageTimestampDesc(company)
-                .stream()
-                .map(WhatsAppConversation::getUazapInstance)
-                .filter(inst -> inst != null && !inst.isEmpty())
-                .findFirst()
-                .orElse(null);
+        // Obter nome da instância - Primeiro tenta pelas conexões cadastradas (mais
+        // confiável)
+        List<String> instanceNames = connectionRepository.findInstanceNamesByCompanyId(company.getId());
 
-        if (instanceName == null) {
-            instanceName = company.getName().replaceAll("[^a-zA-Z0-9]", "");
+        String instanceName = null;
+        if (!instanceNames.isEmpty()) {
+            instanceName = instanceNames.get(0); // Usa a primeira conexão ativa
+            log.debug("Instância obtida via conexões cadastradas: {}", instanceName);
+        } else {
+            // Fallback: buscar pelas conversas existentes
+            instanceName = conversationRepository.findByCompanyOrderByLastMessageTimestampDesc(company)
+                    .stream()
+                    .map(WhatsAppConversation::getUazapInstance)
+                    .filter(inst -> inst != null && !inst.isEmpty())
+                    .findFirst()
+                    .orElse(null);
+
+            if (instanceName == null) {
+                instanceName = company.getName().replaceAll("[^a-zA-Z0-9]", "");
+            }
         }
 
         // Verificar status real na API

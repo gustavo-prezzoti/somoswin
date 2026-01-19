@@ -32,8 +32,7 @@ public class UazapService {
 
     private final WhatsAppConversationRepository conversationRepository;
     private final WhatsAppMessageRepository messageRepository;
-
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate; // Injetado com timeout configurado
 
     @Value("${uazap.default-base-url}")
     private String defaultBaseUrl;
