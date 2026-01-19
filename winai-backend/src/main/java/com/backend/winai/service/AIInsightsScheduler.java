@@ -5,6 +5,7 @@ import com.backend.winai.repository.CompanyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -25,7 +26,7 @@ public class AIInsightsScheduler {
      * Executa a cada hora para gerar insights para todas as empresas
      * Roda de forma assíncrona para não bloquear outras operações
      */
-    // @Scheduled(cron = "0 0 * * * *") // A cada hora cheia (DESATIVADO)
+    @Scheduled(cron = "0 0 * * * *") // A cada hora cheia
     public void generateInsightsForAllCompanies() {
         log.info("Iniciando geração automática de insights de IA para todas as empresas...");
 
