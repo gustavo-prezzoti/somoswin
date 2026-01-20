@@ -30,26 +30,6 @@ export interface CreateCampaignRequest {
     creativeSource: string;
 }
 
-export interface MetaAccount {
-    id: string;
-    name: string;
-}
-
-export interface MetaConnectionStatus {
-    connected: boolean;
-    adAccountId?: string;
-    pageId?: string;
-    businessId?: string;
-    instagramBusinessId?: string;
-}
-
-export interface SelectAccountsRequest {
-    businessId?: string;
-    adAccountId?: string;
-    pageId?: string;
-    instagramBusinessId?: string;
-}
-
 export const marketingService = {
     getMetrics: async (): Promise<TrafficMetrics> => {
         return api.get<TrafficMetrics>('/marketing/metrics');
@@ -60,34 +40,14 @@ export const marketingService = {
     getAuthUrl: async (): Promise<{ url: string }> => {
         return api.get<{ url: string }>('/marketing/auth/meta');
     },
-    getStatus: async (): Promise<MetaConnectionStatus> => {
-        return api.get<MetaConnectionStatus>('/marketing/status');
+    getStatus: async (): Promise<{ connected: boolean, adAccountId?: string, pageId?: string }> => {
+        return api.get<{ connected: boolean, adAccountId?: string, pageId?: string }>('/marketing/status');
     },
     disconnect: async (): Promise<void> => {
         await api.post('/marketing/disconnect', {});
     },
     getInstagramMetrics: async (): Promise<InstagramMetrics> => {
         return api.get<InstagramMetrics>('/marketing/instagram-metrics');
-    },
-
-    // New methods for account selection
-    listBusinessManagers: async (): Promise<MetaAccount[]> => {
-        return api.get<MetaAccount[]>('/marketing/businesses');
-    },
-    listAdAccounts: async (businessId?: string): Promise<MetaAccount[]> => {
-        const params = businessId ? `?businessId=${businessId}` : '';
-        return api.get<MetaAccount[]>(`/marketing/ad-accounts${params}`);
-    },
-    listPages: async (businessId?: string): Promise<MetaAccount[]> => {
-        const params = businessId ? `?businessId=${businessId}` : '';
-        return api.get<MetaAccount[]>(`/marketing/pages${params}`);
-    },
-    listInstagramAccounts: async (businessId?: string): Promise<MetaAccount[]> => {
-        const params = businessId ? `?businessId=${businessId}` : '';
-        return api.get<MetaAccount[]>(`/marketing/instagram-accounts${params}`);
-    },
-    selectAccounts: async (request: SelectAccountsRequest): Promise<void> => {
-        await api.post('/marketing/select-accounts', request);
     }
 };
 
@@ -98,4 +58,3 @@ export interface InstagramMetrics {
     interactions: MetricDetail;
     performanceHistory: DailyPerformance[];
 }
-
