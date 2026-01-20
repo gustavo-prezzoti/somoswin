@@ -170,6 +170,37 @@ public class WhatsAppChatService {
                                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
                 try {
+                        // 0. Buscar instância existente para este número
+                        String uazapInstance = null;
+                        List<WhatsAppConversation> existingConversations = conversationRepository
+                                        .findByCompanyOrderByLastMessageTimestampDesc(company);
+
+                        // Procurar por conversa com o mesmo telefone
+                        for (WhatsAppConversation conv : existingConversations) {
+                                if (conv.getPhoneNumber() != null && conv.getPhoneNumber().contains(phoneNumber)
+                                                || (phoneNumber != null
+                                                                && phoneNumber.contains(conv.getPhoneNumber()))) {
+                                        if (conv.getUazapInstance() != null && !conv.getUazapInstance().isEmpty()) {
+                                                uazapInstance = conv.getUazapInstance();
+                                                log.debug("Usando instância existente para enviar mídia: {}",
+                                                                conv.getUazapInstance());
+                                                break;
+                                        }
+                                }
+                        }
+
+                        // Se ainda não temos instância, usar a primeira disponível da empresa
+                        if (uazapInstance == null) {
+                                for (WhatsAppConversation conv : existingConversations) {
+                                        if (conv.getUazapInstance() != null && !conv.getUazapInstance().isEmpty()) {
+                                                uazapInstance = conv.getUazapInstance();
+                                                log.debug("Usando primeira instância disponível para mídia: {}",
+                                                                conv.getUazapInstance());
+                                                break;
+                                        }
+                                }
+                        }
+
                         // 1. Upload do arquivo para o Supabase Storage (Histórico)
                         String bucket = "whatsapp-media";
                         String folder = companyId.toString() + "/" + phoneNumber;
@@ -189,6 +220,7 @@ public class WhatsAppChatService {
                                         .fileName(file.getOriginalFilename())
                                         .mimeType(file.getContentType())
                                         .ptt(ptt)
+                                        .uazapInstance(uazapInstance)
                                         .build();
 
                         // 3. Enviar mensagem via UaZap (com arquivo físico) by passing file bytes

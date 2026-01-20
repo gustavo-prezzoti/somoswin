@@ -405,11 +405,17 @@ public class UazapService {
     @Transactional
     public WhatsAppMessage sendMediaMessage(com.backend.winai.dto.request.SendMediaMessageRequest request,
             Company company, byte[] fileContent) {
+        // Build config - use instance from request if provided
+        Map<String, String> config = getUazapConfig(company);
+        if (request.getUazapInstance() != null && !request.getUazapInstance().isEmpty()) {
+            config.put("instance", request.getUazapInstance());
+        }
+
         // Buscar ou criar conversa
         WhatsAppConversation conversation = findOrCreateConversation(
                 request.getPhoneNumber(),
                 company,
-                getUazapConfig(company));
+                config);
 
         // Preparar requisição para Uazap
         String baseUrl = conversation.getUazapBaseUrl() != null

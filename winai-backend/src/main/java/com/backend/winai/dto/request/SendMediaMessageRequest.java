@@ -26,4 +26,7 @@ public class SendMediaMessageRequest {
 
     // Para documentos
     private String documentName;
+
+    // Instância do WhatsApp a ser usada
+    private String uazapInstance;
 }
