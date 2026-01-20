@@ -43,8 +43,20 @@ public class MarketingController {
 
     @GetMapping("/auth/meta/callback")
     public ResponseEntity<Void> handleMetaCallback(
-            @RequestParam("code") String code,
-            @RequestParam("state") String companyId) {
+            @RequestParam(value = "code", required = false) String code,
+            @RequestParam(value = "state", required = false) String companyId,
+            @RequestParam(value = "error", required = false) String error,
+            @RequestParam(value = "error_reason", required = false) String errorReason) {
+
+        // Handle user cancellation or permission denial
+        if (error != null || code == null) {
+            String errorMessage = errorReason != null ? errorReason : (error != null ? error : "unknown_error");
+            String frontendUrl = marketingService.getFrontendUrl();
+            return ResponseEntity.status(302)
+                    .header("Location", frontendUrl + "/configuracoes?error=meta_" + errorMessage)
+                    .build();
+        }
+
         String redirectUrl = marketingService.handleMetaCallback(code, companyId);
         return ResponseEntity.status(302).header("Location", redirectUrl).build();
     }

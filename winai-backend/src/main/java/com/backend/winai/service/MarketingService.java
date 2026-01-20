@@ -65,6 +65,10 @@ public class MarketingService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    public String getFrontendUrl() {
+        return frontendUrl;
+    }
+
     public TrafficMetricsResponse getTrafficMetrics() {
         return buildEmptyMetrics();
     }
