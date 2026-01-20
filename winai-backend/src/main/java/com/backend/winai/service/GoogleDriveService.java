@@ -60,7 +60,7 @@ public class GoogleDriveService {
     @Value("${google.client.secret:}")
     private String clientSecret;
 
-    @Value("${google.redirect.uri:http://localhost:8080/api/v1/drive/callback}")
+    @Value("${google.redirect.uri:https://server.somoswin.com.br/api/v1/drive/callback}")
     private String redirectUri;
 
     @Value("${app.frontend.url:http://localhost:3000}")

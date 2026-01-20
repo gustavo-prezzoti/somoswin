@@ -43,7 +43,7 @@ public class MarketingService {
     @Value("${meta.client.secret:}")
     private String clientSecret;
 
-    @Value("${meta.redirect.uri:http://localhost:8080/api/v1/marketing/auth/meta/callback}")
+    @Value("${meta.redirect.uri:https://server.somoswin.com.br/api/v1/marketing/auth/meta/callback}")
     private String redirectUri;
 
     @Value("${app.frontend.url:http://localhost:3000}")
