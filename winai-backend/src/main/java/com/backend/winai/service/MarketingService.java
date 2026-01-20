@@ -43,7 +43,7 @@ public class MarketingService {
     @Value("${meta.client.secret:}")
     private String clientSecret;
 
-    @Value("${meta.redirect.uri:https://server.somoswin.com.br/api/v1/marketing/auth/meta/callback}")
+    @Value("${meta.redirect.uri:http://localhost:8080/api/v1/marketing/auth/meta/callback}")
     private String redirectUri;
 
     @Value("${app.frontend.url:http://localhost:3000}")
@@ -368,22 +368,85 @@ public class MarketingService {
     }
 
     private void fetchDefaultAccounts(MetaConnection connection) throws Exception {
-        // Fetch Ad Accounts
-        String adAccountsUrl = String.format("%s/me/adaccounts?fields=id,name&access_token=%s", metaApiBaseUrl,
-                connection.getAccessToken());
-        ResponseEntity<String> adAccountsResponse = getWithRetry(adAccountsUrl);
-        JsonNode adAccountsData = objectMapper.readTree(adAccountsResponse.getBody()).get("data");
-        if (adAccountsData != null && adAccountsData.size() > 0) {
-            connection.setAdAccountId(adAccountsData.get(0).get("id").asText());
+        String accessToken = connection.getAccessToken();
+
+        // Step 1: First, try to get the Business Manager connected via OAuth
+        String businessId = null;
+        try {
+            String businessUrl = String.format("%s/me/businesses?fields=id,name&access_token=%s",
+                    metaApiBaseUrl, accessToken);
+            ResponseEntity<String> businessResponse = getWithRetry(businessUrl);
+            JsonNode businessData = objectMapper.readTree(businessResponse.getBody()).get("data");
+            if (businessData != null && businessData.size() > 0) {
+                businessId = businessData.get(0).get("id").asText();
+                connection.setBusinessId(businessId);
+                log.info("Found Business Manager: {} ({})",
+                        businessData.get(0).get("name").asText(), businessId);
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch Business Manager, will use personal accounts", e);
         }
 
-        // Fetch Pages
-        String pagesUrl = String.format("%s/me/accounts?fields=id,name&access_token=%s", metaApiBaseUrl,
-                connection.getAccessToken());
-        ResponseEntity<String> pagesResponse = getWithRetry(pagesUrl);
-        JsonNode pagesData = objectMapper.readTree(pagesResponse.getBody()).get("data");
-        if (pagesData != null && pagesData.size() > 0) {
-            connection.setPageId(pagesData.get(0).get("id").asText());
+        // Step 2: Fetch Ad Accounts - use BM endpoint if we have a business ID
+        try {
+            String adAccountsUrl;
+            if (businessId != null) {
+                // Use the Business Manager's owned ad accounts
+                adAccountsUrl = String.format("%s/%s/owned_ad_accounts?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, businessId, accessToken);
+            } else {
+                // Fallback to personal ad accounts
+                adAccountsUrl = String.format("%s/me/adaccounts?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, accessToken);
+            }
+            ResponseEntity<String> adAccountsResponse = getWithRetry(adAccountsUrl);
+            JsonNode adAccountsData = objectMapper.readTree(adAccountsResponse.getBody()).get("data");
+            if (adAccountsData != null && adAccountsData.size() > 0) {
+                connection.setAdAccountId(adAccountsData.get(0).get("id").asText());
+                log.info("Found Ad Account: {}", adAccountsData.get(0).get("name").asText());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch Ad Accounts", e);
+        }
+
+        // Step 3: Fetch Pages - use BM endpoint if we have a business ID
+        try {
+            String pagesUrl;
+            if (businessId != null) {
+                // Use the Business Manager's owned pages
+                pagesUrl = String.format("%s/%s/owned_pages?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, businessId, accessToken);
+            } else {
+                // Fallback to personal pages
+                pagesUrl = String.format("%s/me/accounts?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, accessToken);
+            }
+            ResponseEntity<String> pagesResponse = getWithRetry(pagesUrl);
+            JsonNode pagesData = objectMapper.readTree(pagesResponse.getBody()).get("data");
+            if (pagesData != null && pagesData.size() > 0) {
+                connection.setPageId(pagesData.get(0).get("id").asText());
+                log.info("Found Page: {}", pagesData.get(0).get("name").asText());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch Pages", e);
+        }
+
+        // Step 4: Try to fetch Instagram account from BM if available
+        if (businessId != null) {
+            try {
+                String igUrl = String.format("%s/%s/instagram_accounts?fields=id,username&access_token=%s",
+                        metaApiBaseUrl, businessId, accessToken);
+                ResponseEntity<String> igResponse = getWithRetry(igUrl);
+                JsonNode igData = objectMapper.readTree(igResponse.getBody()).get("data");
+                if (igData != null && igData.size() > 0) {
+                    connection.setInstagramBusinessId(igData.get(0).get("id").asText());
+                    log.info("Found Instagram account: {}",
+                            igData.get(0).has("username") ? igData.get(0).get("username").asText()
+                                    : igData.get(0).get("id").asText());
+                }
+            } catch (Exception e) {
+                log.warn("Could not fetch Instagram accounts from BM", e);
+            }
         }
     }
 
@@ -394,6 +457,8 @@ public class MarketingService {
                     res.put("connected", conn.isConnected());
                     res.put("adAccountId", conn.getAdAccountId());
                     res.put("pageId", conn.getPageId());
+                    res.put("businessId", conn.getBusinessId());
+                    res.put("instagramBusinessId", conn.getInstagramBusinessId());
                     return res;
                 })
                 .orElse(Map.of("connected", false));
@@ -406,6 +471,189 @@ public class MarketingService {
             conn.setAccessToken(null);
             metaConnectionRepository.save(conn);
         });
+    }
+
+    /**
+     * List all Business Managers the user has access to
+     */
+    public List<Map<String, String>> listBusinessManagers(User user) {
+        List<Map<String, String>> result = new ArrayList<>();
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(user.getCompany());
+
+        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()) {
+            return result;
+        }
+
+        MetaConnection connection = connectionOpt.get();
+        try {
+            String url = String.format("%s/me/businesses?fields=id,name&access_token=%s",
+                    metaApiBaseUrl, connection.getAccessToken());
+            ResponseEntity<String> response = getWithRetry(url);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
+
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    Map<String, String> bm = new HashMap<>();
+                    bm.put("id", node.get("id").asText());
+                    bm.put("name", node.get("name").asText());
+                    result.add(bm);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error listing business managers", e);
+        }
+        return result;
+    }
+
+    /**
+     * List Ad Accounts for a specific Business Manager
+     */
+    public List<Map<String, String>> listAdAccountsByBusiness(User user, String businessId) {
+        List<Map<String, String>> result = new ArrayList<>();
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(user.getCompany());
+
+        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()) {
+            return result;
+        }
+
+        MetaConnection connection = connectionOpt.get();
+        try {
+            String url;
+            if (businessId != null && !businessId.isEmpty()) {
+                // Get ad accounts owned by the Business Manager
+                url = String.format("%s/%s/owned_ad_accounts?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, businessId, connection.getAccessToken());
+            } else {
+                // Fallback to user's personal ad accounts
+                url = String.format("%s/me/adaccounts?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, connection.getAccessToken());
+            }
+            ResponseEntity<String> response = getWithRetry(url);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
+
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    Map<String, String> acc = new HashMap<>();
+                    acc.put("id", node.get("id").asText());
+                    acc.put("name", node.get("name").asText());
+                    result.add(acc);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error listing ad accounts for business {}", businessId, e);
+        }
+        return result;
+    }
+
+    /**
+     * List Pages for a specific Business Manager
+     */
+    public List<Map<String, String>> listPagesByBusiness(User user, String businessId) {
+        List<Map<String, String>> result = new ArrayList<>();
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(user.getCompany());
+
+        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()) {
+            return result;
+        }
+
+        MetaConnection connection = connectionOpt.get();
+        try {
+            String url;
+            if (businessId != null && !businessId.isEmpty()) {
+                // Get pages owned by the Business Manager
+                url = String.format("%s/%s/owned_pages?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, businessId, connection.getAccessToken());
+            } else {
+                // Fallback to user's personal pages
+                url = String.format("%s/me/accounts?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, connection.getAccessToken());
+            }
+            ResponseEntity<String> response = getWithRetry(url);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
+
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    Map<String, String> page = new HashMap<>();
+                    page.put("id", node.get("id").asText());
+                    page.put("name", node.get("name").asText());
+                    result.add(page);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error listing pages for business {}", businessId, e);
+        }
+        return result;
+    }
+
+    /**
+     * List Instagram accounts for a specific Business Manager
+     */
+    public List<Map<String, String>> listInstagramAccountsByBusiness(User user, String businessId) {
+        List<Map<String, String>> result = new ArrayList<>();
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(user.getCompany());
+
+        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()) {
+            return result;
+        }
+
+        MetaConnection connection = connectionOpt.get();
+        try {
+            String url;
+            if (businessId != null && !businessId.isEmpty()) {
+                // Get Instagram accounts connected to the Business Manager
+                url = String.format("%s/%s/instagram_accounts?fields=id,username&access_token=%s",
+                        metaApiBaseUrl, businessId, connection.getAccessToken());
+            } else {
+                // Fallback - try to get from pages
+                return result;
+            }
+            ResponseEntity<String> response = getWithRetry(url);
+            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
+
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    Map<String, String> ig = new HashMap<>();
+                    ig.put("id", node.get("id").asText());
+                    ig.put("name", node.has("username") ? node.get("username").asText() : node.get("id").asText());
+                    result.add(ig);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error listing Instagram accounts for business {}", businessId, e);
+        }
+        return result;
+    }
+
+    /**
+     * Update the selected Business Manager, Ad Account, Page, and Instagram account
+     */
+    @Transactional
+    public void updateSelectedAccounts(User user, String businessId, String adAccountId, String pageId,
+            String instagramBusinessId) {
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(user.getCompany());
+
+        if (connectionOpt.isEmpty()) {
+            throw new RuntimeException("Meta connection not found");
+        }
+
+        MetaConnection connection = connectionOpt.get();
+
+        if (businessId != null) {
+            connection.setBusinessId(businessId);
+        }
+        if (adAccountId != null) {
+            connection.setAdAccountId(adAccountId);
+        }
+        if (pageId != null) {
+            connection.setPageId(pageId);
+        }
+        if (instagramBusinessId != null) {
+            connection.setInstagramBusinessId(instagramBusinessId);
+        }
+
+        metaConnectionRepository.save(connection);
+        log.info("Updated Meta connection for company {}: businessId={}, adAccountId={}, pageId={}, igId={}",
+                user.getCompany().getId(), businessId, adAccountId, pageId, instagramBusinessId);
     }
 
     // Cron job to sync everything automatically every 6 hours

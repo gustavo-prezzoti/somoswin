@@ -170,7 +170,7 @@ export const dashboardService = {
             throw new Error('Token de autenticação não encontrado. Faça login novamente.');
         }
 
-        const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://server.somoswin.com.br/api/v1';
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
         const response = await fetch(
             `${API_BASE_URL}/dashboard/export/report?${params.toString()}`,
             {
