@@ -27,12 +27,14 @@ export interface UpdateKnowledgeBaseRequest {
 }
 
 export const knowledgeBaseService = {
-    async getAll(): Promise<KnowledgeBase[]> {
-        return await httpClient.get<KnowledgeBase[]>('/knowledge-bases');
+    async getAll(companyId?: string): Promise<KnowledgeBase[]> {
+        const url = companyId ? `/knowledge-bases?companyId=${companyId}` : '/knowledge-bases';
+        return await httpClient.get<KnowledgeBase[]>(url);
     },
 
-    async create(data: CreateKnowledgeBaseRequest): Promise<KnowledgeBase> {
-        return await httpClient.post<KnowledgeBase>('/knowledge-bases', data);
+    async create(data: CreateKnowledgeBaseRequest, companyId?: string): Promise<KnowledgeBase> {
+        const url = companyId ? `/knowledge-bases?companyId=${companyId}` : '/knowledge-bases';
+        return await httpClient.post<KnowledgeBase>(url, data);
     },
 
     async update(id: string, data: UpdateKnowledgeBaseRequest): Promise<KnowledgeBase> {

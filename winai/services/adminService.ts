@@ -218,6 +218,60 @@ const adminService = {
     deleteUserWhatsAppConnection: async (connectionId: string): Promise<void> => {
         await httpClient.delete(`/admin/user-whatsapp-connections/${connectionId}`);
     },
+
+    // ========== SYSTEM PROMPTS ==========
+
+    getAllSystemPrompts: async (): Promise<SystemPrompt[]> => {
+        return await httpClient.get<SystemPrompt[]>('/admin/prompts');
+    },
+
+    getSystemPromptsByCategory: async (category: string): Promise<SystemPrompt[]> => {
+        return await httpClient.get<SystemPrompt[]>(`/admin/prompts/category/${category}`);
+    },
+
+    getSystemPromptById: async (promptId: string): Promise<SystemPrompt> => {
+        return await httpClient.get<SystemPrompt>(`/admin/prompts/${promptId}`);
+    },
+
+    createSystemPrompt: async (data: CreateSystemPromptRequest): Promise<SystemPrompt> => {
+        return await httpClient.post<SystemPrompt>('/admin/prompts', data);
+    },
+
+    updateSystemPrompt: async (promptId: string, data: UpdateSystemPromptRequest): Promise<SystemPrompt> => {
+        return await httpClient.put<SystemPrompt>(`/admin/prompts/${promptId}`, data);
+    },
+
+    deleteSystemPrompt: async (promptId: string): Promise<void> => {
+        await httpClient.delete(`/admin/prompts/${promptId}`);
+    },
 };
+
+export interface SystemPrompt {
+    id: string;
+    name: string;
+    category: string;
+    content: string;
+    description?: string;
+    isActive: boolean;
+    isDefault: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateSystemPromptRequest {
+    name: string;
+    category: string;
+    content: string;
+    description?: string;
+    isDefault?: boolean;
+}
+
+export interface UpdateSystemPromptRequest {
+    name?: string;
+    content?: string;
+    description?: string;
+    isActive?: boolean;
+    isDefault?: boolean;
+}
 
 export default adminService;

@@ -1,5 +1,6 @@
 package com.backend.winai.repository;
 
+import com.backend.winai.entity.Company;
 import com.backend.winai.entity.MetaInsight;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -15,4 +16,6 @@ public interface MetaInsightRepository extends JpaRepository<MetaInsight, UUID> 
 
     Optional<MetaInsight> findByCompanyIdAndDateAndLevelAndExternalId(UUID companyId, LocalDate date, String level,
             String externalId);
+
+    void deleteByCompany(Company company);
 }

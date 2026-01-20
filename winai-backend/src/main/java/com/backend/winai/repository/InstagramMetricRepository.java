@@ -1,5 +1,6 @@
 package com.backend.winai.repository;
 
+import com.backend.winai.entity.Company;
 import com.backend.winai.entity.InstagramMetric;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -14,4 +15,6 @@ public interface InstagramMetricRepository extends JpaRepository<InstagramMetric
     List<InstagramMetric> findByCompanyIdAndDateBetween(UUID companyId, LocalDate startDate, LocalDate endDate);
 
     Optional<InstagramMetric> findByCompanyIdAndDate(UUID companyId, LocalDate date);
+
+    void deleteByCompany(Company company);
 }

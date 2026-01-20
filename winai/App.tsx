@@ -45,6 +45,7 @@ import AdminSettings from './components/Admin/AdminSettings';
 import AdminUserConnections from './src/components/Admin/AdminUserConnections';
 import AdminAgentsAI from './components/Admin/AdminAgentsAI';
 import AdminCompanies from './components/Admin/AdminCompanies';
+import AdminPrompts from './components/Admin/AdminPrompts';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -356,6 +357,7 @@ const App: React.FC = () => {
           <Route path="instances" element={<AdminInstances />} />
           <Route path="user-connections" element={<AdminUserConnections />} />
           <Route path="agents" element={<AdminAgentsAI />} />
+          <Route path="prompts" element={<AdminPrompts />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Users, MessageSquare, Smartphone, MessagesSquare, RefreshCw, AlertCircle } from 'lucide-react';
+import { Users, MessageSquare, Smartphone, MessagesSquare, RefreshCw, AlertCircle, Activity, ArrowUpRight, Zap, Cpu } from 'lucide-react';
 import adminService from '../../services/adminService';
 
 interface StatCardProps {
@@ -8,44 +8,32 @@ interface StatCardProps {
     title: string;
     value: string | number;
     subtitle?: string;
+    variant?: 'emerald' | 'indigo' | 'rose' | 'amber';
 }
 
-const StatCard: React.FC<StatCardProps> = ({ icon, title, value, subtitle }) => (
-    <div style={{
-        background: '#ffffff',
-        borderRadius: '12px',
-        padding: '24px',
-        border: '1px solid #e5e7eb',
-    }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div>
-                <p style={{ fontSize: '13px', color: '#6b7280', fontWeight: 500, margin: 0, marginBottom: '8px' }}>
-                    {title}
-                </p>
-                <p style={{ fontSize: '32px', fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.025em' }}>
-                    {value}
-                </p>
-                {subtitle && (
-                    <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0, marginTop: '4px' }}>
-                        {subtitle}
-                    </p>
-                )}
+const StatCard: React.FC<StatCardProps> = ({ icon, title, value, subtitle, variant = 'indigo' }) => {
+    const colors = {
+        emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+        indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+        rose: 'bg-rose-50 text-rose-600 border-rose-100',
+        amber: 'bg-amber-50 text-amber-600 border-amber-100',
+    };
+
+    return (
+        <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-gray-100 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between h-full">
+            <div className="flex items-start justify-between mb-8">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${colors[variant]}`}>
+                    {icon}
+                </div>
             </div>
-            <div style={{
-                width: '44px',
-                height: '44px',
-                background: '#f3f4f6',
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#6b7280'
-            }}>
-                {icon}
+
+            <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] mb-2">{title}</p>
+                <h3 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter italic uppercase leading-none">{value}</h3>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -102,48 +90,28 @@ const AdminDashboard: React.FC = () => {
 
     if (isAuthenticated === null || loading) {
         return (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#6b7280' }}>
-                <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ marginLeft: '12px', fontSize: '14px' }}>Carregando...</span>
+            <div className="flex flex-col items-center justify-center h-96 gap-4">
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Carregando estatísticas...</span>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div style={{ padding: '24px' }}>
-                <div style={{
-                    background: '#ffffff',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                    padding: '32px',
-                    textAlign: 'center'
-                }}>
-                    <AlertCircle size={48} style={{ color: '#9ca3af', marginBottom: '16px' }} />
-                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#111827', margin: 0, marginBottom: '8px' }}>
-                        Erro ao carregar dados
-                    </h3>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: 0, marginBottom: '24px' }}>
-                        {error}
-                    </p>
+            <div className="p-6">
+                <div className="bg-white rounded-[2rem] border border-gray-100 p-16 text-center max-w-xl mx-auto shadow-lg">
+                    <div className="w-20 h-20 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-8 text-rose-500">
+                        <AlertCircle size={40} />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 uppercase italic mb-4">Erro ao carregar dados</h3>
+                    <p className="text-gray-400 font-bold mb-10 italic max-w-sm mx-auto">{error}</p>
                     <button
                         onClick={loadStats}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 20px',
-                            background: '#111827',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            cursor: 'pointer'
-                        }}
+                        className="flex items-center gap-3 px-10 py-5 bg-gray-900 text-white rounded-2xl hover:bg-black transition-all font-black uppercase text-xs tracking-widest active:scale-95 mx-auto"
                     >
-                        <RefreshCw size={16} />
-                        Tentar Novamente
+                        <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+                        Tentar novamente
                     </button>
                 </div>
             </div>
@@ -151,46 +119,52 @@ const AdminDashboard: React.FC = () => {
     }
 
     return (
-        <div>
-            <div style={{ marginBottom: '32px' }}>
-                <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.025em' }}>
-                    Dashboard
-                </h1>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: 0, marginTop: '4px' }}>
-                    Visão geral do sistema
-                </p>
+        <div className="p-6 max-w-[1600px] mx-auto min-h-screen">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-16 px-4 md:px-0">
+                <div className="relative">
+                    <h1 className="text-5xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Dashboard</h1>
+                    <p className="text-gray-500 font-bold text-sm tracking-tight mt-3 opacity-70 flex items-center gap-2">
+                        Visão geral do sistema Win AI
+                    </p>
+                </div>
+
+                <button
+                    onClick={loadStats}
+                    className="hidden md:flex items-center gap-3 px-6 py-4 bg-white text-gray-400 hover:text-emerald-600 rounded-xl border border-gray-100 shadow-sm transition-all active:scale-95"
+                >
+                    <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Atualizar</span>
+                </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
                 <StatCard
-                    icon={<Users size={22} />}
-                    title="Total de Usuários"
+                    icon={<Users size={28} />}
+                    title="Usuários"
                     value={stats?.totalUsers || 0}
+                    variant="emerald"
                 />
                 <StatCard
-                    icon={<MessageSquare size={22} />}
-                    title="Total de Mensagens"
-                    value={stats?.totalMessages || 0}
+                    icon={<MessageSquare size={28} />}
+                    title="Mensagens"
+                    value={(stats?.totalMessages || 0).toLocaleString('pt-BR')}
+                    variant="indigo"
                 />
                 <StatCard
-                    icon={<Smartphone size={22} />}
-                    title="Instâncias WhatsApp"
+                    icon={<Smartphone size={28} />}
+                    title="Instâncias"
                     value={`${stats?.connectedInstances || 0}/${stats?.totalInstances || 0}`}
-                    subtitle="conectadas/total"
+                    variant="amber"
                 />
                 <StatCard
-                    icon={<MessagesSquare size={22} />}
+                    icon={<MessagesSquare size={28} />}
                     title="Conversas"
                     value={stats?.totalConversations || 0}
+                    variant="rose"
                 />
             </div>
 
-            <style>{`
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
+
         </div>
     );
 };

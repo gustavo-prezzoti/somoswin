@@ -1,49 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { RefreshCw, Wifi, WifiOff, AlertCircle, Plus, Trash2, Power, X, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff, Plus, Trash2, Power, Smartphone, QrCode, Search, Activity, Zap } from 'lucide-react';
 import adminService, { AdminInstance, CreateInstanceRequest } from '../../services/adminService';
+import { useModal } from './ModalContext';
 
 const AdminInstances: React.FC = () => {
     const navigate = useNavigate();
+    const { showAlert, showConfirm, showCustomModal, showToast, closeModal } = useModal();
     const [instances, setInstances] = useState<AdminInstance[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
     const [connectingInstance, setConnectingInstance] = useState<string | null>(null);
     const [disconnectingInstance, setDisconnectingInstance] = useState<string | null>(null);
-
-    // Modals state
-    const [showCreateModal, setShowCreateModal] = useState(false);
-
-    // Confirmation Modal state
-    const [confirmModal, setConfirmModal] = useState<{
-        isOpen: boolean;
-        title: string;
-        message: string;
-        type: 'danger' | 'warning';
-        onConfirm: () => Promise<void>;
-    }>({
-        isOpen: false,
-        title: '',
-        message: '',
-        type: 'warning',
-        onConfirm: async () => { },
-    });
-    const [confirmLoading, setConfirmLoading] = useState(false);
-
-    const [createForm, setCreateForm] = useState<CreateInstanceRequest>({
-        instanceName: '',
-        qrcode: true,
-        integration: 'WHATSAPP-BAILEYS'
-    });
-
-
-
-    // QR Code Modal
-    const [showQrModal, setShowQrModal] = useState(false);
-    const [qrCodeData, setQrCodeData] = useState('');
-    const [qrCodeInstance, setQrCodeInstance] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
@@ -72,7 +41,6 @@ const AdminInstances: React.FC = () => {
             setLoading(true);
             const data = await adminService.getAllInstances();
             setInstances(data || []);
-            setError('');
         } catch (err: any) {
             console.error('Erro ao carregar instâncias:', err);
             if (err.status === 401 || err.status === 403) {
@@ -81,695 +49,343 @@ const AdminInstances: React.FC = () => {
                 navigate('/admin/login');
                 return;
             }
-            setError('Erro ao carregar instâncias');
             setInstances([]);
         } finally {
             setLoading(false);
         }
     };
 
-    // Auto-refresh QR Code e Check Connection Status
-    useEffect(() => {
-        let interval: NodeJS.Timeout;
-
-        if (showQrModal && qrCodeInstance) {
-            const refreshQr = async () => {
-                try {
-                    const result = await adminService.connectInstance(qrCodeInstance);
-
-                    const isConnected = result.status === 'open' ||
-                        result.status === 'connected' ||
-                        result.instance?.status === 'open' ||
-                        result.instance?.status === 'connected';
-
-                    if (isConnected) {
-                        setShowQrModal(false);
-                        setSuccess(`Instância ${qrCodeInstance} conectada com sucesso!`);
-                        loadInstances();
-                        return;
-                    }
-
-                    const qrcode = result.qrcode || result.instance?.qrcode;
-                    if (qrcode && typeof qrcode === 'string' && qrcode.includes('base64')) {
-                        setQrCodeData(qrcode);
-                    }
-                } catch (e) {
-                    console.error("Erro ao renovar QR Code", e);
-                }
-            };
-
-            // Renova a cada 15 segundos
-            interval = setInterval(refreshQr, 15000);
-        }
-
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [showQrModal, qrCodeInstance]);
-
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
+    const handleCreate = async (instanceName: string) => {
         try {
-            const payload = {
-                ...createForm,
+            const payload: CreateInstanceRequest = {
+                instanceName,
+                qrcode: true,
                 integration: 'WHATSAPP-BAILEYS'
             };
             await adminService.createInstance(payload);
-            setSuccess('Instância criada com sucesso!');
-            setShowCreateModal(false);
-            setCreateForm({ instanceName: '', qrcode: true, integration: 'WHATSAPP-BAILEYS' });
+            showToast('Instância criada com sucesso.');
             await loadInstances();
-            setTimeout(() => setSuccess(''), 3000);
         } catch (err: any) {
-            setError(err.message || 'Erro ao criar instância');
+            showToast(err.message || 'Falha ao criar instância.', 'error');
+            throw err;
         }
     };
 
+    const openCreateModal = () => {
+        let currentName = '';
+        const ModalBody = () => {
+            const [name, setName] = useState('');
+            return (
+                <div className="space-y-6 pt-2">
+                    <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex gap-3 text-emerald-800">
+                        <Smartphone size={20} className="shrink-0 mt-1" />
+                        <p className="text-[11px] font-bold uppercase tracking-widest leading-relaxed">
+                            A criação de uma nova instância reserva recursos de servidor para o processamento de mensagens em tempo real. Escolha um nome identificador único.
+                        </p>
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Apelido da Instância (Identificador)</label>
+                        <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => {
+                                const val = e.target.value.toUpperCase();
+                                setName(val);
+                                currentName = val;
+                            }}
+                            className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-black text-gray-800 uppercase italic"
+                            placeholder="EX: CANAL DE VENDAS SP"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+            );
+        };
 
-    const confirmAction = (
-        title: string,
-        message: string,
-        action: () => Promise<void>,
-        type: 'danger' | 'warning' = 'warning'
-    ) => {
-        setConfirmModal({
-            isOpen: true,
-            title,
-            message,
-            type,
+        showConfirm({
+            title: 'Nova Instância WhatsApp',
+            body: <ModalBody />,
+            confirmText: 'Criar Instância',
             onConfirm: async () => {
-                setConfirmLoading(true);
-                try {
-                    await action();
-                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                } finally {
-                    setConfirmLoading(false);
+                if (!currentName.trim()) {
+                    showAlert('Erro', 'O nome da instância é obrigatório.', 'error');
+                    throw new Error('Nome obrigatório');
                 }
+                await handleCreate(currentName);
             }
         });
     };
 
-    const handleDelete = (instanceName: string) => {
-        confirmAction(
-            'Excluir Instância',
-            `Tem certeza que deseja excluir a instância "${instanceName}"? Esta ação não pode ser desfeita.`,
-            async () => {
-                try {
-                    await adminService.deleteInstance(instanceName);
-                    setSuccess('Instância excluída!');
-                    await loadInstances();
-                    setTimeout(() => setSuccess(''), 3000);
-                } catch (err: any) {
-                    setError(err.message || 'Erro ao excluir instância');
-                    setTimeout(() => setError(''), 3000);
-                }
-            },
-            'danger'
-        );
+    const openQrModal = (instanceName: string, initialQr: string) => {
+        let currentQr = initialQr;
+
+        const QrBody = () => {
+            const [qr, setQr] = useState(currentQr);
+            const [timer, setTimer] = useState(40);
+
+            useEffect(() => {
+                const refreshInterval = setInterval(async () => {
+                    try {
+                        const result = await adminService.connectInstance(instanceName);
+                        const isConnected = result.status === 'open' ||
+                            result.status === 'connected' ||
+                            result.instance?.status === 'open' ||
+                            result.instance?.status === 'connected';
+
+                        if (isConnected) {
+                            closeModal();
+                            showToast(`WhatsApp conectado com sucesso!`);
+                            loadInstances();
+                            return;
+                        }
+
+                        const newQr = result.qrcode || result.instance?.qrcode;
+                        if (newQr && typeof newQr === 'string') {
+                            setQr(newQr);
+                            currentQr = newQr;
+                            setTimer(40);
+                        }
+                    } catch (e) {
+                        console.error("Erro ao renovar QR Code", e);
+                    }
+                }, 15000);
+
+                const timerInterval = setInterval(() => {
+                    setTimer(t => t > 0 ? t - 1 : 0);
+                }, 1000);
+
+                return () => {
+                    clearInterval(refreshInterval);
+                    clearInterval(timerInterval);
+                };
+            }, []);
+
+            return (
+                <div className="flex flex-col items-center gap-8 py-6">
+                    <div className="text-center space-y-2">
+                        <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">Conectar WhatsApp</h4>
+                        <p className="text-sm font-bold text-gray-400 italic">
+                            Escaneie o QR Code no seu WhatsApp (Aparelhos Conectados)
+                        </p>
+                    </div>
+
+                    <div className="p-8 bg-white rounded-[2rem] shadow-lg border border-gray-100">
+                        <div className="p-2 bg-white rounded-2xl">
+                            <img src={qr} alt="QR Code" className="w-64 h-64" />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 px-6 py-3 bg-gray-50 rounded-full border border-gray-100">
+                        <RefreshCw size={16} className="animate-spin text-emerald-500" />
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none">
+                            O QR Code expira em: {timer}s
+                        </span>
+                    </div>
+                </div>
+            );
+        };
+
+        showCustomModal({
+            title: `Conectar: ${instanceName}`,
+            body: <QrBody />,
+            showFooter: true,
+            confirmText: 'Fechar'
+        });
     };
 
     const handleConnect = async (instanceName: string) => {
         setConnectingInstance(instanceName);
-        setError('');
         try {
             const result = await adminService.connectInstance(instanceName);
-
-            // Check for QR Code in response (direct or nested in instance)
             const qrcode = result.qrcode || result.instance?.qrcode;
 
             if (qrcode && typeof qrcode === 'string' && qrcode.includes('base64')) {
-                setQrCodeData(qrcode);
-                setQrCodeInstance(instanceName);
-                setShowQrModal(true);
-                setSuccess('Escaneie o QR Code para conectar.');
+                openQrModal(instanceName, qrcode);
             } else {
-                setSuccess('Solicitação de conexão enviada! Verifique o status.');
+                showToast('Conectando instância... Verifique o status em instantes.', 'info');
                 setTimeout(() => loadInstances(), 2000);
             }
         } catch (err: any) {
-            setError(err.message || 'Erro ao conectar instância');
-            setTimeout(() => setError(''), 3000);
+            showToast('Falha ao conectar instância.', 'error');
         } finally {
             setConnectingInstance(null);
         }
     };
 
     const handleDisconnect = (instanceName: string) => {
-        confirmAction(
-            'Desconectar Instância',
-            `Deseja realmente desconectar a instância "${instanceName}"?`,
-            async () => {
+        showConfirm({
+            title: 'Desconectar WhatsApp',
+            message: `Tem certeza que deseja desconectar a instância "${instanceName}"?`,
+            type: 'warning',
+            onConfirm: async () => {
                 setDisconnectingInstance(instanceName);
                 try {
                     await adminService.disconnectInstance(instanceName);
-                    setSuccess('Instância desconectada!');
+                    showToast('Instância desconectada com sucesso.');
                     await loadInstances();
-                    setTimeout(() => setSuccess(''), 3000);
                 } catch (err: any) {
-                    setError(err.message || 'Erro ao desconectar instância');
-                    setTimeout(() => setError(''), 3000);
+                    showToast('Falha ao desconectar a instância.', 'error');
                 } finally {
                     setDisconnectingInstance(null);
                 }
-            },
-            'warning'
-        );
+            }
+        });
     };
 
+    const handleDelete = (instanceName: string) => {
+        showConfirm({
+            title: 'Excluir Instância',
+            message: `Tem certeza que deseja excluir permanentemente a instância "${instanceName}"? Esta ação não pode ser desfeita.`,
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    await adminService.deleteInstance(instanceName);
+                    showToast('Instância excluída com sucesso.');
+                    await loadInstances();
+                } catch (err: any) {
+                    showToast('Não foi possível excluir a instância.', 'error');
+                }
+            }
+        });
+    };
+
+    const filteredInstances = instances.filter(i =>
+        i.instanceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (i.phoneNumber && i.phoneNumber.includes(searchTerm))
+    );
 
     if (isAuthenticated === false) {
         return <Navigate to="/admin/login" replace />;
     }
 
-    if (isAuthenticated === null || loading) {
+    if (isAuthenticated === null || (loading && instances.length === 0)) {
         return (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#6b7280' }}>
-                <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ marginLeft: '12px', fontSize: '14px' }}>Carregando...</span>
+            <div className="flex flex-col items-center justify-center h-96 gap-4">
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Carregando instâncias...</span>
             </div>
         );
     }
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <div>
-                    <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.025em' }}>
-                        Instâncias WhatsApp
-                    </h1>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: 0, marginTop: '4px' }}>
-                        Gerencie as conexões WhatsApp - {instances.length} instâncias
+        <div className="p-6 max-w-[1600px] mx-auto">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+                <div className="relative">
+                    <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Instâncias</h1>
+                    <p className="text-gray-500 font-bold text-sm tracking-tight mt-2 opacity-70 flex items-center gap-2">
+                        Gerencie suas instâncias do WhatsApp
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={loadInstances} style={styles.btnSecondary}>
-                        <RefreshCw size={16} />
-                        Atualizar
+
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    <button onClick={loadInstances} className="p-4 bg-white text-gray-400 hover:text-emerald-600 rounded-2xl border border-gray-100 shadow-sm transition-all active:scale-95">
+                        <RefreshCw size={22} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button onClick={() => setShowCreateModal(true)} style={styles.btnPrimary}>
-                        <Plus size={16} />
+                    <button onClick={openCreateModal} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-gray-900 text-white rounded-[1.2rem] hover:bg-black transition-all font-black uppercase text-xs tracking-widest active:scale-95 whitespace-nowrap">
+                        <Plus size={20} strokeWidth={3} />
                         Nova Instância
                     </button>
                 </div>
             </div>
 
-            {error && (
-                <div style={styles.alertError}>
-                    <AlertCircle size={16} />
-                    {error}
-                </div>
-            )}
-            {success && (
-                <div style={styles.alertSuccess}>
-                    {success}
-                </div>
-            )}
-
-            <div style={styles.tableContainer}>
-                <table style={styles.table}>
-                    <thead>
-                        <tr>
-                            <th style={styles.th}>Instância</th>
-                            <th style={styles.th}>Status</th>
-                            <th style={styles.th}>Telefone / Perfil</th>
-                            <th style={styles.th}>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {instances.length === 0 ? (
-                            <tr>
-                                <td colSpan={4} style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-                                    Nenhuma instância encontrada
-                                </td>
-                            </tr>
-                        ) : (
-                            instances.map((instance) => (
-                                <tr key={instance.instanceId} style={styles.tr}>
-                                    <td style={styles.td}>
-                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <span style={{ fontWeight: 600, color: '#111827' }}>{instance.instanceName}</span>
-                                            <span style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace' }}>{instance.instanceId}</span>
-                                        </div>
-                                    </td>
-                                    <td style={styles.td}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            {instance.status === 'connected' || instance.status === 'open' ? (
-                                                <>
-                                                    <Wifi size={14} style={{ color: '#16a34a' }} />
-                                                    <span style={styles.badgeSuccess}>Conectado</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <WifiOff size={14} style={{ color: '#dc2626' }} />
-                                                    <span style={styles.badgeError}>{instance.status || 'Desconectado'}</span>
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td style={styles.td}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            {instance.profilePicUrl && (
-                                                <img
-                                                    src={instance.profilePicUrl}
-                                                    alt="Profile"
-                                                    style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
-                                                />
-                                            )}
-                                            <div>
-                                                <div style={{ fontSize: '13px', fontWeight: 500 }}>{instance.profileName || '-'}</div>
-                                                <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                                                    {instance.phoneNumber ? `+${instance.phoneNumber}` : '-'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td style={styles.td}>
-                                        <div style={{ display: 'flex', gap: '6px' }}>
-
-                                            {instance.status === 'connected' || instance.status === 'open' ? (
-                                                <button
-                                                    onClick={() => handleDisconnect(instance.instanceName)}
-                                                    disabled={disconnectingInstance === instance.instanceName}
-                                                    style={{
-                                                        ...styles.btnIcon,
-                                                        color: '#dc2626',
-                                                        borderColor: '#fecaca',
-                                                        background: '#fef2f2',
-                                                        opacity: disconnectingInstance === instance.instanceName ? 0.6 : 1,
-                                                        cursor: disconnectingInstance === instance.instanceName ? 'not-allowed' : 'pointer'
-                                                    }}
-                                                    title="Desconectar"
-                                                >
-                                                    {disconnectingInstance === instance.instanceName ? (
-                                                        <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                    ) : (
-                                                        <Power size={16} />
-                                                    )}
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={() => handleConnect(instance.instanceName)}
-                                                    disabled={connectingInstance === instance.instanceName}
-                                                    style={{
-                                                        ...styles.btnIcon,
-                                                        color: '#16a34a',
-                                                        borderColor: '#bbf7d0',
-                                                        background: '#f0fdf4',
-                                                        opacity: connectingInstance === instance.instanceName ? 0.6 : 1,
-                                                        cursor: connectingInstance === instance.instanceName ? 'not-allowed' : 'pointer'
-                                                    }}
-                                                    title="Conectar"
-                                                >
-                                                    {connectingInstance === instance.instanceName ? (
-                                                        <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                    ) : (
-                                                        <Power size={16} />
-                                                    )}
-                                                </button>
-                                            )}
-
-                                            <button onClick={() => handleDelete(instance.instanceName)} style={styles.btnIconDanger} title="Excluir">
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+            <div className="mb-10 relative group">
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-emerald-500 transition-colors" size={20} />
+                <input
+                    type="text"
+                    placeholder="PESQUISAR POR INSTÂNCIA OU TELEFONE..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-16 pr-6 py-5 bg-white border border-gray-100 rounded-[2rem] shadow-sm focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-black text-gray-800 uppercase italic text-sm tracking-wide"
+                />
             </div>
 
-            {/* Create Modal */}
-            {showCreateModal && (
-                <div style={styles.modalOverlay} onClick={() => setShowCreateModal(false)}>
-                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>
-                            <h2 style={styles.modalTitle}>Nova Instância</h2>
-                            <button onClick={() => setShowCreateModal(false)} style={styles.modalClose}>
-                                <X size={20} />
-                            </button>
+            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-8">
+                {filteredInstances.length === 0 ? (
+                    <div className="col-span-full py-24 bg-white rounded-[2rem] border border-gray-100 text-center flex flex-col items-center">
+                        <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 text-gray-200">
+                            <Smartphone size={40} />
                         </div>
-                        <form onSubmit={handleCreate}>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Nome (Identificação da Empresa) *</label>
-                                <input
-                                    type="text"
-                                    value={createForm.instanceName}
-                                    onChange={(e) => setCreateForm({ ...createForm, instanceName: e.target.value })}
-                                    style={styles.input}
-                                    placeholder="Ex: Minha Empresa"
-                                    required
-                                />
-                                <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
-                                    Este nome será usado para identificar a instância e conexão.
-                                </p>
-                            </div>
-
-                            <div style={styles.modalFooter}>
-                                <button type="button" onClick={() => setShowCreateModal(false)} style={styles.btnSecondary}>
-                                    Cancelar
-                                </button>
-                                <button type="submit" style={styles.btnPrimary}>
-                                    Criar Instância
-                                </button>
-                            </div>
-                        </form>
+                        <h3 className="text-xl font-bold text-gray-800 uppercase italic">Nenhuma Instância</h3>
+                        <p className="text-gray-400 text-sm mt-1">Nenhuma instância de WhatsApp encontrada.</p>
                     </div>
-                </div>
-            )}
+                ) : (
+                    filteredInstances.map((instance) => {
+                        const isConnected = instance.status === 'connected' || instance.status === 'open';
+                        return (
+                            <div key={instance.instanceId} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all group flex flex-col h-full">
+                                <div className="flex items-start justify-between mb-8">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-14 h-14 rounded-xl flex items-center justify-center transition-all ${isConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                                            {isConnected ? <Wifi size={28} /> : <WifiOff size={28} />}
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-gray-800 text-xl uppercase italic leading-none group-hover:text-emerald-700 transition-colors">{instance.instanceName}</h3>
+                                            <div className="flex items-center gap-2 mt-2">
+                                                <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                                <span className={`text-[10px] font-bold uppercase ${isConnected ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                    {isConnected ? 'ONLINE' : 'OFFLINE'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDelete(instance.instanceName)}
+                                        className="p-2 text-gray-300 hover:text-rose-600 transition-all"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
 
+                                <div className="flex-1 space-y-4 relative z-10">
+                                    <div className="bg-gray-50/50 rounded-3xl p-6 border border-gray-50 group-hover:bg-white group-hover:border-emerald-50 transition-all flex items-center gap-4">
+                                        <div className="relative shrink-0">
+                                            <img
+                                                src={instance.profilePicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(instance.profileName || 'WA')}&background=10b981&color=fff&bold=true`}
+                                                alt="Profile"
+                                                className="w-12 h-12 rounded-xl object-cover shadow-sm ring-2 ring-white"
+                                            />
+                                            {isConnected && (
+                                                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" />
+                                            )}
+                                        </div>
+                                        <div className="overflow-hidden">
+                                            <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest leading-none mb-1">Peer Identity</p>
+                                            <p className="font-black text-gray-700 text-base truncate uppercase italic tracking-tight">{instance.profileName || 'SCAN REQUISITADO'}</p>
+                                            {instance.phoneNumber && (
+                                                <p className="text-[10px] font-bold text-gray-400 mt-0.5">+{instance.phoneNumber}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
 
-            {/* QR Code Modal */}
-            {showQrModal && (
-                <div style={styles.modalOverlay} onClick={() => setShowQrModal(false)}>
-                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <Wifi size={20} color="#111827" />
-                                <h2 style={styles.modalTitle}>Conectar: {qrCodeInstance}</h2>
+                                <div className="mt-8 pt-8 border-t border-gray-50 flex gap-3">
+                                    {isConnected ? (
+                                        <button
+                                            onClick={() => handleDisconnect(instance.instanceName)}
+                                            className="flex-1 flex items-center justify-center gap-3 py-4 bg-gray-50 text-gray-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all font-bold uppercase text-[10px] active:scale-95 disabled:opacity-50"
+                                            disabled={disconnectingInstance === instance.instanceName}
+                                        >
+                                            {disconnectingInstance === instance.instanceName ? <RefreshCw size={14} className="animate-spin" /> : <Power size={14} />}
+                                            Desconectar
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleConnect(instance.instanceName)}
+                                            className="flex-1 flex items-center justify-center gap-3 py-4 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-all font-bold uppercase text-[10px] active:scale-95 disabled:opacity-50"
+                                            disabled={connectingInstance === instance.instanceName}
+                                        >
+                                            {connectingInstance === instance.instanceName ? <RefreshCw size={14} className="animate-spin" /> : <QrCode size={14} />}
+                                            Conectar
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                            <button onClick={() => setShowQrModal(false)} style={styles.modalClose}>
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-                            <p style={{ textAlign: 'center', color: '#4b5563', margin: 0 }}>
-                                Abra o WhatsApp no seu celular, vá em <strong>Aparelhos conectados {'>'} Conectar um aparelho</strong> e escaneie o código abaixo:
-                            </p>
-                            <div style={{ padding: '16px', border: '1px solid #e5e7eb', borderRadius: '12px', background: '#ffffff', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-                                <img src={qrCodeData} alt="QR Code" style={{ maxWidth: '250px', width: '100%', height: 'auto', display: 'block' }} />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#6b7280', background: '#f3f4f6', padding: '8px 12px', borderRadius: '6px' }}>
-                                <RefreshCw size={12} />
-                                <span>O código expira em 40 segundos. Se expirar, feche e tente novamente.</span>
-                            </div>
-                        </div>
-                        <div style={styles.modalFooter}>
-                            <button onClick={() => setShowQrModal(false)} style={styles.btnPrimary}>
-                                Concluído
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Confirmation Modal */}
-            {confirmModal.isOpen && (
-                <div style={styles.modalOverlay} onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}>
-                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <AlertTriangle size={20} color={confirmModal.type === 'danger' ? '#dc2626' : '#d97706'} />
-                                <h2 style={styles.modalTitle}>{confirmModal.title}</h2>
-                            </div>
-                            <button onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })} style={styles.modalClose}>
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div style={{ padding: '24px', color: '#4b5563', fontSize: '14px', lineHeight: '1.5' }}>
-                            {confirmModal.message}
-                        </div>
-                        <div style={styles.modalFooter}>
-                            <button
-                                type="button"
-                                onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
-                                style={styles.btnSecondary}
-                                disabled={confirmLoading}
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="button"
-                                onClick={confirmModal.onConfirm}
-                                disabled={confirmLoading}
-                                style={{
-                                    ...(confirmModal.type === 'danger' ? styles.btnDanger : styles.btnPrimary),
-                                    opacity: confirmLoading ? 0.6 : 1,
-                                    cursor: confirmLoading ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {confirmLoading ? (
-                                    <>
-                                        <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                        Processando...
-                                    </>
-                                ) : (
-                                    'Confirmar'
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <style>{`
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
+                        );
+                    })
+                )}
+            </div>
         </div>
     );
-};
-
-// ... styles ...
-// (Keeping existing styles, no changes needed, but will include to ensure file completeness)
-const styles: { [key: string]: React.CSSProperties } = {
-    btnPrimary: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '10px 16px',
-        background: '#111827',
-        color: '#ffffff',
-        border: 'none',
-        borderRadius: '8px',
-        fontSize: '14px',
-        fontWeight: 500,
-        cursor: 'pointer'
-    },
-    btnDanger: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '10px 16px',
-        background: '#dc2626',
-        color: '#ffffff',
-        border: 'none',
-        borderRadius: '8px',
-        fontSize: '14px',
-        fontWeight: 500,
-        cursor: 'pointer'
-    },
-    btnSecondary: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '10px 16px',
-        background: '#ffffff',
-        color: '#374151',
-        border: '1px solid #d1d5db',
-        borderRadius: '8px',
-        fontSize: '14px',
-        fontWeight: 500,
-        cursor: 'pointer'
-    },
-    btnIcon: {
-        padding: '8px',
-        background: '#ffffff',
-        color: '#6b7280',
-        border: '1px solid #e5e7eb',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    // We can reuse btnIcon and override styles in-line or add new specific styles if needed.
-    // Given the component already uses style overrides for the new Power buttons, we are good.
-    btnIconSuccess: { // Keep for reference though replaced by inline overrides
-        padding: '8px',
-        background: '#f0fdf4',
-        color: '#16a34a',
-        border: '1px solid #bbf7d0',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    btnIconDanger: {
-        padding: '8px',
-        background: '#ffffff',
-        color: '#dc2626',
-        border: '1px solid #fecaca',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    alertError: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '12px 16px',
-        background: '#fef2f2',
-        borderRadius: '8px',
-        marginBottom: '16px',
-        color: '#dc2626',
-        fontSize: '14px',
-        border: '1px solid #fecaca'
-    },
-    alertSuccess: {
-        padding: '12px 16px',
-        background: '#f0fdf4',
-        borderRadius: '8px',
-        marginBottom: '16px',
-        color: '#16a34a',
-        fontSize: '14px',
-        border: '1px solid #bbf7d0'
-    },
-    tableContainer: {
-        background: '#ffffff',
-        borderRadius: '12px',
-        border: '1px solid #e5e7eb',
-        overflow: 'hidden'
-    },
-    table: {
-        width: '100%',
-        borderCollapse: 'collapse'
-    },
-    th: {
-        padding: '12px 16px',
-        textAlign: 'left',
-        fontSize: '12px',
-        fontWeight: 600,
-        color: '#6b7280',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        background: '#f9fafb',
-        borderBottom: '1px solid #e5e7eb'
-    },
-    tr: {
-        borderBottom: '1px solid #e5e7eb'
-    },
-    td: {
-        padding: '16px'
-    },
-    badgeSuccess: {
-        padding: '4px 10px',
-        borderRadius: '6px',
-        fontSize: '12px',
-        fontWeight: 500,
-        background: '#f0fdf4',
-        color: '#16a34a'
-    },
-    badgeError: {
-        padding: '4px 10px',
-        borderRadius: '6px',
-        fontSize: '12px',
-        fontWeight: 500,
-        background: '#fef2f2',
-        color: '#dc2626'
-    },
-    code: {
-        padding: '4px 8px',
-        borderRadius: '4px',
-        background: '#f3f4f6',
-        fontSize: '12px',
-        color: '#4b5563',
-        fontFamily: 'ui-monospace, SFMono-Regular, monospace'
-    },
-    modalOverlay: {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0,0,0,0.4)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000
-    },
-    modal: {
-        background: '#ffffff',
-        borderRadius: '12px',
-        width: '100%',
-        maxWidth: '520px',
-        maxHeight: '90vh',
-        overflow: 'auto',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-    },
-    modalHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '20px 24px',
-        borderBottom: '1px solid #e5e7eb'
-    },
-    sectionHeader: {
-        padding: '16px 24px 0',
-        fontSize: '12px',
-        fontWeight: 600,
-        color: '#9ca3af',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em'
-    },
-    modalTitle: {
-        fontSize: '18px',
-        fontWeight: 600,
-        color: '#111827',
-        margin: 0
-    },
-    modalClose: {
-        background: 'none',
-        border: 'none',
-        color: '#6b7280',
-        cursor: 'pointer',
-        padding: '4px'
-    },
-    formGroup: {
-        padding: '0 24px',
-        marginBottom: '12px',
-        marginTop: '12px'
-    },
-    formRow: {
-        display: 'flex',
-        gap: '12px',
-        padding: '0 24px',
-        marginBottom: '12px',
-        marginTop: '12px'
-    },
-    label: {
-        display: 'block',
-        fontSize: '14px',
-        fontWeight: 500,
-        color: '#374151',
-        marginBottom: '6px'
-    },
-    input: {
-        width: '100%',
-        padding: '10px 12px',
-        border: '1px solid #d1d5db',
-        borderRadius: '8px',
-        fontSize: '14px',
-        boxSizing: 'border-box'
-    },
-    modalFooter: {
-        display: 'flex',
-        gap: '12px',
-        padding: '20px 24px',
-        borderTop: '1px solid #e5e7eb',
-        justifyContent: 'flex-end',
-        background: '#f9fafb',
-        borderBottomLeftRadius: '12px',
-        borderBottomRightRadius: '12px',
-        marginTop: '20px'
-    }
 };
 
 export default AdminInstances;

@@ -1,24 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Lock, Unlock, RefreshCw, X, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Lock, Unlock, User as UserIcon, Building2, Shield, Mail, Key, Search, MoreHorizontal } from 'lucide-react';
 import adminService, { AdminUser, CreateUserRequest, UpdateUserRequest, Company } from '../../services/adminService';
+import { useModal } from './ModalContext';
 
 const AdminUsers: React.FC = () => {
     const navigate = useNavigate();
+    const { showAlert, showConfirm, showToast, closeModal } = useModal();
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showModal, setShowModal] = useState(false);
-    const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
-    const [formData, setFormData] = useState<CreateUserRequest>({
-        name: '',
-        email: '',
-        password: '',
-        role: 'USER',
-        companyId: '',
-    });
     const [companies, setCompanies] = useState<Company[]>([]);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
     useEffect(() => {
@@ -37,104 +29,75 @@ const AdminUsers: React.FC = () => {
                 return;
             }
             setIsAuthenticated(true);
-            loadUsers();
-            loadCompanies();
+            loadData();
         } catch {
             setIsAuthenticated(false);
         }
     }, []);
 
-    const loadUsers = async () => {
+    const loadData = async () => {
         try {
             setLoading(true);
-            const data = await adminService.getAllUsers();
-            setUsers(data || []);
-            setError('');
+            const [usersData, companiesData] = await Promise.all([
+                adminService.getAllUsers(),
+                adminService.getAllCompanies()
+            ]);
+            setUsers(usersData || []);
+            setCompanies(companiesData || []);
         } catch (err: any) {
-            console.error('Erro ao carregar usuários:', err);
+            console.error('Erro ao carregar dados:', err);
             if (err.status === 401 || err.status === 403) {
                 localStorage.removeItem('win_access_token');
                 localStorage.removeItem('win_user');
                 navigate('/admin/login');
                 return;
             }
-            setError('Erro ao carregar usuários');
             setUsers([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const loadCompanies = async () => {
-        try {
-            const data = await adminService.getAllCompanies();
-            setCompanies(data || []);
-        } catch (err: any) {
-            console.error('Erro ao carregar empresas:', err);
-        }
-    };
-
     const handleToggleStatus = async (userId: string) => {
         try {
             await adminService.toggleUserStatus(userId);
-            setSuccess('Status alterado');
-            await loadUsers();
-            setTimeout(() => setSuccess(''), 3000);
+            showToast('Status do usuário alterado.');
+            const data = await adminService.getAllUsers();
+            setUsers(data || []);
         } catch (err: any) {
-            if (err.status === 401 || err.status === 403) {
-                navigate('/admin/login');
-                return;
-            }
-            setError('Erro ao alterar status');
-            setTimeout(() => setError(''), 3000);
+            showToast('Falha ao alterar o status do usuário.', 'error');
         }
     };
 
     const handleDelete = async (userId: string, permanent: boolean = false) => {
-        const confirmMsg = permanent
-            ? 'Excluir permanentemente este usuário?'
-            : 'Desativar este usuário?';
-
-        if (!window.confirm(confirmMsg)) return;
-
-        try {
-            if (permanent) {
-                await adminService.hardDeleteUser(userId);
-            } else {
-                await adminService.deleteUser(userId);
+        showConfirm({
+            title: permanent ? 'Excluir Usuário' : 'Desativar Usuário',
+            message: permanent
+                ? 'Tem certeza que deseja excluir permanentemente este usuário? Esta ação não pode ser desfeita.'
+                : 'Deseja desativar o acesso deste usuário temporariamente?',
+            type: permanent ? 'danger' : 'warning',
+            onConfirm: async () => {
+                try {
+                    if (permanent) {
+                        await adminService.hardDeleteUser(userId);
+                        showToast('Usuário excluído com sucesso.');
+                    } else {
+                        await adminService.deleteUser(userId);
+                        showToast('Usuário desativado com sucesso.');
+                    }
+                    const data = await adminService.getAllUsers();
+                    setUsers(data || []);
+                } catch (err: any) {
+                    showToast('Não foi possível processar a exclusão.', 'error');
+                }
             }
-            setSuccess(permanent ? 'Usuário excluído' : 'Usuário desativado');
-            await loadUsers();
-            setTimeout(() => setSuccess(''), 3000);
-        } catch (err: any) {
-            if (err.status === 401 || err.status === 403) {
-                navigate('/admin/login');
-                return;
-            }
-            setError('Erro ao excluir usuário');
-            setTimeout(() => setError(''), 3000);
-        }
+        });
     };
 
-    const openCreateModal = () => {
-        setEditingUser(null);
-        setFormData({ name: '', email: '', password: '', role: 'USER', companyId: '' });
-        setShowModal(true);
-    };
-
-    const openEditModal = (user: AdminUser) => {
-        setEditingUser(user);
-        setFormData({ name: user.name, email: user.email, password: '', role: user.role, companyId: user.companyId || '' });
-        setShowModal(true);
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-
+    const handleSave = async (editingUser: AdminUser | null, formData: CreateUserRequest) => {
         if (!formData.companyId) {
-            setError('Empresa é obrigatória');
-            return;
+            showAlert('Atenção', 'Selecione uma empresa para este usuário.', 'warning');
+            throw new Error('Empresa obrigatória');
         }
 
         try {
@@ -147,22 +110,131 @@ const AdminUsers: React.FC = () => {
                 };
                 if (formData.password) updateData.password = formData.password;
                 await adminService.updateUser(editingUser.id, updateData);
-                setSuccess('Usuário atualizado');
+                showToast('Dados do usuário atualizados.');
             } else {
                 await adminService.createUser(formData);
-                setSuccess('Usuário criado');
+                showToast('Usuário criado com sucesso.');
             }
-            setShowModal(false);
-            await loadUsers();
-            setTimeout(() => setSuccess(''), 3000);
+            const data = await adminService.getAllUsers();
+            setUsers(data || []);
         } catch (err: any) {
-            if (err.status === 401 || err.status === 403) {
-                navigate('/admin/login');
-                return;
-            }
-            setError(err.message || 'Erro ao salvar');
+            showToast(err.message || 'Falha ao salvar o usuário.', 'error');
+            throw err;
         }
     };
+
+    const openUserModal = (user: AdminUser | null = null) => {
+        let currentData: CreateUserRequest = {
+            name: user?.name || '',
+            email: user?.email || '',
+            password: '',
+            role: user?.role || 'USER',
+            companyId: user?.companyId || ''
+        };
+
+        const ModalBody = () => {
+            const [data, setData] = useState(currentData);
+
+            const updateField = (field: keyof CreateUserRequest, value: string) => {
+                const newData = { ...data, [field]: value };
+                setData(newData);
+                currentData = newData;
+            };
+
+            return (
+                <div className="space-y-6 pt-2 max-h-[70vh] overflow-y-auto px-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                <UserIcon size={12} className="text-emerald-500" /> Identificação Completa
+                            </label>
+                            <input
+                                type="text"
+                                value={data.name}
+                                onChange={(e) => updateField('name', e.target.value)}
+                                className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-black text-gray-800 uppercase italic"
+                                placeholder="EX: GUSTAVO PREZZOTI"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                <Mail size={12} className="text-blue-500" /> Email Credenciado
+                            </label>
+                            <input
+                                type="email"
+                                value={data.email}
+                                onChange={(e) => updateField('email', e.target.value)}
+                                className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500/10 focus:bg-white transition-all font-bold text-gray-700"
+                                placeholder="admin@empresa.com"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                <Key size={12} className="text-amber-500" /> {user ? 'Redefinir Token (Senha)' : 'Credencial de Acesso'}
+                            </label>
+                            <input
+                                type="password"
+                                value={data.password}
+                                onChange={(e) => updateField('password', e.target.value)}
+                                className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-amber-500/10 focus:bg-white transition-all font-bold text-gray-700"
+                                placeholder={user ? 'IMUTÁVEL (OPCIONAL)' : '••••••••'}
+                                required={!user}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                <Shield size={12} className="text-rose-500" /> Nível de Autorização
+                            </label>
+                            <select
+                                value={data.role}
+                                onChange={(e) => updateField('role', e.target.value as any)}
+                                className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-rose-500/10 focus:bg-white transition-all font-black text-gray-700 appearance-none uppercase"
+                            >
+                                <option value="USER">USUÁRIO</option>
+                                <option value="ADMIN">ADMINISTRADOR</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                <Building2 size={12} className="text-indigo-500" /> Unidade Corporativa
+                            </label>
+                            <select
+                                value={data.companyId}
+                                onChange={(e) => updateField('companyId', e.target.value)}
+                                className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all font-black text-gray-700 appearance-none uppercase"
+                                required
+                            >
+                                <option value="">SELECIONE MATRIZ...</option>
+                                {companies.map(company => (
+                                    <option key={company.id} value={company.id}>{company.name.toUpperCase()}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        showConfirm({
+            title: user ? 'Editar Usuário' : 'Novo Usuário',
+            body: <ModalBody />,
+            confirmText: user ? 'Salvar' : 'Criar',
+            onConfirm: async () => {
+                await handleSave(user, currentData);
+            }
+        });
+    };
+
+    const filteredUsers = users.filter(user =>
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     if (isAuthenticated === false) {
         return <Navigate to="/admin/login" replace />;
@@ -170,396 +242,167 @@ const AdminUsers: React.FC = () => {
 
     if (isAuthenticated === null || loading) {
         return (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#6b7280' }}>
-                <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ marginLeft: '12px', fontSize: '14px' }}>Carregando...</span>
+            <div className="flex flex-col items-center justify-center h-96 gap-4">
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Carregando usuários...</span>
             </div>
         );
     }
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <div>
-                    <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.025em' }}>
-                        Usuários
-                    </h1>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: 0, marginTop: '4px' }}>
-                        Gerencie os usuários do sistema
-                    </p>
+        <div className="p-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-12">
+                <div className="relative">
+                    <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Usuários</h1>
+                    <p className="text-gray-500 font-bold text-sm tracking-tight mt-2 opacity-70">Gerenciamento de usuários e níveis de acesso</p>
                 </div>
-                <button onClick={openCreateModal} style={styles.btnPrimary}>
-                    <Plus size={18} />
+
+                <button
+                    onClick={() => openUserModal()}
+                    className="w-full lg:w-auto flex items-center justify-center gap-3 px-8 py-4 bg-gray-900 text-white rounded-2xl hover:bg-black transition-all font-black uppercase text-xs tracking-widest active:scale-95"
+                >
+                    <Plus size={20} strokeWidth={3} />
                     Novo Usuário
                 </button>
             </div>
 
-            {error && (
-                <div style={styles.alertError}>
-                    <AlertCircle size={16} />
-                    {error}
-                </div>
-            )}
-            {success && (
-                <div style={styles.alertSuccess}>
-                    {success}
-                </div>
-            )}
-
-            <div style={styles.tableContainer}>
-                <table style={styles.table}>
-                    <thead>
-                        <tr>
-                            <th style={styles.th}>Usuário</th>
-                            <th style={styles.th}>Email</th>
-                            <th style={styles.th}>Role</th>
-                            <th style={styles.th}>Empresa</th>
-                            <th style={styles.th}>Status</th>
-                            <th style={styles.th}>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {users.length === 0 ? (
-                            <tr>
-                                <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-                                    Nenhum usuário encontrado
-                                </td>
-                            </tr>
-                        ) : (
-                            users.map((user) => (
-                                <tr key={user.id} style={styles.tr}>
-                                    <td style={styles.td}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <img
-                                                src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=f3f4f6&color=374151`}
-                                                alt={user.name}
-                                                style={styles.avatar}
-                                            />
-                                            <span style={{ fontWeight: 500, color: '#111827' }}>{user.name}</span>
-                                        </div>
-                                    </td>
-                                    <td style={{ ...styles.td, color: '#6b7280' }}>{user.email}</td>
-                                    <td style={styles.td}>
-                                        <span style={user.role === 'ADMIN' ? styles.badgeDark : styles.badgeLight}>
-                                            {user.role}
-                                        </span>
-                                    </td>
-                                    <td style={{ ...styles.td, color: '#6b7280' }}>{user.companyName || '-'}</td>
-                                    <td style={styles.td}>
-                                        <span style={user.active ? styles.badgeSuccess : styles.badgeError}>
-                                            {user.active ? 'Ativo' : 'Inativo'}
-                                        </span>
-                                    </td>
-                                    <td style={styles.td}>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button onClick={() => openEditModal(user)} style={styles.btnIcon} title="Editar">
-                                                <Pencil size={16} />
-                                            </button>
-                                            <button onClick={() => handleToggleStatus(user.id)} style={styles.btnIcon} title={user.active ? 'Desativar' : 'Ativar'}>
-                                                {user.active ? <Lock size={16} /> : <Unlock size={16} />}
-                                            </button>
-                                            <button onClick={() => handleDelete(user.id, true)} style={styles.btnIconDanger} title="Excluir">
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+            <div className="mb-8 relative group">
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-emerald-500 transition-colors" size={20} />
+                <input
+                    type="text"
+                    placeholder="PESQUISAR POR NOME OU EMAIL..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-16 pr-6 py-5 bg-white border border-gray-100 rounded-[2rem] shadow-sm focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-black text-gray-800 uppercase italic text-sm tracking-wide"
+                />
             </div>
 
-            {showModal && (
-                <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
-                    <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div style={styles.modalHeader}>
-                            <h2 style={styles.modalTitle}>{editingUser ? 'Editar Usuário' : 'Novo Usuário'}</h2>
-                            <button onClick={() => setShowModal(false)} style={styles.modalClose}>
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <form onSubmit={handleSubmit}>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Nome *</label>
-                                <input
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    style={styles.input}
-                                    required
-                                />
+            {/* Responsive Table/Cards Layout */}
+            <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse hidden md:table">
+                        <thead>
+                            <tr className="bg-gray-50/50">
+                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Usuário</th>
+                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Nível</th>
+                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Empresa</th>
+                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Status</th>
+                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {filteredUsers.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-8 py-24 text-center text-gray-300 font-bold uppercase tracking-[0.2em] italic">
+                                        Nenhum usuário encontrado
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredUsers.map((user) => (
+                                    <tr key={user.id} className="hover:bg-gray-50/50 transition-all group">
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-4">
+                                                <div className="relative shrink-0">
+                                                    <img
+                                                        src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=10b981&color=fff&bold=true`}
+                                                        alt={user.name}
+                                                        className="w-12 h-12 rounded-xl object-cover transition-all shadow-sm"
+                                                    />
+                                                    <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${user.active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-gray-800 tracking-tighter uppercase italic text-base leading-none">{user.name}</p>
+                                                    <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-tight">{user.email}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-[0.15em] flex items-center gap-2 w-fit ${user.role === 'ADMIN' ? 'bg-gray-900 text-white' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                                <Shield size={10} />
+                                                {user.role === 'ADMIN' ? 'ADMINISTRADOR' : 'USUÁRIO'}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-2">
+                                                <Building2 size={12} className="text-gray-300" />
+                                                <span className="font-black text-gray-500 text-[10px] uppercase tracking-widest italic truncate max-w-[150px]">
+                                                    {user.companyName?.toUpperCase() || 'EXTERNAL UNIT'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className={`flex items-center gap-2 font-black text-[9px] tracking-[0.2em] ${user.active ? 'text-emerald-600' : 'text-rose-500'}`}>
+                                                <div className={`w-1.5 h-1.5 rounded-full ${user.active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                                {user.active ? 'ATIVO' : 'DESATIVADO'}
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+                                                <button onClick={() => openUserModal(user)} className="p-3 bg-white text-gray-400 hover:text-emerald-600 hover:shadow-xl rounded-xl transition-all border border-gray-100">
+                                                    <Pencil size={18} />
+                                                </button>
+                                                <button onClick={() => handleToggleStatus(user.id)} className={`p-3 bg-white hover:shadow-xl rounded-xl transition-all border border-gray-100 ${user.active ? 'text-gray-400 hover:text-amber-600' : 'text-emerald-500 hover:text-emerald-600'}`}>
+                                                    {user.active ? <Lock size={18} /> : <Unlock size={18} />}
+                                                </button>
+                                                <button onClick={() => handleDelete(user.id, true)} className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:shadow-xl rounded-xl transition-all border border-gray-100">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+
+                    {/* Mobile Cards Layout */}
+                    <div className="md:hidden grid grid-cols-1 gap-4 p-4">
+                        {filteredUsers.map(user => (
+                            <div key={user.id} className="bg-gray-50/50 rounded-3xl p-6 border border-gray-100 space-y-6">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <img
+                                            src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=10b981&color=fff&bold=true`}
+                                            alt={user.name}
+                                            className="w-14 h-14 rounded-2xl object-cover shadow-lg"
+                                        />
+                                        <div>
+                                            <h3 className="font-black text-gray-800 uppercase italic leading-none">{user.name}</h3>
+                                            <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase">{user.email}</p>
+                                        </div>
+                                    </div>
+                                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black tracking-widest ${user.role === 'ADMIN' ? 'bg-gray-900 text-white' : 'bg-emerald-100 text-emerald-600'}`}>
+                                        {user.role === 'ADMIN' ? 'ADMINISTRADOR' : 'USUÁRIO'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-white p-3 rounded-2xl border border-gray-100">
+                                        <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Company</p>
+                                        <p className="text-[10px] font-bold text-gray-600 truncate">{user.companyName?.toUpperCase() || 'N/A'}</p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-2xl border border-gray-100">
+                                        <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Status</p>
+                                        <p className={`text-[10px] font-black uppercase ${user.active ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                            {user.active ? 'ACTIVE' : 'REVOKED'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => openUserModal(user)} className="flex-1 py-3 bg-white text-gray-600 rounded-xl font-black uppercase text-[10px] tracking-widest border border-gray-100">Edit</button>
+                                    <button onClick={() => handleToggleStatus(user.id)} className="flex-1 py-3 bg-white text-amber-600 rounded-xl font-black uppercase text-[10px] tracking-widest border border-gray-100">
+                                        {user.active ? 'Lock' : 'Unlock'}
+                                    </button>
+                                    <button onClick={() => handleDelete(user.id, true)} className="p-3 bg-rose-50 text-rose-500 rounded-xl border border-rose-100">
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
                             </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Email *</label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    style={styles.input}
-                                    required
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>{editingUser ? 'Nova Senha' : 'Senha *'}</label>
-                                <input
-                                    type="password"
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    style={styles.input}
-                                    required={!editingUser}
-                                    placeholder={editingUser ? 'Deixe vazio para manter' : ''}
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Role *</label>
-                                <select
-                                    value={formData.role}
-                                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                    style={styles.input}
-                                >
-                                    <option value="USER">USER</option>
-                                    <option value="ADMIN">ADMIN</option>
-                                </select>
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Empresa *</label>
-                                <select
-                                    value={formData.companyId || ''}
-                                    onChange={(e) => setFormData({ ...formData, companyId: e.target.value })}
-                                    style={styles.input}
-                                    required
-                                >
-                                    <option value="">Selecione uma empresa...</option>
-                                    {companies.map(company => (
-                                        <option key={company.id} value={company.id}>{company.name}</option>
-                                    ))}
-                                </select>
-                                <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
-                                    Associe o usuário a uma empresa para dar acesso às conexões e agentes de IA.
-                                </p>
-                            </div>
-                            <div style={styles.modalFooter}>
-                                <button type="button" onClick={() => setShowModal(false)} style={styles.btnSecondary}>
-                                    Cancelar
-                                </button>
-                                <button type="submit" style={styles.btnPrimary}>
-                                    {editingUser ? 'Salvar' : 'Criar'}
-                                </button>
-                            </div>
-                        </form>
+                        ))}
                     </div>
                 </div>
-            )}
-
-            <style>{`
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
+            </div>
         </div>
     );
-};
-
-const styles: { [key: string]: React.CSSProperties } = {
-    btnPrimary: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '10px 16px',
-        background: '#111827',
-        color: '#ffffff',
-        border: 'none',
-        borderRadius: '8px',
-        fontSize: '14px',
-        fontWeight: 500,
-        cursor: 'pointer'
-    },
-    btnSecondary: {
-        padding: '10px 16px',
-        background: '#ffffff',
-        color: '#374151',
-        border: '1px solid #d1d5db',
-        borderRadius: '8px',
-        fontSize: '14px',
-        fontWeight: 500,
-        cursor: 'pointer'
-    },
-    btnIcon: {
-        padding: '8px',
-        background: '#ffffff',
-        color: '#6b7280',
-        border: '1px solid #e5e7eb',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    btnIconDanger: {
-        padding: '8px',
-        background: '#ffffff',
-        color: '#dc2626',
-        border: '1px solid #fecaca',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    alertError: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '12px 16px',
-        background: '#fef2f2',
-        borderRadius: '8px',
-        marginBottom: '16px',
-        color: '#dc2626',
-        fontSize: '14px',
-        border: '1px solid #fecaca'
-    },
-    alertSuccess: {
-        padding: '12px 16px',
-        background: '#f0fdf4',
-        borderRadius: '8px',
-        marginBottom: '16px',
-        color: '#16a34a',
-        fontSize: '14px',
-        border: '1px solid #bbf7d0'
-    },
-    tableContainer: {
-        background: '#ffffff',
-        borderRadius: '12px',
-        border: '1px solid #e5e7eb',
-        overflow: 'hidden'
-    },
-    table: {
-        width: '100%',
-        borderCollapse: 'collapse'
-    },
-    th: {
-        padding: '12px 16px',
-        textAlign: 'left',
-        fontSize: '12px',
-        fontWeight: 600,
-        color: '#6b7280',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        background: '#f9fafb',
-        borderBottom: '1px solid #e5e7eb'
-    },
-    tr: {
-        borderBottom: '1px solid #e5e7eb'
-    },
-    td: {
-        padding: '16px'
-    },
-    avatar: {
-        width: '36px',
-        height: '36px',
-        borderRadius: '8px',
-        objectFit: 'cover'
-    },
-    badgeDark: {
-        padding: '4px 10px',
-        borderRadius: '6px',
-        fontSize: '12px',
-        fontWeight: 500,
-        background: '#111827',
-        color: '#ffffff'
-    },
-    badgeLight: {
-        padding: '4px 10px',
-        borderRadius: '6px',
-        fontSize: '12px',
-        fontWeight: 500,
-        background: '#f3f4f6',
-        color: '#374151'
-    },
-    badgeSuccess: {
-        padding: '4px 10px',
-        borderRadius: '6px',
-        fontSize: '12px',
-        fontWeight: 500,
-        background: '#f0fdf4',
-        color: '#16a34a'
-    },
-    badgeError: {
-        padding: '4px 10px',
-        borderRadius: '6px',
-        fontSize: '12px',
-        fontWeight: 500,
-        background: '#fef2f2',
-        color: '#dc2626'
-    },
-    modalOverlay: {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0,0,0,0.4)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000
-    },
-    modal: {
-        background: '#ffffff',
-        borderRadius: '12px',
-        width: '100%',
-        maxWidth: '480px',
-        maxHeight: '90vh',
-        overflow: 'auto'
-    },
-    modalHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '20px 24px',
-        borderBottom: '1px solid #e5e7eb'
-    },
-    modalTitle: {
-        fontSize: '18px',
-        fontWeight: 600,
-        color: '#111827',
-        margin: 0
-    },
-    modalClose: {
-        background: 'none',
-        border: 'none',
-        color: '#6b7280',
-        cursor: 'pointer',
-        padding: '4px'
-    },
-    formGroup: {
-        padding: '0 24px',
-        marginBottom: '16px'
-    },
-    label: {
-        display: 'block',
-        fontSize: '14px',
-        fontWeight: 500,
-        color: '#374151',
-        marginBottom: '6px'
-    },
-    input: {
-        width: '100%',
-        padding: '10px 12px',
-        border: '1px solid #d1d5db',
-        borderRadius: '8px',
-        fontSize: '14px',
-        boxSizing: 'border-box'
-    },
-    modalFooter: {
-        display: 'flex',
-        gap: '12px',
-        padding: '20px 24px',
-        borderTop: '1px solid #e5e7eb',
-        justifyContent: 'flex-end'
-    }
 };
 
 export default AdminUsers;

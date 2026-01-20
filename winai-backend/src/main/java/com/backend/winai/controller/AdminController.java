@@ -229,4 +229,62 @@ public class AdminController {
         adminService.deleteUserWhatsAppConnection(connectionId);
         return ResponseEntity.ok().build();
     }
+
+    // ========== SYSTEM PROMPTS ==========
+
+    @Operation(summary = "Listar todos os prompts", description = "Lista todos os prompts do sistema organizados por categoria")
+    @GetMapping("/prompts")
+    public ResponseEntity<List<com.backend.winai.dto.SystemPromptDTO>> getAllSystemPrompts() {
+        return ResponseEntity.ok(adminService.getAllSystemPrompts());
+    }
+
+    @Operation(summary = "Listar prompts por categoria", description = "Lista prompts de uma categoria específica")
+    @GetMapping("/prompts/category/{category}")
+    public ResponseEntity<List<com.backend.winai.dto.SystemPromptDTO>> getSystemPromptsByCategory(
+            @Parameter(description = "Categoria do prompt (SOCIAL_MEDIA, PAID_TRAFFIC, WHATSAPP)") @PathVariable String category) {
+        return ResponseEntity.ok(adminService.getSystemPromptsByCategory(category.toUpperCase()));
+    }
+
+    @Operation(summary = "Buscar prompt por ID", description = "Retorna um prompt específico")
+    @GetMapping("/prompts/{promptId}")
+    public ResponseEntity<com.backend.winai.dto.SystemPromptDTO> getSystemPromptById(
+            @Parameter(description = "ID do prompt") @PathVariable UUID promptId) {
+        return ResponseEntity.ok(adminService.getSystemPromptById(promptId));
+    }
+
+    @Operation(summary = "Criar prompt", description = "Cria um novo prompt do sistema")
+    @PostMapping("/prompts")
+    public ResponseEntity<com.backend.winai.dto.SystemPromptDTO> createSystemPrompt(
+            @RequestBody Map<String, Object> request) {
+        String name = (String) request.get("name");
+        String category = (String) request.get("category");
+        String content = (String) request.get("content");
+        String description = (String) request.get("description");
+        Boolean isDefault = (Boolean) request.get("isDefault");
+
+        return ResponseEntity.ok(adminService.createSystemPrompt(name, category, content, description, isDefault));
+    }
+
+    @Operation(summary = "Atualizar prompt", description = "Atualiza um prompt existente")
+    @PutMapping("/prompts/{promptId}")
+    public ResponseEntity<com.backend.winai.dto.SystemPromptDTO> updateSystemPrompt(
+            @Parameter(description = "ID do prompt") @PathVariable UUID promptId,
+            @RequestBody Map<String, Object> request) {
+        String name = (String) request.get("name");
+        String content = (String) request.get("content");
+        String description = (String) request.get("description");
+        Boolean isActive = (Boolean) request.get("isActive");
+        Boolean isDefault = (Boolean) request.get("isDefault");
+
+        return ResponseEntity
+                .ok(adminService.updateSystemPrompt(promptId, name, content, description, isActive, isDefault));
+    }
+
+    @Operation(summary = "Excluir prompt", description = "Remove um prompt do sistema")
+    @DeleteMapping("/prompts/{promptId}")
+    public ResponseEntity<Void> deleteSystemPrompt(
+            @Parameter(description = "ID do prompt") @PathVariable UUID promptId) {
+        adminService.deleteSystemPrompt(promptId);
+        return ResponseEntity.ok().build();
+    }
 }

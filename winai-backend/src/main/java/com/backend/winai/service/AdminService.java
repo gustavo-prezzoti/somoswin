@@ -28,10 +28,18 @@ import com.backend.winai.repository.NotificationRepository;
 import com.backend.winai.repository.RefreshTokenRepository;
 import com.backend.winai.repository.AIInsightRepository;
 import com.backend.winai.repository.DashboardMetricsRepository;
+import com.backend.winai.repository.InstagramMetricRepository;
+import com.backend.winai.repository.MetaCampaignRepository;
+import com.backend.winai.repository.MetaAdSetRepository;
+import com.backend.winai.repository.MetaAdRepository;
+import com.backend.winai.repository.MetaInsightRepository;
+import com.backend.winai.repository.SystemPromptRepository;
 import com.backend.winai.entity.UserWhatsAppConnection;
 import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.KnowledgeBase;
+import com.backend.winai.entity.SystemPrompt;
 import com.backend.winai.dto.request.CreateUserWhatsAppConnectionRequest;
+import com.backend.winai.dto.SystemPromptDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -71,6 +79,12 @@ public class AdminService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final AIInsightRepository aiInsightRepository;
     private final DashboardMetricsRepository dashboardMetricsRepository;
+    private final InstagramMetricRepository instagramMetricRepository;
+    private final MetaCampaignRepository metaCampaignRepository;
+    private final MetaAdSetRepository metaAdSetRepository;
+    private final MetaAdRepository metaAdRepository;
+    private final MetaInsightRepository metaInsightRepository;
+    private final SystemPromptRepository systemPromptRepository;
     private final UazapService uazapService;
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -366,7 +380,7 @@ public class AdminService {
         }
         connectionRepository.deleteAll(connections);
 
-        List<KnowledgeBase> kbs = knowledgeBaseRepository.findByCompanyOrderByUpdatedAtDesc(company);
+        List<KnowledgeBase> kbs = knowledgeBaseRepository.findByCompanyIdOrderByUpdatedAtDesc(company.getId());
         for (KnowledgeBase kb : kbs) {
             knowledgeBaseChunkRepository.deleteByKnowledgeBase(kb);
         }
@@ -376,6 +390,12 @@ public class AdminService {
         leadRepository.deleteAll(leadRepository.findByCompanyOrderByCreatedAtDesc(company));
         aiInsightRepository.deleteByCompany(company);
         dashboardMetricsRepository.deleteByCompany(company);
+        instagramMetricRepository.deleteByCompany(company);
+
+        metaInsightRepository.deleteByCompany(company);
+        metaAdRepository.deleteByCompany(company);
+        metaAdSetRepository.deleteByCompany(company);
+        metaCampaignRepository.deleteByCompany(company);
 
         // 4. Integrações Sociais e Outros
         socialMediaProfileRepository.findByCompany(company).ifPresent(socialMediaProfileRepository::delete);
@@ -647,5 +667,119 @@ public class AdminService {
             throw new RuntimeException("Conexão não encontrada");
         }
         connectionRepository.deleteById(connectionId);
+    }
+
+    // ========== SYSTEM PROMPTS ==========
+
+    /**
+     * Lista todos os prompts do sistema
+     */
+    public List<SystemPromptDTO> getAllSystemPrompts() {
+        return systemPromptRepository.findAllByOrderByCategoryAscNameAsc().stream()
+                .map(this::mapToSystemPromptDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Busca prompts por categoria
+     */
+    public List<SystemPromptDTO> getSystemPromptsByCategory(String category) {
+        return systemPromptRepository.findByCategory(category).stream()
+                .map(this::mapToSystemPromptDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Busca um prompt por ID
+     */
+    public SystemPromptDTO getSystemPromptById(UUID id) {
+        SystemPrompt prompt = systemPromptRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Prompt não encontrado"));
+        return mapToSystemPromptDTO(prompt);
+    }
+
+    /**
+     * Cria um novo prompt
+     */
+    @Transactional
+    public SystemPromptDTO createSystemPrompt(String name, String category, String content, String description,
+            Boolean isDefault) {
+        String categoryUpper = category.toUpperCase();
+
+        // Se já existe um prompt para essa categoria, vamos atualizar
+        SystemPrompt prompt = systemPromptRepository.findByCategory(categoryUpper)
+                .orElse(new SystemPrompt());
+
+        prompt.setName(name);
+        prompt.setCategory(categoryUpper);
+        prompt.setContent(content);
+        prompt.setDescription(description);
+        prompt.setIsActive(true);
+        prompt.setIsDefault(true); // Se só tem um, ele é o padrão
+
+        prompt = systemPromptRepository.save(prompt);
+        log.info("Saved/Updated system prompt for category: {}", categoryUpper);
+        return mapToSystemPromptDTO(prompt);
+    }
+
+    /**
+     * Atualiza um prompt existente
+     */
+    @Transactional
+    public SystemPromptDTO updateSystemPrompt(UUID id, String name, String content, String description,
+            Boolean isActive, Boolean isDefault) {
+        SystemPrompt prompt = systemPromptRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Prompt não encontrado"));
+
+        if (name != null)
+            prompt.setName(name);
+        if (content != null)
+            prompt.setContent(content);
+        if (description != null)
+            prompt.setDescription(description);
+        if (isActive != null)
+            prompt.setIsActive(isActive);
+
+        // Sempre padrão se só tem um
+        prompt.setIsDefault(true);
+
+        prompt = systemPromptRepository.save(prompt);
+        log.info("Updated system prompt: {}", id);
+        return mapToSystemPromptDTO(prompt);
+    }
+
+    /**
+     * Remove um prompt
+     */
+    @Transactional
+    public void deleteSystemPrompt(UUID id) {
+        if (!systemPromptRepository.existsById(id)) {
+            throw new RuntimeException("Prompt não encontrado");
+        }
+        systemPromptRepository.deleteById(id);
+        log.info("Deleted system prompt: {}", id);
+    }
+
+    /**
+     * Busca o prompt padrão ativo de uma categoria
+     */
+    public String getActivePromptContent(String category) {
+        return systemPromptRepository.findByCategoryAndIsActiveTrueAndIsDefaultTrue(category)
+                .map(SystemPrompt::getContent)
+                .orElse(null);
+    }
+
+    private SystemPromptDTO mapToSystemPromptDTO(SystemPrompt prompt) {
+        return SystemPromptDTO.builder()
+                .id(prompt.getId())
+                .name(prompt.getName())
+                .category(prompt.getCategory())
+                .content(prompt.getContent())
+                .description(prompt.getDescription())
+                .isActive(prompt.getIsActive())
+                .isDefault(prompt.getIsDefault())
+                .createdAt(prompt.getCreatedAt())
+                .updatedAt(prompt.getUpdatedAt())
+                .build();
     }
 }

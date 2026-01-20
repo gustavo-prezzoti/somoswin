@@ -26,16 +26,18 @@ public class KnowledgeBaseController {
     private final KnowledgeBaseService service;
 
     @GetMapping
-    public ResponseEntity<List<KnowledgeBaseResponse>> findAll(@AuthenticationPrincipal User user) {
-        List<KnowledgeBase> list = service.findAll(user);
+    public ResponseEntity<List<KnowledgeBaseResponse>> findAll(@AuthenticationPrincipal User user,
+            @RequestParam(required = false) UUID companyId) {
+        List<KnowledgeBase> list = service.findAll(user, companyId);
         return ResponseEntity.ok(list.stream().map(this::toResponse).collect(Collectors.toList()));
     }
 
     @PostMapping
     public ResponseEntity<KnowledgeBaseResponse> create(@AuthenticationPrincipal User user,
-            @RequestBody CreateKnowledgeBaseRequest request) {
+            @RequestBody CreateKnowledgeBaseRequest request,
+            @RequestParam(required = false) UUID companyId) {
         KnowledgeBase kb = service.create(user, request.getName(), request.getContent(), request.getAgentPrompt(),
-                request.getSystemTemplate());
+                request.getSystemTemplate(), companyId);
         return ResponseEntity.ok(toResponse(kb));
     }
 
