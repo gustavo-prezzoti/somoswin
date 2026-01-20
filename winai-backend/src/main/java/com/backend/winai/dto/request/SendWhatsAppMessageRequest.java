@@ -13,13 +13,14 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SendWhatsAppMessageRequest {
-    
+
     @NotBlank(message = "Número do telefone é obrigatório")
     private String phoneNumber; // Formato: 5549991679923 (sem espaços ou caracteres especiais)
-    
+
     @NotBlank(message = "Mensagem é obrigatória")
     private String message;
-    
-    private UUID leadId; // Opcional: associar mensagem a um lead
-}
 
+    private UUID leadId; // Opcional: associar mensagem a um lead
+
+    private String uazapInstance; // Opcional: instância do WhatsApp a ser usada
+}

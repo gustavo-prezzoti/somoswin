@@ -51,11 +51,17 @@ public class UazapService {
      */
     @Transactional
     public WhatsAppMessage sendTextMessage(SendWhatsAppMessageRequest request, Company company) {
+        // Build config - use instance from request if provided
+        Map<String, String> config = getUazapConfig(company);
+        if (request.getUazapInstance() != null && !request.getUazapInstance().isEmpty()) {
+            config.put("instance", request.getUazapInstance());
+        }
+
         // Buscar ou criar conversa
         WhatsAppConversation conversation = findOrCreateConversation(
                 request.getPhoneNumber(),
                 company,
-                getUazapConfig(company));
+                config);
 
         // Preparar requisição para Uazap
         String baseUrl = conversation.getUazapBaseUrl() != null
@@ -140,6 +146,28 @@ public class UazapService {
             String phoneNumber,
             Company company,
             Map<String, String> uazapConfig) {
+        String instanceName = uazapConfig.get("instance");
+
+        if (instanceName != null && !instanceName.isEmpty()) {
+            return conversationRepository
+                    .findByPhoneNumberAndCompanyAndUazapInstance(phoneNumber, company, instanceName)
+                    .orElseGet(() -> {
+                        WhatsAppConversation newConversation = WhatsAppConversation.builder()
+                                .company(company)
+                                .phoneNumber(phoneNumber)
+                                .uazapBaseUrl(uazapConfig.get("baseUrl"))
+                                .uazapToken(uazapConfig.get("token"))
+                                .uazapInstance(instanceName)
+                                .unreadCount(0)
+                                .isArchived(false)
+                                .isBlocked(false)
+                                .build();
+                        return conversationRepository.save(newConversation);
+                    });
+        }
+
+        // Fallback para busca sem instância (apenas quando instância não está
+        // configurada)
         return conversationRepository.findByPhoneNumberAndCompany(phoneNumber, company)
                 .orElseGet(() -> {
                     WhatsAppConversation newConversation = WhatsAppConversation.builder()

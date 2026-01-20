@@ -268,6 +268,38 @@ public class WhatsAppService {
                     .orElseThrow(() -> new RuntimeException("Lead não encontrado"));
         }
 
+        // Se não foi especificada uma instância, tentar encontrar uma conversa
+        // existente
+        // para usar a instância dela (evita duplicatas)
+        if (request.getUazapInstance() == null || request.getUazapInstance().isEmpty()) {
+            List<WhatsAppConversation> existingConversations = conversationRepository
+                    .findByCompanyOrderByLastMessageTimestampDesc(company);
+
+            // Procurar por conversa com o mesmo telefone
+            for (WhatsAppConversation conv : existingConversations) {
+                if (conv.getPhoneNumber() != null && conv.getPhoneNumber().contains(request.getPhoneNumber())
+                        || (request.getPhoneNumber() != null
+                                && request.getPhoneNumber().contains(conv.getPhoneNumber()))) {
+                    if (conv.getUazapInstance() != null && !conv.getUazapInstance().isEmpty()) {
+                        request.setUazapInstance(conv.getUazapInstance());
+                        log.debug("Usando instância existente para enviar: {}", conv.getUazapInstance());
+                        break;
+                    }
+                }
+            }
+
+            // Se ainda não temos instância, usar a primeira disponível da empresa
+            if (request.getUazapInstance() == null || request.getUazapInstance().isEmpty()) {
+                for (WhatsAppConversation conv : existingConversations) {
+                    if (conv.getUazapInstance() != null && !conv.getUazapInstance().isEmpty()) {
+                        request.setUazapInstance(conv.getUazapInstance());
+                        log.debug("Usando primeira instância disponível: {}", conv.getUazapInstance());
+                        break;
+                    }
+                }
+            }
+        }
+
         // Enviar mensagem via Uazap
         WhatsAppMessage message = uazapService.sendTextMessage(request, company);
 
