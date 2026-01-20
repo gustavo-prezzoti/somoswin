@@ -219,10 +219,12 @@ public class MarketingService {
     }
 
     public String getMetaAuthorizationUrl(User user) {
-        String scope = "public_profile,email,ads_management,ads_read,business_management,leads_retrieval,pages_read_engagement,pages_show_list,instagram_basic,instagram_manage_insights";
+        // Using Facebook Login for Business with config_id
+        // This ensures users select assets from a specific Business Manager
+        String configId = "1444720510682524";
         return String.format(
-                "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s",
-                clientId, redirectUri, user.getCompany().getId(), scope);
+                "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code&override_default_response_type=true",
+                clientId, redirectUri, user.getCompany().getId(), configId);
     }
 
     @Transactional
@@ -370,21 +372,42 @@ public class MarketingService {
     private void fetchDefaultAccounts(MetaConnection connection) throws Exception {
         String accessToken = connection.getAccessToken();
 
-        // Step 1: First, try to get the Business Manager connected via OAuth
+        // Step 1: Try to get the Business ID from the token
+        // For Facebook Login for Business tokens, we can get client_business_id
+        // directly
         String businessId = null;
         try {
-            String businessUrl = String.format("%s/me/businesses?fields=id,name&access_token=%s",
+            // First try to get client_business_id (available with Business Integration
+            // System User tokens)
+            String clientBizUrl = String.format("%s/me?fields=client_business_id&access_token=%s",
                     metaApiBaseUrl, accessToken);
-            ResponseEntity<String> businessResponse = getWithRetry(businessUrl);
-            JsonNode businessData = objectMapper.readTree(businessResponse.getBody()).get("data");
-            if (businessData != null && businessData.size() > 0) {
-                businessId = businessData.get(0).get("id").asText();
+            ResponseEntity<String> clientBizResponse = getWithRetry(clientBizUrl);
+            JsonNode clientBizData = objectMapper.readTree(clientBizResponse.getBody());
+            if (clientBizData.has("client_business_id")) {
+                businessId = clientBizData.get("client_business_id").asText();
                 connection.setBusinessId(businessId);
-                log.info("Found Business Manager: {} ({})",
-                        businessData.get(0).get("name").asText(), businessId);
+                log.info("Found Business Manager from token (client_business_id): {}", businessId);
             }
         } catch (Exception e) {
-            log.warn("Could not fetch Business Manager, will use personal accounts", e);
+            log.debug("Could not get client_business_id, trying me/businesses", e);
+        }
+
+        // If we didn't get client_business_id, try me/businesses
+        if (businessId == null) {
+            try {
+                String businessUrl = String.format("%s/me/businesses?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, accessToken);
+                ResponseEntity<String> businessResponse = getWithRetry(businessUrl);
+                JsonNode businessData = objectMapper.readTree(businessResponse.getBody()).get("data");
+                if (businessData != null && businessData.size() > 0) {
+                    businessId = businessData.get(0).get("id").asText();
+                    connection.setBusinessId(businessId);
+                    log.info("Found Business Manager from me/businesses: {} ({})",
+                            businessData.get(0).get("name").asText(), businessId);
+                }
+            } catch (Exception e) {
+                log.warn("Could not fetch Business Manager, will use personal accounts", e);
+            }
         }
 
         // Step 2: Fetch Ad Accounts - use BM endpoint if we have a business ID
