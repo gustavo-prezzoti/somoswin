@@ -259,6 +259,7 @@ public class WhatsAppWebhookService {
             Company company) {
         String waChatId = webhook.getChat() != null ? webhook.getChat().getWa_chatid() : null;
         String instanceName = webhook.getInstanceName();
+        boolean isNew = false;
 
         WhatsAppConversation conversation;
         Optional<WhatsAppConversation> existing;
@@ -302,7 +303,9 @@ public class WhatsAppWebhookService {
                     .uazapBaseUrl(webhook.getBaseUrl())
                     .uazapToken(webhook.getToken())
                     .uazapInstance(instanceName)
+                    .supportMode(company.getDefaultSupportMode() != null ? company.getDefaultSupportMode() : "IA")
                     .build();
+            isNew = true;
         }
 
         // Buscar foto de perfil se não tiver (apenas se tivermos um número de telefone
@@ -323,7 +326,11 @@ public class WhatsAppWebhookService {
 
                 // Se não veio no webhook, busca na API
                 if (originalProfileUrl == null) {
-                    originalProfileUrl = uazapService.fetchProfilePictureUrl(conversation.getPhoneNumber(), company);
+                    originalProfileUrl = uazapService.fetchProfilePictureUrl(
+                            conversation.getPhoneNumber(),
+                            company,
+                            instanceName,
+                            webhook.getToken());
                 }
 
                 if (originalProfileUrl != null && !originalProfileUrl.isEmpty()) {
@@ -351,7 +358,30 @@ public class WhatsAppWebhookService {
             }
         }
 
-        return conversationRepository.save(conversation);
+        conversation = conversationRepository.save(conversation);
+
+        if (isNew) {
+            sendWebSocketNewContact(company.getId(), conversation);
+        }
+
+        return conversation;
+    }
+
+    /**
+     * Envia evento de novo contato via WebSocket
+     */
+    private void sendWebSocketNewContact(UUID companyId, WhatsAppConversation conversation) {
+        try {
+            WebSocketMessage message = WebSocketMessage.builder()
+                    .type("NEW_CONTACT")
+                    .conversation(toConversationResponse(conversation))
+                    .companyId(companyId)
+                    .build();
+
+            messagingTemplate.convertAndSend("/topic/whatsapp/" + companyId, message);
+        } catch (Exception e) {
+            log.error("Erro ao enviar WebSocket NEW_CONTACT", e);
+        }
     }
 
     /**

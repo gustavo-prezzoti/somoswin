@@ -155,4 +155,27 @@ public class WhatsAppController {
         whatsAppService.disconnectSDRAgent(user);
         return ResponseEntity.ok().build();
     }
+
+    /**
+     * GET /api/v1/whatsapp/settings/support-mode
+     * Retorna o modo de suporte padrão para novos leads
+     */
+    @GetMapping("/settings/support-mode")
+    public ResponseEntity<Map<String, String>> getDefaultSupportMode(@AuthenticationPrincipal User user) {
+        String mode = whatsAppService.getDefaultSupportMode(user);
+        return ResponseEntity.ok(Map.of("mode", mode));
+    }
+
+    /**
+     * PUT /api/v1/whatsapp/settings/support-mode
+     * Atualiza o modo de suporte padrão para novos leads
+     */
+    @PutMapping("/settings/support-mode")
+    public ResponseEntity<Void> updateDefaultSupportMode(
+            @AuthenticationPrincipal User user,
+            @RequestBody Map<String, String> body) {
+        String mode = body.get("mode");
+        whatsAppService.updateDefaultSupportMode(user, mode);
+        return ResponseEntity.ok().build();
+    }
 }

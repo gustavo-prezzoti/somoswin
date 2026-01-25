@@ -799,4 +799,30 @@ public class WhatsAppService {
             uazapService.disconnectInstance(instanceName);
         }
     }
+
+    /**
+     * Obtém o modo de suporte padrão
+     */
+    @Transactional(readOnly = true)
+    public String getDefaultSupportMode(User user) {
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        return company.getDefaultSupportMode() != null ? company.getDefaultSupportMode() : "IA";
+    }
+
+    /**
+     * Atualiza o modo de suporte padrão
+     */
+    @Transactional
+    public void updateDefaultSupportMode(User user, String mode) {
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        if (!"IA".equals(mode) && !"HUMAN".equals(mode)) {
+            throw new IllegalArgumentException("Modo inválido. Use 'IA' ou 'HUMAN'");
+        }
+
+        company.setDefaultSupportMode(mode);
+        companyRepository.save(company);
+    }
 }

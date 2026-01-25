@@ -9,24 +9,29 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateGoalRequest {
-    
+
     @NotBlank(message = "Título é obrigatório")
     private String title;
-    
+
     private String description;
-    
+
     @NotNull(message = "Tipo da meta é obrigatório")
     private GoalType goalType;
-    
+
     @NotNull(message = "Valor alvo é obrigatório")
     @Positive(message = "Valor alvo deve ser positivo")
     private Integer targetValue;
-    
-    private Integer yearCycle;
-}
 
+    private Integer yearCycle;
+
+    private LocalDate startDate;
+
+    private LocalDate endDate;
+}

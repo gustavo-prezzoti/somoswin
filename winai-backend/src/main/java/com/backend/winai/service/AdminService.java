@@ -292,6 +292,7 @@ public class AdminService {
                     Map<String, Object> map = new HashMap<>();
                     map.put("id", company.getId().toString());
                     map.put("name", company.getName());
+                    map.put("defaultSupportMode", company.getDefaultSupportMode());
                     map.put("createdAt", company.getCreatedAt() != null ? company.getCreatedAt().toString() : null);
                     return map;
                 })
@@ -349,6 +350,9 @@ public class AdminService {
         }
         if (companyDetails.getLeadVolume() != null) {
             company.setLeadVolume(companyDetails.getLeadVolume());
+        }
+        if (companyDetails.getDefaultSupportMode() != null) {
+            company.setDefaultSupportMode(companyDetails.getDefaultSupportMode());
         }
 
         Company savedCompany = companyRepository.save(company);

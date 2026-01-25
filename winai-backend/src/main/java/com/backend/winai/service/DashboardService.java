@@ -88,7 +88,7 @@ public class DashboardService {
                                 .user(buildUserSummary(user))
                                 .metrics(buildMetricsSummary(currentSummary, previousSummary))
                                 .chartData(buildChartData(currentMetrics, startDate, days))
-                                .goals(buildGoalDTOs(goals))
+                                .goals(buildGoalDTOs(goals, company))
                                 .insights(buildInsightDTOs(insights))
                                 .campaigns(buildCampaignSummaries(company))
                                 .recentLeads(buildRecentLeads(company))
@@ -342,19 +342,59 @@ public class DashboardService {
                 return chartData;
         }
 
-        private List<DashboardResponse.GoalDTO> buildGoalDTOs(List<Goal> goals) {
+        private List<DashboardResponse.GoalDTO> buildGoalDTOs(List<Goal> goals, Company company) {
                 return goals.stream()
-                                .map(g -> DashboardResponse.GoalDTO.builder()
-                                                .id(g.getId())
-                                                .title(g.getTitle())
-                                                .description(g.getDescription())
-                                                .type(g.getGoalType().name())
-                                                .targetValue(g.getTargetValue())
-                                                .currentValue(g.getCurrentValue())
-                                                .progressPercentage(g.getProgressPercentage())
-                                                .status(g.getStatus().name())
-                                                .isHighlighted(g.getIsHighlighted())
-                                                .build())
+                                .map(g -> {
+                                        // Calculate currentValue dynamically for LEADS goals
+                                        int currentValue = g.getCurrentValue() != null ? g.getCurrentValue() : 0;
+
+                                        System.out.println("[DEBUG] Goal ID: " + g.getId() +
+                                                        ", Type: " + g.getGoalType() +
+                                                        ", Company: " + (company != null ? company.getId() : "null"));
+
+                                        if (g.getGoalType() == GoalType.LEADS && company != null) {
+                                                // Use DashboardMetrics to count leads (same source as dashboard
+                                                // display)
+                                                LocalDate startDate = g.getStartDate() != null ? g.getStartDate()
+                                                                : LocalDate.now().minusDays(365);
+                                                LocalDate endDate = g.getEndDate() != null ? g.getEndDate()
+                                                                : LocalDate.now();
+
+                                                System.out.println("[DEBUG] Querying leads from " + startDate + " to "
+                                                                + endDate);
+
+                                                Integer leadsSum = metricsRepository
+                                                                .sumLeadsCapturedByCompanyAndDateBetween(
+                                                                                company, startDate, endDate);
+
+                                                System.out.println("[DEBUG] leadsSum result: " + leadsSum);
+                                                currentValue = leadsSum != null ? leadsSum : 0;
+                                        } else {
+                                                System.out.println("[DEBUG] Condition not met: goalType="
+                                                                + g.getGoalType() + ", company=" + (company != null));
+                                        }
+
+                                        // Calculate progress percentage
+                                        int progressPercentage = 0;
+                                        if (g.getTargetValue() != null && g.getTargetValue() > 0) {
+                                                progressPercentage = (int) Math.min(100,
+                                                                (currentValue * 100.0 / g.getTargetValue()));
+                                        }
+
+                                        return DashboardResponse.GoalDTO.builder()
+                                                        .id(g.getId())
+                                                        .title(g.getTitle())
+                                                        .description(g.getDescription())
+                                                        .type(g.getGoalType().name())
+                                                        .targetValue(g.getTargetValue())
+                                                        .currentValue(currentValue)
+                                                        .progressPercentage(progressPercentage)
+                                                        .status(g.getStatus().name())
+                                                        .isHighlighted(g.getIsHighlighted())
+                                                        .startDate(g.getStartDate())
+                                                        .endDate(g.getEndDate())
+                                                        .build();
+                                })
                                 .collect(Collectors.toList());
         }
 
@@ -456,6 +496,14 @@ public class DashboardService {
                         throw new RuntimeException("Usuário não possui empresa associada");
                 }
 
+                // Check for existing active goal of the same type
+                goalRepository.findActiveGoalByCompanyAndType(company, request.getGoalType(), LocalDate.now())
+                                .ifPresent(existingGoal -> {
+                                        throw new RuntimeException("Já existe uma meta ativa para a categoria: " +
+                                                        request.getGoalType().name()
+                                                        + ". Aguarde a meta expirar ou exclua-a antes de criar uma nova.");
+                                });
+
                 Goal goal = Goal.builder()
                                 .company(company)
                                 .title(request.getTitle())
@@ -465,12 +513,14 @@ public class DashboardService {
                                 .currentValue(0)
                                 .yearCycle(request.getYearCycle() != null ? request.getYearCycle()
                                                 : LocalDate.now().getYear())
+                                .startDate(request.getStartDate() != null ? request.getStartDate() : LocalDate.now())
+                                .endDate(request.getEndDate())
                                 .status(GoalStatus.ACTIVE)
                                 .build();
 
                 goal = goalRepository.save(goal);
 
-                return buildGoalDTOs(List.of(goal)).get(0);
+                return buildGoalDTOs(List.of(goal), company).get(0);
         }
 
         /**
@@ -483,7 +533,7 @@ public class DashboardService {
                         return List.of();
                 }
                 return buildGoalDTOs(goalRepository.findByCompanyAndYearCycleAndStatusOrderByCreatedAtDesc(company,
-                                LocalDate.now().getYear(), GoalStatus.ACTIVE));
+                                LocalDate.now().getYear(), GoalStatus.ACTIVE), company);
         }
 
         /**
@@ -499,6 +549,17 @@ public class DashboardService {
                         throw new RuntimeException("Acesso negado");
                 }
 
+                // If changing goal type, check for existing active goal of the new type
+                if (request.getGoalType() != goal.getGoalType()) {
+                        goalRepository.findActiveGoalByCompanyAndType(user.getCompany(), request.getGoalType(),
+                                        LocalDate.now())
+                                        .ifPresent(existingGoal -> {
+                                                throw new RuntimeException(
+                                                                "Já existe uma meta ativa para a categoria: " +
+                                                                                request.getGoalType().name());
+                                        });
+                }
+
                 goal.setTitle(request.getTitle());
                 goal.setDescription(request.getDescription());
                 goal.setGoalType(request.getGoalType());
@@ -506,9 +567,15 @@ public class DashboardService {
                 if (request.getYearCycle() != null) {
                         goal.setYearCycle(request.getYearCycle());
                 }
+                if (request.getStartDate() != null) {
+                        goal.setStartDate(request.getStartDate());
+                }
+                if (request.getEndDate() != null) {
+                        goal.setEndDate(request.getEndDate());
+                }
 
                 goal = goalRepository.save(goal);
-                return buildGoalDTOs(List.of(goal)).get(0);
+                return buildGoalDTOs(List.of(goal), user.getCompany()).get(0);
         }
 
         /**
@@ -552,7 +619,7 @@ public class DashboardService {
 
                 goal.setIsHighlighted(!Boolean.TRUE.equals(goal.getIsHighlighted()));
                 goal = goalRepository.save(goal);
-                return buildGoalDTOs(List.of(goal)).get(0);
+                return buildGoalDTOs(List.of(goal), user.getCompany()).get(0);
         }
 
         /**

@@ -43,7 +43,7 @@ public class MarketingService {
     @Value("${meta.client.secret:}")
     private String clientSecret;
 
-    @Value("${meta.redirect.uri:https://server.somoswin.com.br/api/v1/marketing/auth/meta/callback}")
+    @Value("${meta.redirect.uri:http://localhost:8080/api/v1/marketing/auth/meta/callback}")
     private String redirectUri;
 
     @Value("${app.frontend.url:http://localhost:3000}")
@@ -278,19 +278,28 @@ public class MarketingService {
             }
 
             metaConnectionRepository.save(connection);
+            log.info("Meta connection saved for company {} - AdAccountId: {}, BusinessId: {}",
+                    companyId, connection.getAdAccountId(), connection.getBusinessId());
 
             // Trigger initial sync in background
-            try {
-                final MetaConnection finalConn = connection;
-                java.util.concurrent.CompletableFuture.runAsync(() -> {
-                    try {
-                        syncAccountData(finalConn);
-                    } catch (Exception e) {
-                        log.error("Initial Meta sync failed for company {}", companyId, e);
-                    }
-                });
-            } catch (Exception e) {
-                log.warn("Failed to schedule initial Meta sync", e);
+            if (connection.getAdAccountId() != null) {
+                try {
+                    final MetaConnection finalConn = connection;
+                    log.info("Starting initial Meta sync in background for company {}", companyId);
+                    java.util.concurrent.CompletableFuture.runAsync(() -> {
+                        try {
+                            log.info("Initial sync started for company {}", finalConn.getCompany().getId());
+                            syncAccountData(finalConn);
+                            log.info("Initial sync completed for company {}", finalConn.getCompany().getId());
+                        } catch (Exception e) {
+                            log.error("Initial Meta sync failed for company {}", finalConn.getCompany().getId(), e);
+                        }
+                    });
+                } catch (Exception e) {
+                    log.warn("Failed to schedule initial Meta sync", e);
+                }
+            } else {
+                log.warn("No Ad Account found during OAuth. Sync will not run until an Ad Account is configured.");
             }
 
             return frontendUrl + "/configuracoes?meta=connected";
@@ -374,6 +383,7 @@ public class MarketingService {
     }
 
     private void fetchDefaultAccounts(MetaConnection connection) throws Exception {
+        log.info("fetchDefaultAccounts starting for connection with metaUserId: {}", connection.getMetaUserId());
         String accessToken = connection.getAccessToken();
 
         // Step 1: Try to get the Business ID from the token

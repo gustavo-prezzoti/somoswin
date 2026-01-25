@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -96,6 +97,8 @@ public class DashboardResponse {
         private Integer progressPercentage;
         private String status;
         private Boolean isHighlighted;
+        private LocalDate startDate;
+        private LocalDate endDate;
     }
 
     @Data

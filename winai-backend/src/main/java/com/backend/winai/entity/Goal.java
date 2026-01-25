@@ -3,6 +3,7 @@ package com.backend.winai.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -53,6 +54,12 @@ public class Goal {
 
     @Column(name = "year_cycle")
     private Integer yearCycle;
+
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(name = "end_date")
+    private LocalDate endDate;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

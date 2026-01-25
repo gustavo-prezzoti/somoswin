@@ -846,40 +846,84 @@ public class UazapService {
     /**
      * Busca a URL da foto de perfil de um número
      */
-    public String fetchProfilePictureUrl(String phoneNumber, Company company) {
+    /**
+     * Busca a URL da foto de perfil de um número
+     */
+    public String fetchProfilePictureUrl(String phoneNumber, Company company, String instanceName, String token) {
         Map<String, String> config = getUazapConfig(company);
         String baseUrl = config.get("baseUrl");
-        String token = config.get("token");
-        String instanceName = config.get("instance");
 
-        if (baseUrl == null || token == null || instanceName == null) {
+        // Se fornecidos, usam os parâmetros específicos (prioridade para o que vem do
+        // webhook)
+        String useInstance = (instanceName != null && !instanceName.isEmpty()) ? instanceName : config.get("instance");
+        String useToken = (token != null && !token.isEmpty()) ? token : config.get("token");
+
+        if (baseUrl == null || useToken == null || useInstance == null) {
+            log.warn("Dados insuficientes para buscar foto de perfil: Instance={}, Token={}, BaseUrl={}",
+                    useInstance, useToken != null ? "hidden" : "null", baseUrl);
             return null;
         }
 
-        // Adiciona o número como parâmetro na URL (Padrão Evolution API para GET)
-        String url = baseUrl.replaceAll("/$", "") + "/chat/fetchProfilePictureUrl/" + instanceName + "?number="
-                + phoneNumber;
+        String cleanBaseUrl = baseUrl.replaceAll("/$", "");
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("apikey", adminToken);
-        headers.set("token", token);
+        headers.set("token", useToken);
 
-        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
-
+        // 1. Tentar GET (Evolution v1 / Padrão antigo)
         try {
+            String urlGet = cleanBaseUrl + "/chat/fetchProfilePictureUrl/" + useInstance + "?number=" + phoneNumber;
+
+            HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url,
+                    urlGet,
                     HttpMethod.GET,
                     requestEntity,
                     new ParameterizedTypeReference<Map<String, Object>>() {
                     });
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return (String) response.getBody().get("profilePictureUrl");
+                Object ppUrl = response.getBody().get("profilePictureUrl");
+                if (ppUrl != null)
+                    return ppUrl.toString();
             }
         } catch (Exception e) {
-            log.warn("Falha ao buscar foto de perfil para {}: {}", phoneNumber, e.getMessage());
+            log.debug("Falha ao buscar foto via GET para {}: {}", phoneNumber, e.getMessage());
         }
+
+        // 2. Tentar POST (Evolution v2 / Novo padrão)
+        try {
+            String urlPost = cleanBaseUrl + "/chat/fetchProfilePictureUrl/" + useInstance;
+
+            Map<String, String> body = new HashMap<>();
+            body.put("number", phoneNumber);
+
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    urlPost,
+                    HttpMethod.POST,
+                    requestEntity,
+                    new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Object ppUrl = response.getBody().get("profilePictureUrl");
+                if (ppUrl != null)
+                    return ppUrl.toString();
+            }
+        } catch (Exception e) {
+            log.warn("Falha ao buscar foto via POST para {}: {}", phoneNumber, e.getMessage());
+        }
+
         return null;
+    }
+
+    /**
+     * Sobrecarga para compatibilidade
+     */
+    public String fetchProfilePictureUrl(String phoneNumber, Company company) {
+        return fetchProfilePictureUrl(phoneNumber, company, null, null);
     }
 }

@@ -44,6 +44,10 @@ public class Company {
     @Builder.Default
     private AccountStatus status = AccountStatus.PENDING;
 
+    @Column(name = "default_support_mode")
+    @Builder.Default
+    private String defaultSupportMode = "IA"; // IA ou HUMAN
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;
