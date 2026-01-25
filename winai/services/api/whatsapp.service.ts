@@ -11,6 +11,7 @@ export interface WhatsAppConversation {
     phoneNumber: string;
     waChatId: string | null;
     contactName: string | null;
+    profilePictureUrl: string | null;
     unreadCount: number;
     lastMessageText: string | null;
     lastMessageTimestamp: number | null;

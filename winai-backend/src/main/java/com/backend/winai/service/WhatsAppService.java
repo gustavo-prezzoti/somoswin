@@ -711,6 +711,8 @@ public class WhatsAppService {
                 .lastMessageTimestamp(conversation.getLastMessageTimestamp())
                 .isArchived(conversation.getIsArchived())
                 .isBlocked(conversation.getIsBlocked())
+                .uazapInstance(conversation.getUazapInstance())
+                .supportMode(conversation.getSupportMode())
                 .createdAt(conversation.getCreatedAt())
                 .updatedAt(conversation.getUpdatedAt())
                 .build();

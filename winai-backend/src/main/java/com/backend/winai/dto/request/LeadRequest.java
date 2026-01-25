@@ -17,7 +17,6 @@ public class LeadRequest {
     @NotBlank(message = "Nome é obrigatório")
     private String name;
 
-    @NotBlank(message = "E-mail é obrigatório")
     @Email(message = "E-mail inválido")
     private String email;
 

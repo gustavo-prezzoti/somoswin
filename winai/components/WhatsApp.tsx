@@ -929,7 +929,18 @@ const WhatsApp: React.FC = () => {
                     }`}
                 >
                   <div className="relative flex-shrink-0">
-                    <div className="w-11 h-11 rounded-full bg-emerald-100 flex items-center justify-center">
+                    {chat.profilePictureUrl ? (
+                      <img
+                        src={chat.profilePictureUrl}
+                        alt={chat.contactName || 'Avatar'}
+                        className="w-11 h-11 rounded-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-11 h-11 rounded-full bg-emerald-100 flex items-center justify-center ${chat.profilePictureUrl ? 'hidden' : ''}`}>
                       <span className="text-emerald-600 font-black text-sm">
                         {chat.contactName ? chat.contactName.charAt(0).toUpperCase() : chat.phoneNumber.slice(-2)}
                       </span>
@@ -967,7 +978,18 @@ const WhatsApp: React.FC = () => {
           {/* Header */}
           <div className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+              {activeConversation.profilePictureUrl ? (
+                <img
+                  src={activeConversation.profilePictureUrl}
+                  alt={activeConversation.contactName || 'Avatar'}
+                  className="w-10 h-10 rounded-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center ${activeConversation.profilePictureUrl ? 'hidden' : ''}`}>
                 <span className="text-emerald-600 font-black text-sm">
                   {activeConversation.contactName ? activeConversation.contactName.charAt(0).toUpperCase() : activeConversation.phoneNumber.slice(-2)}
                 </span>
@@ -1248,7 +1270,18 @@ const WhatsApp: React.FC = () => {
         <div className={`bg-white border-l border-gray-100 transition-all duration-300 overflow-hidden ${isDetailsOpen ? 'w-80' : 'w-0'}`}>
           <div className="w-80 p-8 flex flex-col h-full space-y-8">
             <div className="flex flex-col items-center text-center">
-              <div className="w-24 h-24 rounded-3xl bg-emerald-100 flex items-center justify-center mb-4 border-4 border-gray-50">
+              {activeConversation.profilePictureUrl ? (
+                <img
+                  src={activeConversation.profilePictureUrl}
+                  alt={activeConversation.contactName || 'Avatar'}
+                  className="w-24 h-24 rounded-3xl object-cover mb-4 border-4 border-gray-50"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`w-24 h-24 rounded-3xl bg-emerald-100 flex items-center justify-center mb-4 border-4 border-gray-50 ${activeConversation.profilePictureUrl ? 'hidden' : ''}`}>
                 <span className="text-emerald-600 font-black text-2xl">
                   {activeConversation.contactName ? activeConversation.contactName.charAt(0).toUpperCase() : activeConversation.phoneNumber.slice(-2)}
                 </span>
@@ -1289,9 +1322,7 @@ const WhatsApp: React.FC = () => {
                 </>
               )}
 
-              <button className="w-full mt-auto py-4 border border-gray-100 text-gray-400 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-gray-50 transition-all">
-                Ver Histórico CRM
-              </button>
+
             </div>
           </div>
         </div>
