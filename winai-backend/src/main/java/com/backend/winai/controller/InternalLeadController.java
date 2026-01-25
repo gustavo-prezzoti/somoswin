@@ -29,7 +29,7 @@ public class InternalLeadController {
     private final LeadRepository leadRepository;
     private final WhatsAppMessageRepository messageRepository;
 
-    @Value("${internal.api.key:winai-internal-secret-key}")
+    @Value("${internal.api.key:winai-lq-f8a9b2c7e4d1-2026-xK9mN3pL}")
     private String internalApiKey;
 
     /**

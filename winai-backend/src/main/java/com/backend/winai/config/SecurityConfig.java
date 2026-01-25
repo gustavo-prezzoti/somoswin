@@ -45,6 +45,7 @@ public class SecurityConfig {
                                                                 "/api/v1/marketing/auth/meta/callback",
                                                                 "/api/v1/marketing/auth/meta/deauthorize",
                                                                 "/api/v1/marketing/auth/meta/data-deletion",
+                                                                "/api/internal/**",
                                                                 "/ws/**",
                                                                 "/ws/info",
                                                                 "/actuator/health",
