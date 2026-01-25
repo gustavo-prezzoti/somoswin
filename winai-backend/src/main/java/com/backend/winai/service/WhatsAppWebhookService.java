@@ -532,6 +532,7 @@ public class WhatsAppWebhookService {
     private Company findCompanyByWebhook(UazapWebhookRequest webhook) {
         String token = webhook.getToken();
         String instanceName = webhook.getInstanceName();
+        UUID companyId = null;
 
         if (token != null && !token.isEmpty()) {
             // Tenta buscar primeiro pelo token/URL que é mais preciso
@@ -539,19 +540,22 @@ public class WhatsAppWebhookService {
                     .findByInstanceBaseUrlAndInstanceToken(webhook.getBaseUrl(), token);
 
             if (conn.isPresent()) {
-                return conn.get().getCompany();
+                companyId = conn.get().getCompany().getId();
             }
         }
 
-        if (instanceName != null && !instanceName.isEmpty()) {
+        if (companyId == null && instanceName != null && !instanceName.isEmpty()) {
             // Tenta buscar pelo nome da instância
             List<UserWhatsAppConnection> conns = userWhatsAppConnectionRepository.findByInstanceName(instanceName);
             if (!conns.isEmpty()) {
-                // Se houver mais de uma empresa com o mesmo nome de instância (raro por causa
-                // do prefixo),
-                // pega a primeira ou tenta filtrar melhor no futuro
-                return conns.get(0).getCompany();
+                companyId = conns.get(0).getCompany().getId();
             }
+        }
+
+        // Se encontrou um companyId, recarrega do banco para ter dados frescos
+        // (incluindo defaultSupportMode)
+        if (companyId != null) {
+            return companyRepository.findById(companyId).orElse(null);
         }
 
         log.warn(
@@ -598,6 +602,7 @@ public class WhatsAppWebhookService {
                 .lastMessageTimestamp(conversation.getLastMessageTimestamp())
                 .isArchived(conversation.getIsArchived())
                 .isBlocked(conversation.getIsBlocked())
+                .supportMode(conversation.getSupportMode())
                 .createdAt(conversation.getCreatedAt())
                 .updatedAt(conversation.getUpdatedAt())
                 .build();

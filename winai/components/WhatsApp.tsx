@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Send, Phone, Video, Paperclip, Smile, CheckCheck, ChevronRight, ChevronLeft, Bot, UserCheck, Zap, Info, MoreHorizontal, Loader2, Mic, Image, FileText, Play, Pause, X, Trash2, StopCircle } from 'lucide-react';
+import { Search, Send, Phone, Video, Paperclip, Smile, CheckCheck, ChevronRight, ChevronLeft, Bot, UserCheck, Zap, Info, MoreHorizontal, Loader2, Mic, Image, FileText, X, Trash2, StopCircle } from 'lucide-react';
 import { whatsappService, WhatsAppConversation, WhatsAppMessage } from '../services/api/whatsapp.service';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { userService } from '../services/api/user.service';
 import { useSearchParams } from 'react-router-dom';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
+import AudioPlayer from './ui/AudioPlayer';
 
 const WhatsApp: React.FC = () => {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
@@ -818,24 +819,13 @@ const WhatsApp: React.FC = () => {
 
     if (isAudio) {
       return (
-        <div className="flex items-center gap-3 min-w-[200px]">
-          <button
-            onClick={() => msg.mediaUrl && toggleAudio(msg.id, msg.mediaUrl)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${msg.fromMe ? 'bg-white/20 hover:bg-white/30' : 'bg-emerald-100 hover:bg-emerald-200'}`}
-          >
-            {playingAudio === msg.id ? <Pause size={18} className={msg.fromMe ? 'text-white' : 'text-emerald-600'} /> : <Play size={18} className={msg.fromMe ? 'text-white' : 'text-emerald-600'} />}
-          </button>
-          <div className="flex-1">
-            <div className={`h-1 rounded-full ${msg.fromMe ? 'bg-white/30' : 'bg-gray-200'}`}>
-              <div className={`h-full rounded-full transition-all ${msg.fromMe ? 'bg-white' : 'bg-emerald-500'}`} style={{ width: playingAudio === msg.id ? '50%' : '0%' }} />
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              <Mic size={12} className={msg.fromMe ? 'text-white/50' : 'text-gray-400'} />
-              <span className={`text-[10px] ${msg.fromMe ? 'text-white/70' : 'text-gray-500'}`}>{formatDuration(msg.mediaDuration)}</span>
-            </div>
-          </div>
-          {msg.transcription && <p className={`text-[11px] mt-2 italic ${msg.fromMe ? 'text-white/70' : 'text-gray-500'}`}>"{msg.transcription}"</p>}
-        </div>
+        <AudioPlayer
+          src={msg.mediaUrl || ''}
+          duration={msg.mediaDuration}
+          transcription={msg.transcription}
+          fromMe={msg.fromMe}
+          messageId={msg.id}
+        />
       );
     }
 
