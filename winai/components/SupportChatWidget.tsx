@@ -4,7 +4,7 @@ import { MessageCircle, X, Send, Minus, RefreshCcw, User, Bot, Sparkles } from '
 import ReactMarkdown from 'react-markdown';
 import { useLocation } from 'react-router-dom';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
 interface SupportConfig {
     id: number;
@@ -40,10 +40,7 @@ const SupportChatWidget: React.FC = () => {
             fetchConfig();
         }
 
-        const handleOpenChat = () => {
-            console.log('OPEN_SUPPORT_CHAT event received');
-            setIsOpen(true);
-        };
+        const handleOpenChat = () => setIsOpen(true);
         window.addEventListener('OPEN_SUPPORT_CHAT', handleOpenChat);
 
         return () => window.removeEventListener('OPEN_SUPPORT_CHAT', handleOpenChat);
@@ -55,10 +52,24 @@ const SupportChatWidget: React.FC = () => {
 
     const fetchConfig = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/v1/support/config`);
+            const token = localStorage.getItem('win_access_token');
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            // Remove /api/v1 from endpoint if API_URL already has it, or just ensure cleanliness
+            // Assuming API_URL might be base, so we construct carefully
+            const response = await fetch(`${API_URL}/support/config`, { headers });
+
             if (response.ok) {
                 const data = await response.json();
                 setConfig(data);
+            } else if (response.status === 401) {
+                console.error('Unauthorized access to support config');
+                // Optional: setConfig(null) or handle logout if critical
             }
         } catch (error) {
             console.error('Error fetching support config:', error);
@@ -79,11 +90,17 @@ const SupportChatWidget: React.FC = () => {
         setIsLoading(true);
 
         try {
-            const response = await fetch(`${API_URL}/api/v1/support/chat`, {
+            const token = localStorage.getItem('win_access_token');
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`${API_URL}/support/chat`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({ message: text }),
             });
 

@@ -62,10 +62,7 @@ const Support: React.FC = () => {
                   <h3 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic mb-2">Assistente IA</h3>
                   <p className="text-gray-500 text-sm font-medium leading-relaxed mb-8">Tire suas dúvidas instantaneamente com nossa Inteligência Artificial especializada.</p>
                   <button
-                     onClick={() => {
-                        console.log('Dispatching OPEN_SUPPORT_CHAT');
-                        window.dispatchEvent(new Event('OPEN_SUPPORT_CHAT'));
-                     }}
+                     onClick={() => window.dispatchEvent(new Event('OPEN_SUPPORT_CHAT'))}
                      className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 transition-all uppercase text-[11px] tracking-widest flex items-center justify-center gap-2"
                   >
                      Iniciar Chat IA <MessageSquare size={14} />
