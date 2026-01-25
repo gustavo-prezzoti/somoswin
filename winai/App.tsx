@@ -31,6 +31,7 @@ import MeetingCalendar from './components/Calendar';
 import Academy from './components/Academy';
 import Login from './components/Login';
 import Checkout from './components/Checkout';
+import Terms from './components/Terms';
 import LandingPage from './components/LandingPage';
 import SocialMedia from './components/SocialMedia';
 import Support from './components/Support';
@@ -46,11 +47,13 @@ import AdminUserConnections from './src/components/Admin/AdminUserConnections';
 import AdminAgentsAI from './components/Admin/AdminAgentsAI';
 import AdminCompanies from './components/Admin/AdminCompanies';
 import AdminPrompts from './components/Admin/AdminPrompts';
+import AdminSupportChat from './components/Admin/AdminSupportChat';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
 import { useWebSocket } from './hooks/useWebSocket';
 
 import logoLight from './logo_light.png';
+import SupportChatWidget from './components/SupportChatWidget';
 
 const SidebarItem = ({ to, icon: Icon, label, isActive, isCollapsed }: { to: string, icon: any, label: string, isActive: boolean, isCollapsed: boolean }) => (
   <Link
@@ -335,6 +338,7 @@ const App: React.FC = () => {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/checkout" element={<Checkout />} />
+        <Route path="/termos" element={<Terms />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
         <Route path="/agentes" element={<ProtectedRoute><Agents /></ProtectedRoute>} />
@@ -357,10 +361,13 @@ const App: React.FC = () => {
           <Route path="user-connections" element={<AdminUserConnections />} />
           <Route path="agents" element={<AdminAgentsAI />} />
           <Route path="prompts" element={<AdminPrompts />} />
+          <Route path="support-chat" element={<AdminSupportChat />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
+
       </Routes>
-    </BrowserRouter>
+      <SupportChatWidget />
+    </BrowserRouter >
   );
 };
 

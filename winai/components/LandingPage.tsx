@@ -384,9 +384,12 @@ const LandingPage: React.FC = () => {
                <div className="flex items-center gap-3 text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">
                   <ShieldCheck size={16} /> Sistema de Vendas 100% Blindado
                </div>
+               <div className="flex items-center gap-6">
+                  <a href="/termos" className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] hover:text-emerald-600 transition-colors">Termos de Uso</a>
+               </div>
             </div>
-         </footer>
-      </div>
+         </footer >
+      </div >
    );
 };
 
