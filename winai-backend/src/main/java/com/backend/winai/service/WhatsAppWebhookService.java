@@ -113,15 +113,17 @@ public class WhatsAppWebhookService {
             }
 
             // Criar mensagem
+            boolean isFromMe = Boolean.TRUE.equals(webhook.getMessage().getFromMe());
+
             WhatsAppMessage message = WhatsAppMessage.builder()
                     .conversation(conversation)
                     .lead(lead)
                     .messageId(messageId)
                     .content(messageText)
-                    .fromMe(false)
+                    .fromMe(isFromMe)
                     .messageType(messageType)
                     .messageTimestamp(timestamp != null ? timestamp : System.currentTimeMillis())
-                    .status("received")
+                    .status(isFromMe ? "sent" : "received")
                     .isGroup(false)
                     .build();
 
