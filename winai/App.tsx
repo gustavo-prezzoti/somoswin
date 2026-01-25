@@ -207,7 +207,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         </div>
 
         <div className="p-3 bg-black/20 border-t border-white/5 space-y-1">
-          <SidebarItem to="/suporte" icon={LifeBuoy} label="Suporte VIP" isActive={location.pathname === '/suporte'} isCollapsed={!isSidebarOpen} />
+          <SidebarItem to="/suporte" icon={LifeBuoy} label="Suporte" isActive={location.pathname === '/suporte'} isCollapsed={!isSidebarOpen} />
           <SidebarItem to="/configuracoes" icon={SettingsIcon} label="Configurações" isActive={location.pathname === '/configuracoes'} isCollapsed={!isSidebarOpen} />
 
           <button
