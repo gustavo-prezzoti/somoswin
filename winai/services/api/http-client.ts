@@ -6,7 +6,7 @@
 import { storageService } from '../storage';
 import { AuthResponse } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://server.somoswin.com.br/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
 interface RequestConfig extends RequestInit {
     skipAuth?: boolean;

@@ -159,151 +159,152 @@ const Campaigns: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-gray-800 tracking-tighter uppercase italic">Campanhas de Tráfego</h1>
-          <p className="text-gray-500 mt-1 font-medium">Monitore e gerencie sua performance no Meta Ads.</p>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-emerald-600 text-white font-black px-6 py-4 rounded-2xl flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 text-xs uppercase tracking-widest active:scale-95"
-          >
-            <Plus size={18} /> Subir Nova Campanha
-          </button>
-        </div>
-      </div>
-
-      {/* Fluxo de Aquisição Section */}
-      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-8 rounded-[40px] border border-emerald-100 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
+    <>
+      <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic flex items-center gap-2">
-              <TrendingUp size={24} className="text-emerald-600" />
-              Fluxo de Aquisição
-            </h2>
-            <p className="text-gray-500 text-sm mt-1">Visualize o fluxo de leads capturados</p>
+            <h1 className="text-3xl font-black text-gray-800 tracking-tighter uppercase italic">Campanhas de Tráfego</h1>
+            <p className="text-gray-500 mt-1 font-medium">Monitore e gerencie sua performance no Meta Ads.</p>
           </div>
-        </div>
-
-        {hasCampaignData ? (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-emerald-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">ATUAL</span>
-                <TrendingUp size={16} className="text-emerald-600" />
-              </div>
-              <p className="text-3xl font-black text-gray-800">0</p>
-              <p className="text-xs text-gray-400 mt-1">Leads capturados</p>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-emerald-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">ANTERIOR</span>
-                <TrendingDown size={16} className="text-gray-400" />
-              </div>
-              <p className="text-3xl font-black text-gray-800">0</p>
-              <p className="text-xs text-gray-400 mt-1">Leads capturados</p>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl border border-emerald-100 text-center">
-            <Target size={48} className="text-emerald-500/40 mx-auto mb-4" />
-            <h3 className="font-black text-gray-700 mb-2">{isMetaConnected ? "Sem dados de aquisição" : "Meta não conectado"}</h3>
-            <p className="text-sm text-gray-500 mb-6">
-              {isMetaConnected 
-                ? "Conecte suas campanhas para começar a visualizar o fluxo de leads." 
-                : "Conecte sua conta Meta (Facebook/Instagram) nas configurações para acessar campanhas."}
-            </p>
-            {!isMetaConnected && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 inline-block">
-                <p className="text-xs font-semibold text-amber-700">Acesse Configurações para conectar Meta</p>
-              </div>
-            )}
+          <div className="flex gap-3">
             <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (isMetaConnected) {
-                  setIsModalOpen(true);
-                }
-              }}
-              disabled={!isMetaConnected}
-              type="button"
-              className={`font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest flex items-center gap-2 mx-auto cursor-pointer transition-all ${
-                isMetaConnected 
-                  ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20" 
-                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
+              onClick={() => setIsModalOpen(true)}
+              className="bg-emerald-600 text-white font-black px-6 py-4 rounded-2xl flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 text-xs uppercase tracking-widest active:scale-95"
             >
-              <Plus size={16} /> Conectar Campanhas
+              <Plus size={18} /> Subir Nova Campanha
             </button>
           </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <SummaryCard
-          icon={DollarSign}
-          label="Investimento"
-          metric={metrics?.investment || { value: 'R$ 0,00', trend: '0%', isPositive: true }}
-          color="bg-emerald-50 text-emerald-600"
-        />
-        <SummaryCard
-          icon={Eye}
-          label="Impressões"
-          metric={metrics?.impressions || { value: '0', trend: '0%', isPositive: true }}
-          color="bg-sky-50 text-sky-600"
-        />
-        <SummaryCard
-          icon={MousePointerClick}
-          label="Cliques"
-          metric={metrics?.clicks || { value: '0', trend: '0%', isPositive: true }}
-          color="bg-teal-50 text-teal-600"
-        />
-        <SummaryCard
-          icon={MessageSquare}
-          label="Conversas Iniciadas"
-          metric={metrics?.conversations || { value: '0', trend: '0%', isPositive: true }}
-          color="bg-emerald-50 text-emerald-600"
-        />
-      </div>
-
-      <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic">Análise de Performance</h2>
         </div>
-        <div className="h-[350px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={(() => {
-              // Se não houver dados, criar array com valores zerados para os últimos 7 dias
-              if (!metrics?.performanceHistory || metrics.performanceHistory.length === 0) {
-                const today = new Date();
-                return Array.from({ length: 7 }, (_, i) => {
-                  const date = new Date(today);
-                  date.setDate(date.getDate() - (6 - i));
-                  return {
-                    date: date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-                    value: 0
-                  };
-                });
-              }
-              return metrics.performanceHistory;
-            })()}>
-              <defs><linearGradient id="performanceGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#9ca3af' }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#9ca3af' }} domain={[0, 'auto']} />
-              <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-              <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#performanceGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
+
+        {/* Fluxo de Aquisição Section */}
+        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-8 rounded-[40px] border border-emerald-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic flex items-center gap-2">
+                <TrendingUp size={24} className="text-emerald-600" />
+                Fluxo de Aquisição
+              </h2>
+              <p className="text-gray-500 text-sm mt-1">Visualize o fluxo de leads capturados</p>
+            </div>
+          </div>
+
+          {hasCampaignData ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-emerald-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">ATUAL</span>
+                  <TrendingUp size={16} className="text-emerald-600" />
+                </div>
+                <p className="text-3xl font-black text-gray-800">0</p>
+                <p className="text-xs text-gray-400 mt-1">Leads capturados</p>
+              </div>
+              <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-emerald-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">ANTERIOR</span>
+                  <TrendingDown size={16} className="text-gray-400" />
+                </div>
+                <p className="text-3xl font-black text-gray-800">0</p>
+                <p className="text-xs text-gray-400 mt-1">Leads capturados</p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl border border-emerald-100 text-center">
+              <Target size={48} className="text-emerald-500/40 mx-auto mb-4" />
+              <h3 className="font-black text-gray-700 mb-2">{isMetaConnected ? "Sem dados de aquisição" : "Meta não conectado"}</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                {isMetaConnected
+                  ? "Conecte suas campanhas para começar a visualizar o fluxo de leads."
+                  : "Conecte sua conta Meta (Facebook/Instagram) nas configurações para acessar campanhas."}
+              </p>
+              {!isMetaConnected && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 inline-block">
+                  <p className="text-xs font-semibold text-amber-700">Acesse Configurações para conectar Meta</p>
+                </div>
+              )}
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (isMetaConnected) {
+                    setIsModalOpen(true);
+                  }
+                }}
+                disabled={!isMetaConnected}
+                type="button"
+                className={`font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest flex items-center gap-2 mx-auto cursor-pointer transition-all ${isMetaConnected
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
+                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  }`}
+              >
+                <Plus size={16} /> Conectar Campanhas
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <SummaryCard
+            icon={DollarSign}
+            label="Investimento"
+            metric={metrics?.investment || { value: 'R$ 0,00', trend: '0%', isPositive: true }}
+            color="bg-emerald-50 text-emerald-600"
+          />
+          <SummaryCard
+            icon={Eye}
+            label="Impressões"
+            metric={metrics?.impressions || { value: '0', trend: '0%', isPositive: true }}
+            color="bg-sky-50 text-sky-600"
+          />
+          <SummaryCard
+            icon={MousePointerClick}
+            label="Cliques"
+            metric={metrics?.clicks || { value: '0', trend: '0%', isPositive: true }}
+            color="bg-teal-50 text-teal-600"
+          />
+          <SummaryCard
+            icon={MessageSquare}
+            label="Conversas Iniciadas"
+            metric={metrics?.conversations || { value: '0', trend: '0%', isPositive: true }}
+            color="bg-emerald-50 text-emerald-600"
+          />
+        </div>
+
+        <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic">Análise de Performance</h2>
+          </div>
+          <div className="h-[350px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={(() => {
+                // Se não houver dados, criar array com valores zerados para os últimos 7 dias
+                if (!metrics?.performanceHistory || metrics.performanceHistory.length === 0) {
+                  const today = new Date();
+                  return Array.from({ length: 7 }, (_, i) => {
+                    const date = new Date(today);
+                    date.setDate(date.getDate() - (6 - i));
+                    return {
+                      date: date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+                      value: 0
+                    };
+                  });
+                }
+                return metrics.performanceHistory;
+              })()}>
+                <defs><linearGradient id="performanceGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#9ca3af' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#9ca3af' }} domain={[0, 'auto']} />
+                <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#performanceGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
       {/* Modal Wizard */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50" onClick={(e) => {
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50" onClick={(e) => {
           if (e.target === e.currentTarget) {
             setIsModalOpen(false);
           }
@@ -581,7 +582,7 @@ const Campaigns: React.FC = () => {
 
       {/* Modal Drive Selector */}
       {showDriveSelector && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50">
           <div className="bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden border border-emerald-900/10">
             <DriveFileSelector
               onSelect={(file) => {
@@ -595,7 +596,7 @@ const Campaigns: React.FC = () => {
         </div>
       )}
 
-    </div>
+    </>
   );
 };
 

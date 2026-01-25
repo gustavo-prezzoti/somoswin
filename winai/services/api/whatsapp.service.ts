@@ -143,6 +143,20 @@ export const whatsappService = {
     async disconnectSDRAgent(): Promise<void> {
         return await httpClient.post<void>('/whatsapp/sdr/disconnect', {});
     },
+
+    /**
+     * Obtém o modo de suporte padrão
+     */
+    async getDefaultSupportMode(): Promise<{ mode: string }> {
+        return await httpClient.get<{ mode: string }>('/whatsapp/settings/support-mode');
+    },
+
+    /**
+     * Atualiza o modo de suporte padrão
+     */
+    async updateDefaultSupportMode(mode: 'IA' | 'HUMAN'): Promise<void> {
+        return await httpClient.put<void>('/whatsapp/settings/support-mode', { mode });
+    },
 };
 
 export default whatsappService;

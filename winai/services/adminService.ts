@@ -87,6 +87,7 @@ export interface Company {
     id: string;
     name: string;
     createdAt?: string;
+    defaultSupportMode?: string;
 }
 
 export interface CreateCompanyRequest {
@@ -95,6 +96,7 @@ export interface CreateCompanyRequest {
 
 export interface UpdateCompanyRequest {
     name?: string;
+    defaultSupportMode?: string;
 }
 
 export interface CreateUserWhatsAppConnectionRequest {

@@ -322,199 +322,201 @@ const Settings: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
-          <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">
-            Configurações
-          </h1>
+    <>
+      <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">
+              Configurações
+            </h1>
+          </div>
+
+          <button
+            onClick={handleSave}
+            className="bg-emerald-600 text-white font-black px-8 py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 uppercase text-xs tracking-widest active:scale-95"
+          >
+            {saved ? <Check size={18} /> : <Save size={18} />}
+            {saved ? 'Salvo com Sucesso' : 'Salvar Alterações'}
+          </button>
         </div>
 
-        <button
-          onClick={handleSave}
-          className="bg-emerald-600 text-white font-black px-8 py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 uppercase text-xs tracking-widest active:scale-95"
-        >
-          {saved ? <Check size={18} /> : <Save size={18} />}
-          {saved ? 'Salvo com Sucesso' : 'Salvar Alterações'}
-        </button>
-      </div>
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Tabs Sidebar */}
+          <div className="lg:w-72 space-y-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-black text-[11px] uppercase tracking-widest ${activeTab === tab.id
+                  ? 'bg-[#003d2b] text-emerald-400 shadow-xl shadow-emerald-950/20'
+                  : 'bg-white text-gray-400 hover:bg-gray-50 border border-gray-100'
+                  }`}
+              >
+                <tab.icon size={18} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Tabs Sidebar */}
-        <div className="lg:w-72 space-y-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-black text-[11px] uppercase tracking-widest ${activeTab === tab.id
-                ? 'bg-[#003d2b] text-emerald-400 shadow-xl shadow-emerald-950/20'
-                : 'bg-white text-gray-400 hover:bg-gray-50 border border-gray-100'
-                }`}
-            >
-              <tab.icon size={18} />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 bg-white rounded-[48px] border border-gray-100 shadow-sm p-8 md:p-12">
-          {activeTab === 'profile' && (
-            <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
-              <div className="flex items-center gap-6 mb-10 pb-10 border-b border-gray-50">
-                <div className="relative group">
-                  <img
-                    src={user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=10b981&color=fff&size=200`}
-                    className="w-24 h-24 rounded-[32px] object-cover border-4 border-gray-50 shadow-lg"
-                    alt="Avatar"
-                  />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="absolute -bottom-2 -right-2 p-2 bg-emerald-600 text-white rounded-xl shadow-lg hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isUploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
-                  </button>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic">{user?.name || 'Diretor'}</h3>
-                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">{user?.role || 'Executivo'}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Nome de Exibição</label>
-                  <input
-                    type="text"
-                    value={profileData.name}
-                    onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                    className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">E-mail de Acesso</label>
-                  <input
-                    type="email"
-                    value={profileData.email}
-                    onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                    className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Cargo / Função</label>
-                  <input
-                    type="text"
-                    value={user?.role || ''}
-                    disabled
-                    className="w-full px-6 py-4 bg-gray-100 border border-transparent rounded-2xl font-bold text-sm text-gray-500 cursor-not-allowed"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Telefone (WhatsApp)</label>
-                  <input
-                    type="text"
-                    value={profileData.phone}
-                    onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                    placeholder="(00) 00000-0000"
-                    className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'integrations' && (
-            <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
-              <div className="grid grid-cols-1 gap-4">
-                {[
-                  {
-                    id: 'whatsapp',
-                    name: 'Agente SDR (WhatsApp)',
-                    status: whatsappConnected ? 'connected' : 'disconnected',
-                    desc: 'Conecte seu WhatsApp para ativar a qualificação automática.',
-                    icon: Smartphone,
-                    action: 'Conectar via QR Code',
-                    color: whatsappConnected ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 bg-gray-100'
-                  },
-                  {
-                    id: 'calendar',
-                    name: 'Google Calendar',
-                    status: googleConnected ? 'connected' : 'disconnected',
-                    desc: 'Sincronização de reuniões agendadas pela IA.',
-                    icon: Globe,
-                    action: 'Conectar OAuth',
-                    color: googleConnected ? 'text-blue-600 bg-blue-100' : 'text-gray-400 bg-gray-100'
-                  },
-                  {
-                    id: 'meta',
-                    name: 'Meta Ads (Facebook/Instagram)',
-                    status: metaConnected ? 'connected' : 'disconnected',
-                    desc: 'Tráfego pago, Leads e Instagram Social Growth.',
-                    icon: Facebook,
-                    action: 'Conectar OAuth',
-                    color: metaConnected ? 'text-blue-500 bg-blue-50' : 'text-gray-400 bg-gray-100'
-                  }
-                ].map((item) => (
-                  <div key={item.id} className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group hover:bg-white hover:shadow-xl transition-all">
-                    <div className="flex items-center gap-5">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.color}`}>
-                        <item.icon size={24} />
-                      </div>
-                      <div>
-                        <h4 className="font-black text-gray-900 text-sm tracking-tight uppercase">{item.name}</h4>
-                        <p className="text-[11px] text-gray-400 font-medium">{item.desc}</p>
-                      </div>
-                    </div>
+          {/* Content Area */}
+          <div className="flex-1 bg-white rounded-[48px] border border-gray-100 shadow-sm p-8 md:p-12">
+            {activeTab === 'profile' && (
+              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                <div className="flex items-center gap-6 mb-10 pb-10 border-b border-gray-50">
+                  <div className="relative group">
+                    <img
+                      src={user?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=10b981&color=fff&size=200`}
+                      className="w-24 h-24 rounded-[32px] object-cover border-4 border-gray-50 shadow-lg"
+                      alt="Avatar"
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                      className="hidden"
+                    />
                     <button
-                      onClick={() => {
-                        if (item.id === 'whatsapp') {
-                          if (item.status === 'connected') {
-                            handleWhatsAppDisconnect();
-                          } else {
-                            handleWhatsAppConnect();
-                          }
-                        } else if (item.id === 'calendar') {
-                          if (item.status === 'connected') {
-                            handleGoogleDisconnect();
-                          } else {
-                            handleGoogleConnect();
-                          }
-                        } else if (item.id === 'meta') {
-                          if (item.status === 'connected') {
-                            handleMetaDisconnect();
-                          } else {
-                            handleMetaConnect();
-                          }
-                        }
-                      }}
-                      disabled={item.id === 'whatsapp' && isConnectingWhatsapp}
-                      className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${item.status === 'connected' ? 'bg-white text-rose-500 border border-rose-100 hover:bg-rose-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20'
-                        }`}>
-                      {item.id === 'whatsapp' && isConnectingWhatsapp ? (
-                        <RefreshCw size={14} className="animate-spin" />
-                      ) : (
-                        item.status === 'connected' ? 'Desconectar' : item.action
-                      )}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="absolute -bottom-2 -right-2 p-2 bg-emerald-600 text-white rounded-xl shadow-lg hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isUploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                     </button>
                   </div>
-                ))}
+                  <div>
+                    <h3 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic">{user?.name || 'Diretor'}</h3>
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">{user?.role || 'Executivo'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Nome de Exibição</label>
+                    <input
+                      type="text"
+                      value={profileData.name}
+                      onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                      className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">E-mail de Acesso</label>
+                    <input
+                      type="email"
+                      value={profileData.email}
+                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                      className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Cargo / Função</label>
+                    <input
+                      type="text"
+                      value={user?.role || ''}
+                      disabled
+                      className="w-full px-6 py-4 bg-gray-100 border border-transparent rounded-2xl font-bold text-sm text-gray-500 cursor-not-allowed"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Telefone (WhatsApp)</label>
+                    <input
+                      type="text"
+                      value={profileData.phone}
+                      onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                      placeholder="(00) 00000-0000"
+                      className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {activeTab === 'integrations' && (
+              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                <div className="grid grid-cols-1 gap-4">
+                  {[
+                    {
+                      id: 'whatsapp',
+                      name: 'Agente SDR (WhatsApp)',
+                      status: whatsappConnected ? 'connected' : 'disconnected',
+                      desc: 'Conecte seu WhatsApp para ativar a qualificação automática.',
+                      icon: Smartphone,
+                      action: 'Conectar via QR Code',
+                      color: whatsappConnected ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 bg-gray-100'
+                    },
+                    {
+                      id: 'calendar',
+                      name: 'Google Calendar',
+                      status: googleConnected ? 'connected' : 'disconnected',
+                      desc: 'Sincronização de reuniões agendadas pela IA.',
+                      icon: Globe,
+                      action: 'Conectar OAuth',
+                      color: googleConnected ? 'text-blue-600 bg-blue-100' : 'text-gray-400 bg-gray-100'
+                    },
+                    {
+                      id: 'meta',
+                      name: 'Meta Ads (Facebook/Instagram)',
+                      status: metaConnected ? 'connected' : 'disconnected',
+                      desc: 'Tráfego pago, Leads e Instagram Social Growth.',
+                      icon: Facebook,
+                      action: 'Conectar OAuth',
+                      color: metaConnected ? 'text-blue-500 bg-blue-50' : 'text-gray-400 bg-gray-100'
+                    }
+                  ].map((item) => (
+                    <div key={item.id} className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group hover:bg-white hover:shadow-xl transition-all">
+                      <div className="flex items-center gap-5">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.color}`}>
+                          <item.icon size={24} />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-gray-900 text-sm tracking-tight uppercase">{item.name}</h4>
+                          <p className="text-[11px] text-gray-400 font-medium">{item.desc}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (item.id === 'whatsapp') {
+                            if (item.status === 'connected') {
+                              handleWhatsAppDisconnect();
+                            } else {
+                              handleWhatsAppConnect();
+                            }
+                          } else if (item.id === 'calendar') {
+                            if (item.status === 'connected') {
+                              handleGoogleDisconnect();
+                            } else {
+                              handleGoogleConnect();
+                            }
+                          } else if (item.id === 'meta') {
+                            if (item.status === 'connected') {
+                              handleMetaDisconnect();
+                            } else {
+                              handleMetaConnect();
+                            }
+                          }
+                        }}
+                        disabled={item.id === 'whatsapp' && isConnectingWhatsapp}
+                        className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${item.status === 'connected' ? 'bg-white text-rose-500 border border-rose-100 hover:bg-rose-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20'
+                          }`}>
+                        {item.id === 'whatsapp' && isConnectingWhatsapp ? (
+                          <RefreshCw size={14} className="animate-spin" />
+                        ) : (
+                          item.status === 'connected' ? 'Desconectar' : item.action
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* QR Code Modal */}
       {showQrModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white rounded-[40px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div className="flex items-center gap-4">
@@ -589,7 +591,7 @@ const Settings: React.FC = () => {
           <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
         ))}
       </div>
-    </div>
+    </>
   );
 };
 

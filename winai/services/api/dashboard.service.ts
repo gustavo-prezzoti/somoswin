@@ -54,6 +54,8 @@ export interface GoalDTO {
     progressPercentage: number;
     status: string;
     isHighlighted: boolean;
+    startDate?: string;
+    endDate?: string;
 }
 
 export interface CreateGoalRequest {
@@ -62,6 +64,8 @@ export interface CreateGoalRequest {
     goalType: 'LEADS' | 'CPL' | 'CONVERSION' | 'APPOINTMENTS' | 'SHOWUP' | 'REVENUE' | 'ROI';
     targetValue: number;
     yearCycle?: number;
+    startDate?: string;
+    endDate?: string;
 }
 
 export interface InsightDTO {
@@ -170,7 +174,7 @@ export const dashboardService = {
             throw new Error('Token de autenticação não encontrado. Faça login novamente.');
         }
 
-        const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://server.somoswin.com.br/api/v1';
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
         const response = await fetch(
             `${API_BASE_URL}/dashboard/export/report?${params.toString()}`,
             {

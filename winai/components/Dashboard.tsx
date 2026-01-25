@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, DollarSign, Percent, Zap, MessageCircle, AlertCircle, Calendar, Sparkles, Settings2, CheckCircle2, Loader2, RefreshCw, Target, PlusCircle, X, Save, Plus, Download, ArrowRight } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, Percent, Zap, AlertCircle, Calendar, Settings2, CheckCircle2, Loader2, RefreshCw, Target, PlusCircle, X, Download } from 'lucide-react';
 import { dashboardService, DashboardData } from '../services';
 import { marketingService } from '../services/api/marketing.service';
 import { useNavigate } from 'react-router-dom';
@@ -165,274 +165,189 @@ const Dashboard: React.FC = () => {
   const data = dashboardData;
   const hasMetrics = data.metrics.leadsCaptured.value !== "0" || data.chartData.some(d => d.atual > 0);
   const hasGoals = data.goals.length > 0;
-  const hasInsights = data.insights.length > 0;
+
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
-        <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
-          <div className="relative flex flex-col items-center justify-center bg-gray-50/50 p-4 rounded-[32px] border border-gray-100">
-            <div className="relative w-32 h-32 flex items-center justify-center">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="44" stroke="#e2e8f0" strokeWidth="8" fill="transparent" />
-                <circle
-                  cx="50" cy="50" r="44"
-                  stroke="#10b981" strokeWidth="8"
-                  strokeDasharray="276.46"
-                  strokeDashoffset={276.46 - (276.46 * data.performanceScore / 100)}
-                  fill="transparent" strokeLinecap="round"
-                  className="transition-all duration-1000 ease-out"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-black text-gray-900 tracking-tighter">{data.performanceScore}</span>
-                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest">Score</span>
+    <>
+      <div className="space-y-8 max-w-7xl mx-auto">
+        <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+            <div className="relative flex flex-col items-center justify-center bg-gray-50/50 p-4 rounded-[32px] border border-gray-100">
+              <div className="relative w-32 h-32 flex items-center justify-center">
+                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="44" stroke="#e2e8f0" strokeWidth="8" fill="transparent" />
+                  <circle
+                    cx="50" cy="50" r="44"
+                    stroke="#10b981" strokeWidth="8"
+                    strokeDasharray="276.46"
+                    strokeDashoffset={276.46 - (276.46 * data.performanceScore / 100)}
+                    fill="transparent" strokeLinecap="round"
+                    className="transition-all duration-1000 ease-out"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-3xl font-black text-gray-900 tracking-tighter">{data.performanceScore}</span>
+                  <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest">Score</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="max-w-md">
-            <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-              <Zap size={14} className="text-emerald-500 fill-emerald-500" />
-              <span className="text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em]">Painel Operacional • 2026</span>
-            </div>
-            <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none truncate">
-              BEM-VINDO, <br />
-              <span className="text-emerald-600 text-2xl md:text-3xl block mt-1">{data.user.name}</span>
-            </h1>
-            <p className="text-gray-500 mt-2 font-medium">Status da Operação: <span className={`font-black italic underline underline-offset-4 ${data.performanceScore > 0 ? 'text-emerald-600 decoration-emerald-200' : 'text-gray-400 decoration-gray-200'}`}>{data.operationStatus}</span></p>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-          <select
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(Number(e.target.value))}
-            className="w-full sm:w-auto bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
-          >
-            <option value={7}>Últimos 7 dias</option>
-            <option value={30}>Últimos 30 dias</option>
-          </select>
-          <button
-            onClick={() => setIsReportModalOpen(true)}
-            type="button"
-            className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 active:scale-95 cursor-pointer"
-          >
-            <Download size={16} />
-            Extrair Relatório
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard icon={Users} label="Leads Captados" value={data.metrics.leadsCaptured.value} trend={data.metrics.leadsCaptured.trend} isPositive={data.metrics.leadsCaptured.isPositive} />
-        <MetricCard icon={DollarSign} label="CPL Médio" value={data.metrics.cplAverage.value} trend={data.metrics.cplAverage.trend} isPositive={data.metrics.cplAverage.isPositive} />
-        <MetricCard icon={Percent} label="Conversão" value={data.metrics.conversionRate.value} trend={data.metrics.conversionRate.trend} isPositive={data.metrics.conversionRate.isPositive} />
-        <MetricCard icon={TrendingUp} label="ROI Estimado" value={data.metrics.roi.value} trend={data.metrics.roi.trend} isPositive={data.metrics.roi.isPositive} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Fluxo de Aquisição</h2>
-            <div className="flex gap-4">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full"></div><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ATUAL</span></div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-200 rounded-full"></div><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ANTERIOR</span></div>
-            </div>
-          </div>
-          {hasMetrics ? (
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.chartData}>
-                  <defs><linearGradient id="colorAtual" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }} />
-                  <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '16px' }} />
-                  <Area type="monotone" dataKey="atual" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorAtual)" />
-                  <Area type="monotone" dataKey="anterior" stroke="#e5e7eb" strokeWidth={2} strokeDasharray="5 5" fill="none" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <EmptyState
-              title={metaConnected ? "Sem dados de aquisição" : "Meta não conectado"}
-              description={metaConnected ? "Conecte suas campanhas para começar a visualizar o fluxo de leads." : "Conecte sua conta Meta (Facebook/Instagram) nas configurações para acessar campanhas."}
-              actionLabel={metaConnected ? "Conectar Campanhas" : "Ir para Configurações"}
-              onAction={() => navigate(metaConnected ? '/campanhas' : '/configuracoes')}
-              disabled={!metaConnected}
-              disabledReason={!metaConnected ? "Conecte Meta nas Configurações primeiro" : undefined}
-            />
-          )}
-        </div>
-
-        {/* Metas Ciclo 2026 */}
-        <div className="bg-[#003d2b] p-8 rounded-[40px] shadow-2xl flex flex-col justify-between overflow-hidden border border-emerald-900 relative">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full -mr-24 -mt-24 blur-3xl"></div>
-
-          <div className="space-y-6 relative z-10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-emerald-400">
-                <TrendingUp size={20} />
-                <h2 className="font-black text-white tracking-[0.2em] uppercase text-xs italic">Metas Ciclo 2026</h2>
+            <div className="max-w-md">
+              <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+                <Zap size={14} className="text-emerald-500 fill-emerald-500" />
+                <span className="text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em]">Painel Operacional • 2026</span>
               </div>
-              {hasGoals && (
-                <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-500/30 uppercase tracking-widest">Foco Ativo</span>
-              )}
+              <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none truncate">
+                BEM-VINDO, <br />
+                <span className="text-emerald-600 text-2xl md:text-3xl block mt-1">{data.user.name}</span>
+              </h1>
+              <p className="text-gray-500 mt-2 font-medium">Status da Operação: <span className={`font-black italic underline underline-offset-4 ${data.performanceScore > 0 ? 'text-emerald-600 decoration-emerald-200' : 'text-gray-400 decoration-gray-200'}`}>{data.operationStatus}</span></p>
             </div>
+          </div>
 
-            {hasGoals ? (
-              <>
-                <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-3">
-                  <p className="text-[10px] font-black text-emerald-500/60 uppercase tracking-widest">Objetivos Estratégicos:</p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {data.goals.map((goal) => (
-                      <div key={goal.id} className="flex items-center gap-2 text-[11px] font-bold text-gray-200 italic">
-                        <CheckCircle2 size={12} className="text-emerald-400" /> {goal.title}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(Number(e.target.value))}
+              className="w-full sm:w-auto bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
+            >
+              <option value={7}>Últimos 7 dias</option>
+              <option value={30}>Últimos 30 dias</option>
+            </select>
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              type="button"
+              className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 active:scale-95 cursor-pointer"
+            >
+              <Download size={16} />
+              Extrair Relatório
+            </button>
+          </div>
+        </div>
 
-                <div className="space-y-8 mt-4">
-                  {data.goals.slice(0, 3).map((goal, index) => (
-                    <div key={goal.id} className="space-y-3">
-                      <div className="flex justify-between items-end px-1">
-                        <div className="flex items-center gap-2">
-                          <div className={`p-2 ${index === 0 ? 'bg-emerald-500/20 text-emerald-400' :
-                            index === 1 ? 'bg-orange-500/20 text-orange-400' :
-                              'bg-sky-500/20 text-sky-400'
-                            } rounded-xl`}>
-                            {index === 0 ? <Users size={16} /> : index === 1 ? <Calendar size={16} /> : <Target size={16} />}
-                          </div>
-                          <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{goal.type}</span>
-                        </div>
-                        <span className="text-2xl font-black text-white italic tracking-tighter">{goal.progressPercentage}%</span>
-                      </div>
-                      <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${index === 0 ? 'bg-emerald-500 shadow-[0_0_15px_#10b981]' :
-                            index === 1 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]' :
-                              'bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.5)]'
-                            } rounded-full transition-all duration-1000`}
-                          style={{ width: `${goal.progressPercentage}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <MetricCard icon={Users} label="Leads Captados" value={data.metrics.leadsCaptured.value} trend={data.metrics.leadsCaptured.trend} isPositive={data.metrics.leadsCaptured.isPositive} />
+          <MetricCard icon={DollarSign} label="CPL Médio" value={data.metrics.cplAverage.value} trend={data.metrics.cplAverage.trend} isPositive={data.metrics.cplAverage.isPositive} />
+          <MetricCard icon={Percent} label="Conversão" value={data.metrics.conversionRate.value} trend={data.metrics.conversionRate.trend} isPositive={data.metrics.conversionRate.isPositive} />
+          <MetricCard icon={TrendingUp} label="ROI Estimado" value={data.metrics.roi.value} trend={data.metrics.roi.trend} isPositive={data.metrics.roi.isPositive} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Fluxo de Aquisição</h2>
+              <div className="flex gap-4">
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full"></div><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ATUAL</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-200 rounded-full"></div><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ANTERIOR</span></div>
+              </div>
+            </div>
+            {hasMetrics ? (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={data.chartData}>
+                    <defs><linearGradient id="colorAtual" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }} />
+                    <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '16px' }} />
+                    <Area type="monotone" dataKey="atual" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorAtual)" />
+                    <Area type="monotone" dataKey="anterior" stroke="#e5e7eb" strokeWidth={2} strokeDasharray="5 5" fill="none" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Target size={32} className="text-emerald-500/40 mb-3" />
-                <p className="text-emerald-100/60 text-sm font-medium">Nenhuma meta definida</p>
-                <p className="text-emerald-100/40 text-xs mt-1">Defina suas metas para acompanhar o progresso</p>
-              </div>
+              <EmptyState
+                title={metaConnected ? "Sem dados de aquisição" : "Meta não conectado"}
+                description={metaConnected ? "Conecte suas campanhas para começar a visualizar o fluxo de leads." : "Conecte sua conta Meta (Facebook/Instagram) nas configurações para acessar campanhas."}
+                actionLabel={metaConnected ? "Conectar Campanhas" : "Ir para Configurações"}
+                onAction={() => navigate(metaConnected ? '/campanhas' : '/configuracoes')}
+                disabled={!metaConnected}
+                disabledReason={!metaConnected ? "Conecte Meta nas Configurações primeiro" : undefined}
+              />
             )}
           </div>
 
-          <button
-            onClick={() => navigate('/metas')}
-            type="button"
-            className="w-full mt-8 bg-white/10 hover:bg-white/20 text-white font-black py-4 rounded-2xl border border-white/10 transition-all flex items-center justify-center gap-2 uppercase text-[10px] tracking-widest group relative z-10 cursor-pointer"
-          >
-            <Settings2 size={16} className="group-hover:rotate-45 transition-transform" />
-            {hasGoals ? 'GERENCIAR METAS' : 'CRIAR METAS'}
-          </button>
-        </div>
-      </div>
+          {/* Metas Ciclo 2026 */}
+          <div className="bg-[#003d2b] p-8 rounded-[40px] shadow-2xl flex flex-col justify-between overflow-hidden border border-emerald-900 relative">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full -mr-24 -mt-24 blur-3xl"></div>
 
-      <div className="space-y-6">
-        <div className="flex items-center gap-2 text-emerald-600">
-          <Zap size={22} className="fill-emerald-600" />
-          <h2 className="text-2xl font-black tracking-tighter uppercase italic">Inteligência Estratégica</h2>
-          <span className="ml-auto text-[10px] bg-white border border-gray-100 px-3 py-1.5 rounded-full font-black text-gray-400 uppercase tracking-widest shadow-sm">IA WIN.AI AGUARDANDO</span>
-        </div>
-
-        {/* Forçamos o estado vazio enquanto o usuário valida os dados internamente */}
-        {false && hasInsights ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-12">
-            {data.insights.map((insight, index) => {
-              const Icon = index % 3 === 0 ? Zap : index % 3 === 1 ? Target : Sparkles;
-              const priorityColor =
-                insight.priority === 'HIGH' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                  insight.priority === 'MEDIUM' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                    'bg-emerald-50 text-emerald-600 border-emerald-100';
-
-              return (
-                <div
-                  key={insight.id}
-                  className="group relative bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm transition-all hover:shadow-2xl hover:border-emerald-500/30 flex flex-col"
-                >
-                  {/* Priority Badge */}
-                  <div className="flex justify-between items-start mb-6">
-                    <div className={`p-4 rounded-2xl bg-gray-50 text-gray-900 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-500`}>
-                      <Icon size={24} />
-                    </div>
-                    <div className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${priorityColor}`}>
-                      Prio: {insight.priority}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 mb-6">
-                    <h3 className="font-black text-gray-900 tracking-tight uppercase text-lg leading-tight group-hover:text-emerald-700 transition-colors">
-                      {insight.title}
-                    </h3>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                        Sugestão: <span className="text-emerald-600">{insight.suggestionSource}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 bg-gray-50/50 rounded-3xl p-6 border border-gray-100/50 group-hover:bg-white transition-colors">
-                    <p className="text-sm text-gray-600 leading-relaxed font-medium">
-                      {insight.description.split('**').map((part, i) =>
-                        i % 2 === 1 ? <strong key={i} className="text-gray-900 font-black italic">{part}</strong> : part
-                      )}
-                    </p>
-                  </div>
-
-                  {/* Se houver URL ou Label, mostra o botão, caso contrário mostra apenas um feedback visual */}
-                  {insight.actionLabel && (
-                    <button
-                      onClick={() => insight.actionUrl && window.open(insight.actionUrl, '_blank')}
-                      className={`w-full mt-6 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 
-                        ${insight.actionUrl
-                          ? 'bg-gray-900 text-white hover:bg-emerald-600 shadow-xl shadow-gray-900/10 hover:shadow-emerald-600/20 active:scale-95 cursor-pointer'
-                          : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-default'
-                        }`}
-                    >
-                      {insight.actionLabel}
-                      {insight.actionUrl && <ArrowRight size={16} />}
-                    </button>
-                  )}
-
-                  {!insight.actionLabel && (
-                    <div className="mt-6 flex items-center justify-center gap-2 py-4 border border-dashed border-gray-200 rounded-2xl">
-                      <CheckCircle2 size={14} className="text-emerald-500" />
-                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Ação Sugerida pela IA</span>
-                    </div>
-                  )}
+            <div className="space-y-6 relative z-10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-emerald-400">
+                  <TrendingUp size={20} />
+                  <h2 className="font-black text-white tracking-[0.2em] uppercase text-xs italic">Metas Ciclo 2026</h2>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="bg-white p-12 rounded-[40px] border border-gray-100 shadow-sm text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Sparkles size={32} className="text-gray-400" />
+                {hasGoals && (
+                  <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-500/30 uppercase tracking-widest">Foco Ativo</span>
+                )}
+              </div>
+
+              {hasGoals ? (
+                <>
+                  <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-3">
+                    <p className="text-[10px] font-black text-emerald-500/60 uppercase tracking-widest">Objetivos Estratégicos:</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {data.goals.map((goal) => (
+                        <div key={goal.id} className="flex items-center gap-2 text-[11px] font-bold text-gray-200 italic">
+                          <CheckCircle2 size={12} className="text-emerald-400" /> {goal.title}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-8 mt-4">
+                    {data.goals.slice(0, 3).map((goal, index) => (
+                      <div key={goal.id} className="space-y-3">
+                        <div className="flex justify-between items-end px-1">
+                          <div className="flex items-center gap-2">
+                            <div className={`p-2 ${index === 0 ? 'bg-emerald-500/20 text-emerald-400' :
+                              index === 1 ? 'bg-orange-500/20 text-orange-400' :
+                                'bg-sky-500/20 text-sky-400'
+                              } rounded-xl`}>
+                              {index === 0 ? <Users size={16} /> : index === 1 ? <Calendar size={16} /> : <Target size={16} />}
+                            </div>
+                            <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{goal.type}</span>
+                          </div>
+                          <span className="text-2xl font-black text-white italic tracking-tighter">{goal.progressPercentage}%</span>
+                        </div>
+                        <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${index === 0 ? 'bg-emerald-500 shadow-[0_0_15px_#10b981]' :
+                              index === 1 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]' :
+                                'bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.5)]'
+                              } rounded-full transition-all duration-1000`}
+                            style={{ width: `${goal.progressPercentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Target size={32} className="text-emerald-500/40 mb-3" />
+                  <p className="text-emerald-100/60 text-sm font-medium">Nenhuma meta definida</p>
+                  <p className="text-emerald-100/40 text-xs mt-1">Defina suas metas para acompanhar o progresso</p>
+                </div>
+              )}
             </div>
-            <h3 className="font-black text-gray-700 text-lg mb-2">Nenhum insight disponível</h3>
-            <p className="text-gray-400 max-w-md mx-auto">A inteligência artificial começará a gerar insights conforme seus dados de campanha forem registrados.</p>
+
+            <button
+              onClick={() => navigate('/metas')}
+              type="button"
+              className="w-full mt-8 bg-white/10 hover:bg-white/20 text-white font-black py-4 rounded-2xl border border-white/10 transition-all flex items-center justify-center gap-2 uppercase text-[10px] tracking-widest group relative z-10 cursor-pointer"
+            >
+              <Settings2 size={16} className="group-hover:rotate-45 transition-transform" />
+              {hasGoals ? 'GERENCIAR METAS' : 'CRIAR METAS'}
+            </button>
           </div>
-        )}
+        </div>
       </div>
+
 
       {/* Report Export Modal */}
       {isReportModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50" onClick={(e) => {
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50" onClick={(e) => {
           if (e.target === e.currentTarget) {
             setIsReportModalOpen(false);
           }
@@ -514,7 +429,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

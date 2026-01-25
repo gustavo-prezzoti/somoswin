@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Send, Phone, Video, Paperclip, Smile, CheckCheck, ChevronRight, ChevronLeft, Bot, UserCheck, Zap, Info, MoreHorizontal, Loader2, Mic, Image, FileText, Play, Pause } from 'lucide-react';
+import { Search, Send, Phone, Video, Paperclip, Smile, CheckCheck, ChevronRight, ChevronLeft, Bot, UserCheck, Zap, Info, MoreHorizontal, Loader2, Mic, Image, FileText, Play, Pause, X, Trash2, StopCircle } from 'lucide-react';
 import { whatsappService, WhatsAppConversation, WhatsAppMessage } from '../services/api/whatsapp.service';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { userService } from '../services/api/user.service';
 import { useSearchParams } from 'react-router-dom';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 const WhatsApp: React.FC = () => {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
@@ -25,10 +26,18 @@ const WhatsApp: React.FC = () => {
   const [searchParams] = useSearchParams();
   const chatId = searchParams.get('chatId');
 
+  // Novos estados para Emoji e Áudio
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Modo de suporte vem da conversa ativa
   const supportMode = activeConversation?.supportMode || 'IA';
@@ -183,58 +192,163 @@ const WhatsApp: React.FC = () => {
 
   // Callback memoizado para WebSocket
   const handleWebSocketMessage = useCallback((data: any) => {
+    console.log('WebSocket message received:', data.type);
+
+    // ===============================================
+    // 1. NOVA MENSAGEM RECEBIDA
+    // ===============================================
     if (data.type === 'NEW_MESSAGE' && data.message) {
-      console.log('WebSocket NEW_MESSAGE received:', {
-        messageId: data.message.id,
-        contentLength: data.message.content?.length || 0,
-        contentPreview: data.message.content?.substring(0, 100) || '[VAZIO]',
-        conversationId: data.message.conversationId,
-        fromMe: data.message.fromMe
+      const msg = data.message;
+      console.log('WebSocket NEW_MESSAGE:', {
+        messageId: msg.id,
+        conversationId: msg.conversationId,
+        fromMe: msg.fromMe,
+        contentPreview: msg.content?.substring(0, 50) || '[MEDIA]'
       });
-      // Se a mensagem é da conversa ativa, adicionar à lista
-      setMessages(prev => {
-        // Verificar se é da conversa ativa
-        if (activeConversation && data.message.conversationId === activeConversation.id) {
+
+      // Adicionar mensagem à conversa ativa se for dela
+      if (activeConversation && msg.conversationId === activeConversation.id) {
+        setMessages(prev => {
           // Evitar duplicatas
-          if (prev.some(m => m.id === data.message.id)) {
-            console.log('Message already exists in list, skipping duplicate');
+          if (prev.some(m => m.id === msg.id)) {
+            console.log('Message duplicate, skipping');
             return prev;
           }
-          console.log('Adding new message to list');
-          return [...prev, data.message];
-        }
-        console.log('Message is not from active conversation, skipping');
-        return prev;
-      });
-      // Atualizar lista de conversas silenciosamente
-      loadConversations(true);
-    } else if (data.type === 'CONVERSATION_UPDATED' && data.conversation) {
-      // Atualizar conversa na lista
+          console.log('Adding new message to chat');
+          setShouldScrollToBottom(true);
+          return [...prev, msg].sort((a, b) => a.messageTimestamp - b.messageTimestamp);
+        });
+
+        // Atualizar preview da conversa ativa
+        setActiveConversation(prev => prev ? {
+          ...prev,
+          lastMessageText: msg.content || '[Mídia]',
+          lastMessageTimestamp: msg.messageTimestamp,
+          unreadCount: 0 // Já está aberta, então não conta como não lida
+        } : null);
+      }
+
+      // Atualizar lista de conversas - mover para o topo e atualizar preview
       setConversations(prev => {
-        const index = prev.findIndex(c => c.id === data.conversation.id);
-        if (index >= 0) {
+        const existingIndex = prev.findIndex(c => c.id === msg.conversationId);
+
+        if (existingIndex >= 0) {
           const updated = [...prev];
-          updated[index] = data.conversation;
-          // Mover para o topo se tiver nova mensagem
-          if (data.conversation.unreadCount > 0) {
-            updated.splice(index, 1);
-            updated.unshift(data.conversation);
+          const conversation = { ...updated[existingIndex] };
+
+          // Atualizar dados da conversa
+          conversation.lastMessageText = msg.content || '[Mídia]';
+          conversation.lastMessageTimestamp = msg.messageTimestamp;
+
+          // Incrementar unread se não for a conversa ativa
+          if (!activeConversation || msg.conversationId !== activeConversation.id) {
+            conversation.unreadCount = (conversation.unreadCount || 0) + 1;
           }
+
+          // Remover da posição atual
+          updated.splice(existingIndex, 1);
+          // Adicionar no topo (mais recente primeiro)
+          updated.unshift(conversation);
+
+          setTotalContacts(updated.length);
           return updated;
         }
+
+        // Se a conversa não existe, fazer reload para buscar o novo contato
+        console.log('Conversation not found, fetching new contact...');
+        loadConversations(true);
         return prev;
       });
-    } else if (data.type === 'SUPPORT_MODE_CHANGED') {
-      // Atualizar modo na lista de conversas
+    }
+
+    // ===============================================
+    // 2. NOVO CONTATO/CONVERSA CRIADA
+    // ===============================================
+    else if (data.type === 'NEW_CONTACT' && (data.conversation || data.contact)) {
+      const newConversation = data.conversation || data.contact;
+      console.log('WebSocket NEW_CONTACT:', newConversation);
+
+      setConversations(prev => {
+        // Verificar se já existe
+        if (prev.some(c => c.id === newConversation.id)) {
+          console.log('Contact already exists');
+          return prev;
+        }
+
+        // Adicionar no topo da lista
+        console.log('Adding new contact to list');
+        const updated = [newConversation, ...prev];
+        setTotalContacts(updated.length);
+        return updated;
+      });
+    }
+
+    // ===============================================
+    // 3. CONVERSA ATUALIZADA (status, nome, etc)
+    // ===============================================
+    else if (data.type === 'CONVERSATION_UPDATED' && data.conversation) {
+      const conv = data.conversation;
+      console.log('WebSocket CONVERSATION_UPDATED:', conv.id);
+
+      setConversations(prev => {
+        const index = prev.findIndex(c => c.id === conv.id);
+        if (index >= 0) {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], ...conv };
+
+          // Se tem nova mensagem, mover para o topo
+          if (conv.lastMessageTimestamp && conv.lastMessageTimestamp > (prev[index].lastMessageTimestamp || 0)) {
+            const [movedConv] = updated.splice(index, 1);
+            updated.unshift(movedConv);
+          }
+
+          return updated;
+        } else {
+          // Nova conversa, adicionar no topo
+          return [conv, ...prev];
+        }
+      });
+
+      // Atualizar conversa ativa se for a mesma
+      if (activeConversation?.id === conv.id) {
+        setActiveConversation(prev => prev ? { ...prev, ...conv } : null);
+      }
+    }
+
+    // ===============================================
+    // 4. MODO DE SUPORTE ALTERADO
+    // ===============================================
+    else if (data.type === 'SUPPORT_MODE_CHANGED') {
+      console.log('WebSocket SUPPORT_MODE_CHANGED:', data.conversationId, data.mode);
+
       setConversations(prev => prev.map(c =>
         c.id === data.conversationId ? { ...c, supportMode: data.mode } : c
       ));
 
-      // Atualizar modo se for a conversa ativa
       if (activeConversation?.id === data.conversationId) {
         setActiveConversation(prev => prev ? { ...prev, supportMode: data.mode } : null);
       }
     }
+
+    // ===============================================
+    // 5. MENSAGEM ENVIADA (confirmação)
+    // ===============================================
+    else if (data.type === 'MESSAGE_SENT' && data.message) {
+      const msg = data.message;
+      console.log('WebSocket MESSAGE_SENT confirmation:', msg.id);
+
+      // Atualizar mensagem otimista com dados confirmados
+      setMessages(prev => {
+        const index = prev.findIndex(m => m.id === msg.id);
+        if (index >= 0) {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], ...msg, status: 'sent' };
+          return updated;
+        }
+        return prev;
+      });
+    }
+
   }, [activeConversation, loadConversations]);
 
   // WebSocket para atualização em tempo real
@@ -409,6 +523,83 @@ const WhatsApp: React.FC = () => {
     } finally {
       setIsSending(false);
     }
+  };
+
+
+  // Funções de Emojis
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    setMessage((prev) => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+  };
+
+  // Funções de Gravação de Áudio
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      timerIntervalRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Erro ao acessar microfone:', error);
+      alert('Permissão de microfone negada ou não disponível.');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+
+      // Parar tracks
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+
+      // Pequeno delay para garantir que o evento onstop processe os chunks
+      setTimeout(async () => {
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' }); // WebM é suportado pela maioria dos browsers recentes
+
+          // Criar nome de arquivo único
+          const fileName = `audio-${Date.now()}.webm`;
+          const audioFile = new File([audioBlob], fileName, { type: "audio/webm" });
+
+          await handleSendFile(audioFile);
+        }
+      }, 200);
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+    setIsRecording(false);
+    setRecordingTime(0);
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    audioChunksRef.current = [];
   };
 
   const formatDate = (timestamp: number) => {
@@ -916,62 +1107,141 @@ const WhatsApp: React.FC = () => {
           )}
 
           {/* Área de Entrada */}
-          <div className="p-6 bg-white border-t border-gray-100">
-            <div className="max-w-4xl mx-auto flex items-center gap-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={supportMode === 'IA' || isSending}
-                className={`p-3 transition-colors ${supportMode === 'IA' || isSending
-                  ? 'text-gray-300 cursor-not-allowed'
-                  : 'text-gray-400 hover:text-emerald-600'
-                  }`}
-                title={supportMode === 'IA' ? 'Desative a IA para enviar arquivos' : 'Anexar arquivo'}
-              >
-                <Paperclip size={20} />
-              </button>
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  placeholder={
-                    supportMode === 'IA'
-                      ? "IA está respondendo automaticamente..."
-                      : "Digite sua mensagem..."
-                  }
-                  className={`w-full px-6 py-3.5 border-none rounded-2xl focus:ring-1 focus:ring-emerald-500 outline-none transition-all text-sm font-medium ${supportMode === 'IA'
-                    ? 'bg-gray-100 cursor-not-allowed text-gray-400'
-                    : 'bg-gray-50'
-                    }`}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && supportMode === 'HUMAN') {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  disabled={isSending || supportMode === 'IA'}
-                  readOnly={supportMode === 'IA'}
+          <div className="p-6 bg-white border-t border-gray-100 relative">
+
+            {/* Emoji Picker Popover */}
+            {showEmojiPicker && (
+              <div className="absolute bottom-24 left-6 z-[60] shadow-2xl rounded-2xl">
+                <div
+                  className="fixed inset-0 z-[-1]"
+                  onClick={() => setShowEmojiPicker(false)}
+                />
+                <EmojiPicker
+                  onEmojiClick={onEmojiClick}
+                  autoFocusSearch={false}
+                  width={300}
+                  height={400}
+                  searchDisabled={false}
+                  skinTonesDisabled
+                  previewConfig={{ showPreview: false }}
                 />
               </div>
-              <button
-                onClick={handleSendMessage}
-                disabled={!message.trim() || isSending || supportMode === 'IA'}
-                className={`p-3.5 rounded-2xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${supportMode === 'IA'
-                  ? 'bg-gray-300 text-gray-500'
-                  : supportMode === 'HUMAN'
-                    ? 'bg-rose-500 text-white shadow-rose-500/20'
-                    : 'bg-emerald-600 text-white shadow-emerald-600/20'
-                  }`}
-              >
-                {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-              </button>
+            )}
+
+            <div className="max-w-4xl mx-auto flex items-center gap-3">
+              {isRecording ? (
+                // Interface de Gravação
+                <div className="flex-1 flex items-center gap-4 bg-gray-50 p-2 rounded-2xl animate-in fade-in duration-200 border border-rose-100">
+                  <div className="flex items-center gap-2 text-rose-500 animate-pulse px-2">
+                    <div className="w-3 h-3 bg-rose-500 rounded-full"></div>
+                    <span className="text-xs font-black uppercase tracking-widest">Gravando {formatDuration(recordingTime)}</span>
+                  </div>
+                  <div className="flex-1"></div>
+                  <button
+                    onClick={cancelRecording}
+                    className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-all"
+                    title="Cancelar"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                  <button
+                    onClick={stopRecording}
+                    className="p-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
+                    title="Enviar Áudio"
+                  >
+                    <Send size={20} />
+                  </button>
+                </div>
+              ) : (
+                // Interface de Input Normal
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+
+                  <button
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    disabled={supportMode === 'IA' || isSending}
+                    className={`p-3 transition-colors ${supportMode === 'IA' || isSending
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : 'text-gray-400 hover:text-yellow-500'
+                      }`}
+                    title="Emojis"
+                  >
+                    <Smile size={24} />
+                  </button>
+
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={supportMode === 'IA' || isSending}
+                    className={`p-3 transition-colors ${supportMode === 'IA' || isSending
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : 'text-gray-400 hover:text-emerald-600'
+                      }`}
+                    title={supportMode === 'IA' ? 'Desative a IA para enviar arquivos' : 'Anexar arquivo'}
+                  >
+                    <Paperclip size={20} />
+                  </button>
+
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      placeholder={
+                        supportMode === 'IA'
+                          ? "IA está respondendo automaticamente..."
+                          : "Digite sua mensagem..."
+                      }
+                      className={`w-full px-6 py-3.5 border-none rounded-2xl focus:ring-1 focus:ring-emerald-500 outline-none transition-all text-sm font-medium ${supportMode === 'IA'
+                        ? 'bg-gray-100 cursor-not-allowed text-gray-400'
+                        : 'bg-gray-50'
+                        }`}
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && supportMode === 'HUMAN') {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      disabled={isSending || supportMode === 'IA'}
+                      readOnly={supportMode === 'IA'}
+                    />
+                  </div>
+
+                  {message.trim() ? (
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={!message.trim() || isSending || supportMode === 'IA'}
+                      className={`p-3.5 rounded-2xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${supportMode === 'IA'
+                        ? 'bg-gray-300 text-gray-500'
+                        : supportMode === 'HUMAN'
+                          ? 'bg-rose-500 text-white shadow-rose-500/20'
+                          : 'bg-emerald-600 text-white shadow-emerald-600/20'
+                        }`}
+                    >
+                      {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={startRecording}
+                      disabled={supportMode === 'IA' || isSending}
+                      className={`p-3.5 rounded-2xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${supportMode === 'IA'
+                        ? 'bg-gray-300 text-gray-500'
+                        : supportMode === 'HUMAN'
+                          ? 'bg-rose-500 text-white shadow-rose-500/20'
+                          : 'bg-emerald-600 text-white shadow-emerald-600/20'
+                        }`}
+                      title="Gravar áudio"
+                    >
+                      <Mic size={20} />
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

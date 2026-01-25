@@ -3,12 +3,16 @@ import SockJS from 'sockjs-client';
 import { Client, IMessage } from '@stomp/stompjs';
 
 interface WebSocketMessage {
-    type: string;
+    type: 'NEW_MESSAGE' | 'CONVERSATION_UPDATED' | 'NEW_CONTACT' | 'MESSAGE_SENT' | 'SUPPORT_MODE_CHANGED' | 'NOTIFICATION_RECEIVED' | string;
     message?: any;
     conversation?: any;
+    contact?: any;
     companyId: string;
     conversationId?: string;
     mode?: string;
+    unreadCount?: number;
+    lastMessageText?: string;
+    lastMessageTimestamp?: number;
 }
 
 export const useWebSocket = (
@@ -30,7 +34,7 @@ export const useWebSocket = (
             return;
         }
 
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://server.somoswin.com.br';
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
         const wsUrl = apiUrl.replace('/api/v1', '').replace(/\/$/, '');
         const socket = new SockJS(`${wsUrl}/ws`);
         const client = new Client({

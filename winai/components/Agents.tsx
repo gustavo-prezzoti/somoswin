@@ -109,7 +109,7 @@ const Agents: React.FC = () => {
     try {
       setIsConnecting(true); // Manter feedback de carregamento
       await whatsappService.disconnectSDRAgent();
-      showToast('Agente Desativado com sucesso', 'default');
+      showToast('Agente Desativado com sucesso', 'info');
       await loadSDRAgentStatus();
     } catch (error) {
       showToast('Erro ao desconectar', 'error');
@@ -201,43 +201,47 @@ const Agents: React.FC = () => {
   const description = sdrStatus?.description || 'Qualificação automática de leads via WhatsApp e agendamento de reuniões comerciais.';
 
   return (
-    <div className="space-y-10 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-emerald-600">
-            <Zap size={20} className="fill-emerald-600" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em]">Gestão de Ativos Neurais</span>
+    <>
+      <div className="space-y-10 max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-emerald-600">
+              <Zap size={20} className="fill-emerald-600" />
+              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Gestão de Ativos Neurais</span>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Agentes de <br /><span className="text-emerald-600">Performance.</span></h1>
+            <p className="text-gray-500 font-medium text-lg">Seus especialistas de IA operando em tempo real.</p>
           </div>
-          <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Agentes de <br /><span className="text-emerald-600">Performance.</span></h1>
-          <p className="text-gray-500 font-medium text-lg">Seus especialistas de IA operando em tempo real.</p>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {isLoading ? (
-          <div className="col-span-full flex items-center justify-center py-20">
-            <Loader2 className="animate-spin text-emerald-600" size={48} />
-          </div>
-        ) : (
-          <AgentCard
-            type="sdr"
-            icon={MessageCircle}
-            title={title}
-            status={status}
-            isConnected={isConnected}
-            description={description}
-            lastExecution={lastExecution}
-            executionsToday={contactsToday > 0 ? `${contactsToday} Contatos` : '0 Contatos'}
-            successRate={efficiency > 0 ? `${efficiency.toFixed(1)}%` : '0%'}
-            isConnecting={isConnecting}
-            onToggle={toggleAgent}
-          />
-        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {isLoading ? (
+            <div className="col-span-full flex items-center justify-center py-20">
+              <Loader2 className="animate-spin text-emerald-600" size={48} />
+            </div>
+          ) : (
+            <AgentCard
+              type="sdr"
+              icon={MessageCircle}
+              title={title}
+              status={status}
+              isConnected={isConnected}
+              description={description}
+              lastExecution={lastExecution}
+              executionsToday={contactsToday > 0 ? `${contactsToday} Contatos` : '0 Contatos'}
+              successRate={efficiency > 0 ? `${efficiency.toFixed(1)}%` : '0%'}
+              isConnecting={isConnecting}
+              onToggle={toggleAgent}
+            />
+          )}
+        </div>
+
+
       </div>
 
       {/* QR Code Modal */}
       {showQrModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white rounded-[40px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div className="flex items-center gap-4">
@@ -301,7 +305,7 @@ const Agents: React.FC = () => {
           <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
         ))}
       </div>
-    </div>
+    </>
   );
 };
 

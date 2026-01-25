@@ -96,10 +96,26 @@ const AdminAgentsAI = () => {
 
     const openAgentModal = (agent: KnowledgeBase | null = null) => {
         let currentData = { ...agent };
+        const currentCompany = companies.find(c => c.id === selectedCompanyId);
 
         const ModalBody = () => {
             const [data, setData] = useState(currentData);
             const [isCustom, setIsCustom] = useState(!!data.agentPrompt);
+            const [compMode, setCompMode] = useState(currentCompany?.defaultSupportMode || 'IA');
+
+            const toggleCompanyMode = async (mode: string) => {
+                setCompMode(mode);
+                if (currentCompany) {
+                    try {
+                        await adminService.updateCompany(currentCompany.id, { defaultSupportMode: mode });
+                        // Atualiza estado global das empresas
+                        setCompanies(prev => prev.map(c => c.id === currentCompany.id ? { ...c, defaultSupportMode: mode } : c));
+                    } catch (e) {
+                        console.error(e);
+                        showToast('Erro ao salvar configuração da empresa', 'error');
+                    }
+                }
+            };
 
             const update = (fields: Partial<KnowledgeBase>) => {
                 const newData = { ...data, ...fields };
@@ -114,6 +130,28 @@ const AdminAgentsAI = () => {
                         <p className="text-[11px] font-bold uppercase tracking-widest leading-relaxed">
                             Configure o comportamento e o conhecimento da IA para esta empresa.
                         </p>
+                    </div>
+
+                    {/* Switch de Modo de Suporte da Empresa */}
+                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Bot size={14} className="text-gray-400" />
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Novos Leads iniciam com:</span>
+                        </div>
+                        <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+                            <button
+                                onClick={() => toggleCompanyMode('IA')}
+                                className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'IA' || !compMode ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                IA (Auto)
+                            </button>
+                            <button
+                                onClick={() => toggleCompanyMode('HUMAN')}
+                                className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'HUMAN' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                Humano
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
