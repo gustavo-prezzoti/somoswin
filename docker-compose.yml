@@ -166,8 +166,10 @@ services:
       - CRON_INTERVAL_MINUTES=30
       - RUN_ON_STARTUP=true
     depends_on:
-      - backend
-      - redis
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - winai-network
     restart: unless-stopped

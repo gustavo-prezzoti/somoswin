@@ -4,6 +4,7 @@ Java API Client - Comunicação com Backend Java
 import httpx
 import logging
 from typing import List, Optional, Dict, Any
+import asyncio
 from config import settings
 from app.models import Lead, Message, LeadStatus
 
@@ -21,40 +22,46 @@ class JavaApiClient:
             "X-Internal-Key": self.api_key
         }
     
-    async def get_pending_leads(self) -> List[Lead]:
-        """Busca todos os leads pendentes de qualificação"""
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{self.base_url}/api/internal/leads/pending-qualification",
-                    headers=self.headers
-                )
-                response.raise_for_status()
-                
-                data = response.json()
-                leads = []
-                for item in data:
-                    lead = Lead(
-                        id=item["id"],
-                        company_id=item["companyId"],
-                        name=item["name"],
-                        phone=item.get("phone"),
-                        email=item.get("email"),
-                        status=LeadStatus(item["status"]),
-                        notes=item.get("notes"),
-                        manually_qualified=item.get("manuallyQualified", False)
+    async def get_pending_leads(self, retries=3, delay=2.0) -> List[Lead]:
+        """Busca todos os leads pendentes de qualificação com retry"""
+        for attempt in range(retries):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.get(
+                        f"{self.base_url}/api/internal/leads/pending-qualification",
+                        headers=self.headers
                     )
-                    leads.append(lead)
-                
-                logger.info(f"Fetched {len(leads)} pending leads")
-                return leads
-                
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error fetching leads: {e.response.status_code}")
-            return []
-        except Exception as e:
-            logger.error(f"Error fetching pending leads: {e}")
-            return []
+                    response.raise_for_status()
+                    
+                    data = response.json()
+                    leads = []
+                    for item in data:
+                        lead = Lead(
+                            id=item["id"],
+                            company_id=item["companyId"],
+                            name=item["name"],
+                            phone=item.get("phone"),
+                            email=item.get("email"),
+                            status=LeadStatus(item["status"]),
+                            notes=item.get("notes"),
+                            manually_qualified=item.get("manuallyQualified", False)
+                        )
+                        leads.append(lead)
+                    
+                    logger.info(f"Fetched {len(leads)} pending leads")
+                    return leads
+                    
+            except httpx.HTTPStatusError as e:
+                logger.error(f"HTTP error fetching leads: {e.response.status_code}")
+                return []
+            except Exception as e:
+                if attempt < retries - 1:
+                    logger.warning(f"Error fetching pending leads (attempt {attempt+1}/{retries}): {e}. Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"Error fetching pending leads after {retries} attempts: {e}")
+                    return []
+        return []
     
     async def get_lead_messages(self, lead_id: str, limit: int = 20) -> List[Message]:
         """Busca mensagens de um lead específico"""
