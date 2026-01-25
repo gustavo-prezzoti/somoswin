@@ -195,7 +195,25 @@ const SupportChatWidget: React.FC = () => {
                                         : 'bg-white border border-gray-100 text-gray-700 rounded-tl-sm prose prose-sm prose-emerald'
                                         }`}
                                 >
-                                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                    <ReactMarkdown
+                                        components={{
+                                            p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                                            ul: ({ children }) => <ul className="list-disc list-outside ml-4 mb-2 space-y-1">{children}</ul>,
+                                            ol: ({ children }) => <ol className="list-decimal list-outside ml-4 mb-2 space-y-1">{children}</ol>,
+                                            li: ({ children }) => <li className="leading-snug">{children}</li>,
+                                            h1: ({ children }) => <h1 className="font-bold text-lg mb-2 mt-4 text-emerald-900 border-b border-emerald-100 pb-1">{children}</h1>,
+                                            h2: ({ children }) => <h2 className="font-bold text-base mb-2 mt-3 text-emerald-800">{children}</h2>,
+                                            h3: ({ children }) => <h3 className="font-semibold text-sm mb-1 mt-2 text-emerald-700">{children}</h3>,
+                                            strong: ({ children }) => <strong className="font-bold text-gray-900 bg-emerald-50/50 px-0.5 rounded">{children}</strong>,
+                                            blockquote: ({ children }) => <blockquote className="border-l-4 border-emerald-500 pl-3 italic text-gray-500 my-3 bg-gray-50 py-2 pr-2 rounded-r">{children}</blockquote>,
+                                            code: ({ children }) => <code className="bg-gray-100 rounded px-1.5 py-0.5 text-xs font-mono text-emerald-600 border border-gray-200">{children}</code>,
+                                            pre: ({ children }) => <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto my-3 text-xs border border-gray-800">{children}</pre>,
+                                            a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline underline-offset-2 font-medium transition-colors">{children}</a>,
+                                            hr: () => <hr className="my-4 border-gray-200 dashed" />
+                                        }}
+                                    >
+                                        {msg.content}
+                                    </ReactMarkdown>
                                 </div>
                             </div>
                         ))}

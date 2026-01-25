@@ -47,7 +47,25 @@ public class SupportService {
         }
 
         String systemPrompt = config.getSystemPrompt();
-        String response = openAiService.generateResponse(systemPrompt, request.getMessage());
+
+        // Enforce Markdown Formatting Rules
+        String formattingRules = """
+                \n
+                ---
+                **DIRETRIZES DE FORMATAÇÃO E ESTILO (IMPORTANTE):**
+                1. Responda SEMPRE utilizando **Markdown** bem estruturado.
+                2. Use **negrito** (`**texto**`) para destacar conceitos chaves ou passos importantes.
+                3. Use listas (`- item` ou `1. passo`) para instruções sequenciais ou enumerações. Evite blocos de texto gigantes.
+                4. Separe parágrafos com uma linha em branco para facilitar a leitura.
+                5. Use títulos (`# Título` ou `## Subtítulo`) se a resposta for longa e precisar de seções.
+                6. Se for mostrar código ou comandos, use blocos de código (` ``` `).
+                7. Seja conciso e direto.
+                ---
+                """;
+
+        String finalPrompt = systemPrompt + formattingRules;
+
+        String response = openAiService.generateResponse(finalPrompt, request.getMessage());
 
         if (response == null) {
             return ChatResponse.builder()
