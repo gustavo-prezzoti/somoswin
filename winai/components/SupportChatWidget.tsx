@@ -40,7 +40,10 @@ const SupportChatWidget: React.FC = () => {
             fetchConfig();
         }
 
-        const handleOpenChat = () => setIsOpen(true);
+        const handleOpenChat = () => {
+            console.log('OPEN_SUPPORT_CHAT event received');
+            setIsOpen(true);
+        };
         window.addEventListener('OPEN_SUPPORT_CHAT', handleOpenChat);
 
         return () => window.removeEventListener('OPEN_SUPPORT_CHAT', handleOpenChat);
