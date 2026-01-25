@@ -5,12 +5,6 @@ import {
    MessageSquare,
    Mail,
    Search,
-   ChevronRight,
-   CheckCircle2,
-   AlertCircle,
-   ExternalLink,
-   FileText,
-   HelpCircle,
    Clock,
    Zap,
    PhoneCall
@@ -65,7 +59,7 @@ const Support: React.FC = () => {
                      onClick={() => window.dispatchEvent(new Event('OPEN_SUPPORT_CHAT'))}
                      className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 transition-all uppercase text-[11px] tracking-widest flex items-center justify-center gap-2"
                   >
-                     Iniciar Chat IA <MessageSquare size={14} />
+                     Iniciar Chat <MessageSquare size={14} />
                   </button>
                </div>
             </div>
@@ -92,7 +86,6 @@ const Support: React.FC = () => {
                         <div key={i} className="p-6 bg-gray-50/50 border border-gray-100 rounded-3xl hover:bg-white hover:shadow-xl hover:border-emerald-500 transition-all cursor-pointer group">
                            <div className="flex justify-between items-start mb-3">
                               <h4 className="font-black text-gray-800 text-sm leading-tight pr-4">{faq.q}</h4>
-                              <ChevronRight size={16} className="text-gray-300 group-hover:text-emerald-500 transition-colors" />
                            </div>
                            <p className="text-[11px] text-gray-400 font-medium leading-relaxed">{faq.a}</p>
                         </div>
