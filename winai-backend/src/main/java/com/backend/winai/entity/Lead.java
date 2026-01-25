@@ -44,6 +44,10 @@ public class Lead {
     @Column(length = 500)
     private String source; // Origem do lead (campanha, orgânico, etc)
 
+    @Column(name = "manually_qualified")
+    @Builder.Default
+    private Boolean manuallyQualified = false; // Flag para impedir IA de sobrescrever qualificação manual
+
     @Column(name = "profile_picture_url")
     private String profilePictureUrl;
 

@@ -144,6 +144,32 @@ services:
     restart: unless-stopped
 
   # =====================================
+  # Lead Qualifier - AI Lead Qualification
+  # =====================================
+  lead-qualifier:
+    build:
+      context: ./lead-qualifier
+      dockerfile: Dockerfile
+    container_name: winai-lead-qualifier
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - JAVA_API_URL=http://backend:8080
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CRON_INTERVAL_MINUTES=30
+      - RUN_ON_STARTUP=true
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - winai-network
+    restart: unless-stopped
+
+  # =====================================
   # Frontend - Vite + React + Nginx
   # =====================================
   frontend:

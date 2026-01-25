@@ -106,6 +106,10 @@ public class LeadService {
         lead.setEmail(request.getEmail());
         lead.setPhone(request.getPhone());
         if (request.getStatus() != null) {
+            // Se o status foi alterado manualmente, marcar como qualificação manual
+            if (!request.getStatus().equals(lead.getStatus())) {
+                lead.setManuallyQualified(true);
+            }
             lead.setStatus(request.getStatus());
         }
         lead.setOwnerName(request.getOwnerName());

@@ -1313,7 +1313,6 @@ const WhatsApp: React.FC = () => {
                       </div>
                       {activeConversation.leadId && (
                         <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                          <span className="text-[11px] text-gray-400">Lead ID</span>
                           <span className="text-[11px] font-bold text-gray-800 truncate">{activeConversation.leadId}</span>
                         </div>
                       )}
