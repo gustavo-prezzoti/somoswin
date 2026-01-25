@@ -31,7 +31,7 @@ const AdminSupportChat: React.FC = () => {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`${API_URL}/api/v1/admin/support/config`, { headers });
+            const response = await fetch(`${API_URL}/admin/support/config`, { headers });
 
             if (response.ok) {
                 const data = await response.json();
@@ -68,7 +68,7 @@ const AdminSupportChat: React.FC = () => {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`${API_URL}/api/v1/admin/support/config`, {
+            const response = await fetch(`${API_URL}/admin/support/config`, {
                 method: 'PUT',
                 headers,
                 body: JSON.stringify(config)
