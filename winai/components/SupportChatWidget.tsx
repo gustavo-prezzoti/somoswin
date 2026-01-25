@@ -124,6 +124,14 @@ const SupportChatWidget: React.FC = () => {
 
     if (shouldHide || !config?.isActive) return null;
 
+    const [hasViewed, setHasViewed] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            setHasViewed(true);
+        }
+    }, [isOpen]);
+
     if (!isOpen) {
         return (
             <button
@@ -131,7 +139,9 @@ const SupportChatWidget: React.FC = () => {
                 className="fixed bottom-6 right-6 w-14 h-14 bg-emerald-600 rounded-full shadow-2xl flex items-center justify-center text-white hover:bg-emerald-700 hover:scale-110 transition-all z-[9999] group animate-in slide-in-from-bottom-10 fade-in duration-700"
             >
                 <MessageCircle size={28} className="group-hover:rotate-12 transition-transform" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                {!hasViewed && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                )}
             </button>
         );
     }
