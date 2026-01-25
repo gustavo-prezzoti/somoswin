@@ -233,7 +233,6 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-40">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></div>
-            <h2 className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em]">Operação Ativa • Real-Time Core</h2>
           </div>
           <div className="flex items-center gap-6">
             <div className="relative">
