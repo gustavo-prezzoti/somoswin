@@ -39,6 +39,11 @@ const SupportChatWidget: React.FC = () => {
         if (!shouldHide) {
             fetchConfig();
         }
+
+        const handleOpenChat = () => setIsOpen(true);
+        window.addEventListener('OPEN_SUPPORT_CHAT', handleOpenChat);
+
+        return () => window.removeEventListener('OPEN_SUPPORT_CHAT', handleOpenChat);
     }, [shouldHide]);
 
     useEffect(() => {
@@ -173,8 +178,8 @@ const SupportChatWidget: React.FC = () => {
 
                                 <div
                                     className={`max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user'
-                                            ? 'bg-emerald-600 text-white rounded-tr-sm'
-                                            : 'bg-white border border-gray-100 text-gray-700 rounded-tl-sm prose prose-sm prose-emerald'
+                                        ? 'bg-emerald-600 text-white rounded-tr-sm'
+                                        : 'bg-white border border-gray-100 text-gray-700 rounded-tl-sm prose prose-sm prose-emerald'
                                         }`}
                                 >
                                     <ReactMarkdown>{msg.content}</ReactMarkdown>
