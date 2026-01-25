@@ -186,14 +186,22 @@ const SocialMedia: React.FC = () => {
                   <StatCard icon={MessageSquare} label="Interações" value={metrics?.interactions.value || '0'} trend={metrics?.interactions.trend || '0%'} color="bg-amber-50 text-amber-600" />
                </div>
                <div className="bg-white p-10 rounded-[48px] border border-gray-100 shadow-sm">
-                  <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic mb-10">Histórico de Performance</h2>
+                  <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic mb-10">HISTÓRICO DE PERFORMANCE</h2>
                   <div className="h-[350px] w-full">
                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={metrics?.performanceHistory || []}>
+                        <AreaChart data={metrics?.performanceHistory && metrics.performanceHistory.length > 0 ? metrics.performanceHistory : [
+                           { date: 'Seg', value: 0 },
+                           { date: 'Ter', value: 0 },
+                           { date: 'Qua', value: 0 },
+                           { date: 'Qui', value: 0 },
+                           { date: 'Sex', value: 0 },
+                           { date: 'Sáb', value: 0 },
+                           { date: 'Dom', value: 0 }
+                        ]}>
                            <defs><linearGradient id="colorEng" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }} />
-                           <YAxis hide />
+                           <YAxis hide domain={[0, 100]} />
                            <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
                            <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={5} fillOpacity={1} fill="url(#colorEng)" />
                         </AreaChart>
@@ -279,36 +287,36 @@ const SocialMedia: React.FC = () => {
                               : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
                               }`}>
                               <div className={`prose prose-sm max-w-none ${msg.role === 'user' ? 'prose-invert' : 'prose-emerald'}`}
-                                   style={{
-                                     '--tw-prose-headings': msg.role === 'user' ? 'rgb(255,255,255)' : 'rgb(5,65,41)',
-                                     '--tw-prose-bold': msg.role === 'user' ? 'rgb(255,255,255)' : 'rgb(5,65,41)',
-                                     '--tw-prose-code': msg.role === 'user' ? 'rgb(200,200,200)' : 'rgb(16,185,129)',
-                                     '--tw-prose-hr': msg.role === 'user' ? 'rgba(255,255,255,0.3)' : 'rgb(229,231,235)',
-                                     '--tw-prose-quote-borders': msg.role === 'user' ? 'rgba(255,255,255,0.5)' : 'rgb(16,185,129)',
-                                   } as any}>
+                                 style={{
+                                    '--tw-prose-headings': msg.role === 'user' ? 'rgb(255,255,255)' : 'rgb(5,65,41)',
+                                    '--tw-prose-bold': msg.role === 'user' ? 'rgb(255,255,255)' : 'rgb(5,65,41)',
+                                    '--tw-prose-code': msg.role === 'user' ? 'rgb(200,200,200)' : 'rgb(16,185,129)',
+                                    '--tw-prose-hr': msg.role === 'user' ? 'rgba(255,255,255,0.3)' : 'rgb(229,231,235)',
+                                    '--tw-prose-quote-borders': msg.role === 'user' ? 'rgba(255,255,255,0.5)' : 'rgb(16,185,129)',
+                                 } as any}>
                                  <ReactMarkdown
                                     components={{
-                                      h1: ({children}) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
-                                      h2: ({children}) => <h2 className="text-base font-bold mt-3 mb-2">{children}</h2>,
-                                      h3: ({children}) => <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>,
-                                      p: ({children}) => <p className="mb-2">{children}</p>,
-                                      ul: ({children}) => <ul className="list-disc list-outside ml-4 mb-2">{children}</ul>,
-                                      ol: ({children}) => <ol className="list-decimal list-outside ml-4 mb-2">{children}</ol>,
-                                      li: ({children}) => <li className="mb-1">{children}</li>,
-                                      blockquote: ({children}) => (
-                                        <blockquote className={`border-l-4 pl-3 italic my-2 ${msg.role === 'user' ? 'border-gray-300 text-gray-200' : 'border-emerald-300 text-gray-600'}`}>
-                                          {children}
-                                        </blockquote>
-                                      ),
-                                      code: ({children}) => (
-                                        <code className={`px-1 rounded text-xs ${msg.role === 'user' ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                                          {children}
-                                        </code>
-                                      ),
-                                      hr: () => <hr className={`my-3 ${msg.role === 'user' ? 'border-gray-400' : 'border-gray-200'}`} />,
+                                       h1: ({ children }) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
+                                       h2: ({ children }) => <h2 className="text-base font-bold mt-3 mb-2">{children}</h2>,
+                                       h3: ({ children }) => <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>,
+                                       p: ({ children }) => <p className="mb-2">{children}</p>,
+                                       ul: ({ children }) => <ul className="list-disc list-outside ml-4 mb-2">{children}</ul>,
+                                       ol: ({ children }) => <ol className="list-decimal list-outside ml-4 mb-2">{children}</ol>,
+                                       li: ({ children }) => <li className="mb-1">{children}</li>,
+                                       blockquote: ({ children }) => (
+                                          <blockquote className={`border-l-4 pl-3 italic my-2 ${msg.role === 'user' ? 'border-gray-300 text-gray-200' : 'border-emerald-300 text-gray-600'}`}>
+                                             {children}
+                                          </blockquote>
+                                       ),
+                                       code: ({ children }) => (
+                                          <code className={`px-1 rounded text-xs ${msg.role === 'user' ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                                             {children}
+                                          </code>
+                                       ),
+                                       hr: () => <hr className={`my-3 ${msg.role === 'user' ? 'border-gray-400' : 'border-gray-200'}`} />,
                                     }}
                                  >
-                                   {msg.content}
+                                    {msg.content}
                                  </ReactMarkdown>
                               </div>
                            </div>
@@ -363,9 +371,9 @@ const SocialMedia: React.FC = () => {
                      </div>
                      <h3 className="text-xl font-bold text-gray-900">Excluir histórico?</h3>
                   </div>
-                  
+
                   <p className="text-gray-600 mb-8">Tem certeza que deseja excluir este histórico de chat? Esta ação não pode ser desfeita.</p>
-                  
+
                   <div className="flex gap-3">
                      <button
                         onClick={() => {
