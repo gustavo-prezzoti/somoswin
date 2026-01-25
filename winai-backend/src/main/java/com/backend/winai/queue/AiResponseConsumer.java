@@ -114,7 +114,8 @@ public class AiResponseConsumer {
                 Company company = companyRepository.findById(companyId).orElse(null);
 
                 if (conversation != null && company != null) {
-                    aiAgentService.processAndRespond(conversation, mergedText.toString(), metadata.getLeadName());
+                    aiAgentService.processAndRespond(conversation, mergedText.toString(), metadata.getLeadName(),
+                            metadata.getImageUrl());
                 } else {
                     log.warn("Conversation or Company not found for accumulated message: {}", metadata);
                 }

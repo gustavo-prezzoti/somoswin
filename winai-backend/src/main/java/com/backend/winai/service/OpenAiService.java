@@ -29,8 +29,11 @@ public class OpenAiService {
     @Value("${openai.api-key:${openai.api.key:}}")
     private String apiKey;
 
-    @Value("${openai.model:gpt-4o}")
+    @Value("${openai.model:gpt-4o-mini}")
     private String model;
+
+    @Value("${openai.model.vision:gpt-4o}")
+    private String visionModel;
 
     @Value("${openai.temperature:0.7}")
     private Double temperature;
@@ -46,16 +49,17 @@ public class OpenAiService {
 
     // Fallback models if primary model fails
     private static final String[] FALLBACK_MODELS = { "gpt-4o", "gpt-4-turbo", "gpt-4o-mini", "gpt-4" };
-    private String currentModel;
+    private String currentTextModel;
+    private String currentVisionModel;
 
     @PostConstruct
     public void init() {
-        this.currentModel = model;
+        this.currentTextModel = model;
+        this.currentVisionModel = visionModel;
         if (enabled && apiKey != null && !apiKey.isEmpty() && !apiKey.startsWith("sk-your")) {
             log.info("=== OpenAI Service Initialized ===");
-            log.info("Model: {} | Enabled: {} | Max Tokens: {}", model, enabled, maxTokens);
-            log.warn("❌ IMPORTANT: If you're using GPT-5, ensure your API key has access to it.");
-            log.warn("📌 Configured model: '{}' - Verify this model exists in OpenAI API.", model);
+            log.info("Text Model: {} | Vision Model: {} | Enabled: {}", currentTextModel, currentVisionModel, enabled);
+            log.warn("📌 Configured models verified.");
         } else {
             log.warn("OpenAI Service is disabled or API key is not configured");
         }
@@ -71,16 +75,22 @@ public class OpenAiService {
 
     @SuppressWarnings("unchecked")
     public String generateResponse(String systemPrompt, String userMessage, List<ChatMessage> conversationHistory) {
+        return generateResponse(systemPrompt, userMessage, null, conversationHistory);
+    }
+
+    @SuppressWarnings("unchecked")
+    public String generateResponse(String systemPrompt, String userMessage, String imageUrl,
+            List<ChatMessage> conversationHistory) {
         if (!isChatEnabled()) {
             log.warn("OpenAI Chat Service is not enabled or not properly configured");
             return null;
         }
 
         try {
-            List<Map<String, String>> messages = new ArrayList<>();
+            List<Map<String, Object>> messages = new ArrayList<>();
 
             // System Message
-            Map<String, String> sysMsg = new HashMap<>();
+            Map<String, Object> sysMsg = new HashMap<>();
             sysMsg.put("role", "system");
             sysMsg.put("content", systemPrompt);
             messages.add(sysMsg);
@@ -88,7 +98,7 @@ public class OpenAiService {
             // History
             if (conversationHistory != null) {
                 for (ChatMessage msg : conversationHistory) {
-                    Map<String, String> histMsg = new HashMap<>();
+                    Map<String, Object> histMsg = new HashMap<>();
                     histMsg.put("role", msg.getRole());
                     histMsg.put("content", msg.getContent());
                     messages.add(histMsg);
@@ -96,9 +106,33 @@ public class OpenAiService {
             }
 
             // User Message
-            Map<String, String> userMsg = new HashMap<>();
+            Map<String, Object> userMsg = new HashMap<>();
             userMsg.put("role", "user");
-            userMsg.put("content", userMessage);
+
+            // Determine model logic
+            String currentModel = (imageUrl != null && !imageUrl.isEmpty()) ? currentVisionModel : currentTextModel;
+
+            if (imageUrl != null && !imageUrl.isEmpty()) {
+                List<Map<String, Object>> contentList = new ArrayList<>();
+
+                // Text
+                Map<String, Object> textPart = new HashMap<>();
+                textPart.put("type", "text");
+                textPart.put("text", userMessage != null ? userMessage : "Analise esta imagem.");
+                contentList.add(textPart);
+
+                // Image
+                Map<String, Object> imagePart = new HashMap<>();
+                imagePart.put("type", "image_url");
+                Map<String, String> urlMap = new HashMap<>();
+                urlMap.put("url", imageUrl);
+                imagePart.put("image_url", urlMap);
+                contentList.add(imagePart);
+
+                userMsg.put("content", contentList);
+            } else {
+                userMsg.put("content", userMessage);
+            }
             messages.add(userMsg);
 
             // Request Body
@@ -143,7 +177,7 @@ public class OpenAiService {
                         errorMessage.contains("unauthorized"))) {
                     log.error("🚨 MODEL ERROR DETECTED: '{}' | Error: {}", currentModel, errorMessage);
                     log.warn("⚠️ Attempting fallback to alternative models...");
-                    return tryFallbackModels(systemPrompt, userMessage, conversationHistory, currentModel);
+                    return tryFallbackModels(systemPrompt, userMessage, imageUrl, conversationHistory, currentModel);
                 }
 
                 return null;
@@ -186,7 +220,7 @@ public class OpenAiService {
                 // Try fallback if content is empty but no explicit error
                 if (refusal == null) {
                     log.warn("📌 Content is empty but no refusal - trying fallback models");
-                    return tryFallbackModels(systemPrompt, userMessage, conversationHistory, currentModel);
+                    return tryFallbackModels(systemPrompt, userMessage, imageUrl, conversationHistory, currentModel);
                 }
                 return null;
             }
@@ -201,7 +235,7 @@ public class OpenAiService {
     }
 
     @SuppressWarnings("unchecked")
-    private String tryFallbackModels(String systemPrompt, String userMessage,
+    private String tryFallbackModels(String systemPrompt, String userMessage, String imageUrl,
             List<ChatMessage> conversationHistory, String failedModel) {
         log.warn("🔄 Trying fallback models after failure with: {}", failedModel);
 
@@ -213,10 +247,10 @@ public class OpenAiService {
             try {
                 log.info("🔄 Fallback attempt with model: {}", fallbackModel);
 
-                List<Map<String, String>> messages = new ArrayList<>();
+                List<Map<String, Object>> messages = new ArrayList<>();
 
                 // System Message
-                Map<String, String> sysMsg = new HashMap<>();
+                Map<String, Object> sysMsg = new HashMap<>();
                 sysMsg.put("role", "system");
                 sysMsg.put("content", systemPrompt);
                 messages.add(sysMsg);
@@ -224,7 +258,7 @@ public class OpenAiService {
                 // History
                 if (conversationHistory != null) {
                     for (ChatMessage msg : conversationHistory) {
-                        Map<String, String> histMsg = new HashMap<>();
+                        Map<String, Object> histMsg = new HashMap<>();
                         histMsg.put("role", msg.getRole());
                         histMsg.put("content", msg.getContent());
                         messages.add(histMsg);
@@ -232,9 +266,30 @@ public class OpenAiService {
                 }
 
                 // User Message
-                Map<String, String> userMsg = new HashMap<>();
+                Map<String, Object> userMsg = new HashMap<>();
                 userMsg.put("role", "user");
-                userMsg.put("content", userMessage);
+
+                if (imageUrl != null && !imageUrl.isEmpty()) {
+                    List<Map<String, Object>> contentList = new ArrayList<>();
+
+                    // Text
+                    Map<String, Object> textPart = new HashMap<>();
+                    textPart.put("type", "text");
+                    textPart.put("text", userMessage != null ? userMessage : "Analise esta imagem.");
+                    contentList.add(textPart);
+
+                    // Image
+                    Map<String, Object> imagePart = new HashMap<>();
+                    imagePart.put("type", "image_url");
+                    Map<String, String> urlMap = new HashMap<>();
+                    urlMap.put("url", imageUrl);
+                    imagePart.put("image_url", urlMap);
+                    contentList.add(imagePart);
+
+                    userMsg.put("content", contentList);
+                } else {
+                    userMsg.put("content", userMessage);
+                }
                 messages.add(userMsg);
 
                 Map<String, Object> body = new HashMap<>();
@@ -261,8 +316,7 @@ public class OpenAiService {
                             if (content != null && !content.trim().isEmpty()) {
                                 log.info("✅ SUCCESS with fallback model: {} | Content: {} chars",
                                         fallbackModel, content.length());
-                                currentModel = fallbackModel;
-                                log.warn("📝 Model automatically switched to: {}", fallbackModel);
+                                // currentModel update removed to avoid state issues
                                 return content;
                             }
                         }
@@ -287,6 +341,11 @@ public class OpenAiService {
 
     public String generateResponseWithContext(String agentPrompt, String knowledgeBaseContent, String userMessage,
             List<String> recentMessages) {
+        return generateResponseWithContext(agentPrompt, knowledgeBaseContent, userMessage, null, recentMessages);
+    }
+
+    public String generateResponseWithContext(String agentPrompt, String knowledgeBaseContent, String userMessage,
+            String imageUrl, List<String> recentMessages) {
         StringBuilder systemPrompt = new StringBuilder();
 
         if (agentPrompt != null && !agentPrompt.isEmpty()) {
@@ -322,7 +381,7 @@ public class OpenAiService {
             }
         }
 
-        return generateResponse(systemPrompt.toString(), userMessage, history);
+        return generateResponse(systemPrompt.toString(), userMessage, imageUrl, history);
     }
 
     @SuppressWarnings("unchecked")
@@ -554,7 +613,7 @@ public class OpenAiService {
             for (int turn = 0; turn < 5; turn++) {
 
                 Map<String, Object> body = new HashMap<>();
-                body.put("model", model);
+                body.put("model", currentTextModel); // Clinicorp uses text model
                 body.put("messages", messages);
                 body.put("tools", tools);
 

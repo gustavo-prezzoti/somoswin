@@ -15,5 +15,6 @@ public class AiQueueMessage implements Serializable {
     private String userMessage;
     private String companyId;
     private String leadName; // Context field: User's name
+    private String imageUrl; // URL of image (if any)
     private Long timestamp;
 }

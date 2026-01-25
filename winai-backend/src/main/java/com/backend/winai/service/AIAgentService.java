@@ -45,6 +45,12 @@ public class AIAgentService {
 
     @Transactional
     public String processMessageWithAI(WhatsAppConversation conversation, String userMessage, String leadName) {
+        return processMessageWithAI(conversation, userMessage, leadName, null);
+    }
+
+    @Transactional
+    public String processMessageWithAI(WhatsAppConversation conversation, String userMessage, String leadName,
+            String imageUrl) {
         try {
             // Recarregar a conversation com a company para evitar
             // LazyInitializationException
@@ -106,6 +112,7 @@ public class AIAgentService {
                     enhancedAgentPrompt,
                     knowledgeBase.getContent(),
                     userMessage,
+                    imageUrl,
                     recentMessages);
 
             if (aiResponse != null && !aiResponse.isEmpty()) {
@@ -160,10 +167,16 @@ public class AIAgentService {
 
     @Transactional
     public String processAndRespond(WhatsAppConversation conversation, String userMessage, String leadName) {
+        return processAndRespond(conversation, userMessage, leadName, null);
+    }
+
+    @Transactional
+    public String processAndRespond(WhatsAppConversation conversation, String userMessage, String leadName,
+            String imageUrl) {
         log.info("Starting processAndRespond for conversation: {}, user message: {} chars",
                 conversation.getId(), userMessage != null ? userMessage.length() : 0);
 
-        String aiResponse = processMessageWithAI(conversation, userMessage, leadName);
+        String aiResponse = processMessageWithAI(conversation, userMessage, leadName, imageUrl);
 
         if (aiResponse != null && !aiResponse.isEmpty()) {
             log.info("AI generated response: {} chars", aiResponse.length());

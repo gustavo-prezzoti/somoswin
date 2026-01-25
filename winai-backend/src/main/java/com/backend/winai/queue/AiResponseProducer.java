@@ -24,7 +24,16 @@ public class AiResponseProducer {
             // 1. Acumula o texto da mensagem na lista do Redis
             redisTemplate.opsForList().rightPush(bufferKey, message.getUserMessage());
 
-            // 2. Salva metadados (sobrescreve com os mais recentes)
+            // 2. Salva metadados (sobrescreve com os mais recentes mas preserva imagem)
+            if (message.getImageUrl() == null) {
+                Object existingObj = redisTemplate.opsForValue().get(metaKey);
+                if (existingObj instanceof AiQueueMessage) {
+                    AiQueueMessage existing = (AiQueueMessage) existingObj;
+                    if (existing != null && existing.getImageUrl() != null) {
+                        message.setImageUrl(existing.getImageUrl());
+                    }
+                }
+            }
             redisTemplate.opsForValue().set(metaKey, message);
 
             // 3. Atualiza o timer de silêncio para AGORA

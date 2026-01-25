@@ -156,18 +156,20 @@ public class WhatsAppWebhookService {
             log.info("Webhook processado com sucesso. MessageId: {}, Phone: {}, LeadId: {}",
                     messageId, phoneNumber, lead != null ? lead.getId() : null);
 
-            // Processar resposta automática da IA (texto ou áudio transcrito)
+            // Processar resposta automática da IA (texto, áudio transcrito ou imagem)
             String typeLowerCheck = messageType != null ? messageType.toLowerCase() : "";
             boolean isText = "text".equalsIgnoreCase(messageType)
                     || "extendedtextmessage".equalsIgnoreCase(messageType);
             boolean isAudio = (typeLowerCheck.contains("audio") || typeLowerCheck.contains("ptt"))
                     && message.getTranscription() != null;
+            boolean isImage = typeLowerCheck.contains("image");
 
-            if (!Boolean.TRUE.equals(message.getFromMe()) && (isText || isAudio)) {
+            if (!Boolean.TRUE.equals(message.getFromMe()) && (isText || isAudio || isImage)) {
                 // Usar o conteúdo da mensagem (que pode ter sido atualizado com a transcrição)
-                processAIResponse(conversation, message.getContent(), company);
+                String imageUrl = isImage ? message.getMediaUrl() : null;
+                processAIResponse(conversation, message.getContent(), company, imageUrl);
             } else {
-                log.info("IA ignorada: fromMe={} (esperado false), type={} (esperado text ou audio transcrito)",
+                log.info("IA ignorada: fromMe={} (esperado false), type={} (esperado text, audio transcrito ou imagem)",
                         message.getFromMe(), messageType);
             }
 
@@ -180,7 +182,8 @@ public class WhatsAppWebhookService {
     /**
      * Envia solicitação de resposta da IA para a fila (Redis)
      */
-    private void processAIResponse(WhatsAppConversation conversation, String userMessage, Company company) {
+    private void processAIResponse(WhatsAppConversation conversation, String userMessage, Company company,
+            String imageUrl) {
         try {
             if (!aiAgentService.isAIEnabledForConversation(conversation)) {
                 log.debug("AI não está habilitada para esta conversa: {}", conversation.getId());
@@ -204,6 +207,7 @@ public class WhatsAppWebhookService {
                     .companyId(company.getId().toString())
                     .userMessage(userMessage)
                     .leadName(leadName)
+                    .imageUrl(imageUrl)
                     .timestamp(System.currentTimeMillis())
                     .build();
 
