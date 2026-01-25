@@ -189,21 +189,21 @@ const SocialMedia: React.FC = () => {
                   <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic mb-10">HISTÓRICO DE PERFORMANCE</h2>
                   <div className="h-[350px] w-full">
                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={metrics?.performanceHistory && metrics.performanceHistory.length > 0 ? metrics.performanceHistory : [
-                           { date: 'Seg', value: 0 },
-                           { date: 'Ter', value: 0 },
-                           { date: 'Qua', value: 0 },
-                           { date: 'Qui', value: 0 },
-                           { date: 'Sex', value: 0 },
-                           { date: 'Sáb', value: 0 },
-                           { date: 'Dom', value: 0 }
+                        <AreaChart data={metrics?.performanceHistory && metrics.performanceHistory.length > 0 ? metrics.performanceHistory.map((d: any) => ({ ...d, Eng: d.value })) : [
+                           { date: 'Seg', Eng: 0 },
+                           { date: 'Ter', Eng: 0 },
+                           { date: 'Qua', Eng: 0 },
+                           { date: 'Qui', Eng: 0 },
+                           { date: 'Sex', Eng: 0 },
+                           { date: 'Sáb', Eng: 0 },
+                           { date: 'Dom', Eng: 0 }
                         ]}>
                            <defs><linearGradient id="colorEng" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }} />
                            <YAxis hide domain={[0, 100]} />
                            <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
-                           <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={5} fillOpacity={1} fill="url(#colorEng)" />
+                           <Area type="monotone" dataKey="Eng" stroke="#10b981" strokeWidth={5} fillOpacity={1} fill="url(#colorEng)" />
                         </AreaChart>
                      </ResponsiveContainer>
                   </div>
