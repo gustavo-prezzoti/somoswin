@@ -29,6 +29,7 @@ const SupportChatWidget: React.FC = () => {
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [config, setConfig] = useState<SupportConfig | null>(null);
+    const [hasViewed, setHasViewed] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const location = useLocation();
 
@@ -49,6 +50,12 @@ const SupportChatWidget: React.FC = () => {
     useEffect(() => {
         scrollToBottom();
     }, [messages, isOpen, isMinimized]);
+
+    useEffect(() => {
+        if (isOpen) {
+            setHasViewed(true);
+        }
+    }, [isOpen]);
 
     const fetchConfig = async () => {
         try {
@@ -123,14 +130,6 @@ const SupportChatWidget: React.FC = () => {
     };
 
     if (shouldHide || !config?.isActive) return null;
-
-    const [hasViewed, setHasViewed] = useState(false);
-
-    useEffect(() => {
-        if (isOpen) {
-            setHasViewed(true);
-        }
-    }, [isOpen]);
 
     if (!isOpen) {
         return (
