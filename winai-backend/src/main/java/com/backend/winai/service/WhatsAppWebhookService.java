@@ -40,6 +40,7 @@ public class WhatsAppWebhookService {
     private final com.backend.winai.queue.AiResponseProducer aiResponseProducer;
     private final UserWhatsAppConnectionRepository userWhatsAppConnectionRepository;
     private final MetricsSyncService metricsSyncService;
+    private final OpenAiService openAiService;
 
     /**
      * Processa webhook do Uazap recebido via n8n
@@ -155,12 +156,16 @@ public class WhatsAppWebhookService {
             log.info("Webhook processado com sucesso. MessageId: {}, Phone: {}, LeadId: {}",
                     messageId, phoneNumber, lead != null ? lead.getId() : null);
 
-            // Processar resposta automática da IA (apenas para mensagens de texto
-            // recebidas)
-            if (!Boolean.TRUE.equals(message.getFromMe()) && "text".equalsIgnoreCase(messageType)) {
-                processAIResponse(conversation, messageText, company);
+            // Processar resposta automática da IA (texto ou áudio transcrito)
+            boolean isText = "text".equalsIgnoreCase(messageType);
+            boolean isAudio = ("audio".equalsIgnoreCase(messageType) || "ptt".equalsIgnoreCase(messageType))
+                    && message.getTranscription() != null;
+
+            if (!Boolean.TRUE.equals(message.getFromMe()) && (isText || isAudio)) {
+                // Usar o conteúdo da mensagem (que pode ter sido atualizado com a transcrição)
+                processAIResponse(conversation, message.getContent(), company);
             } else {
-                log.info("IA ignorada: fromMe={} (esperado false), type={} (esperado text)",
+                log.info("IA ignorada: fromMe={} (esperado false), type={} (esperado text ou audio transcrito)",
                         message.getFromMe(), messageType);
             }
 
@@ -828,6 +833,23 @@ public class WhatsAppWebhookService {
 
                 message.setMediaUrl(s3Url);
                 message.setMediaType(contentType);
+
+                // TRANSCRIÇÃO DE ÁUDIO (Novo fluxo)
+                if (typeLower.contains("audio") || typeLower.contains("ptt")) {
+                    try {
+                        String transcription = openAiService.transcribeAudio(mediaBytes, "audio" + extension);
+                        if (transcription != null && !transcription.isEmpty()) {
+                            message.setTranscription(transcription);
+                            message.setContent(transcription); // Atualiza o conteúdo visual com o texto transcrito
+                            log.info("Áudio transcrito com sucesso: {}", transcription);
+                        } else {
+                            message.setContent("[Áudio sem transcrição]");
+                        }
+                    } catch (Exception e) {
+                        log.error("Erro ao transcrever áudio no fluxo: {}", e.getMessage());
+                        message.setContent("[Erro na transcrição de áudio]");
+                    }
+                }
 
                 // Limpar o content se for apenas a URL bruta do WhatsApp
                 if (message.getContent() != null

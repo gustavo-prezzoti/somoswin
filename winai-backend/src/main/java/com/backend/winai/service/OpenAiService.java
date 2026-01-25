@@ -361,6 +361,50 @@ public class OpenAiService {
         }
     }
 
+    public String transcribeAudio(byte[] audioData, String filename) {
+        if (!isChatEnabled())
+            return null;
+
+        try {
+            // Salvar bytes em arquivo temporário
+            java.io.File tempFile = java.io.File.createTempFile("audio_", "_" + filename);
+            java.nio.file.Files.write(tempFile.toPath(), audioData);
+
+            String url = "https://api.openai.com/v1/audio/transcriptions";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            headers.setBearerAuth(apiKey);
+
+            org.springframework.util.MultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
+            body.add("file", new org.springframework.core.io.FileSystemResource(tempFile));
+            body.add("model", "whisper-1");
+            body.add("language", "pt");
+
+            HttpEntity<org.springframework.util.MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body,
+                    headers);
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, requestEntity, Map.class);
+
+            // Limpar arquivo temporário
+            try {
+                tempFile.delete();
+            } catch (Exception ignored) {
+            }
+
+            if (response.getBody() != null && response.getBody().containsKey("text")) {
+                String text = (String) response.getBody().get("text");
+                log.info("Áudio transcrito: {}", text);
+                return text;
+            }
+
+            return null;
+        } catch (Exception e) {
+            log.error("Erro ao transcrever áudio: {}", e.getMessage());
+            return null;
+        }
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     private ChatMemoryService chatMemoryService;
 
