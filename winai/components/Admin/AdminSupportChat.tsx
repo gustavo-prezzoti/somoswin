@@ -23,7 +23,16 @@ const AdminSupportChat: React.FC = () => {
 
     const fetchConfig = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/v1/admin/support/config`);
+            const token = localStorage.getItem('win_access_token');
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`${API_URL}/api/v1/admin/support/config`, { headers });
+
             if (response.ok) {
                 const data = await response.json();
                 setConfig({
@@ -34,6 +43,10 @@ const AdminSupportChat: React.FC = () => {
                     option4: data.option4 || '',
                     isActive: data.isActive
                 });
+            } else if (response.status === 401) {
+                setMessage({ type: 'error', text: 'Sessão expirada. Faça login novamente.' });
+            } else {
+                setMessage({ type: 'error', text: 'Erro ao carregar configurações.' });
             }
         } catch (error) {
             console.error('Failed to fetch config', error);
@@ -47,15 +60,25 @@ const AdminSupportChat: React.FC = () => {
         setIsSaving(true);
         setMessage(null);
         try {
+            const token = localStorage.getItem('win_access_token');
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch(`${API_URL}/api/v1/admin/support/config`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(config)
             });
 
             if (response.ok) {
                 setMessage({ type: 'success', text: 'Configurações salvas com sucesso!' });
                 setTimeout(() => setMessage(null), 3000);
+            } else if (response.status === 401) {
+                setMessage({ type: 'error', text: 'Sessão expirada. Faça login novamente.' });
             } else {
                 setMessage({ type: 'error', text: 'Erro ao salvar configurações.' });
             }

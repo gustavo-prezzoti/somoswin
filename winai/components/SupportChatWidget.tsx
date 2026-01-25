@@ -147,10 +147,9 @@ const SupportChatWidget: React.FC = () => {
                         <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-[#002a1e] rounded-full"></div>
                     </div>
                     <div>
-                        <h3 className="font-bold text-white text-sm">Suporte Inteligente</h3>
-                        <p className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                            <Sparkles size={8} /> WinAI Assistant
-                        </p>
+                        <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                            WinAI Assistant <Sparkles size={12} className="text-emerald-400" />
+                        </h3>
                     </div>
                 </div>
                 <div className="flex items-center gap-1 text-gray-400">
@@ -190,34 +189,19 @@ const SupportChatWidget: React.FC = () => {
                                 key={idx}
                                 className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                             >
-                                {msg.role === 'assistant' && (
-                                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                                        <Bot size={16} />
-                                    </div>
-                                )}
-
                                 <div
-                                    className={`max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user'
+                                    className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.role === 'user'
                                         ? 'bg-emerald-600 text-white rounded-tr-sm'
                                         : 'bg-white border border-gray-100 text-gray-700 rounded-tl-sm prose prose-sm prose-emerald'
                                         }`}
                                 >
                                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                                 </div>
-
-                                {msg.role === 'user' && (
-                                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 shrink-0">
-                                        <User size={16} />
-                                    </div>
-                                )}
                             </div>
                         ))}
 
                         {isLoading && (
                             <div className="flex gap-3 justify-start">
-                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                                    <Bot size={16} />
-                                </div>
                                 <div className="bg-white border border-gray-100 p-4 rounded-2xl rounded-tl-sm shadow-sm flex gap-1">
                                     <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                                     <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
@@ -270,11 +254,7 @@ const SupportChatWidget: React.FC = () => {
                             </button>
                         </form>
 
-                        <div className="text-center">
-                            <span className="text-[10px] text-gray-300 font-medium uppercase tracking-wider">
-                                Powered by WinAI GPT-4o
-                            </span>
-                        </div>
+
                     </div>
                 </>
             )}
