@@ -77,6 +77,9 @@ services:
 
       # Meta Sync
       - META_SYNC_ENABLED=false
+
+      # Internal API Key
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-winai-lq-f8a9b2c7e4d1-2026-xK9mN3pL}
     depends_on:
       - redis
     networks:
@@ -156,7 +159,7 @@ services:
       - 8.8.4.4
     environment:
       - JAVA_API_URL=http://backend:8080
-      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-winai-lq-f8a9b2c7e4d1-2026-xK9mN3pL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
