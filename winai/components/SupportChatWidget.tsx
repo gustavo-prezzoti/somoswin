@@ -179,7 +179,7 @@ const SupportChatWidget: React.FC = () => {
                                 </div>
                                 <h4 className="font-bold text-gray-800">Olá! Como posso ajudar?</h4>
                                 <p className="text-xs text-gray-500 max-w-[200px] mx-auto">
-                                    Sou a IA da WinAI. Selecione uma opção abaixo ou digite sua dúvida.
+                                    Sou o suporte da WinAI. Selecione uma opção abaixo ou digite sua dúvida.
                                 </p>
                             </div>
                         )}

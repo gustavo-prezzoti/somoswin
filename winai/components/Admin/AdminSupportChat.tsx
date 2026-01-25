@@ -134,7 +134,6 @@ const AdminSupportChat: React.FC = () => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <label className="text-xs font-black text-gray-500 uppercase tracking-widest">System Prompt (Instruções da IA)</label>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg font-bold">GPT-4o-mini</span>
                     </div>
                     <textarea
                         value={config.systemPrompt}
