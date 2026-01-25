@@ -157,8 +157,10 @@ public class WhatsAppWebhookService {
                     messageId, phoneNumber, lead != null ? lead.getId() : null);
 
             // Processar resposta automática da IA (texto ou áudio transcrito)
-            boolean isText = "text".equalsIgnoreCase(messageType);
-            boolean isAudio = ("audio".equalsIgnoreCase(messageType) || "ptt".equalsIgnoreCase(messageType))
+            String typeLowerCheck = messageType != null ? messageType.toLowerCase() : "";
+            boolean isText = "text".equalsIgnoreCase(messageType)
+                    || "extendedtextmessage".equalsIgnoreCase(messageType);
+            boolean isAudio = (typeLowerCheck.contains("audio") || typeLowerCheck.contains("ptt"))
                     && message.getTranscription() != null;
 
             if (!Boolean.TRUE.equals(message.getFromMe()) && (isText || isAudio)) {
