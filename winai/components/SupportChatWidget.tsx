@@ -154,6 +154,13 @@ const SupportChatWidget: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1 text-gray-400">
                     <button
+                        onClick={() => setMessages([])}
+                        className="p-1.5 hover:bg-white/10 text-emerald-100 hover:text-white rounded-lg transition-colors mr-1"
+                        title="Nova Conversa"
+                    >
+                        <RefreshCcw size={16} />
+                    </button>
+                    <button
                         onClick={() => setIsMinimized(!isMinimized)}
                         className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
                     >
