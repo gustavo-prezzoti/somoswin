@@ -179,9 +179,24 @@ public class TrafficAdvisorChatService {
         try {
             chat.setLastMessage(aiResponse.length() > 250 ? aiResponse.substring(0, 247) + "..." : aiResponse);
             chat.setFullHistory(objectMapper.writeValueAsString(messages));
-            if (chat.getTitle() == null || chat.getTitle().equals("Novo Chat")) {
-                chat.setTitle(request.getMessage().length() > 30 ? request.getMessage().substring(0, 30) + "..."
-                        : request.getMessage());
+            // Atualização inteligente do título
+            boolean isNewChat = chat.getTitle() == null || chat.getTitle().equals("Novo Chat");
+            // Se o título atual for muito curto (ex: "Oi", "Olá") e a nova mensagem for
+            // mais substancial, atualizamos
+            boolean isCurrentTitleShort = chat.getTitle() != null && chat.getTitle().length() < 15;
+            boolean isNewMessageSubstantial = request.getMessage().length() > 15;
+
+            if (isNewChat || (isCurrentTitleShort && isNewMessageSubstantial)) {
+                String newTitle = request.getMessage().trim();
+                // Pega apenas a primeira linha se houver quebras
+                if (newTitle.contains("\n")) {
+                    newTitle = newTitle.split("\n")[0];
+                }
+
+                if (newTitle.length() > 40) {
+                    newTitle = newTitle.substring(0, 40) + "...";
+                }
+                chat.setTitle(newTitle);
             }
             chatRepository.save(chat);
             log.debug("Chat saved successfully with {} messages", messages.size());
