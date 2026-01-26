@@ -3,20 +3,9 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { DollarSign, Eye, MousePointerClick, MessageSquare, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Link as LinkIcon, Database, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { marketingService, TrafficMetrics, CreateCampaignRequest } from '../services';
+import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import DriveFileSelector from './DriveFileSelector';
 import { DriveFile } from '../services/api/google-drive.service';
-
-// Interface para chat do Traffic Advisor
-interface TrafficChat {
-  id: string;
-  title: string;
-  createdAt: string;
-}
-
-interface TrafficMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
 
 const SummaryCard = ({ icon: Icon, label, metric, color }: { icon: any, label: string, metric?: any, color: string }) => {
   const value = metric?.value || '0';
@@ -59,7 +48,7 @@ const Campaigns: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [chats, setChats] = useState<TrafficChat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<TrafficMessage[]>([]);
+  const [messages, setMessages] = useState<TrafficChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -86,6 +75,7 @@ const Campaigns: React.FC = () => {
 
   useEffect(() => {
     loadMetrics();
+    loadChats();
   }, []);
 
   useEffect(() => {
@@ -121,16 +111,26 @@ const Campaigns: React.FC = () => {
   };
 
   // Traffic Advisor Chat Functions
-  const handleSelectChat = (id: string) => {
-    setIsChatLoading(true);
-    setActiveChatId(id);
-    // Mock messages load
-    setTimeout(() => {
-      setMessages([
-        { role: 'assistant', content: 'Olá! Sou seu consultor de tráfego pago. Como posso ajudar você a otimizar suas campanhas hoje?' }
-      ]);
+  const loadChats = async () => {
+    try {
+      const data = await trafficChatService.listChats();
+      setChats(data);
+    } catch (error) {
+      console.error('Failed to load chats', error);
+    }
+  };
+
+  const handleSelectChat = async (id: string) => {
+    try {
+      setIsChatLoading(true);
+      setActiveChatId(id);
+      const details = await trafficChatService.getChatDetails(id);
+      setMessages(details.messages);
+    } catch (error) {
+      console.error('Failed to load chat details', error);
+    } finally {
       setIsChatLoading(false);
-    }, 500);
+    }
   };
 
   const handleNewChat = () => {
@@ -144,11 +144,16 @@ const Campaigns: React.FC = () => {
     setDeleteModalOpen(true);
   };
 
-  const confirmDeleteChat = () => {
+  const confirmDeleteChat = async () => {
     if (chatToDelete) {
-      setChats(prev => prev.filter(c => c.id !== chatToDelete));
-      if (activeChatId === chatToDelete) {
-        handleNewChat();
+      try {
+        await trafficChatService.deleteChat(chatToDelete);
+        setChats(prev => prev.filter(c => c.id !== chatToDelete));
+        if (activeChatId === chatToDelete) {
+          handleNewChat();
+        }
+      } catch (error) {
+        console.error('Failed to delete chat', error);
       }
     }
     setDeleteModalOpen(false);
@@ -158,33 +163,35 @@ const Campaigns: React.FC = () => {
   const handleSendMessage = async () => {
     if (!prompt.trim() || isSending) return;
 
-    const userMsg: TrafficMessage = { role: 'user', content: prompt };
-    setMessages(prev => [...prev, userMsg]);
-    setPrompt('');
-    setIsSending(true);
+    try {
+      setIsSending(true);
+      const tempPrompt = prompt;
+      setPrompt('');
 
-    // Simulated AI response
-    setTimeout(() => {
-      const responses = [
-        "Analisando seus dados de campanha, identifiquei que o CPC médio está acima do benchmark do seu segmento. Recomendo:\n\n1. **Testar novos criativos** - Vídeos curtos (15s) tendem a performar melhor\n2. **Ajustar a segmentação** - Focar em lookalike 1-2%\n3. **Revisar os horários de veiculação** - Concentrar budget nos horários de pico\n\nQuer que eu detalhe alguma dessas estratégias?",
-        "Com base na análise do ROAS das suas últimas campanhas:\n\n📊 **Campanha A**: ROAS 3.2x - Excelente performance\n📊 **Campanha B**: ROAS 1.8x - Abaixo do esperado\n\nSugiro redistribuir 30% do orçamento da Campanha B para A e testar um novo público na B.",
-        "Para melhorar suas conversões no tráfego pago, recomendo:\n\n✅ **Otimizar landing page** - Velocidade e clareza de proposta\n✅ **Usar prova social** - Depoimentos e resultados\n✅ **Criar urgência** - Ofertas por tempo limitado\n✅ **Retargeting agressivo** - 7 dias pós-visita\n\nPosso criar um plano de ação detalhado se quiser!"
-      ];
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      // Add user message optimistically
+      const userMsg: TrafficChatMessage = { role: 'user', content: tempPrompt };
+      setMessages(prev => [...prev, userMsg]);
 
-      setMessages(prev => [...prev, { role: 'assistant', content: randomResponse }]);
+      // Call API
+      const response = await trafficChatService.sendMessage(tempPrompt, activeChatId || undefined);
+
+      // Update chat state
+      setMessages(prev => [...prev, response.message]);
 
       if (!activeChatId) {
-        const newChatId = Date.now().toString();
-        setActiveChatId(newChatId);
-        setChats(prev => [{
-          id: newChatId,
-          title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
-          createdAt: new Date().toISOString()
-        }, ...prev]);
+        setActiveChatId(response.chatId);
+        loadChats(); // Refresh list to show new chat title
+      } else {
+        // Update list order for current chat
+        loadChats();
       }
+
+    } catch (error) {
+      console.error('Failed to send message', error);
+      // Aqui você poderia adicionar uma mensagem de erro visual para o usuário
+    } finally {
       setIsSending(false);
-    }, 1500);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
