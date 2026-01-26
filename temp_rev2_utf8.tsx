@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import {
    TrendingUp,
    Users,
@@ -11,10 +11,7 @@ import {
    History,
    Loader2,
    Plus,
-   Trash2,
-   Star,
-   UserCheck,
-   Video
+   Trash2
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -37,7 +34,7 @@ const StatCard = ({ icon: Icon, label, value, trend, color }: any) => (
 );
 
 const SocialMedia: React.FC = () => {
-   const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'IA_CHAT' | 'DESIGNERS' | 'EDITORS'>('DASHBOARD');
+   const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'IA_CHAT'>('DASHBOARD');
    const [prompt, setPrompt] = useState('');
 
    // State for Metrics
@@ -55,45 +52,6 @@ const SocialMedia: React.FC = () => {
    // Delete confirmation modal state
    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
    const [chatToDelete, setChatToDelete] = useState<string | null>(null);
-
-   const designers = [
-      { id: 1, name: 'Sofia Davis', specialty: 'Brand Identity & UI', rating: '4.9', price: '1.200', img: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop' },
-      { id: 2, name: 'Lucas Brandão', specialty: 'Social Media Design', rating: '4.8', price: '800', img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop' },
-      { id: 3, name: 'Isabela Moraes', specialty: 'Motion Graphics', rating: '5.0', price: '1.500', img: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop' },
-   ];
-
-   const editors = [
-      { id: 1, name: 'Pedro Alencar', specialty: 'Reels & TikTok Pro', rating: '4.9', price: '500', img: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop' },
-      { id: 2, name: 'Mariana Costa', specialty: 'YouTube Vlogs', rating: '4.7', price: '900', img: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop' },
-      { id: 3, name: 'Tiago Silva', specialty: 'Cinematic Edits', rating: '5.0', price: '2.000', img: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop' },
-   ];
-
-   const ProfessionalCard = ({ pro, onPortfolioClick }: any) => (
-      <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl transition-all group border-b-4 border-b-transparent hover:border-b-emerald-500">
-         <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-emerald-50">
-               <img src={pro.img} className="w-full h-full object-cover" alt={pro.name} />
-            </div>
-            <div>
-               <h4 className="font-black text-gray-800 text-sm tracking-tight">{pro.name}</h4>
-               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{pro.specialty}</p>
-            </div>
-         </div>
-         <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-1 text-amber-500">
-               <Star size={12} fill="currentColor" />
-               <span className="text-xs font-black">{pro.rating}</span>
-            </div>
-            <span className="text-xs font-black text-gray-400 uppercase">A partir de <span className="text-emerald-600">R$ {pro.price}</span></span>
-         </div>
-         <button
-            onClick={() => onPortfolioClick && onPortfolioClick(pro)}
-            className="w-full py-4 bg-gray-50 text-emerald-600 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-emerald-600 hover:text-white transition-all"
-         >
-            Ver Portfólio
-         </button>
-      </div>
-   );
 
    useEffect(() => {
       loadMetrics();
@@ -206,7 +164,7 @@ const SocialMedia: React.FC = () => {
          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div>
                <h1 className="text-4xl font-black text-gray-800 tracking-tighter uppercase italic">Social Growth</h1>
-               <p className="text-gray-500 mt-1 font-medium">Performance orgânica e criação assistida por IA.</p>
+               <p className="text-gray-500 mt-1 font-medium">Performance org├ónica e cria├º├úo assistida por IA.</p>
             </div>
 
             <div className="flex items-center bg-gray-100 p-1.5 rounded-[24px] border border-gray-200 overflow-x-auto no-scrollbar max-w-full">
@@ -216,12 +174,6 @@ const SocialMedia: React.FC = () => {
                <button onClick={() => setActiveTab('IA_CHAT')} className={`flex items-center gap-2 px-6 py-3 rounded-[20px] text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'IA_CHAT' ? 'bg-white text-emerald-600 shadow-lg' : 'text-gray-400 hover:text-emerald-600'}`}>
                   <Sparkles size={14} /> IA Criativa
                </button>
-               <button onClick={() => setActiveTab('DESIGNERS')} className={`flex items-center gap-2 px-6 py-3 rounded-[20px] text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'DESIGNERS' ? 'bg-white text-emerald-600 shadow-lg' : 'text-gray-400 hover:text-emerald-600'}`}>
-                  <UserCheck size={14} /> Designers
-               </button>
-               <button onClick={() => setActiveTab('EDITORS')} className={`flex items-center gap-2 px-6 py-3 rounded-[20px] text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'EDITORS' ? 'bg-white text-emerald-600 shadow-lg' : 'text-gray-400 hover:text-emerald-600'}`}>
-                  <Video size={14} /> Editores de Vídeo
-               </button>
             </div>
          </div>
 
@@ -230,28 +182,20 @@ const SocialMedia: React.FC = () => {
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <StatCard icon={Users} label="Seguidores Totais" value={metrics?.followers.value || '0'} trend={metrics?.followers.trend || '0%'} color="bg-indigo-50 text-indigo-600" />
                   <StatCard icon={TrendingUp} label="Taxa de Engajamento" value={metrics?.engagementRate.value || '0%'} trend={metrics?.engagementRate.trend || '0%'} color="bg-emerald-50 text-emerald-600" />
-                  <StatCard icon={Eye} label="Impressões (30d)" value={metrics?.impressions.value || '0'} trend={metrics?.impressions.trend || '0%'} color="bg-sky-50 text-sky-600" />
-                  <StatCard icon={MessageSquare} label="Interações" value={metrics?.interactions.value || '0'} trend={metrics?.interactions.trend || '0%'} color="bg-amber-50 text-amber-600" />
+                  <StatCard icon={Eye} label="Impress├Áes (30d)" value={metrics?.impressions.value || '0'} trend={metrics?.impressions.trend || '0%'} color="bg-sky-50 text-sky-600" />
+                  <StatCard icon={MessageSquare} label="Intera├º├Áes" value={metrics?.interactions.value || '0'} trend={metrics?.interactions.trend || '0%'} color="bg-amber-50 text-amber-600" />
                </div>
                <div className="bg-white p-10 rounded-[48px] border border-gray-100 shadow-sm">
-                  <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic mb-10">HISTÓRICO DE PERFORMANCE</h2>
+                  <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic mb-10">Hist├│rico de Performance</h2>
                   <div className="h-[350px] w-full">
                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={metrics?.performanceHistory && metrics.performanceHistory.length > 0 ? metrics.performanceHistory.map((d: any) => ({ ...d, Eng: d.value })) : [
-                           { date: 'Seg', Eng: 0 },
-                           { date: 'Ter', Eng: 0 },
-                           { date: 'Qua', Eng: 0 },
-                           { date: 'Qui', Eng: 0 },
-                           { date: 'Sex', Eng: 0 },
-                           { date: 'Sáb', Eng: 0 },
-                           { date: 'Dom', Eng: 0 }
-                        ]}>
+                        <AreaChart data={metrics?.performanceHistory || []}>
                            <defs><linearGradient id="colorEng" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }} />
-                           <YAxis hide domain={[0, 100]} />
+                           <YAxis hide />
                            <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
-                           <Area type="monotone" dataKey="Eng" stroke="#10b981" strokeWidth={5} fillOpacity={1} fill="url(#colorEng)" />
+                           <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={5} fillOpacity={1} fill="url(#colorEng)" />
                         </AreaChart>
                      </ResponsiveContainer>
                   </div>
@@ -264,7 +208,7 @@ const SocialMedia: React.FC = () => {
                <div className="w-72 border-r border-gray-100 flex flex-col bg-gray-50/50">
                   <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                        <History size={14} /> Histórico Recente
+                        <History size={14} /> Hist├│rico Recente
                      </h3>
                      <button
                         onClick={handleNewChat}
@@ -283,7 +227,7 @@ const SocialMedia: React.FC = () => {
                               : 'hover:bg-white border-transparent hover:border-gray-200'
                               }`}
                         >
-                           <div className="flex justify-between items-start mb-1">
+                           <div className="flex justify-between items-center mb-1">
                               <p className={`text-[10px] font-black uppercase ${activeChatId === c.id ? 'text-emerald-600' : 'text-gray-400'}`}>Chat</p>
                               <button
                                  onClick={(e) => handleDeleteChat(e, c.id)}
@@ -306,7 +250,7 @@ const SocialMedia: React.FC = () => {
                         <div>
                            <h2 className="text-xl font-black text-gray-800 uppercase italic">Creative Studio IA</h2>
                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
-                              {activeChatId ? 'Explorando Estratégia' : 'Pronta para criar'}
+                              {activeChatId ? 'Explorando Estrat├®gia' : 'Pronta para criar'}
                            </p>
                         </div>
                      </div>
@@ -322,7 +266,7 @@ const SocialMedia: React.FC = () => {
                         <div className="flex justify-start">
                            <div className="max-w-[80%] bg-white p-8 rounded-[32px] rounded-tl-none border border-gray-100 shadow-sm space-y-4">
                               <p className="text-sm font-medium leading-relaxed text-gray-800 italic">
-                                 "Olá! Sou sua IA de Growth Social. Como posso ajudar com sua estratégia de conteúdo hoje?"
+                                 "Ol├í! Sou sua IA de Growth Social. Como posso ajudar com sua estrat├®gia de conte├║do hoje?"
                               </p>
                            </div>
                         </div>
@@ -335,36 +279,36 @@ const SocialMedia: React.FC = () => {
                               : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
                               }`}>
                               <div className={`prose prose-sm max-w-none ${msg.role === 'user' ? 'prose-invert' : 'prose-emerald'}`}
-                                 style={{
-                                    '--tw-prose-headings': msg.role === 'user' ? 'rgb(255,255,255)' : 'rgb(5,65,41)',
-                                    '--tw-prose-bold': msg.role === 'user' ? 'rgb(255,255,255)' : 'rgb(5,65,41)',
-                                    '--tw-prose-code': msg.role === 'user' ? 'rgb(200,200,200)' : 'rgb(16,185,129)',
-                                    '--tw-prose-hr': msg.role === 'user' ? 'rgba(255,255,255,0.3)' : 'rgb(229,231,235)',
-                                    '--tw-prose-quote-borders': msg.role === 'user' ? 'rgba(255,255,255,0.5)' : 'rgb(16,185,129)',
-                                 } as any}>
+                                   style={{
+                                     '--tw-prose-headings': msg.role === 'user' ? 'rgb(255,255,255)' : 'rgb(5,65,41)',
+                                     '--tw-prose-bold': msg.role === 'user' ? 'rgb(255,255,255)' : 'rgb(5,65,41)',
+                                     '--tw-prose-code': msg.role === 'user' ? 'rgb(200,200,200)' : 'rgb(16,185,129)',
+                                     '--tw-prose-hr': msg.role === 'user' ? 'rgba(255,255,255,0.3)' : 'rgb(229,231,235)',
+                                     '--tw-prose-quote-borders': msg.role === 'user' ? 'rgba(255,255,255,0.5)' : 'rgb(16,185,129)',
+                                   } as any}>
                                  <ReactMarkdown
                                     components={{
-                                       h1: ({ children }) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
-                                       h2: ({ children }) => <h2 className="text-base font-bold mt-3 mb-2">{children}</h2>,
-                                       h3: ({ children }) => <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>,
-                                       p: ({ children }) => <p className="mb-2">{children}</p>,
-                                       ul: ({ children }) => <ul className="list-disc list-outside ml-4 mb-2">{children}</ul>,
-                                       ol: ({ children }) => <ol className="list-decimal list-outside ml-4 mb-2">{children}</ol>,
-                                       li: ({ children }) => <li className="mb-1">{children}</li>,
-                                       blockquote: ({ children }) => (
-                                          <blockquote className={`border-l-4 pl-3 italic my-2 ${msg.role === 'user' ? 'border-gray-300 text-gray-200' : 'border-emerald-300 text-gray-600'}`}>
-                                             {children}
-                                          </blockquote>
-                                       ),
-                                       code: ({ children }) => (
-                                          <code className={`px-1 rounded text-xs ${msg.role === 'user' ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                                             {children}
-                                          </code>
-                                       ),
-                                       hr: () => <hr className={`my-3 ${msg.role === 'user' ? 'border-gray-400' : 'border-gray-200'}`} />,
+                                      h1: ({children}) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
+                                      h2: ({children}) => <h2 className="text-base font-bold mt-3 mb-2">{children}</h2>,
+                                      h3: ({children}) => <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>,
+                                      p: ({children}) => <p className="mb-2">{children}</p>,
+                                      ul: ({children}) => <ul className="list-disc list-outside ml-4 mb-2">{children}</ul>,
+                                      ol: ({children}) => <ol className="list-decimal list-outside ml-4 mb-2">{children}</ol>,
+                                      li: ({children}) => <li className="mb-1">{children}</li>,
+                                      blockquote: ({children}) => (
+                                        <blockquote className={`border-l-4 pl-3 italic my-2 ${msg.role === 'user' ? 'border-gray-300 text-gray-200' : 'border-emerald-300 text-gray-600'}`}>
+                                          {children}
+                                        </blockquote>
+                                      ),
+                                      code: ({children}) => (
+                                        <code className={`px-1 rounded text-xs ${msg.role === 'user' ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                                          {children}
+                                        </code>
+                                      ),
+                                      hr: () => <hr className={`my-3 ${msg.role === 'user' ? 'border-gray-400' : 'border-gray-200'}`} />,
                                     }}
                                  >
-                                    {msg.content}
+                                   {msg.content}
                                  </ReactMarkdown>
                               </div>
                            </div>
@@ -389,7 +333,7 @@ const SocialMedia: React.FC = () => {
                      <div className="max-w-4xl mx-auto relative">
                         <input
                            type="text"
-                           placeholder="Descreva sua ideia ou peça uma análise..."
+                           placeholder="Descreva sua ideia ou pe├ºa uma an├ílise..."
                            className="w-full pl-8 pr-20 py-6 bg-gray-50 rounded-[32px] border-none focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none transition-all font-medium text-sm"
                            value={prompt}
                            onChange={(e) => setPrompt(e.target.value)}
@@ -409,22 +353,6 @@ const SocialMedia: React.FC = () => {
             </div>
          )}
 
-         {activeTab === 'DESIGNERS' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {designers.map(pro => (
-                  <ProfessionalCard key={pro.id} pro={pro} />
-               ))}
-            </div>
-         )}
-
-         {activeTab === 'EDITORS' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {editors.map(pro => (
-                  <ProfessionalCard key={pro.id} pro={pro} />
-               ))}
-            </div>
-         )}
-
          {/* Delete Confirmation Modal */}
          {deleteModalOpen && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -433,11 +361,11 @@ const SocialMedia: React.FC = () => {
                      <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
                         <Trash2 size={24} className="text-red-600" />
                      </div>
-                     <h3 className="text-xl font-bold text-gray-900">Excluir histórico?</h3>
+                     <h3 className="text-xl font-bold text-gray-900">Excluir hist├│rico?</h3>
                   </div>
-
-                  <p className="text-gray-600 mb-8">Tem certeza que deseja excluir este histórico de chat? Esta ação não pode ser desfeita.</p>
-
+                  
+                  <p className="text-gray-600 mb-8">Tem certeza que deseja excluir este hist├│rico de chat? Esta a├º├úo n├úo pode ser desfeita.</p>
+                  
                   <div className="flex gap-3">
                      <button
                         onClick={() => {
