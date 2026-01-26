@@ -20,6 +20,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import ReactMarkdown from 'react-markdown';
 import { marketingService, InstagramMetrics } from '../services/api/marketing.service';
 import { socialChatService, SocialChat, ChatMessage } from '../services/api/socialChat.service';
+import { professionalService, Professional } from '../services/api/professional.service';
 
 const StatCard = ({ icon: Icon, label, value, trend, color }: any) => (
    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
@@ -56,23 +57,26 @@ const SocialMedia: React.FC = () => {
    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
    const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
-   const designers = [
-      { id: 1, name: 'Sofia Davis', specialty: 'Brand Identity & UI', rating: '4.9', price: '1.200', img: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop' },
-      { id: 2, name: 'Lucas Brandão', specialty: 'Social Media Design', rating: '4.8', price: '800', img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop' },
-      { id: 3, name: 'Isabela Moraes', specialty: 'Motion Graphics', rating: '5.0', price: '1.500', img: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop' },
-   ];
+   // Professional lists
+   const [designers, setDesigners] = useState<Professional[]>([]);
+   const [editors, setEditors] = useState<Professional[]>([]);
+   const [isProfessionalsLoading, setIsProfessionalsLoading] = useState(false);
 
-   const editors = [
-      { id: 1, name: 'Pedro Alencar', specialty: 'Reels & TikTok Pro', rating: '4.9', price: '500', img: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop' },
-      { id: 2, name: 'Mariana Costa', specialty: 'YouTube Vlogs', rating: '4.7', price: '900', img: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop' },
-      { id: 3, name: 'Tiago Silva', specialty: 'Cinematic Edits', rating: '5.0', price: '2.000', img: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop' },
-   ];
+   const formatPrice = (value: number) => {
+      return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+   };
 
-   const ProfessionalCard = ({ pro, onPortfolioClick }: any) => (
+   const ProfessionalCard = ({ pro }: { pro: Professional }) => (
       <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl transition-all group border-b-4 border-b-transparent hover:border-b-emerald-500">
          <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-emerald-50">
-               <img src={pro.img} className="w-full h-full object-cover" alt={pro.name} />
+               {pro.imageUrl ? (
+                  <img src={pro.imageUrl} className="w-full h-full object-cover" alt={pro.name} />
+               ) : (
+                  <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">
+                     <Users size={24} />
+                  </div>
+               )}
             </div>
             <div>
                <h4 className="font-black text-gray-800 text-sm tracking-tight">{pro.name}</h4>
@@ -84,20 +88,24 @@ const SocialMedia: React.FC = () => {
                <Star size={12} fill="currentColor" />
                <span className="text-xs font-black">{pro.rating}</span>
             </div>
-            <span className="text-xs font-black text-gray-400 uppercase">A partir de <span className="text-emerald-600">R$ {pro.price}</span></span>
+            <span className="text-xs font-black text-gray-400 uppercase">A partir de <span className="text-emerald-600">R$ {formatPrice(pro.price)}</span></span>
          </div>
-         <button
-            onClick={() => onPortfolioClick && onPortfolioClick(pro)}
-            className="w-full py-4 bg-gray-50 text-emerald-600 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-emerald-600 hover:text-white transition-all"
+         <a
+            href={pro.whatsappLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-4 bg-emerald-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
          >
-            Ver Portfólio
-         </button>
+            <MessageSquare size={14} />
+            Entrar em contato
+         </a>
       </div>
    );
 
    useEffect(() => {
       loadMetrics();
       loadChats();
+      loadProfessionals();
    }, []);
 
    useEffect(() => {
@@ -128,6 +136,22 @@ const SocialMedia: React.FC = () => {
          setChats(data);
       } catch (error) {
          console.error('Failed to load chats', error);
+      }
+   };
+
+   const loadProfessionals = async () => {
+      try {
+         setIsProfessionalsLoading(true);
+         const [designersData, editorsData] = await Promise.all([
+            professionalService.getDesigners(),
+            professionalService.getEditors()
+         ]);
+         setDesigners(designersData);
+         setEditors(editorsData);
+      } catch (error) {
+         console.error('Failed to load professionals', error);
+      } finally {
+         setIsProfessionalsLoading(false);
       }
    };
 
@@ -410,19 +434,41 @@ const SocialMedia: React.FC = () => {
          )}
 
          {activeTab === 'DESIGNERS' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {designers.map(pro => (
-                  <ProfessionalCard key={pro.id} pro={pro} />
-               ))}
-            </div>
+            isProfessionalsLoading ? (
+               <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+               </div>
+            ) : designers.length === 0 ? (
+               <div className="text-center py-20 text-gray-500">
+                  <Users size={48} className="mx-auto mb-4 opacity-30" />
+                  <p>Nenhum designer disponível</p>
+               </div>
+            ) : (
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {designers.map(pro => (
+                     <ProfessionalCard key={pro.id} pro={pro} />
+                  ))}
+               </div>
+            )
          )}
 
          {activeTab === 'EDITORS' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {editors.map(pro => (
-                  <ProfessionalCard key={pro.id} pro={pro} />
-               ))}
-            </div>
+            isProfessionalsLoading ? (
+               <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+               </div>
+            ) : editors.length === 0 ? (
+               <div className="text-center py-20 text-gray-500">
+                  <Video size={48} className="mx-auto mb-4 opacity-30" />
+                  <p>Nenhum editor de vídeo disponível</p>
+               </div>
+            ) : (
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {editors.map(pro => (
+                     <ProfessionalCard key={pro.id} pro={pro} />
+                  ))}
+               </div>
+            )
          )}
 
          {/* Delete Confirmation Modal */}

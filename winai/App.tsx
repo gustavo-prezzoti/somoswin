@@ -47,6 +47,7 @@ import AdminUserConnections from './src/components/Admin/AdminUserConnections';
 import AdminAgentsAI from './components/Admin/AdminAgentsAI';
 import AdminCompanies from './components/Admin/AdminCompanies';
 import AdminPrompts from './components/Admin/AdminPrompts';
+import AdminProfessionals from './components/Admin/AdminProfessionals';
 import AdminSupportChat from './components/Admin/AdminSupportChat';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
@@ -361,6 +362,7 @@ const App: React.FC = () => {
           <Route path="user-connections" element={<AdminUserConnections />} />
           <Route path="agents" element={<AdminAgentsAI />} />
           <Route path="prompts" element={<AdminPrompts />} />
+          <Route path="professionals" element={<AdminProfessionals />} />
           <Route path="support-chat" element={<AdminSupportChat />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
