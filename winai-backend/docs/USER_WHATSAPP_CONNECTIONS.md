@@ -121,7 +121,7 @@ Use o endpoint de criação de usuários existente.
 Como admin, crie associações entre o usuário e as instâncias do WhatsApp:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/admin/user-whatsapp-connections \
+curl -X POST https://server.somoswin.com.br/api/v1/admin/user-whatsapp-connections \
   -H "Authorization: Bearer {admin-token}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -138,7 +138,7 @@ curl -X POST http://localhost:8080/api/v1/admin/user-whatsapp-connections \
 O usuário pode buscar suas conversas usando o endpoint filtrado:
 
 ```bash
-curl -X GET "http://localhost:8080/api/v1/whatsapp/chat/conversations/user?userId=123e4567-e89b-12d3-a456-426614174000&companyId=company-uuid&includeMessages=true" \
+curl -X GET "https://server.somoswin.com.br/api/v1/whatsapp/chat/conversations/user?userId=123e4567-e89b-12d3-a456-426614174000&companyId=company-uuid&includeMessages=true" \
   -H "Authorization: Bearer {user-token}"
 ```
 

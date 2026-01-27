@@ -4,7 +4,7 @@ import { MessageCircle, X, Send, Minus, RefreshCcw, User, Bot, Sparkles } from '
 import ReactMarkdown from 'react-markdown';
 import { useLocation } from 'react-router-dom';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
+const API_URL = import.meta.env.VITE_API_URL || 'https://server.somoswin.com.br/api/v1';
 
 interface SupportConfig {
     id: number;

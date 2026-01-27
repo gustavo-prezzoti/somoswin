@@ -34,7 +34,7 @@ export const useWebSocket = (
             return;
         }
 
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://server.somoswin.com.br';
         const wsUrl = apiUrl.replace('/api/v1', '').replace(/\/$/, '');
         const socket = new SockJS(`${wsUrl}/ws`);
         const client = new Client({
