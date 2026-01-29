@@ -204,29 +204,8 @@ public class AIAgentService {
                 return "HUMAN_HANDOFF_REQUESTED";
             }
 
-            List<String> chunks = splitMessage(aiResponse);
-            log.info("Split response into {} chunks", chunks.size());
-
-            for (String chunk : chunks) {
-                log.debug("Processing chunk: {} chars", chunk.length());
-                // Enviar msg via Uazap
-                boolean sent = sendAIResponse(conversation, chunk);
-
-                if (sent) {
-                    log.debug("Chunk sent via Uazap, now persisting and notifying");
-                    // Persistir e Notificar cada fragmento como uma mensagem separada
-                    persistAndNotify(conversation, chunk);
-
-                    // Pequeno delay entre mensagens para parecer mais natural (humano digitando)
-                    try {
-                        Thread.sleep(2500); // 2.5s entre mensagens
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                } else {
-                    log.warn("Failed to send chunk via Uazap");
-                }
-            }
+            // Delegar para o método que gerencia múltiplas mensagens
+            sendSplitResponse(conversation, aiResponse);
 
             // Atualizar status de follow-up - IA respondeu
             try {
@@ -244,33 +223,81 @@ public class AIAgentService {
     }
 
     /**
+     * Envia uma resposta longa dividida em múltiplos chunks, mantendo a ordem e
+     * persistindo cada um.
+     */
+    public boolean sendSplitResponse(WhatsAppConversation conversation, String fullResponse) {
+        if (fullResponse == null || fullResponse.isBlank()) {
+            return false;
+        }
+
+        List<String> chunks = splitMessage(fullResponse);
+        log.info("Processando envio de resposta longa ({} chunks) para conversa {}", chunks.size(),
+                conversation.getId());
+
+        boolean allSent = true;
+        for (int i = 0; i < chunks.size(); i++) {
+            String chunk = chunks.get(i);
+            log.debug("Enviando chunk {}/{} ({} chars)", i + 1, chunks.size(), chunk.length());
+
+            boolean sent = sendAIResponse(conversation, chunk);
+            if (sent) {
+                persistAndNotify(conversation, chunk);
+
+                // Pequeno delay entre mensagens se houver mais chunks (simula digitação)
+                if (i < chunks.size() - 1) {
+                    try {
+                        // Delay maior para mensagens mais longas
+                        long delay = Math.min(5000, 1500 + (chunk.length() * 10L));
+                        Thread.sleep(delay);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            } else {
+                log.error("Falha ao enviar chunk {}/{} do follow-up. Interrompendo sequência para evitar confusão.",
+                        i + 1, chunks.size());
+                allSent = false;
+                break;
+            }
+        }
+        return allSent;
+    }
+
+    /**
      * Divide a resposta da IA em partes lógicas para envio separado no WhatsApp.
-     * Prioriza parágrafos (\n\n) e depois quebras de linha (\n).
+     * Prioriza parágrafos (\n\n) e depois quebras de linha (\n) se o bloco for
+     * longo.
      */
     private List<String> splitMessage(String content) {
         List<String> chunks = new ArrayList<>();
         if (content == null || content.isEmpty())
             return chunks;
 
-        // Divide por parágrafos duplos primeiro
-        String[] paragraphs = content.split("\\n\\n+");
+        // Limpeza inicial
+        content = content.replace("\r", "");
 
-        for (String p : paragraphs) {
-            String trimmed = p.trim();
-            if (trimmed.isEmpty())
+        // 1. Divide por parágrafos (duas ou mais quebras de linha)
+        String[] sections = content.split("\\n\\n+");
+
+        for (String section : sections) {
+            String trimmedSection = section.trim();
+            if (trimmedSection.isEmpty())
                 continue;
 
-            // Se o parágrafo ainda for muito longo (> 500 chars), divide por quebra de
-            // linha simples
-            if (trimmed.length() > 500) {
-                String[] lines = trimmed.split("\\n+");
+            // 2. Se a seção for longa ou contiver listas/várias linhas, divide por quebra
+            // simples
+            if (trimmedSection.length() > 300 || trimmedSection.contains("\n")) {
+                String[] lines = trimmedSection.split("\\n");
                 for (String line : lines) {
-                    String lineTrimmed = line.trim();
-                    if (!lineTrimmed.isEmpty())
-                        chunks.add(lineTrimmed);
+                    String trimmedLine = line.trim();
+                    if (!trimmedLine.isEmpty()) {
+                        chunks.add(trimmedLine);
+                    }
                 }
             } else {
-                chunks.add(trimmed);
+                chunks.add(trimmedSection);
             }
         }
 

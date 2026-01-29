@@ -20,7 +20,7 @@ public interface FollowUpStatusRepository extends JpaRepository<FollowUpStatus, 
     Optional<FollowUpStatus> findByConversationId(UUID conversationId);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT fs FROM FollowUpStatus fs WHERE fs.id = :id")
+    @Query("SELECT fs FROM FollowUpStatus fs JOIN FETCH fs.conversation WHERE fs.id = :id")
     Optional<FollowUpStatus> findByIdWithLock(@Param("id") UUID id);
 
     /**
@@ -32,7 +32,7 @@ public interface FollowUpStatusRepository extends JpaRepository<FollowUpStatus, 
      */
     @Query("""
             SELECT fs FROM FollowUpStatus fs
-            JOIN fs.conversation c
+            JOIN FETCH fs.conversation c
             JOIN FollowUpConfig fc ON fc.company = c.company
             WHERE fs.nextFollowUpAt <= :now
             AND fs.paused = false
@@ -47,7 +47,7 @@ public interface FollowUpStatusRepository extends JpaRepository<FollowUpStatus, 
      */
     @Query("""
             SELECT fs FROM FollowUpStatus fs
-            JOIN fs.conversation c
+            JOIN FETCH fs.conversation c
             WHERE c.company.id = :companyId
             ORDER BY fs.lastMessageAt DESC
             """)

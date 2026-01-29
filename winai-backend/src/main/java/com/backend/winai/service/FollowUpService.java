@@ -366,13 +366,10 @@ public class FollowUpService {
         String followUpMessage = generateFollowUpMessage(config, conversation);
 
         try {
-            // 1. Envia via WhatsApp (UAZAPI)
-            boolean sent = aiAgentService.sendAIResponse(conversation, followUpMessage);
+            // 1. Envia via WhatsApp (UAZAPI) e persiste (gerenciando chunks se necessário)
+            boolean sent = aiAgentService.sendSplitResponse(conversation, followUpMessage);
 
             if (sent) {
-                // 2. Persiste no banco de dados e notifica via WebSocket para o Frontend
-                aiAgentService.persistAndNotify(conversation, followUpMessage);
-
                 ZonedDateTime now = ZonedDateTime.now();
                 status.setFollowUpCount(status.getFollowUpCount() + 1);
                 status.setLastFollowUpAt(now);
