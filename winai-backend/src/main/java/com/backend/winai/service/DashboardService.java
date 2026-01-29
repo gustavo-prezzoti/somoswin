@@ -156,6 +156,8 @@ public class DashboardService {
                                         .spend(formatCurrency(spend))
                                         .cpl(formatCurrency(cpl))
                                         .conversion(formatPercentage(convRate))
+                                        .roas(formatRoi(cpl > 0 ? (100.0 / cpl) : 0)) // Using 100 as default lead value
+                                                                                      // for ROAS estimation
                                         .build();
                 }).collect(Collectors.toList());
         }
@@ -250,54 +252,33 @@ public class DashboardService {
                         MetricsSummaryData previous) {
 
                 // Cálculos baseados no modelo do usuário
-                double currentConv = current.totalClicks > 0 ? (double) current.totalLeads / current.totalClicks * 100
-                                : 0;
-                double previousConv = previous.totalClicks > 0
-                                ? (double) previous.totalLeads / previous.totalClicks * 100
-                                : 0;
-
-                // ROI Estimado: Supondo Valor de Lead de R$ 100,00 para o cálculo do "retorno
-                // de leads"
-                double currentRoi = current.totalInvestment > 0 ? (current.totalLeads * 100.0) / current.totalInvestment
-                                : 0;
-                double previousRoi = previous.totalInvestment > 0
-                                ? (previous.totalLeads * 100.0) / previous.totalInvestment
-                                : 0;
-
-                // CPL Médio do Período: Investimento / Leads
-                double currentCpl = current.totalLeads > 0 ? current.totalInvestment / current.totalLeads : 0;
-                double previousCpl = previous.totalLeads > 0 ? previous.totalInvestment / previous.totalLeads : 0;
-
-                return DashboardResponse.MetricsSummary.builder()
-                                .leadsCaptured(buildMetricCard(
-                                                String.valueOf(current.totalLeads),
-                                                calculateTrend(current.totalLeads, previous.totalLeads),
-                                                current.totalLeads >= previous.totalLeads))
-                                .cplAverage(buildMetricCard(
-                                                formatCurrency(currentCpl),
-                                                calculateTrend(currentCpl, previousCpl),
-                                                currentCpl <= previousCpl))
-                                .conversionRate(buildMetricCard(
-                                                formatPercentage(currentConv),
-                                                calculateTrend(currentConv, previousConv),
-                                                currentConv >= previousConv))
-                                .roi(buildMetricCard(
-                                                formatRoi(currentRoi),
-                                                calculateTrend(currentRoi, previousRoi),
-                                                currentRoi >= previousRoi))
-                                .investment(buildMetricCard(
-                                                formatCurrency(current.totalInvestment),
-                                                calculateTrend(current.totalInvestment, previous.totalInvestment),
-                                                current.totalInvestment <= previous.totalInvestment))
-                                .impressions(buildMetricCard(
-                                                String.valueOf(current.totalImpressions),
-                                                calculateTrend(current.totalImpressions, previous.totalImpressions),
-                                                current.totalImpressions >= previous.totalImpressions))
-                                .clicks(buildMetricCard(
-                                                String.valueOf(current.totalClicks),
-                                                calculateTrend(current.totalClicks, previous.totalClicks),
-                                                current.totalClicks >= previous.totalClicks))
+                DashboardResponse.MetricsSummary summary = DashboardResponse.MetricsSummary.builder()
+                                .leadsCaptured(buildMetricCard(String.valueOf(current.totalLeads()),
+                                                calculateTrend(current.totalLeads(), previous.totalLeads()),
+                                                current.totalLeads() >= previous.totalLeads()))
+                                .cplAverage(buildMetricCard(formatCurrency(current.avgCpl()),
+                                                calculateTrend(current.avgCpl(), previous.avgCpl()),
+                                                current.avgCpl() <= previous.avgCpl()))
+                                .conversionRate(buildMetricCard(formatPercentage(current.avgConversion()),
+                                                calculateTrend(current.avgConversion(), previous.avgConversion()),
+                                                current.avgConversion() >= previous.avgConversion()))
+                                .roi(buildMetricCard(formatRoi(current.avgRoi()),
+                                                calculateTrend(current.avgRoi(), previous.avgRoi()),
+                                                current.avgRoi() >= previous.avgRoi()))
+                                .roas(buildMetricCard(formatRoi(current.avgRoas()),
+                                                calculateTrend(current.avgRoas(), previous.avgRoas()),
+                                                current.avgRoas() >= previous.avgRoas()))
+                                .investment(buildMetricCard(formatCurrency(current.totalInvestment()),
+                                                calculateTrend(current.totalInvestment(), previous.totalInvestment()),
+                                                current.totalInvestment() >= previous.totalInvestment()))
+                                .impressions(buildMetricCard(formatNumber(current.totalImpressions()),
+                                                calculateTrend(current.totalImpressions(), previous.totalImpressions()),
+                                                current.totalImpressions() >= previous.totalImpressions()))
+                                .clicks(buildMetricCard(String.valueOf(current.totalClicks()),
+                                                calculateTrend(current.totalClicks(), previous.totalClicks()),
+                                                current.totalClicks() >= previous.totalClicks()))
                                 .build();
+                return summary;
         }
 
         private DashboardResponse.MetricCard buildMetricCard(String value, String trend, boolean isPositive) {
@@ -416,7 +397,7 @@ public class DashboardService {
 
         private MetricsSummaryData calculateSummary(Company company, LocalDate startDate, LocalDate endDate) {
                 if (company == null) {
-                        return new MetricsSummaryData(0, 0.0, 0.0, 0.0, 0.0, 0, 0L);
+                        return new MetricsSummaryData(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0L);
                 }
 
                 Integer totalLeads = metricsRepository.sumLeadsCapturedByCompanyAndDateBetween(company, startDate,
@@ -429,6 +410,7 @@ public class DashboardService {
                 // New fields
                 Double totalInvestment = metricsRepository.sumInvestmentByCompanyAndDateBetween(company, startDate,
                                 endDate);
+                Double avgRoas = metricsRepository.avgRoasByCompanyAndDateBetween(company, startDate, endDate);
                 Integer totalClicks = metricsRepository.sumClicksByCompanyAndDateBetween(company, startDate, endDate);
                 Long totalImpressions = metricsRepository.sumImpressionsByCompanyAndDateBetween(company, startDate,
                                 endDate);
@@ -438,6 +420,7 @@ public class DashboardService {
                                 avgCpl != null ? avgCpl : 0.0,
                                 avgConversion != null ? avgConversion : 0.0,
                                 avgRoi != null ? avgRoi : 0.0,
+                                avgRoas != null ? avgRoas : 0.0,
                                 totalInvestment != null ? totalInvestment : 0.0,
                                 totalClicks != null ? totalClicks : 0,
                                 totalImpressions != null ? totalImpressions : 0L);
@@ -479,6 +462,14 @@ public class DashboardService {
                 if (score >= 40)
                         return "Atenção Necessária";
                 return "Performance Crítica";
+        }
+
+        private String formatNumber(long number) {
+                if (number >= 1000000)
+                        return String.format("%.1fM", number / 1000000.0);
+                if (number >= 1000)
+                        return String.format("%.1fk", number / 1000.0);
+                return String.valueOf(number);
         }
 
         private int randomBetween(int min, int max) {
@@ -687,6 +678,6 @@ public class DashboardService {
 
         // Inner class para dados calculados
         private record MetricsSummaryData(int totalLeads, double avgCpl, double avgConversion, double avgRoi,
-                        double totalInvestment, int totalClicks, long totalImpressions) {
+                        double avgRoas, double totalInvestment, int totalClicks, long totalImpressions) {
         }
 }

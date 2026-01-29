@@ -78,9 +78,14 @@ public class MetricsSyncService {
             }
 
             // ROI Estimado: (Leads * 100.0) / Investimento
+            // ROAS Estimado: Revenue (Leads * 100) / Investimento
             BigDecimal roi = BigDecimal.ZERO;
+            BigDecimal roas = BigDecimal.ZERO;
+            double estimatedRevenue = leadsCaptured * 100.0;
+
             if (totalSpend > 0) {
-                roi = BigDecimal.valueOf((leadsCaptured * 100.0) / totalSpend).setScale(2, RoundingMode.HALF_UP);
+                roi = BigDecimal.valueOf(estimatedRevenue / totalSpend).setScale(2, RoundingMode.HALF_UP);
+                roas = roi; // In this simplified estimation, ROAS and ROI (on ad spend) are similar
             }
 
             // Busca ou cria registro de métrica
@@ -94,6 +99,7 @@ public class MetricsSyncService {
             metrics.setCplAverage(avgCpl);
             metrics.setConversionRate(conversionRate);
             metrics.setRoi(roi);
+            metrics.setRoas(roas);
             metrics.setInvestment(BigDecimal.valueOf(totalSpend).setScale(2, RoundingMode.HALF_UP));
             metrics.setClicks((int) totalClicks);
             metrics.setImpressions(totalImpressions);
@@ -116,15 +122,38 @@ public class MetricsSyncService {
     }
 
     private int calculatePerformanceScore(int leads, double spend, int meetings) {
-        if (leads == 0)
+        if (leads == 0 && spend == 0)
             return 0;
-        int score = 50; // Base
-        if (leads > 10)
-            score += 10;
-        if (meetings > 2)
+        int score = 40; // Base score for active operation
+
+        // Leads volume (0-30 points)
+        if (leads > 20)
+            score += 30;
+        else if (leads > 10)
             score += 20;
-        if (spend > 0 && (spend / leads) < 15.0)
-            score += 20; // CPL bom
+        else if (leads > 0)
+            score += 10;
+
+        // Meetings / Conversions (0-30 points)
+        if (meetings > 5)
+            score += 30;
+        else if (meetings > 2)
+            score += 20;
+        else if (meetings > 0)
+            score += 10;
+
+        // Efficiency (CPL) (0-30 points)
+        if (leads > 0 && spend > 0) {
+            double cpl = spend / leads;
+            if (cpl < 10.0)
+                score += 30;
+            else if (cpl < 25.0)
+                score += 20;
+            else if (cpl < 50.0)
+                score += 10;
+        }
+
+        // Cap at 100
         return Math.min(100, score);
     }
 }

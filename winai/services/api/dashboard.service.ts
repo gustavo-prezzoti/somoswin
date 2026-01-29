@@ -30,6 +30,10 @@ export interface MetricsSummary {
     cplAverage: MetricCard;
     conversionRate: MetricCard;
     roi: MetricCard;
+    roas: MetricCard;
+    investment: MetricCard;
+    impressions: MetricCard;
+    clicks: MetricCard;
 }
 
 export interface MetricCard {

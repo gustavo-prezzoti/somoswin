@@ -47,6 +47,10 @@ public class DashboardMetrics {
     @Builder.Default
     private BigDecimal investment = BigDecimal.ZERO;
 
+    @Column(name = "roas", precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal roas = BigDecimal.ZERO;
+
     @Column(name = "clicks")
     @Builder.Default
     private Integer clicks = 0;

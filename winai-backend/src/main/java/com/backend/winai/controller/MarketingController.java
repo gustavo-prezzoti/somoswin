@@ -20,8 +20,8 @@ public class MarketingController {
     private final MarketingService marketingService;
 
     @GetMapping("/metrics")
-    public ResponseEntity<TrafficMetricsResponse> getMetrics() {
-        return ResponseEntity.ok(marketingService.getTrafficMetrics());
+    public ResponseEntity<TrafficMetricsResponse> getMetrics(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(marketingService.getTrafficMetrics(user));
     }
 
     @GetMapping("/instagram-metrics")

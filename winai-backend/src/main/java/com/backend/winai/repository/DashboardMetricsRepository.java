@@ -43,6 +43,12 @@ public interface DashboardMetricsRepository extends JpaRepository<DashboardMetri
                         @Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate);
 
+        @Query("SELECT AVG(d.roas) FROM DashboardMetrics d WHERE d.company = :company AND d.date BETWEEN :startDate AND :endDate")
+        Double avgRoasByCompanyAndDateBetween(
+                        @Param("company") Company company,
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate);
+
         @Query("SELECT AVG(d.performanceScore) FROM DashboardMetrics d WHERE d.company = :company AND d.date BETWEEN :startDate AND :endDate")
         Double avgPerformanceScoreByCompanyAndDateBetween(
                         @Param("company") Company company,

@@ -323,10 +323,10 @@ const Campaigns: React.FC = () => {
                 color="bg-teal-50 text-teal-600"
               />
               <SummaryCard
-                icon={MessageSquare}
-                label="Conversas Iniciadas"
-                metric={metrics?.conversations || { value: '0', trend: '0%', isPositive: true }}
-                color="bg-emerald-50 text-emerald-600"
+                icon={TrendingUp}
+                label="ROAS Estimado"
+                metric={metrics?.roas || { value: '0.0x', trend: '0%', isPositive: true }}
+                color="bg-purple-50 text-purple-600"
               />
             </div>
 

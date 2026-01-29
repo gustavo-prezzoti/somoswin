@@ -16,6 +16,7 @@ public class TrafficMetricsResponse {
     private MetricDetail impressions;
     private MetricDetail clicks;
     private MetricDetail conversations;
+    private MetricDetail roas;
     private List<DailyPerformance> performanceHistory;
 
     @Data

@@ -36,6 +36,7 @@ public class DashboardResponse {
         private String spend;
         private String cpl;
         private String conversion;
+        private String roas;
     }
 
     @Data
@@ -58,6 +59,7 @@ public class DashboardResponse {
         private MetricCard cplAverage;
         private MetricCard conversionRate;
         private MetricCard roi;
+        private MetricCard roas;
         private MetricCard investment;
         private MetricCard impressions;
         private MetricCard clicks;

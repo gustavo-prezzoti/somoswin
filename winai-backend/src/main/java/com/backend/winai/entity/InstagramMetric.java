@@ -37,4 +37,13 @@ public class InstagramMetric {
 
     @Column(name = "follower_count")
     private Long followerCount;
+
+    private Long interactions;
+    private Long comments;
+    private Long likes;
+    private Long shares;
+    private Long saves;
+
+    @Column(name = "engagement_rate", precision = 5, scale = 2)
+    private java.math.BigDecimal engagementRate;
 }

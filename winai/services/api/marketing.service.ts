@@ -16,6 +16,7 @@ export interface TrafficMetrics {
     impressions: MetricDetail;
     clicks: MetricDetail;
     conversations: MetricDetail;
+    roas: MetricDetail;
     performanceHistory: DailyPerformance[];
 }
 

@@ -225,11 +225,12 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           <MetricCard icon={Users} label="Leads Captados" value={data.metrics.leadsCaptured.value} trend={data.metrics.leadsCaptured.trend} isPositive={data.metrics.leadsCaptured.isPositive} />
           <MetricCard icon={DollarSign} label="CPL Médio" value={data.metrics.cplAverage.value} trend={data.metrics.cplAverage.trend} isPositive={data.metrics.cplAverage.isPositive} />
           <MetricCard icon={Percent} label="Conversão" value={data.metrics.conversionRate.value} trend={data.metrics.conversionRate.trend} isPositive={data.metrics.conversionRate.isPositive} />
           <MetricCard icon={TrendingUp} label="ROI Estimado" value={data.metrics.roi.value} trend={data.metrics.roi.trend} isPositive={data.metrics.roi.isPositive} />
+          <MetricCard icon={Zap} label="ROAS Estimado" value={data.metrics.roas.value} trend={data.metrics.roas.trend} isPositive={data.metrics.roas.isPositive} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

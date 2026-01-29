@@ -148,9 +148,10 @@ public class MarketingService {
             JsonNode basicInfo = objectMapper.readTree(getWithRetry(basicInfoUrl).getBody());
             long followers = basicInfo.has("followers_count") ? basicInfo.get("followers_count").asLong() : 0;
 
-            // 3. Fetch Insights (last 30 days)
+            // 3. Fetch Insights (last 30 days for metrics, last 7 days for the chart
+            // requested)
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach&period=day&access_token=%s",
+                    "%s/%s/insights?metric=reach,impressions,total_interactions,profile_views,website_clicks&period=day&access_token=%s",
                     metaApiBaseUrl, igId, accessToken);
             JsonNode insightsData = objectMapper
                     .readTree(getWithRetry(insightsUrl).getBody()).get("data");
@@ -165,25 +166,40 @@ public class MarketingService {
 
     private InstagramMetricsResponse mapToInstagramResponse(long totalFollowers, JsonNode insights) {
         long impressionsTotal = 0;
+        long interactionsTotal = 0;
         List<InstagramMetricsResponse.DailyPerformance> performance = new ArrayList<>();
 
         if (insights != null && insights.isArray()) {
             for (JsonNode metric : insights) {
                 String name = metric.get("name").asText();
-                if ("impressions".equals(name) || "reach".equals(name)) {
+                if ("impressions".equals(name) || "reach".equals(name) || "total_interactions".equals(name)) {
                     JsonNode values = metric.get("values");
-                    for (JsonNode val : values) {
-                        long v = val.get("value").asLong();
-                        impressionsTotal += v;
-                        performance.add(InstagramMetricsResponse.DailyPerformance.builder()
-                                .date(val.get("end_time").asText().substring(8, 10) + "/"
-                                        + val.get("end_time").asText().substring(5, 7))
-                                .value((double) v)
-                                .build());
+                    if (values != null && values.isArray()) {
+                        long totalForMetric = 0;
+                        int startIdx = Math.max(0, values.size() - 7);
+                        for (int i = startIdx; i < values.size(); i++) {
+                            JsonNode val = values.get(i);
+                            long v = val.get("value").asLong();
+                            totalForMetric += v;
+
+                            if ("reach".equals(name)) {
+                                performance.add(InstagramMetricsResponse.DailyPerformance.builder()
+                                        .date(val.get("end_time").asText().substring(8, 10) + "/"
+                                                + val.get("end_time").asText().substring(5, 7))
+                                        .value((double) v)
+                                        .build());
+                            }
+                        }
+                        if ("impressions".equals(name))
+                            impressionsTotal = totalForMetric;
+                        if ("total_interactions".equals(name))
+                            interactionsTotal = totalForMetric;
                     }
                 }
             }
         }
+
+        double engagementRate = (impressionsTotal > 0) ? (double) interactionsTotal / impressionsTotal * 100 : 0;
 
         return InstagramMetricsResponse.builder()
                 .followers(InstagramMetricsResponse.MetricDetail.builder()
@@ -192,7 +208,7 @@ public class MarketingService {
                         .isPositive(true)
                         .build())
                 .engagementRate(InstagramMetricsResponse.MetricDetail.builder()
-                        .value("4.8%")
+                        .value(String.format("%.2f%%", engagementRate))
                         .trend("0.5%")
                         .isPositive(true)
                         .build())
@@ -202,7 +218,7 @@ public class MarketingService {
                         .isPositive(true)
                         .build())
                 .interactions(InstagramMetricsResponse.MetricDetail.builder()
-                        .value("1.2k")
+                        .value(formatNumber(interactionsTotal))
                         .trend("5.4%")
                         .isPositive(true)
                         .build())
@@ -766,26 +782,16 @@ public class MarketingService {
                 return;
             String igId = igNode.get("id").asText();
 
-            // Fetch Reach
-            String reachUrl = String.format(
-                    "%s/%s/insights?metric=reach&period=day&access_token=%s",
+            // Fetch Insights (reach, impressions, total_interactions, profile_views,
+            // website_clicks)
+            String insightsUrl = String.format(
+                    "%s/%s/insights?metric=reach,impressions,total_interactions,profile_views,website_clicks&period=day&access_token=%s",
                     metaApiBaseUrl, igId, conn.getAccessToken());
-            ResponseEntity<String> reachRes = getWithRetry(reachUrl);
-            JsonNode reachData = objectMapper.readTree(reachRes.getBody()).get("data");
+            ResponseEntity<String> insightsRes = getWithRetry(insightsUrl);
+            JsonNode insightsData = objectMapper.readTree(insightsRes.getBody()).get("data");
 
-            // Fetch Profile Views
-            String profileViewsUrl = String.format(
-                    "%s/%s/insights?metric=profile_views&period=day&metric_type=total_value&access_token=%s",
-                    metaApiBaseUrl, igId, conn.getAccessToken());
-            ResponseEntity<String> profileViewsRes = getWithRetry(profileViewsUrl);
-            JsonNode profileViewsData = objectMapper.readTree(profileViewsRes.getBody()).get("data");
-
-            Map<LocalDate, com.backend.winai.entity.InstagramMetric> metricMap = new HashMap<>();
-
-            // Process Reach
-            processInstagramInsights(reachData, metricMap, conn);
-            // Process Profile Views
-            processInstagramInsights(profileViewsData, metricMap, conn);
+            Map<LocalDate, com.backend.winai.entity.InstagramMetric> metricMap = new java.util.HashMap<>();
+            processInstagramInsights(insightsData, metricMap, conn);
 
             String baseFieldsUrl = String.format("%s/%s?fields=followers_count&access_token=%s", metaApiBaseUrl, igId,
                     conn.getAccessToken());
@@ -841,11 +847,14 @@ public class MarketingService {
         long impressions = (summary != null && summary.has("impressions")) ? summary.get("impressions").asLong() : 0;
         long clicks = (summary != null && summary.has("clicks")) ? summary.get("clicks").asLong() : 0;
 
-        long conversations = 0;
+        long conversions = 0;
         if (summary != null && summary.has("actions")) {
             for (JsonNode action : summary.get("actions")) {
-                if ("onsite_conversion.messaging_conversation_started_7d".equals(action.get("action_type").asText())) {
-                    conversations = action.get("value").asLong();
+                String actionType = action.get("action_type").asText();
+                if ("onsite_conversion.messaging_conversation_started_7d".equals(actionType) ||
+                        "lead".equals(actionType) ||
+                        "purchase".equals(actionType)) {
+                    conversions += action.get("value").asLong();
                 }
             }
         }
@@ -861,11 +870,14 @@ public class MarketingService {
             }
         }
 
+        double roasValue = spend > 0 ? (conversions * 100.0) / spend : 0;
+
         return TrafficMetricsResponse.builder()
                 .investment(createDetail(String.format("R$ %.2f", spend), "0%", true))
                 .impressions(createDetail(formatNumber(impressions), "0%", true))
                 .clicks(createDetail(String.valueOf(clicks), "0%", true))
-                .conversations(createDetail(String.valueOf(conversations), "0%", true))
+                .conversations(createDetail(String.valueOf(conversions), "0%", true))
+                .roas(createDetail(String.format("%.1fx", roasValue), "0%", true))
                 .performanceHistory(performance)
                 .build();
     }
