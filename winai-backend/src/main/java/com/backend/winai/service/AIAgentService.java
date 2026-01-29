@@ -267,8 +267,8 @@ public class AIAgentService {
 
     /**
      * Divide a resposta da IA em partes lógicas para envio separado no WhatsApp.
-     * Prioriza parágrafos (\n\n) e depois quebras de linha (\n) se o bloco for
-     * longo.
+     * Prioriza a tag [SPLIT] definida pela IA. Se não houver, usa lógica de
+     * parágrafo.
      */
     private List<String> splitMessage(String content) {
         List<String> chunks = new ArrayList<>();
@@ -278,7 +278,21 @@ public class AIAgentService {
         // Limpeza inicial
         content = content.replace("\r", "");
 
-        // 1. Divide por parágrafos (duas ou mais quebras de linha)
+        // 1. Prioridade: Split por tag explícita da IA [SPLIT]
+        if (content.contains("[SPLIT]")) {
+            String[] parts = content.split("\\[SPLIT\\]");
+            for (String part : parts) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty()) {
+                    chunks.add(trimmed);
+                }
+            }
+            return chunks;
+        }
+
+        // 2. Fallback: Se não tiver tag, divide apenas por parágrafos duplos (\n\n)
+        // Somente divide por quebra simples (\n) se o bloco for extremamente longo (>
+        // 700)
         String[] sections = content.split("\\n\\n+");
 
         for (String section : sections) {
@@ -286,15 +300,25 @@ public class AIAgentService {
             if (trimmedSection.isEmpty())
                 continue;
 
-            // 2. Se a seção for longa ou contiver listas/várias linhas, divide por quebra
-            // simples
-            if (trimmedSection.length() > 300 || trimmedSection.contains("\n")) {
+            if (trimmedSection.length() > 700) {
+                // Tenta agrupar linhas se o bloco for gigante
                 String[] lines = trimmedSection.split("\\n");
+                StringBuilder currentChunk = new StringBuilder();
                 for (String line : lines) {
                     String trimmedLine = line.trim();
-                    if (!trimmedLine.isEmpty()) {
-                        chunks.add(trimmedLine);
+                    if (trimmedLine.isEmpty())
+                        continue;
+
+                    if (currentChunk.length() + trimmedLine.length() > 500) {
+                        chunks.add(currentChunk.toString().trim());
+                        currentChunk = new StringBuilder();
                     }
+                    if (currentChunk.length() > 0)
+                        currentChunk.append("\n");
+                    currentChunk.append(trimmedLine);
+                }
+                if (currentChunk.length() > 0) {
+                    chunks.add(currentChunk.toString().trim());
                 }
             } else {
                 chunks.add(trimmedSection);

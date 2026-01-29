@@ -426,6 +426,7 @@ public class FollowUpService {
                                 "2. Empática e prestativa.\n" +
                                 "3. Cite brevemente algo do histórico se fizer sentido para parecer natural.\n" +
                                 "4. Termine com uma pergunta simples para facilitar a resposta.\n" +
+                                "5. Se quiser enviar mais de uma mensagem separada, use a tag [SPLIT] entre elas.\n" +
                                 "\nHISTÓRICO:\n%s\n" +
                                 "\nIMPORTANTE: Retorne APENAS o texto da mensagem. Não use aspas ou prefixos.",
                         leadName, String.join("\n", history));

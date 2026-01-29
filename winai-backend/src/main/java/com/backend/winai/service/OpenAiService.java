@@ -371,6 +371,8 @@ public class OpenAiService {
         systemPrompt.append("4. Mantenha respostas concisas e diretas (ideal para WhatsApp).\n");
         systemPrompt.append("5. Use emojis de forma moderada para tornar a conversa mais amigável.\n");
         systemPrompt.append("6. Nunca invente informações que não estejam na base de conhecimento.\n");
+        systemPrompt.append(
+                "7. Use a tag [SPLIT] para indicar onde a mensagem deve ser dividida em múltiplos envios no WhatsApp para um fluxo natural.\n");
 
         List<ChatMessage> history = new ArrayList<>();
         if (recentMessages != null) {
@@ -569,8 +571,8 @@ public class OpenAiService {
                     "2. **Quebras de linha:** Use apenas se a mensagem for realmente dividida em duas ideias.\n");
             sysPrompt.append("3. **Emojis:** Máximo de 2 por mensagem (🧡, ✨).\n\n");
             sysPrompt.append("**INSTRUÇÃO FINAL:**\n");
-            sysPrompt.append(
-                    "Seja breve. Menos é mais. Foque em fechar o agendamento ou tirar a dúvida sem enrolar.");
+            sysPrompt.append("Seja breve. Menos é mais. Foque em fechar o agendamento ou tirar a dúvida sem enrolar. ");
+            sysPrompt.append("Se precisar enviar mais de uma mensagem, use a tag [SPLIT] entre elas.");
 
             // Sempre injeta o agente específico e as tools de escala
             if (agentPrompt != null && !agentPrompt.trim().isEmpty()) {
