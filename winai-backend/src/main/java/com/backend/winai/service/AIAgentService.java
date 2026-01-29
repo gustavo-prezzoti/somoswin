@@ -379,11 +379,13 @@ public class AIAgentService {
             WhatsAppMessageResponse messageDto = toMessageResponse(message);
             WhatsAppConversationResponse conversationDto = toConversationResponse(conversation);
 
-            com.backend.winai.dto.response.WebSocketMessage wsMessage = com.backend.winai.dto.response.WebSocketMessage
-                    .builder().type("NEW_MESSAGE").message(messageDto).conversation(conversationDto)
-                    .companyId(companyId).build();
+            if (messageDto != null) {
+                com.backend.winai.dto.response.WebSocketMessage wsMessage = com.backend.winai.dto.response.WebSocketMessage
+                        .builder().type("NEW_MESSAGE").message(messageDto).conversation(conversationDto)
+                        .companyId(companyId).build();
 
-            messagingTemplate.convertAndSend("/topic/whatsapp/" + companyId, wsMessage);
+                messagingTemplate.convertAndSend("/topic/whatsapp/" + companyId, wsMessage);
+            }
 
             com.backend.winai.dto.response.WebSocketMessage convUpdate = com.backend.winai.dto.response.WebSocketMessage
                     .builder().type("CONVERSATION_UPDATED").conversation(conversationDto).companyId(companyId).build();
@@ -515,6 +517,9 @@ public class AIAgentService {
     }
 
     private WhatsAppMessageResponse toMessageResponse(WhatsAppMessage message) {
+        if (message == null) {
+            return null;
+        }
         return WhatsAppMessageResponse.builder().id(message.getId()).conversationId(message.getConversation().getId())
                 .leadId(message.getLead() != null ? message.getLead().getId() : null).messageId(message.getMessageId())
                 .content(message.getContent()).fromMe(message.getFromMe()).messageType(message.getMessageType())
@@ -525,6 +530,9 @@ public class AIAgentService {
     }
 
     private WhatsAppConversationResponse toConversationResponse(WhatsAppConversation conversation) {
+        if (conversation == null) {
+            return null;
+        }
         return WhatsAppConversationResponse.builder().id(conversation.getId())
                 .companyId(conversation.getCompany() != null ? conversation.getCompany().getId() : null)
                 .leadId(conversation.getLead() != null ? conversation.getLead().getId() : null)
