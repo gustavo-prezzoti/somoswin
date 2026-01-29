@@ -78,6 +78,49 @@ public class OpenAiService {
         return generateResponse(systemPrompt, userMessage, null, conversationHistory);
     }
 
+    /**
+     * Analyzes the user's intent to determine if they are requesting a human agent.
+     * Uses a lightweight model (gpt-4o-mini) for speed and cost-efficiency.
+     * 
+     * @param userMessage         The latest message from the user.
+     * @param conversationHistory Recent conversation context.
+     * @return "HANDOFF" if human intervention is needed, "CONTINUE" otherwise.
+     */
+    public String analyzeIntent(String userMessage, List<ChatMessage> conversationHistory) {
+        if (!isChatEnabled())
+            return "CONTINUE";
+
+        try {
+            String systemPrompt = "You are an intent classifier for a customer support bot. " +
+                    "Analyze the user's message and recent context. " +
+                    "If the user explicitly asks to speak with a human, support agent, attendant, " +
+                    "or expresses frustration requiring human intervention, return ONLY the string 'HANDOFF'. " +
+                    "Otherwise, return 'CONTINUE'. " +
+                    "Do not output any reasoning, just the classification label.";
+
+            // Use lightweight model for classification
+            String originalModel = this.currentTextModel;
+            this.currentTextModel = "gpt-4o-mini"; // Force lightweight model
+
+            String result = generateResponse(systemPrompt, userMessage, null, conversationHistory);
+
+            // Restore original model configuration
+            this.currentTextModel = originalModel;
+
+            if (result != null) {
+                result = result.trim().toUpperCase();
+                if (result.contains("HANDOFF"))
+                    return "HANDOFF";
+            }
+
+            return "CONTINUE";
+
+        } catch (Exception e) {
+            log.warn("Intent analysis failed: {}", e.getMessage());
+            return "CONTINUE"; // Fail safe to normal flow
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public String generateResponse(String systemPrompt, String userMessage, String imageUrl,
             List<ChatMessage> conversationHistory) {

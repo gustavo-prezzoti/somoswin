@@ -204,6 +204,23 @@ public class AIAgentService {
             return null;
         }
 
+        // 0. Intent Classification Step (The "Brain" before the "Mouth")
+        // Convert history for classification
+        List<com.backend.winai.service.OpenAiService.ChatMessage> historyForClass = new ArrayList<>();
+        // Recuperar histórico recente (já truncado pelo fix anterior)
+        List<String> rawHistory = getRecentConversationHistory(conv.getId(), 6); // Menos contexto para classificar é ok
+        for (String histMsg : rawHistory) {
+            historyForClass.add(new com.backend.winai.service.OpenAiService.ChatMessage("user", histMsg)); // Simplificação
+        }
+
+        String intent = openAiService.analyzeIntent(userMessage, historyForClass);
+
+        if ("HANDOFF".equals(intent)) {
+            log.info("🎯 Intent Classifier detected HANDOFF request. Switching to HUMAN mode immediately.");
+            handleHumanHandoff(conv, true); // Envia mensagem padrão "Vou chamar..."
+            return "HUMAN_HANDOFF_REQUESTED";
+        }
+
         String aiResponse = processMessageWithAI(conv, userMessage, leadName, imageUrl);
 
         if (aiResponse != null && !aiResponse.isEmpty()) {
@@ -411,6 +428,11 @@ public class AIAgentService {
 
     @Transactional
     public void handleHumanHandoff(WhatsAppConversation conversation) {
+        handleHumanHandoff(conversation, true);
+    }
+
+    @Transactional
+    public void handleHumanHandoff(WhatsAppConversation conversation, boolean sendClientMessage) {
         log.info("Initiating human handoff for conversation: {}", conversation.getId());
 
         // 1. Update support mode
@@ -433,22 +455,24 @@ public class AIAgentService {
             log.warn("Falha ao enviar broadcast inicial de handoff: {}", e.getMessage());
         }
 
-        // 3. Send handoff message to client
-        String handoffMsg = "Entendi! Vou chamar nossa especialista humana para continuar seu atendimento agora mesmo. 🧡 Aguarde só um momento. 🌿✨";
+        // 3. Send handoff message to client (ONLY IF REQUESTED)
+        if (sendClientMessage) {
+            String handoffMsg = "Entendi! Vou chamar nossa especialista humana para continuar seu atendimento agora mesmo. 🧡 Aguarde só um momento. 🌿✨";
 
-        // Tentar obter mensagem personalizada da configuração
-        try {
-            var configOpt = followUpService.getConfigByCompany(conversation.getCompany().getId());
-            if (configOpt.isPresent() && configOpt.get().getHumanHandoffClientMessage() != null
-                    && !configOpt.get().getHumanHandoffClientMessage().isBlank()) {
-                handoffMsg = configOpt.get().getHumanHandoffClientMessage();
+            // Tentar obter mensagem personalizada da configuração
+            try {
+                var configOpt = followUpService.getConfigByCompany(conversation.getCompany().getId());
+                if (configOpt.isPresent() && configOpt.get().getHumanHandoffClientMessage() != null
+                        && !configOpt.get().getHumanHandoffClientMessage().isBlank()) {
+                    handoffMsg = configOpt.get().getHumanHandoffClientMessage();
+                }
+            } catch (Exception e) {
+                log.warn("Erro ao buscar mensagem personalizada de handoff, usando padrão: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.warn("Erro ao buscar mensagem personalizada de handoff, usando padrão: {}", e.getMessage());
-        }
 
-        sendAIResponse(conversation, handoffMsg);
-        persistAndNotify(conversation, handoffMsg);
+            sendAIResponse(conversation, handoffMsg);
+            persistAndNotify(conversation, handoffMsg);
+        }
 
         // 4. Create notifications for all company users
         if (conversation.getCompany() != null) {
