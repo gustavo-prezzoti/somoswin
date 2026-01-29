@@ -190,28 +190,33 @@ public class AIAgentService {
     @Transactional
     public String processAndRespond(WhatsAppConversation conversation, String userMessage, String leadName,
             String imageUrl) {
-        log.info("Starting processAndRespond for conversation: {}, user message: {} chars", conversation.getId(),
+        // Recarregar a conversation com a company para evitar
+        // LazyInitializationException em background
+        WhatsAppConversation conv = conversationRepository.findByIdWithCompany(conversation.getId())
+                .orElse(conversation);
+
+        log.info("Starting processAndRespond for conversation: {}, user message: {} chars", conv.getId(),
                 userMessage != null ? userMessage.length() : 0);
 
-        String aiResponse = processMessageWithAI(conversation, userMessage, leadName, imageUrl);
+        String aiResponse = processMessageWithAI(conv, userMessage, leadName, imageUrl);
 
         if (aiResponse != null && !aiResponse.isEmpty()) {
             log.info("AI generated response: {} chars", aiResponse.length());
 
             // Check for Human Handoff Request from Tool Call
             if ("HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
-                handleHumanHandoff(conversation);
+                handleHumanHandoff(conv);
                 return "HUMAN_HANDOFF_REQUESTED";
             }
 
             // Delegar para o método que gerencia múltiplas mensagens
-            sendSplitResponse(conversation, aiResponse);
+            sendSplitResponse(conv, aiResponse);
 
             // Atualizar status de follow-up - IA respondeu
             try {
-                followUpService.updateLastMessage(conversation.getId(), "AI");
+                followUpService.updateLastMessage(conv.getId(), "AI");
             } catch (Exception e) {
-                log.warn("Erro ao atualizar follow-up para conversa {}: {}", conversation.getId(), e.getMessage());
+                log.warn("Erro ao atualizar follow-up para conversa {}: {}", conv.getId(), e.getMessage());
             }
 
             return aiResponse;
@@ -437,8 +442,9 @@ public class AIAgentService {
                 notificationRepository.save(notification);
             }
 
-            // 4. Also notify via WebSocket about the mode change for agents online
-            sendWebSocketUpdate(conversation.getCompany().getId(), null, conversation);
+            // 4. Notifications are sent via persistAndNotify above which calls
+            // sendWebSocketUpdate
+            // We only need to send explicit mode change and notification events below.
 
             // 5. Send explicit mode change and notification events
             com.backend.winai.dto.response.WebSocketMessage modeChange = com.backend.winai.dto.response.WebSocketMessage
