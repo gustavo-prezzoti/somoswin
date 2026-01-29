@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Scheduler responsável por disparar processamento de follow-ups.
- * Executa a cada 10 minutos e delega processamento para threads dedicadas.
+ * Executa a cada minuto e delega processamento para threads dedicadas.
  * 
  * Só é ativado quando:
  * - followup.worker.enabled=true (container follow-up worker)
@@ -23,10 +23,10 @@ public class FollowUpScheduler {
     private final FollowUpService followUpService;
 
     /**
-     * Executa a cada 10 minutos.
+     * Executa a cada minuto.
      * O processamento real é feito de forma assíncrona no FollowUpService.
      */
-    @Scheduled(cron = "0 */10 * * * *")
+    @Scheduled(cron = "0 * * * * *")
     public void triggerFollowUps() {
         log.info("[FOLLOW-UP WORKER] Iniciando verificação de follow-ups pendentes...");
 
