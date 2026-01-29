@@ -372,7 +372,7 @@ public class OpenAiService {
         systemPrompt.append("5. Use emojis de forma moderada para tornar a conversa mais amigável.\n");
         systemPrompt.append("6. Nunca invente informações que não estejam na base de conhecimento.\n");
         systemPrompt.append(
-                "7. Use a tag [SPLIT] para indicar onde a mensagem deve ser dividida em múltiplos envios no WhatsApp para um fluxo natural.\n");
+                "7. Use a tag [SPLIT] para dividir mensagens longas em vários balões de conversa. Cada parte deve ser uma continuação direta sem repetir saudações ou introduções. O objetivo é um fluxo natural de mensagens sequenciais.\n");
 
         List<ChatMessage> history = new ArrayList<>();
         if (recentMessages != null) {
@@ -572,7 +572,9 @@ public class OpenAiService {
             sysPrompt.append("3. **Emojis:** Máximo de 2 por mensagem (🧡, ✨).\n\n");
             sysPrompt.append("**INSTRUÇÃO FINAL:**\n");
             sysPrompt.append("Seja breve. Menos é mais. Foque em fechar o agendamento ou tirar a dúvida sem enrolar. ");
-            sysPrompt.append("Se precisar enviar mais de uma mensagem, use a tag [SPLIT] entre elas.");
+            sysPrompt.append("Se precisar enviar mais de uma mensagem, use a tag [SPLIT] entre elas. ");
+            sysPrompt.append(
+                    "Cada balão deve ser continuação do anterior, sem repetir o 'Oi' ou apresentações em cada parte.");
 
             // Sempre injeta o agente específico e as tools de escala
             if (agentPrompt != null && !agentPrompt.trim().isEmpty()) {

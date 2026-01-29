@@ -149,12 +149,13 @@ public class FollowUpService {
         boolean shouldSchedule = false;
         if ("LEAD".equals(from) && config.getTriggerOnLeadMessage()) {
             shouldSchedule = true;
-            // Lead respondeu, reseta contador se não for recorrente
-            if (!config.getRecurring()) {
-                status.setFollowUpCount(0);
-            }
+            // Lead respondeu, reseta contador para começar um novo ciclo de follow-ups
+            status.setFollowUpCount(0);
         } else if ("AI".equals(from) && config.getTriggerOnAiResponse()) {
             shouldSchedule = true;
+            // IA respondeu, também reseta o contador para reativar o ciclo se estava no
+            // limite
+            status.setFollowUpCount(0);
         }
 
         if (shouldSchedule && status.getFollowUpCount() < config.getMaxFollowUps()) {
