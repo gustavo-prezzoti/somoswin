@@ -223,7 +223,6 @@ public class FollowUpService {
      * Chamado pelo FollowUpScheduler.
      */
     @Async("followUpTaskExecutor")
-    @Transactional
     public void processPendingFollowUpsAsync() {
         ZonedDateTime now = ZonedDateTime.now();
         // Busca apenas IDs para evitar problemas de concorrência com objetos Managed
@@ -252,18 +251,20 @@ public class FollowUpService {
      */
     @Transactional
     public void processFollowUpByIdWithLock(UUID statusId) {
-        // O repositório deve usar trava pessimista ou verificação de timer
-        Optional<FollowUpStatus> statusOpt = statusRepository.findById(statusId);
+        // Usa SELECT FOR UPDATE para garantir exclusividade imediata
+        Optional<FollowUpStatus> statusOpt = statusRepository.findByIdWithLock(statusId);
         if (statusOpt.isEmpty())
             return;
 
         FollowUpStatus status = statusOpt.get();
 
-        // Verificação dupla: se o timer já foi limpo por outra thread, ignora.
+        // Verificação DUPLA dentro da trava: se outra thread já limpou o timer, aborta.
         if (status.getNextFollowUpAt() == null || status.getNextFollowUpAt().isAfter(ZonedDateTime.now())) {
+            log.debug("Follow-up {} já processado ou adiado por outra thread", statusId);
             return;
         }
 
+        log.info("Processando follow-up bloqueado para conversa {}", status.getConversation().getId());
         processFollowUpForConversation(status);
     }
 
@@ -347,8 +348,6 @@ public class FollowUpService {
             log.error("Erro ao enviar follow-up para conversa {}: {}",
                     conversation.getId(), e.getMessage(), e);
 
-            // Lógica de Retentativa Única: se falhar, tenta só mais uma vez em 30 min.
-            // Se o followUpCount for o mesmo, significa que não conseguimos enviar o atual.
             if (status.getLastFollowUpAt() == null
                     || status.getLastFollowUpAt().isBefore(ZonedDateTime.now().minusMinutes(5))) {
                 log.info("Agendando UMA única retentativa para conversa {}", conversation.getId());
