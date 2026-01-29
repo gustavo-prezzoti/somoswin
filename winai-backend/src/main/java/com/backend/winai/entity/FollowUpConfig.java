@@ -126,11 +126,18 @@ public class FollowUpConfig {
     private String humanHandoffPhone;
 
     /**
-     * Mensagem customizada para notificação de handoff (opcional).
+     * Mensagem customizada para notificação de handoff enviada ao AGENTE
+     * (opcional).
      * Placeholders disponíveis: {leadName}, {phoneNumber}, {conversationId}
      */
     @Column(name = "human_handoff_message", length = 1000)
     private String humanHandoffMessage;
+
+    /**
+     * Mensagem enviada ao LEAD quando solicitada a escala para humano.
+     */
+    @Column(name = "human_handoff_client_message", length = 1000)
+    private String humanHandoffClientMessage;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

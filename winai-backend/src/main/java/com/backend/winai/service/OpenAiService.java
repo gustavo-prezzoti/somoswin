@@ -373,17 +373,93 @@ public class OpenAiService {
         systemPrompt.append("6. Nunca invente informações que não estejam na base de conhecimento.\n");
         systemPrompt.append(
                 "7. Use a tag [SPLIT] para dividir mensagens longas em vários balões de conversa. Cada parte deve ser uma continuação direta sem repetir saudações ou introduções. O objetivo é um fluxo natural de mensagens sequenciais.\n");
+        systemPrompt.append("8. REGRAS PARA TRANSIÇÃO HUMANA:\n");
+        systemPrompt.append(
+                "   - SE o usuário pedir explicitamente para falar com um humano, use a ferramenta 'escalar_humano'.\n");
+        systemPrompt.append(
+                "   - SE o usuário quiser reagendar ou cancelar algo que você não pode fazer, use a ferramenta respectiva.\n");
+        systemPrompt.append(
+                "   - NÃO tente simular um humano ou mentir. Se for solicitado, mude para o modo humano imediatamente.\n");
 
-        List<ChatMessage> history = new ArrayList<>();
+        List<Map<String, Object>> messages = new ArrayList<>();
+        Map<String, Object> sysMsg = new HashMap<>();
+        sysMsg.put("role", "system");
+        sysMsg.put("content", systemPrompt.toString());
+        messages.add(sysMsg);
+
         if (recentMessages != null) {
             for (int i = 0; i < recentMessages.size(); i++) {
                 String msg = recentMessages.get(i);
                 String role = (i % 2 == 0) ? "user" : "assistant";
-                history.add(new ChatMessage(role, msg));
+                Map<String, Object> histMsg = new HashMap<>();
+                histMsg.put("role", role);
+                histMsg.put("content", msg);
+                messages.add(histMsg);
             }
         }
 
-        return generateResponse(systemPrompt.toString(), userMessage, imageUrl, history);
+        Map<String, Object> userMsg = new HashMap<>();
+        userMsg.put("role", "user");
+        userMsg.put("content", userMessage);
+        messages.add(userMsg);
+
+        List<Map<String, Object>> tools = getGlobalTools();
+
+        // Loop for Tool calling support (Max 3 turns for general flow)
+        for (int turn = 0; turn < 3; turn++) {
+            Map<String, Object> body = new HashMap<>();
+            body.put("model", currentTextModel);
+            body.put("messages", messages);
+            body.put("tools", tools);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(apiKey);
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+            try {
+                ResponseEntity<Map> response = restTemplate.postForEntity("https://api.openai.com/v1/chat/completions",
+                        entity, Map.class);
+                Map<String, Object> responseBody = response.getBody();
+                List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
+                if (choices == null || choices.isEmpty())
+                    return null;
+
+                Map<String, Object> choice = choices.get(0);
+                Map<String, Object> message = (Map<String, Object>) choice.get("message");
+                messages.add(message);
+
+                if (message.containsKey("tool_calls")) {
+                    List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) message.get("tool_calls");
+                    for (Map<String, Object> toolCall : toolCalls) {
+                        Map<String, Object> function = (Map<String, Object>) toolCall.get("function");
+                        String functionName = (String) function.get("name");
+                        String arguments = (String) function.get("arguments");
+                        String toolCallId = (String) toolCall.get("id");
+
+                        String result = executeGlobalTool(functionName, arguments);
+                        if ("HUMAN_HANDOFF_REQUESTED".equals(result)) {
+                            return "HUMAN_HANDOFF_REQUESTED";
+                        }
+
+                        Map<String, Object> toolMsg = new HashMap<>();
+                        toolMsg.put("role", "tool");
+                        toolMsg.put("tool_call_id", toolCallId);
+                        toolMsg.put("content", result != null ? result : "Ok");
+                        messages.add(toolMsg);
+                    }
+                } else {
+                    String content = (String) message.get("content");
+                    return content != null ? content.replace("*", "") : null;
+                }
+            } catch (Exception e) {
+                log.error("Erro na chamada OpenAI com ferramentas: {}", e.getMessage());
+                break;
+            }
+        }
+
+        return null;
     }
 
     @SuppressWarnings("unchecked")
@@ -797,10 +873,9 @@ public class OpenAiService {
                 }
                 return "Erro ao realizar agendamento.";
             }
-            if ("escalar_humano".equalsIgnoreCase(functionName) ||
-                    "reagendar_atendimento".equalsIgnoreCase(functionName) ||
-                    "cancelar_atendimento".equalsIgnoreCase(functionName)) {
-                return "HUMAN_HANDOFF_REQUESTED";
+            String result = executeGlobalTool(functionName, jsonArgs);
+            if (result != null) {
+                return result;
             }
             return "Ferramenta desconhecida";
         } catch (Exception e) {
@@ -849,6 +924,15 @@ public class OpenAiService {
                         "data", Map.of("type", "string", "description", "Data YYYY-MM-DD."),
                         "hora", Map.of("type", "string", "description", "Hora HH:MM."))));
 
+        // Add Global Tools
+        tools.addAll(getGlobalTools());
+
+        return tools;
+    }
+
+    private List<Map<String, Object>> getGlobalTools() {
+        List<Map<String, Object>> tools = new ArrayList<>();
+
         // Tool: escalar_humano
         tools.add(createTool("escalar_humano", "Chama um atendente humano para continuar o atendimento.",
                 new HashMap<>()));
@@ -862,6 +946,15 @@ public class OpenAiService {
                 new HashMap<>()));
 
         return tools;
+    }
+
+    private String executeGlobalTool(String functionName, String jsonArgs) {
+        if ("escalar_humano".equalsIgnoreCase(functionName) ||
+                "reagendar_atendimento".equalsIgnoreCase(functionName) ||
+                "cancelar_atendimento".equalsIgnoreCase(functionName)) {
+            return "HUMAN_HANDOFF_REQUESTED";
+        }
+        return null;
     }
 
     private Map<String, Object> createTool(String name, String description, Map<String, Object> properties) {

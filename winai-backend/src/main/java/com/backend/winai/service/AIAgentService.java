@@ -406,6 +406,18 @@ public class AIAgentService {
 
         // 2. Send handoff message to client
         String handoffMsg = "Entendi! Vou chamar nossa especialista humana para continuar seu atendimento agora mesmo. 🧡 Aguarde só um momento. 🌿✨";
+
+        // Tentar obter mensagem personalizada da configuração
+        try {
+            var configOpt = followUpService.getConfigByCompany(conversation.getCompany().getId());
+            if (configOpt.isPresent() && configOpt.get().getHumanHandoffClientMessage() != null
+                    && !configOpt.get().getHumanHandoffClientMessage().isBlank()) {
+                handoffMsg = configOpt.get().getHumanHandoffClientMessage();
+            }
+        } catch (Exception e) {
+            log.warn("Erro ao buscar mensagem personalizada de handoff, usando padrão: {}", e.getMessage());
+        }
+
         sendAIResponse(conversation, handoffMsg);
         persistAndNotify(conversation, handoffMsg);
 

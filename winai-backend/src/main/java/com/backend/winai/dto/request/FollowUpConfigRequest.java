@@ -82,7 +82,12 @@ public class FollowUpConfigRequest {
     private String humanHandoffPhone;
 
     /**
-     * Mensagem customizada para notificação de handoff.
+     * Mensagem customizada para notificação de handoff enviada ao AGENTE.
      */
     private String humanHandoffMessage;
+
+    /**
+     * Mensagem enviada ao LEAD quando solicitada a escala para humano.
+     */
+    private String humanHandoffClientMessage;
 }

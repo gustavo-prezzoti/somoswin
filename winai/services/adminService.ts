@@ -294,6 +294,7 @@ export interface FollowUpConfig {
     humanHandoffNotificationEnabled?: boolean;
     humanHandoffPhone?: string;
     humanHandoffMessage?: string;
+    humanHandoffClientMessage?: string;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -327,6 +328,7 @@ export interface FollowUpConfigRequest {
     humanHandoffNotificationEnabled?: boolean;
     humanHandoffPhone?: string;
     humanHandoffMessage?: string;
+    humanHandoffClientMessage?: string;
 }
 
 

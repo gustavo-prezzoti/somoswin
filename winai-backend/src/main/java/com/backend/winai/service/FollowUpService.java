@@ -93,6 +93,8 @@ public class FollowUpService {
             config.setHumanHandoffPhone(request.getHumanHandoffPhone());
         if (request.getHumanHandoffMessage() != null)
             config.setHumanHandoffMessage(request.getHumanHandoffMessage());
+        if (request.getHumanHandoffClientMessage() != null)
+            config.setHumanHandoffClientMessage(request.getHumanHandoffClientMessage());
 
         config = configRepository.save(config);
         log.info("Configuração de follow-up salva para empresa {}: enabled={}", company.getName(), config.getEnabled());
@@ -514,6 +516,7 @@ public class FollowUpService {
                 .humanHandoffNotificationEnabled(config.getHumanHandoffNotificationEnabled())
                 .humanHandoffPhone(config.getHumanHandoffPhone())
                 .humanHandoffMessage(config.getHumanHandoffMessage())
+                .humanHandoffClientMessage(config.getHumanHandoffClientMessage())
                 .createdAt(config.getCreatedAt())
                 .updatedAt(config.getUpdatedAt())
                 .build();

@@ -34,6 +34,8 @@ public class FollowUpConfigResponse {
     private String humanHandoffPhone;
     private String humanHandoffMessage;
 
+    private String humanHandoffClientMessage;
+
     private ZonedDateTime createdAt;
     private ZonedDateTime updatedAt;
 }

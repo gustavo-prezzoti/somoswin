@@ -26,7 +26,8 @@ const AdminFollowUp = () => {
         endHour: 18,
         humanHandoffNotificationEnabled: false,
         humanHandoffPhone: '',
-        humanHandoffMessage: ''
+        humanHandoffMessage: '',
+        humanHandoffClientMessage: ''
     });
 
     useEffect(() => {
@@ -73,7 +74,8 @@ const AdminFollowUp = () => {
                     endHour: data.endHour,
                     humanHandoffNotificationEnabled: data.humanHandoffNotificationEnabled || false,
                     humanHandoffPhone: data.humanHandoffPhone || '',
-                    humanHandoffMessage: data.humanHandoffMessage || ''
+                    humanHandoffMessage: data.humanHandoffMessage || '',
+                    humanHandoffClientMessage: data.humanHandoffClientMessage || ''
                 });
             } else {
                 setFormData(prev => ({ ...prev, companyId: selectedCompanyId }));
@@ -393,16 +395,30 @@ const AdminFollowUp = () => {
                                         <div className="group">
                                             <label className="flex items-center gap-2 text-[10px] font-black text-amber-800 uppercase tracking-[0.2em] mb-4">
                                                 <MessageSquare size={14} />
-                                                Mensagem do Lead (Contexto)
+                                                Alerta para o Atendente
                                                 <Info size={12} className="text-amber-300" />
                                             </label>
                                             <textarea
                                                 value={formData.humanHandoffMessage}
                                                 onChange={e => updateForm('humanHandoffMessage', e.target.value)}
-                                                className="w-full px-6 py-5 bg-white border border-amber-200 rounded-2xl focus:ring-4 focus:ring-amber-500/10 transition-all font-bold text-gray-700 text-xs h-[116px] leading-relaxed"
+                                                className="w-full px-6 py-5 bg-white border border-amber-200 rounded-2xl focus:ring-4 focus:ring-amber-500/10 transition-all font-bold text-gray-700 text-[10px] h-[116px] leading-relaxed"
                                                 placeholder="🔔 *Lead Solicitou Atendente*&#10;Nome: {leadName}&#10;Fone: {phoneNumber}"
                                             />
                                             <p className="text-[10px] font-bold text-amber-600/60 mt-2 italic">Dica: Use {"{leadName}"} e {"{phoneNumber}"} como variáveis.</p>
+                                        </div>
+                                        <div className="group">
+                                            <label className="flex items-center gap-2 text-[10px] font-black text-amber-800 uppercase tracking-[0.2em] mb-4">
+                                                <User size={14} />
+                                                Mensagem para o Lead
+                                                <Info size={12} className="text-amber-300" />
+                                            </label>
+                                            <textarea
+                                                value={formData.humanHandoffClientMessage}
+                                                onChange={e => updateForm('humanHandoffClientMessage', e.target.value)}
+                                                className="w-full px-6 py-5 bg-white border border-amber-200 rounded-2xl focus:ring-4 focus:ring-amber-500/10 transition-all font-bold text-gray-700 text-[10px] h-[116px] leading-relaxed"
+                                                placeholder="Entendi! Vou chamar nossa especialista humana para continuar seu atendimento agora mesmo. 🧡 Aguarde só um momento. 🌿✨"
+                                            />
+                                            <p className="text-[10px] font-bold text-amber-600/60 mt-2 italic">Mensagem que o Robô enviará ao cliente antes de parar o atendimento.</p>
                                         </div>
                                     </div>
                                 )}
