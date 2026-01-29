@@ -419,6 +419,8 @@ public class AIAgentService {
                     .builder().type("SUPPORT_MODE_CHANGED").conversationId(conversation.getId().toString())
                     .mode("HUMAN").companyId(companyId).build();
 
+            log.info("Broadcasting SUPPORT_MODE_CHANGED to /topic/whatsapp/{} and /topic/whatsapp/conversations/{}",
+                    companyId, companyId);
             messagingTemplate.convertAndSend("/topic/whatsapp/" + companyId, modeChange);
             messagingTemplate.convertAndSend("/topic/whatsapp/conversations/" + companyId, modeChange);
         } catch (Exception e) {
@@ -505,6 +507,17 @@ public class AIAgentService {
             }
 
             var connections = whatsAppConnectionRepository.findByCompanyId(conversation.getCompany().getId());
+            log.info("=== [HANDOFF NOTIFICATION] Buscando conexão para empresa {} ===",
+                    conversation.getCompany().getId());
+            log.info("  Conexões encontradas: {}", connections.size());
+            for (int i = 0; i < connections.size(); i++) {
+                var c = connections.get(i);
+                log.info("    [{}] Instance: {}, BaseUrl: {}, Token: {}, Active: {}",
+                        i, c.getInstanceName(), c.getInstanceBaseUrl(),
+                        c.getInstanceToken() != null ? "[PRESENTE]" : "[AUSENTE]",
+                        c.getIsActive());
+            }
+
             if (connections.isEmpty()) {
                 log.warn(
                         "Nenhuma conexão WhatsApp ativa para empresa {}, não foi possível enviar notificação de handoff",
@@ -514,9 +527,22 @@ public class AIAgentService {
 
             UserWhatsAppConnection connection = connections.stream().filter(c -> Boolean.TRUE.equals(c.getIsActive()))
                     .findFirst().orElse(connections.get(0));
+
+            log.info("  === CONEXÃO SELECIONADA ===");
+            log.info("    Instance: {}", connection.getInstanceName());
+            log.info("    BaseUrl: {}", connection.getInstanceBaseUrl());
+            log.info("    Token: {}", connection.getInstanceToken() != null ? "[PRESENTE]" : "[AUSENTE]");
+            log.info("    Active: {}", connection.getIsActive());
+
             SendWhatsAppMessageRequest request = SendWhatsAppMessageRequest.builder().phoneNumber(targetPhone)
                     .message(notificationMessage).uazapInstance(connection.getInstanceName())
                     .uazapBaseUrl(connection.getInstanceBaseUrl()).uazapToken(connection.getInstanceToken()).build();
+
+            log.info("  === REQUEST DTO CONSTRUÍDO ===");
+            log.info("    phoneNumber: {}", targetPhone);
+            log.info("    uazapInstance: {}", request.getUazapInstance());
+            log.info("    uazapBaseUrl: {}", request.getUazapBaseUrl());
+            log.info("    uazapToken: {}", request.getUazapToken() != null ? "[PRESENTE]" : "[AUSENTE]");
 
             uazapService.sendTextMessage(request, conversation.getCompany());
 

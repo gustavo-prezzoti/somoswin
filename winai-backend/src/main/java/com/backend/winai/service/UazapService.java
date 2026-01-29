@@ -53,17 +53,105 @@ public class UazapService {
      */
     @Transactional
     public WhatsAppMessage sendTextMessage(SendWhatsAppMessageRequest request, Company company) {
-        // Build config - use instance from request if provided
-        Map<String, String> config = getUazapConfig(company, request.getUazapInstance());
-        if (request.getUazapInstance() != null && !request.getUazapInstance().isEmpty()) {
-            config.put("instance", request.getUazapInstance());
-        }
+        log.info("=== [SEND TEXT MESSAGE] Iniciando envio ===");
+        log.info("  PhoneNumber: {}", request.getPhoneNumber());
+        log.info("  Company: {} (ID: {})", company != null ? company.getName() : "NULL",
+                company != null ? company.getId() : "NULL");
+        log.info("  Request uazapInstance: {}", request.getUazapInstance());
+        log.info("  Request uazapBaseUrl: {}", request.getUazapBaseUrl());
+        log.info("  Request uazapToken: {}", request.getUazapToken() != null ? "[PRESENTE]" : "[AUSENTE]");
+
+        // STEP 1: Determinar credenciais - PRIORIDADE ABSOLUTA para o request
+        String baseUrl = null;
+        String token = null;
+        String instance = null;
+
+        // PRIMEIRO: Tentar usar credenciais do request DTO (passadas explicitamente)
         if (request.getUazapBaseUrl() != null && !request.getUazapBaseUrl().isEmpty()) {
-            config.put("baseUrl", request.getUazapBaseUrl());
+            baseUrl = request.getUazapBaseUrl();
+            log.info("  [STEP1] baseUrl definido pelo REQUEST DTO: {}", baseUrl);
         }
         if (request.getUazapToken() != null && !request.getUazapToken().isEmpty()) {
-            config.put("token", request.getUazapToken());
+            token = request.getUazapToken();
+            log.info("  [STEP1] token definido pelo REQUEST DTO: [PRESENTE]");
         }
+        if (request.getUazapInstance() != null && !request.getUazapInstance().isEmpty()) {
+            instance = request.getUazapInstance();
+            log.info("  [STEP1] instance definido pelo REQUEST DTO: {}", instance);
+        }
+
+        // SEGUNDO: Se faltam credenciais, buscar da conexão da empresa
+        if (baseUrl == null || token == null) {
+            log.info("  [STEP2] Credenciais incompletas no request, buscando da conexão da empresa...");
+            if (company != null) {
+                List<com.backend.winai.entity.UserWhatsAppConnection> connections = userWhatsAppConnectionRepository
+                        .findByCompanyId(company.getId());
+                log.info("  [STEP2] Encontradas {} conexões para empresa {}", connections.size(), company.getId());
+
+                com.backend.winai.entity.UserWhatsAppConnection selectedConn = null;
+
+                // Se temos instanceName, buscar exatamente ela
+                if (instance != null && !instance.isEmpty()) {
+                    final String instanceToFind = instance;
+                    selectedConn = connections.stream()
+                            .filter(c -> instanceToFind.equals(c.getInstanceName()))
+                            .findFirst()
+                            .orElse(null);
+                    log.info("  [STEP2] Busca por instanceName '{}': {}", instance,
+                            selectedConn != null ? "ENCONTRADA" : "NÃO ENCONTRADA");
+                }
+
+                // Se não encontrou por instanceName, pegar a primeira ativa
+                if (selectedConn == null) {
+                    selectedConn = connections.stream()
+                            .filter(c -> Boolean.TRUE.equals(c.getIsActive()))
+                            .findFirst()
+                            .orElse(null);
+                    log.info("  [STEP2] Busca por primeira ativa: {}",
+                            selectedConn != null ? "ENCONTRADA (" + selectedConn.getInstanceName() + ")"
+                                    : "NÃO ENCONTRADA");
+                }
+
+                if (selectedConn != null) {
+                    if (baseUrl == null && selectedConn.getInstanceBaseUrl() != null) {
+                        baseUrl = selectedConn.getInstanceBaseUrl();
+                        log.info("  [STEP2] baseUrl definido pela CONEXÃO: {}", baseUrl);
+                    }
+                    if (token == null && selectedConn.getInstanceToken() != null) {
+                        token = selectedConn.getInstanceToken();
+                        log.info("  [STEP2] token definido pela CONEXÃO: [PRESENTE]");
+                    }
+                    if (instance == null && selectedConn.getInstanceName() != null) {
+                        instance = selectedConn.getInstanceName();
+                        log.info("  [STEP2] instance definido pela CONEXÃO: {}", instance);
+                    }
+                } else {
+                    log.warn("  [STEP2] NENHUMA conexão encontrada para a empresa!");
+                }
+            } else {
+                log.warn("  [STEP2] Company é NULL, não é possível buscar conexão!");
+            }
+        }
+
+        // TERCEIRO: Se ainda faltam credenciais, logar erro mas usar defaults (para não
+        // quebrar)
+        if (baseUrl == null || baseUrl.isEmpty()) {
+            log.error("  [STEP3] baseUrl AINDA VAZIO! Usando default: {}", defaultBaseUrl);
+            baseUrl = defaultBaseUrl;
+        }
+        if (token == null || token.isEmpty()) {
+            log.error("  [STEP3] token AINDA VAZIO! Usando default: [PRESENTE]");
+            token = defaultToken;
+        }
+
+        log.info("=== [CREDENCIAIS FINAIS] baseUrl={}, token=[{}], instance={} ===",
+                baseUrl, token != null ? "PRESENTE" : "AUSENTE", instance);
+
+        // Build config for findOrCreateConversation
+        Map<String, String> config = new HashMap<>();
+        config.put("baseUrl", baseUrl);
+        config.put("token", token);
+        config.put("instance", instance != null ? instance : "");
 
         // Buscar ou criar conversa
         WhatsAppConversation conversation = findOrCreateConversation(
@@ -71,15 +159,8 @@ public class UazapService {
                 company,
                 config);
 
-        // Preparar requisição para Uazap
-        String baseUrl = conversation.getUazapBaseUrl() != null
-                ? conversation.getUazapBaseUrl()
-                : defaultBaseUrl;
-        String token = conversation.getUazapToken() != null
-                ? conversation.getUazapToken()
-                : defaultToken;
-
         String url = baseUrl.replaceAll("/$", "") + "/send/text";
+        log.info("  [SEND] URL final: {}", url);
 
         // Headers
         HttpHeaders headers = new HttpHeaders();
@@ -447,17 +528,106 @@ public class UazapService {
     @Transactional
     public WhatsAppMessage sendMediaMessage(com.backend.winai.dto.request.SendMediaMessageRequest request,
             Company company, byte[] fileContent) {
-        // Build config - use instance from request if provided
-        Map<String, String> config = getUazapConfig(company, request.getUazapInstance());
-        if (request.getUazapInstance() != null && !request.getUazapInstance().isEmpty()) {
-            config.put("instance", request.getUazapInstance());
-        }
+        log.info("=== [SEND MEDIA MESSAGE] Iniciando envio ===");
+        log.info("  PhoneNumber: {}", request.getPhoneNumber());
+        log.info("  Company: {} (ID: {})", company != null ? company.getName() : "NULL",
+                company != null ? company.getId() : "NULL");
+        log.info("  Request uazapInstance: {}", request.getUazapInstance());
+        log.info("  Request uazapBaseUrl: {}", request.getUazapBaseUrl());
+        log.info("  Request uazapToken: {}", request.getUazapToken() != null ? "[PRESENTE]" : "[AUSENTE]");
+        log.info("  MediaType: {}, FileName: {}", request.getMediaType(), request.getFileName());
+
+        // STEP 1: Determinar credenciais - PRIORIDADE ABSOLUTA para o request
+        String baseUrl = null;
+        String token = null;
+        String instance = null;
+
+        // PRIMEIRO: Tentar usar credenciais do request DTO (passadas explicitamente)
         if (request.getUazapBaseUrl() != null && !request.getUazapBaseUrl().isEmpty()) {
-            config.put("baseUrl", request.getUazapBaseUrl());
+            baseUrl = request.getUazapBaseUrl();
+            log.info("  [STEP1] baseUrl definido pelo REQUEST DTO: {}", baseUrl);
         }
         if (request.getUazapToken() != null && !request.getUazapToken().isEmpty()) {
-            config.put("token", request.getUazapToken());
+            token = request.getUazapToken();
+            log.info("  [STEP1] token definido pelo REQUEST DTO: [PRESENTE]");
         }
+        if (request.getUazapInstance() != null && !request.getUazapInstance().isEmpty()) {
+            instance = request.getUazapInstance();
+            log.info("  [STEP1] instance definido pelo REQUEST DTO: {}", instance);
+        }
+
+        // SEGUNDO: Se faltam credenciais, buscar da conexão da empresa
+        if (baseUrl == null || token == null) {
+            log.info("  [STEP2] Credenciais incompletas no request, buscando da conexão da empresa...");
+            if (company != null) {
+                List<com.backend.winai.entity.UserWhatsAppConnection> connections = userWhatsAppConnectionRepository
+                        .findByCompanyId(company.getId());
+                log.info("  [STEP2] Encontradas {} conexões para empresa {}", connections.size(), company.getId());
+
+                com.backend.winai.entity.UserWhatsAppConnection selectedConn = null;
+
+                // Se temos instanceName, buscar exatamente ela
+                if (instance != null && !instance.isEmpty()) {
+                    final String instanceToFind = instance;
+                    selectedConn = connections.stream()
+                            .filter(c -> instanceToFind.equals(c.getInstanceName()))
+                            .findFirst()
+                            .orElse(null);
+                    log.info("  [STEP2] Busca por instanceName '{}': {}", instance,
+                            selectedConn != null ? "ENCONTRADA" : "NÃO ENCONTRADA");
+                }
+
+                // Se não encontrou por instanceName, pegar a primeira ativa
+                if (selectedConn == null) {
+                    selectedConn = connections.stream()
+                            .filter(c -> Boolean.TRUE.equals(c.getIsActive()))
+                            .findFirst()
+                            .orElse(null);
+                    log.info("  [STEP2] Busca por primeira ativa: {}",
+                            selectedConn != null ? "ENCONTRADA (" + selectedConn.getInstanceName() + ")"
+                                    : "NÃO ENCONTRADA");
+                }
+
+                if (selectedConn != null) {
+                    if (baseUrl == null && selectedConn.getInstanceBaseUrl() != null) {
+                        baseUrl = selectedConn.getInstanceBaseUrl();
+                        log.info("  [STEP2] baseUrl definido pela CONEXÃO: {}", baseUrl);
+                    }
+                    if (token == null && selectedConn.getInstanceToken() != null) {
+                        token = selectedConn.getInstanceToken();
+                        log.info("  [STEP2] token definido pela CONEXÃO: [PRESENTE]");
+                    }
+                    if (instance == null && selectedConn.getInstanceName() != null) {
+                        instance = selectedConn.getInstanceName();
+                        log.info("  [STEP2] instance definido pela CONEXÃO: {}", instance);
+                    }
+                } else {
+                    log.warn("  [STEP2] NENHUMA conexão encontrada para a empresa!");
+                }
+            } else {
+                log.warn("  [STEP2] Company é NULL, não é possível buscar conexão!");
+            }
+        }
+
+        // TERCEIRO: Se ainda faltam credenciais, logar erro mas usar defaults (para não
+        // quebrar)
+        if (baseUrl == null || baseUrl.isEmpty()) {
+            log.error("  [STEP3] baseUrl AINDA VAZIO! Usando default: {}", defaultBaseUrl);
+            baseUrl = defaultBaseUrl;
+        }
+        if (token == null || token.isEmpty()) {
+            log.error("  [STEP3] token AINDA VAZIO! Usando default: [PRESENTE]");
+            token = defaultToken;
+        }
+
+        log.info("=== [CREDENCIAIS FINAIS MEDIA] baseUrl={}, token=[{}], instance={} ===",
+                baseUrl, token != null ? "PRESENTE" : "AUSENTE", instance);
+
+        // Build config for findOrCreateConversation
+        Map<String, String> config = new HashMap<>();
+        config.put("baseUrl", baseUrl);
+        config.put("token", token);
+        config.put("instance", instance != null ? instance : "");
 
         // Buscar ou criar conversa
         WhatsAppConversation conversation = findOrCreateConversation(
@@ -465,20 +635,10 @@ public class UazapService {
                 company,
                 config);
 
-        // Preparar requisição para Uazap
-        String baseUrl = conversation.getUazapBaseUrl() != null
-                ? conversation.getUazapBaseUrl()
-                : defaultBaseUrl;
-        String token = conversation.getUazapToken() != null
-                ? conversation.getUazapToken()
-                : defaultToken;
-
         // Endpoint /send/media - igual ao /send/text (sem instância na URL)
         // A instância é identificada pelo token no header
         String url = baseUrl.replaceAll("/$", "") + "/send/media";
-
-        log.info("Enviando mídia para UaZap - URL: {}, number: {}, mediaType: {}, fileName: {}",
-                url, request.getPhoneNumber(), request.getMediaType(), request.getFileName());
+        log.info("  [SEND] URL final: {}", url);
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept", "application/json");
