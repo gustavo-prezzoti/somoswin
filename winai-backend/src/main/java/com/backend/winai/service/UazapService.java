@@ -125,6 +125,46 @@ public class UazapService {
                         instance = selectedConn.getInstanceName();
                         log.info("  [STEP2] instance definido pela CONEXÃO: {}", instance);
                     }
+
+                    // STEP 2.5: Se a conexão foi encontrada MAS as credenciais estão NULL,
+                    // buscar da API UaZap e atualizar a conexão no banco
+                    if ((baseUrl == null || token == null) && selectedConn.getInstanceName() != null) {
+                        log.info("  [STEP2.5] Credenciais NULL na conexão, buscando da API UaZap...");
+                        try {
+                            List<UazapInstanceDTO> instances = fetchInstances();
+                            final String connInstanceName = selectedConn.getInstanceName();
+                            UazapInstanceDTO matchingInstance = instances.stream()
+                                    .filter(i -> connInstanceName.equals(i.getInstanceName()))
+                                    .findFirst()
+                                    .orElse(null);
+
+                            if (matchingInstance != null) {
+                                log.info("  [STEP2.5] Instância {} encontrada na API UaZap", connInstanceName);
+
+                                // Usar baseUrl padrão (a mesma do servidor UaZap)
+                                if (baseUrl == null) {
+                                    baseUrl = defaultBaseUrl;
+                                    log.info("  [STEP2.5] baseUrl definido pelo DEFAULT (mesma da API): {}", baseUrl);
+                                    selectedConn.setInstanceBaseUrl(baseUrl);
+                                }
+
+                                // Usar token da instância
+                                if (token == null && matchingInstance.getToken() != null) {
+                                    token = matchingInstance.getToken();
+                                    log.info("  [STEP2.5] token definido pela API UaZap: [PRESENTE]");
+                                    selectedConn.setInstanceToken(token);
+                                }
+
+                                // Persistir a atualização para futuras chamadas
+                                userWhatsAppConnectionRepository.save(selectedConn);
+                                log.info("  [STEP2.5] Conexão atualizada no banco de dados com credenciais da API");
+                            } else {
+                                log.warn("  [STEP2.5] Instância {} NÃO encontrada na API UaZap", connInstanceName);
+                            }
+                        } catch (Exception e) {
+                            log.error("  [STEP2.5] Erro ao buscar credenciais da API UaZap: {}", e.getMessage());
+                        }
+                    }
                 } else {
                     log.warn("  [STEP2] NENHUMA conexão encontrada para a empresa!");
                 }
@@ -600,6 +640,46 @@ public class UazapService {
                     if (instance == null && selectedConn.getInstanceName() != null) {
                         instance = selectedConn.getInstanceName();
                         log.info("  [STEP2] instance definido pela CONEXÃO: {}", instance);
+                    }
+
+                    // STEP 2.5: Se a conexão foi encontrada MAS as credenciais estão NULL,
+                    // buscar da API UaZap e atualizar a conexão no banco
+                    if ((baseUrl == null || token == null) && selectedConn.getInstanceName() != null) {
+                        log.info("  [STEP2.5] Credenciais NULL na conexão, buscando da API UaZap...");
+                        try {
+                            List<UazapInstanceDTO> instances = fetchInstances();
+                            final String connInstanceName = selectedConn.getInstanceName();
+                            UazapInstanceDTO matchingInstance = instances.stream()
+                                    .filter(i -> connInstanceName.equals(i.getInstanceName()))
+                                    .findFirst()
+                                    .orElse(null);
+
+                            if (matchingInstance != null) {
+                                log.info("  [STEP2.5] Instância {} encontrada na API UaZap", connInstanceName);
+
+                                // Usar baseUrl padrão (a mesma do servidor UaZap)
+                                if (baseUrl == null) {
+                                    baseUrl = defaultBaseUrl;
+                                    log.info("  [STEP2.5] baseUrl definido pelo DEFAULT (mesma da API): {}", baseUrl);
+                                    selectedConn.setInstanceBaseUrl(baseUrl);
+                                }
+
+                                // Usar token da instância
+                                if (token == null && matchingInstance.getToken() != null) {
+                                    token = matchingInstance.getToken();
+                                    log.info("  [STEP2.5] token definido pela API UaZap: [PRESENTE]");
+                                    selectedConn.setInstanceToken(token);
+                                }
+
+                                // Persistir a atualização para futuras chamadas
+                                userWhatsAppConnectionRepository.save(selectedConn);
+                                log.info("  [STEP2.5] Conexão atualizada no banco de dados com credenciais da API");
+                            } else {
+                                log.warn("  [STEP2.5] Instância {} NÃO encontrada na API UaZap", connInstanceName);
+                            }
+                        } catch (Exception e) {
+                            log.error("  [STEP2.5] Erro ao buscar credenciais da API UaZap: {}", e.getMessage());
+                        }
                     }
                 } else {
                     log.warn("  [STEP2] NENHUMA conexão encontrada para a empresa!");
