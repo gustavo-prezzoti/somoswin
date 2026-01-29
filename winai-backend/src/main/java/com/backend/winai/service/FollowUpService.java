@@ -231,25 +231,63 @@ public class FollowUpService {
     @Async("followUpTaskExecutor")
     public void processPendingFollowUpsAsync() {
         ZonedDateTime now = ZonedDateTime.now();
-        // Busca apenas IDs para evitar problemas de concorrência com objetos Managed
-        List<UUID> pendingIds = statusRepository.findPendingFollowUps(now)
-                .stream().map(FollowUpStatus::getId).collect(Collectors.toList());
+        List<FollowUpStatus> pendingList = statusRepository.findPendingFollowUps(now);
 
-        if (pendingIds.isEmpty()) {
+        if (pendingList.isEmpty()) {
             log.debug("Nenhum follow-up pendente para processar");
             return;
         }
 
-        log.info("[FOLLOW-UP WORKER] Processando {} IDs pendentes", pendingIds.size());
+        // AGRUPAR POR TELEFONE PARA EVITAR MÚLTIPLAS CONVERSAS PRO MESMO LEAD
+        // Isso resolve o problema de o lead estar em múltiplas instâncias ou conversas
+        // duplicadas.
+        java.util.Map<String, List<FollowUpStatus>> byPhone = pendingList.stream()
+                .filter(fs -> fs.getConversation().getPhoneNumber() != null)
+                .collect(Collectors.groupingBy(fs -> fs.getConversation().getPhoneNumber()));
 
-        for (UUID statusId : pendingIds) {
+        log.info("[FOLLOW-UP WORKER] Encontrados {} follow-ups pendentes para {} telefones únicos.",
+                pendingList.size(), byPhone.size());
+
+        for (java.util.Map.Entry<String, List<FollowUpStatus>> entry : byPhone.entrySet()) {
+            String phone = entry.getKey();
+            List<FollowUpStatus> statuses = entry.getValue();
+
+            // Pega o primeiro (mais antigo/pendente) para processar
+            FollowUpStatus target = statuses.get(0);
+
+            // Se houver mais de um para o mesmo telefone, desativa os outros
+            if (statuses.size() > 1) {
+                for (int i = 1; i < statuses.size(); i++) {
+                    UUID redundantId = statuses.get(i).getId();
+                    log.info("[FOLLOW-UP WORKER] Desativando follow-up redundante [ID: {}] para o telefone {}",
+                            redundantId, phone);
+                    try {
+                        self.deactivateRedundantFollowUp(redundantId);
+                    } catch (Exception e) {
+                        log.warn("Erro ao desativar follow-up {}: {}", redundantId, e.getMessage());
+                    }
+                }
+            }
+
             try {
-                // USA O PROXY (self) para garantir que @Transactional e @Lock funcionem
-                self.processFollowUpByIdWithLock(statusId);
+                // Processa o único eleito com trava
+                self.processFollowUpByIdWithLock(target.getId());
             } catch (Exception e) {
-                log.error("Erro ao processar follow-up {}: {}", statusId, e.getMessage());
+                log.error("Erro ao processar follow-up {} para {}: {}", target.getId(), phone, e.getMessage());
             }
         }
+    }
+
+    /**
+     * Desativa um follow-up redundante para evitar que seja processado novamente.
+     */
+    @Transactional
+    public void deactivateRedundantFollowUp(UUID statusId) {
+        statusRepository.findById(statusId).ifPresent(status -> {
+            status.setNextFollowUpAt(null);
+            status.setEligible(false); // Marca como inativo para não poluir o worker
+            statusRepository.save(status);
+        });
     }
 
     /**
@@ -271,7 +309,8 @@ public class FollowUpService {
             return;
         }
 
-        log.info("Processando follow-up bloqueado para conversa {}", status.getConversation().getId());
+        log.info("Processando follow-up bloqueado [StatusID: {} | ConvID: {} | Fone: {}]",
+                statusId, status.getConversation().getId(), status.getConversation().getPhoneNumber());
         processFollowUpForConversation(status);
     }
 
