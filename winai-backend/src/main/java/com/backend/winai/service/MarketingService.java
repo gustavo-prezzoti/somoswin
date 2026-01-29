@@ -142,7 +142,7 @@ public class MarketingService {
             // 3. Fetch Insights (last 30 days for metrics, last 7 days for the chart
             // requested)
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach,total_interactions,profile_views,website_clicks&period=day&access_token=%s",
+                    "%s/%s/insights?metric=reach,total_interactions,profile_views,website_clicks&period=day&metric_type=total_value&access_token=%s",
                     metaApiBaseUrl, igId, accessToken);
             JsonNode insightsData = objectMapper
                     .readTree(getWithRetry(insightsUrl).getBody()).get("data");
@@ -776,7 +776,7 @@ public class MarketingService {
             // Fetch Insights (reach, impressions, total_interactions, profile_views,
             // website_clicks)
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach,impressions,total_interactions,profile_views,website_clicks&period=day&access_token=%s",
+                    "%s/%s/insights?metric=reach,impressions,total_interactions,profile_views,website_clicks&period=day&metric_type=total_value&access_token=%s",
                     metaApiBaseUrl, igId, conn.getAccessToken());
             ResponseEntity<String> insightsRes = getWithRetry(insightsUrl);
             JsonNode insightsData = objectMapper.readTree(insightsRes.getBody()).get("data");
