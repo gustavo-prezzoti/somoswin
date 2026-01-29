@@ -92,24 +92,15 @@ public class MarketingService {
         }
 
         try {
-            // Fetch Insights for Summary (This Month)
-            String summaryUrl = String.format(
-                    "%s/%s/insights?fields=spend,impressions,clicks,actions&date_preset=this_month&access_token=%s",
-                    metaApiBaseUrl, adAccountId, accessToken);
-
-            ResponseEntity<String> summaryResponse = getWithRetry(summaryUrl);
-            JsonNode body = objectMapper.readTree(summaryResponse.getBody());
-            JsonNode dataNode = body.get("data");
-            JsonNode summaryData = (dataNode != null && dataNode.size() > 0) ? dataNode.get(0) : null;
-
-            // Fetch History (Last 30 days)
+            // Fetch daily insights for the last 14 days to calculate trends (7d vs previous
+            // 7d)
             String historyUrl = String.format(
-                    "%s/%s/insights?fields=spend,date_start&date_preset=last_30d&time_increment=1&access_token=%s",
+                    "%s/%s/insights?fields=spend,impressions,clicks,actions,date_start&date_preset=last_14d&time_increment=1&access_token=%s",
                     metaApiBaseUrl, adAccountId, accessToken);
             ResponseEntity<String> historyResponse = getWithRetry(historyUrl);
             JsonNode historyData = objectMapper.readTree(historyResponse.getBody()).get("data");
 
-            return mapToResponse(summaryData, historyData);
+            return mapToResponse(historyData);
 
         } catch (Exception e) {
             log.error("Error fetching Meta Ads data", e);
@@ -151,7 +142,7 @@ public class MarketingService {
             // 3. Fetch Insights (last 30 days for metrics, last 7 days for the chart
             // requested)
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach,impressions,total_interactions,profile_views,website_clicks&period=day&access_token=%s",
+                    "%s/%s/insights?metric=reach,total_interactions,profile_views,website_clicks&period=day&access_token=%s",
                     metaApiBaseUrl, igId, accessToken);
             JsonNode insightsData = objectMapper
                     .readTree(getWithRetry(insightsUrl).getBody()).get("data");
@@ -172,7 +163,7 @@ public class MarketingService {
         if (insights != null && insights.isArray()) {
             for (JsonNode metric : insights) {
                 String name = metric.get("name").asText();
-                if ("impressions".equals(name) || "reach".equals(name) || "total_interactions".equals(name)) {
+                if ("reach".equals(name) || "total_interactions".equals(name)) {
                     JsonNode values = metric.get("values");
                     if (values != null && values.isArray()) {
                         long totalForMetric = 0;
@@ -190,7 +181,7 @@ public class MarketingService {
                                         .build());
                             }
                         }
-                        if ("impressions".equals(name))
+                        if ("reach".equals(name))
                             impressionsTotal = totalForMetric;
                         if ("total_interactions".equals(name))
                             interactionsTotal = totalForMetric;
@@ -587,7 +578,7 @@ public class MarketingService {
             syncInstagramData(conn);
 
             // Sync dashboard metrics after raw data is updated
-            metricsSyncService.syncDashboardMetrics(conn.getCompany(), 7);
+            metricsSyncService.syncDashboardMetrics(conn.getCompany(), 30);
         } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
             if (e.getResponseBodyAsString().contains("\"code\":17")
                     || e.getResponseBodyAsString().contains("\"code\": 17")) {
@@ -729,7 +720,7 @@ public class MarketingService {
     private void syncInsights(MetaConnection conn) {
         try {
             String url = String.format(
-                    "%s/%s/insights?fields=spend,impressions,clicks,reach,inline_link_clicks,actions&date_preset=last_7d&time_increment=1&access_token=%s",
+                    "%s/%s/insights?fields=spend,impressions,clicks,reach,inline_link_clicks,actions&date_preset=last_30d&time_increment=1&access_token=%s",
                     metaApiBaseUrl, conn.getAdAccountId(), conn.getAccessToken());
             ResponseEntity<String> response = getWithRetry(url);
             JsonNode data = objectMapper.readTree(response.getBody()).get("data");
@@ -842,43 +833,92 @@ public class MarketingService {
         log.info("Creating campaign: {}", request.getName());
     }
 
-    private TrafficMetricsResponse mapToResponse(JsonNode summary, JsonNode history) {
-        double spend = (summary != null && summary.has("spend")) ? summary.get("spend").asDouble() : 0.0;
-        long impressions = (summary != null && summary.has("impressions")) ? summary.get("impressions").asLong() : 0;
-        long clicks = (summary != null && summary.has("clicks")) ? summary.get("clicks").asLong() : 0;
+    private TrafficMetricsResponse mapToResponse(JsonNode historyData) {
+        double currentSpend = 0;
+        long currentImpressions = 0;
+        long currentClicks = 0;
+        long currentConversions = 0;
 
-        long conversions = 0;
-        if (summary != null && summary.has("actions")) {
-            for (JsonNode action : summary.get("actions")) {
-                String actionType = action.get("action_type").asText();
-                if ("onsite_conversion.messaging_conversation_started_7d".equals(actionType) ||
-                        "lead".equals(actionType) ||
-                        "purchase".equals(actionType)) {
-                    conversions += action.get("value").asLong();
+        double previousSpend = 0;
+        long previousImpressions = 0;
+        long previousClicks = 0;
+        long previousConversions = 0;
+
+        List<TrafficMetricsResponse.DailyPerformance> performance = new ArrayList<>();
+
+        if (historyData != null && historyData.isArray()) {
+            int totalDays = historyData.size();
+            // Assuming Meta returns chronologically (oldest first)
+            // Last 7 days are the "current" period
+            // Days before that are the "previous" period
+            int currentStartIndex = Math.max(0, totalDays - 7);
+
+            for (int i = 0; i < totalDays; i++) {
+                JsonNode node = historyData.get(i);
+                double spend = node.has("spend") ? node.get("spend").asDouble() : 0.0;
+                long imps = node.has("impressions") ? node.get("impressions").asLong() : 0;
+                long clks = node.has("clicks") ? node.get("clicks").asLong() : 0;
+                long convs = 0;
+
+                if (node.has("actions")) {
+                    for (JsonNode action : node.get("actions")) {
+                        String actionType = action.get("action_type").asText();
+                        if ("onsite_conversion.messaging_conversation_started_7d".equals(actionType) ||
+                                "lead".equals(actionType) ||
+                                "purchase".equals(actionType)) {
+                            convs += action.get("value").asLong();
+                        }
+                    }
+                }
+
+                if (i >= currentStartIndex) {
+                    currentSpend += spend;
+                    currentImpressions += imps;
+                    currentClicks += clks;
+                    currentConversions += convs;
+
+                    performance.add(TrafficMetricsResponse.DailyPerformance.builder()
+                            .date(node.get("date_start").asText().substring(8, 10) + "/"
+                                    + node.get("date_start").asText().substring(5, 7))
+                            .value(spend)
+                            .build());
+                } else {
+                    previousSpend += spend;
+                    previousImpressions += imps;
+                    previousClicks += clks;
+                    previousConversions += convs;
                 }
             }
         }
 
-        List<TrafficMetricsResponse.DailyPerformance> performance = new ArrayList<>();
-        if (history != null && history.isArray()) {
-            for (JsonNode node : history) {
-                performance.add(TrafficMetricsResponse.DailyPerformance.builder()
-                        .date(node.get("date_start").asText().substring(8, 10) + "/"
-                                + node.get("date_start").asText().substring(5, 7))
-                        .value(node.get("spend").asDouble())
-                        .build());
-            }
-        }
-
-        double roasValue = spend > 0 ? (conversions * 100.0) / spend : 0;
+        double currentRoas = currentSpend > 0 ? (currentConversions * 100.0) / currentSpend : 0;
+        double previousRoas = previousSpend > 0 ? (previousConversions * 100.0) / previousSpend : 0;
 
         return TrafficMetricsResponse.builder()
-                .investment(createDetail(String.format("R$ %.2f", spend), "0%", true))
-                .impressions(createDetail(formatNumber(impressions), "0%", true))
-                .clicks(createDetail(String.valueOf(clicks), "0%", true))
-                .conversations(createDetail(String.valueOf(conversions), "0%", true))
-                .roas(createDetail(String.format("%.1fx", roasValue), "0%", true))
+                .investment(
+                        createTrendDetail(currentSpend, previousSpend, String.format("R$ %.2f", currentSpend), true))
+                .impressions(createTrendDetail((double) currentImpressions, (double) previousImpressions,
+                        formatNumber(currentImpressions), true))
+                .clicks(createTrendDetail((double) currentClicks, (double) previousClicks,
+                        String.valueOf(currentClicks), true))
+                .conversations(createTrendDetail((double) currentConversions, (double) previousConversions,
+                        String.valueOf(currentConversions), true))
+                .roas(createTrendDetail(currentRoas, previousRoas, String.format("%.1fx", currentRoas), true))
                 .performanceHistory(performance)
+                .build();
+    }
+
+    private TrafficMetricsResponse.MetricDetail createTrendDetail(double current, double previous,
+            String formattedValue,
+            boolean higherIsBetter) {
+        double diff = current - previous;
+        double trendPercent = (previous > 0) ? (diff / previous * 100) : 0;
+        boolean isPositive = higherIsBetter ? (diff >= 0) : (diff <= 0);
+
+        return TrafficMetricsResponse.MetricDetail.builder()
+                .value(formattedValue)
+                .trend(String.format("%.1f%%", Math.abs(trendPercent)))
+                .isPositive(isPositive)
                 .build();
     }
 
