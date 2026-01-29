@@ -32,6 +32,12 @@ public class FollowUpService {
     private final WhatsAppConversationRepository conversationRepository;
     private final CompanyRepository companyRepository;
     private final AIAgentService aiAgentService;
+    private FollowUpService self;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSelf(@org.springframework.context.annotation.Lazy FollowUpService self) {
+        this.self = self;
+    }
 
     // ========== CONFIGURAÇÃO ==========
 
@@ -234,11 +240,12 @@ public class FollowUpService {
             return;
         }
 
-        log.info("Processando {} follow-ups pendentes", pendingIds.size());
+        log.info("[FOLLOW-UP WORKER] Processando {} IDs pendentes", pendingIds.size());
 
         for (UUID statusId : pendingIds) {
             try {
-                processFollowUpByIdWithLock(statusId);
+                // USA O PROXY (self) para garantir que @Transactional e @Lock funcionem
+                self.processFollowUpByIdWithLock(statusId);
             } catch (Exception e) {
                 log.error("Erro ao processar follow-up {}: {}", statusId, e.getMessage());
             }
@@ -268,11 +275,13 @@ public class FollowUpService {
         processFollowUpForConversation(status);
     }
 
-    /**
-     * Processa follow-up para uma conversa específica.
-     */
     @Transactional
     public void processFollowUpForConversation(FollowUpStatus status) {
+        // 1. Limpa o timer IMEDIATAMENTE (dentro da transação travada)
+        // para garantir que ninguém mais processe isso.
+        status.setNextFollowUpAt(null);
+        statusRepository.saveAndFlush(status);
+
         WhatsAppConversation conversation = status.getConversation();
 
         Optional<FollowUpConfig> configOpt = configRepository.findByCompanyId(
@@ -316,11 +325,6 @@ public class FollowUpService {
 
         // Gera mensagem de follow-up
         String followUpMessage = generateFollowUpMessage(config, conversation);
-
-        // ATÔMICO: Limpa o timer IMEDIATAMENTE antes de enviar para evitar que
-        // outra thread/worker processe a mesma conversa simultaneamente.
-        status.setNextFollowUpAt(null);
-        statusRepository.saveAndFlush(status);
 
         try {
             // 1. Envia via WhatsApp (UAZAPI)
