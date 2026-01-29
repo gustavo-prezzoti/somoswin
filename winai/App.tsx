@@ -49,6 +49,7 @@ import AdminCompanies from './components/Admin/AdminCompanies';
 import AdminPrompts from './components/Admin/AdminPrompts';
 import AdminProfessionals from './components/Admin/AdminProfessionals';
 import AdminSupportChat from './components/Admin/AdminSupportChat';
+import AdminFollowUp from './components/Admin/AdminFollowUp';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -361,6 +362,7 @@ const App: React.FC = () => {
           <Route path="instances" element={<AdminInstances />} />
           <Route path="user-connections" element={<AdminUserConnections />} />
           <Route path="agents" element={<AdminAgentsAI />} />
+          <Route path="followup" element={<AdminFollowUp />} />
           <Route path="prompts" element={<AdminPrompts />} />
           <Route path="professionals" element={<AdminProfessionals />} />
           <Route path="support-chat" element={<AdminSupportChat />} />

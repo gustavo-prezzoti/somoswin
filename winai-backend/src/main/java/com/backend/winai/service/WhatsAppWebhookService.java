@@ -40,6 +40,7 @@ public class WhatsAppWebhookService {
     private final com.backend.winai.queue.AiResponseProducer aiResponseProducer;
     private final UserWhatsAppConnectionRepository userWhatsAppConnectionRepository;
     private final MetricsSyncService metricsSyncService;
+    private final FollowUpService followUpService;
     private final OpenAiService openAiService;
 
     /**
@@ -157,6 +158,15 @@ public class WhatsAppWebhookService {
 
             log.info("Webhook processado com sucesso. MessageId: {}, Phone: {}, LeadId: {}",
                     messageId, phoneNumber, lead != null ? lead.getId() : null);
+
+            // Atualizar status de follow-up - mensagem recebida do lead
+            if (!Boolean.TRUE.equals(message.getFromMe())) {
+                try {
+                    followUpService.updateLastMessage(conversation.getId(), "LEAD");
+                } catch (Exception e) {
+                    log.warn("Erro ao atualizar follow-up para conversa {}: {}", conversation.getId(), e.getMessage());
+                }
+            }
 
             // Processar resposta automática da IA (texto, áudio transcrito ou imagem)
             String typeLowerCheck = messageType != null ? messageType.toLowerCase() : "";

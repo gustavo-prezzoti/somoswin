@@ -24,17 +24,11 @@ public class ClinicorpService {
     @Value("${python.backend.url:http://python-backend:5000/api}")
     private String pythonBackendUrl;
 
-    /**
-     * Searches for information in the simulated knowledge base.
-     * Currently a stub as the Python backend is focused on Agenda/Patient.
-     */
     public String searchKnowledgeBase(String query) {
         log.info("Clinicorp Tool: Searching knowledge base for '{}'", query);
-        // TODO: Implement actual RAG endpoint in Python if needed
         return "Informação sobre '" + query + "' não encontrada na base de conhecimento.";
     }
 
-    @SuppressWarnings("unchecked")
     public List<String> getAvailableSlots(LocalDate date) {
         return getAvailableSlots(date, 3); // Default to 3 days if called without range
     }
@@ -43,8 +37,6 @@ public class ClinicorpService {
     public List<String> getAvailableSlots(LocalDate date, int days) {
         log.info("Clinicorp Tool: Searching slots starting from {} for {} days", date, days);
         try {
-            // Using the /agenda/profissionais endpoint with com_agendas=true to get a
-            // bigger picture
             String url = pythonBackendUrl + "/agenda/profissionais?com_agendas=true&data=" + date + "&dias_futuros="
                     + days;
 
@@ -179,6 +171,7 @@ public class ClinicorpService {
         return false;
     }
 
+    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getAppointmentsByPhone(String phone) {
         log.info("Clinicorp Tool: Searching appointments for phone {}", phone);
         try {

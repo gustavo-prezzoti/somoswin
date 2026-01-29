@@ -27,7 +27,28 @@ public class DatabaseMigrationConfig {
                     log.warn("Erro ao alterar user_id (ignorado, pode já ter sido alterado): {}", e.getMessage());
                 }
 
-                // Garantir extensão vector e coluna embedding
+                try {
+                    String[] columns = {
+                            "recurring_interval_minutes", "recurrence_minutes",
+                            "custom_prompt", "custom_message",
+                            "trigger_on_ai_message", "trigger_on_ai_response",
+                            "time_window_start", "start_hour",
+                            "time_window_end", "end_hour"
+                    };
+
+                    for (String col : columns) {
+                        try {
+                            jdbcTemplate.execute(
+                                    "ALTER TABLE winai.followup_configs ALTER COLUMN " + col + " DROP NOT NULL");
+                        } catch (Exception e) {
+                            // Ignora se coluna não existir
+                        }
+                    }
+                    log.info("Constraints de followup_configs ajustadas com sucesso.");
+                } catch (Exception e) {
+                    log.warn("Erro ao ajustar constraints de followup_configs: {}", e.getMessage());
+                }
+
                 try {
                     jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS vector");
                     jdbcTemplate.execute(

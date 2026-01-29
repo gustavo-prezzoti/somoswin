@@ -14,22 +14,21 @@ import com.backend.winai.entity.KnowledgeBaseConnection;
 import com.backend.winai.entity.UserWhatsAppConnection;
 import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.WhatsAppMessage;
+import com.backend.winai.entity.Notification;
+import com.backend.winai.entity.User;
 import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
-import com.backend.winai.entity.Notification;
-import com.backend.winai.entity.User;
 import com.backend.winai.repository.UserRepository;
 import com.backend.winai.repository.NotificationRepository;
 import com.backend.winai.dto.response.WhatsAppConversationResponse;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
+import com.backend.winai.dto.request.SendWhatsAppMessageRequest;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AIAgentService {
 
@@ -42,6 +41,30 @@ public class AIAgentService {
     private final UserRepository userRepository;
     private final NotificationRepository notificationRepository;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+    private final FollowUpService followUpService;
+
+    public AIAgentService(
+            OpenAiService openAiService,
+            KnowledgeBaseConnectionRepository connectionRepository,
+            UserWhatsAppConnectionRepository whatsAppConnectionRepository,
+            WhatsAppMessageRepository messageRepository,
+            UazapService uazapService,
+            WhatsAppConversationRepository conversationRepository,
+            UserRepository userRepository,
+            NotificationRepository notificationRepository,
+            org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate,
+            @org.springframework.context.annotation.Lazy FollowUpService followUpService) {
+        this.openAiService = openAiService;
+        this.connectionRepository = connectionRepository;
+        this.whatsAppConnectionRepository = whatsAppConnectionRepository;
+        this.messageRepository = messageRepository;
+        this.uazapService = uazapService;
+        this.conversationRepository = conversationRepository;
+        this.userRepository = userRepository;
+        this.notificationRepository = notificationRepository;
+        this.messagingTemplate = messagingTemplate;
+        this.followUpService = followUpService;
+    }
 
     @Transactional
     public String processMessageWithAI(WhatsAppConversation conversation, String userMessage, String leadName) {
@@ -80,8 +103,8 @@ public class AIAgentService {
                 return null;
             }
 
-            log.info("Processing message with AI for conversation: {}, using knowledge base: {}",
-                    conv.getId(), knowledgeBase.getName());
+            log.info("Processing message with AI for conversation: {}, using knowledge base: {}", conv.getId(),
+                    knowledgeBase.getName());
 
             List<String> recentMessages = getRecentConversationHistory(conv.getId(), 10);
 
@@ -89,8 +112,8 @@ public class AIAgentService {
             if ("clinicorp".equalsIgnoreCase(knowledgeBase.getSystemTemplate())) {
                 log.info("Activate Clinicorp System Template for conversation: {} using KB: {}", conv.getId(),
                         knowledgeBase.getId());
-                String contextInfo = "Data atual: " + java.time.LocalDateTime.now() +
-                        "\nNome do Paciente/Lead: " + (leadName != null ? leadName : "Não identificado");
+                String contextInfo = "Data atual: " + java.time.LocalDateTime.now() + "\nNome do Paciente/Lead: "
+                        + (leadName != null ? leadName : "Não identificado");
 
                 String aiResponse = openAiService.generateClinicorpResponse(userMessage, recentMessages, contextInfo,
                         knowledgeBase.getAgentPrompt());
@@ -108,16 +131,11 @@ public class AIAgentService {
                         + "\n[CONTEXTO DO USUÁRIO]\nNome do usuário: " + leadName;
             }
 
-            String aiResponse = openAiService.generateResponseWithContext(
-                    enhancedAgentPrompt,
-                    knowledgeBase.getContent(),
-                    userMessage,
-                    imageUrl,
-                    recentMessages);
+            String aiResponse = openAiService.generateResponseWithContext(enhancedAgentPrompt,
+                    knowledgeBase.getContent(), userMessage, imageUrl, recentMessages);
 
             if (aiResponse != null && !aiResponse.isEmpty()) {
-                log.info("AI generated response for conversation {}: {} chars",
-                        conv.getId(), aiResponse.length());
+                log.info("AI generated response for conversation {}: {} chars", conv.getId(), aiResponse.length());
                 return aiResponse;
             }
 
@@ -125,8 +143,8 @@ public class AIAgentService {
             return null;
 
         } catch (Exception e) {
-            log.error("Error processing message with AI for conversation {}: {}",
-                    conversation.getId(), e.getMessage(), e);
+            log.error("Error processing message with AI for conversation {}: {}", conversation.getId(), e.getMessage(),
+                    e);
             return null;
         }
     }
@@ -159,8 +177,7 @@ public class AIAgentService {
             return true;
 
         } catch (Exception e) {
-            log.error("Failed to send AI response for conversation {}: {}",
-                    conversation.getId(), e.getMessage(), e);
+            log.error("Failed to send AI response for conversation {}: {}", conversation.getId(), e.getMessage(), e);
             return false;
         }
     }
@@ -173,8 +190,8 @@ public class AIAgentService {
     @Transactional
     public String processAndRespond(WhatsAppConversation conversation, String userMessage, String leadName,
             String imageUrl) {
-        log.info("Starting processAndRespond for conversation: {}, user message: {} chars",
-                conversation.getId(), userMessage != null ? userMessage.length() : 0);
+        log.info("Starting processAndRespond for conversation: {}, user message: {} chars", conversation.getId(),
+                userMessage != null ? userMessage.length() : 0);
 
         String aiResponse = processMessageWithAI(conversation, userMessage, leadName, imageUrl);
 
@@ -210,6 +227,14 @@ public class AIAgentService {
                     log.warn("Failed to send chunk via Uazap");
                 }
             }
+
+            // Atualizar status de follow-up - IA respondeu
+            try {
+                followUpService.updateLastMessage(conversation.getId(), "AI");
+            } catch (Exception e) {
+                log.warn("Erro ao atualizar follow-up para conversa {}: {}", conversation.getId(), e.getMessage());
+            }
+
             return aiResponse;
         } else {
             log.warn("AI response is null or empty");
@@ -260,29 +285,22 @@ public class AIAgentService {
             }
 
             // Salvar a resposta da IA como mensagem
-            WhatsAppMessage aiMessage = WhatsAppMessage.builder()
-                    .conversation(conversation)
-                    .lead(conversation.getLead())
-                    .messageId(UUID.randomUUID().toString())
-                    .content(aiResponse)
-                    .fromMe(true)
-                    .messageType("text")
-                    .messageTimestamp(System.currentTimeMillis())
-                    .status("sent")
-                    .isGroup(false)
-                    .build();
+            WhatsAppMessage aiMessage = WhatsAppMessage.builder().conversation(conversation)
+                    .lead(conversation.getLead()).messageId(UUID.randomUUID().toString()).content(aiResponse)
+                    .fromMe(true).messageType("text").messageTimestamp(System.currentTimeMillis()).status("sent")
+                    .isGroup(false).build();
 
-            log.debug("Before saving - Message content length: {}, content preview: {}",
-                    aiResponse.length(), aiResponse.substring(0, Math.min(100, aiResponse.length())));
+            log.debug("Before saving - Message content length: {}, content preview: {}", aiResponse.length(),
+                    aiResponse.substring(0, Math.min(100, aiResponse.length())));
 
             aiMessage = messageRepository.save(aiMessage);
 
-            log.info("AI message persisted successfully with ID: {}, content: {} chars",
-                    aiMessage.getId(), aiMessage.getContent() != null ? aiMessage.getContent().length() : 0);
+            log.info("AI message persisted successfully with ID: {}, content: {} chars", aiMessage.getId(),
+                    aiMessage.getContent() != null ? aiMessage.getContent().length() : 0);
 
             // Atualizar conversa
-            conversation.setLastMessageText(
-                    aiResponse.length() > 250 ? aiResponse.substring(0, 247) + "..." : aiResponse);
+            conversation
+                    .setLastMessageText(aiResponse.length() > 250 ? aiResponse.substring(0, 247) + "..." : aiResponse);
             conversation.setLastMessageTimestamp(aiMessage.getMessageTimestamp());
             conversationRepository.save(conversation);
 
@@ -299,10 +317,8 @@ public class AIAgentService {
     private void sendWebSocketUpdate(UUID companyId, WhatsAppMessage message, WhatsAppConversation conversation) {
         try {
             if (message != null) {
-                log.debug("Sending WebSocket update - Message ID: {}, Content length: {}, From me: {}",
-                        message.getId(),
-                        message.getContent() != null ? message.getContent().length() : 0,
-                        message.getFromMe());
+                log.debug("Sending WebSocket update - Message ID: {}, Content length: {}, From me: {}", message.getId(),
+                        message.getContent() != null ? message.getContent().length() : 0, message.getFromMe());
             } else {
                 log.debug("Sending WebSocket update for conversation: {}", conversation.getId());
             }
@@ -313,21 +329,13 @@ public class AIAgentService {
             WhatsAppConversationResponse conversationDto = toConversationResponse(conversation);
 
             com.backend.winai.dto.response.WebSocketMessage wsMessage = com.backend.winai.dto.response.WebSocketMessage
-                    .builder()
-                    .type("NEW_MESSAGE")
-                    .message(messageDto)
-                    .conversation(conversationDto)
-                    .companyId(companyId)
-                    .build();
+                    .builder().type("NEW_MESSAGE").message(messageDto).conversation(conversationDto)
+                    .companyId(companyId).build();
 
             messagingTemplate.convertAndSend("/topic/whatsapp/" + companyId, wsMessage);
 
             com.backend.winai.dto.response.WebSocketMessage convUpdate = com.backend.winai.dto.response.WebSocketMessage
-                    .builder()
-                    .type("CONVERSATION_UPDATED")
-                    .conversation(conversationDto)
-                    .companyId(companyId)
-                    .build();
+                    .builder().type("CONVERSATION_UPDATED").conversation(conversationDto).companyId(companyId).build();
 
             messagingTemplate.convertAndSend("/topic/whatsapp/conversations/" + companyId, convUpdate);
 
@@ -358,16 +366,9 @@ public class AIAgentService {
                     : conversation.getPhoneNumber()) + " solicitou um atendente.";
 
             for (User user : companyUsers) {
-                Notification notification = Notification.builder()
-                        .user(user)
-                        .title(title)
-                        .message(message)
-                        .type("WARNING")
-                        .relatedEntityType("CONVERSATION")
-                        .relatedEntityId(conversation.getId())
-                        .actionUrl("/whatsapp?chatId=" + conversation.getId())
-                        .read(false)
-                        .build();
+                Notification notification = Notification.builder().user(user).title(title).message(message)
+                        .type("WARNING").relatedEntityType("CONVERSATION").relatedEntityId(conversation.getId())
+                        .actionUrl("/whatsapp?chatId=" + conversation.getId()).read(false).build();
                 notificationRepository.save(notification);
             }
 
@@ -376,61 +377,101 @@ public class AIAgentService {
 
             // 5. Send explicit mode change and notification events
             com.backend.winai.dto.response.WebSocketMessage modeChange = com.backend.winai.dto.response.WebSocketMessage
-                    .builder()
-                    .type("SUPPORT_MODE_CHANGED")
-                    .conversationId(conversation.getId().toString())
-                    .mode("HUMAN")
-                    .companyId(conversation.getCompany().getId())
-                    .build();
+                    .builder().type("SUPPORT_MODE_CHANGED").conversationId(conversation.getId().toString())
+                    .mode("HUMAN").companyId(conversation.getCompany().getId()).build();
             messagingTemplate.convertAndSend("/topic/whatsapp/" + conversation.getCompany().getId(), modeChange);
 
             com.backend.winai.dto.response.WebSocketMessage notificationEvent = com.backend.winai.dto.response.WebSocketMessage
-                    .builder()
-                    .type("NOTIFICATION_RECEIVED")
-                    .companyId(conversation.getCompany().getId())
-                    .build();
+                    .builder().type("NOTIFICATION_RECEIVED").companyId(conversation.getCompany().getId()).build();
             messagingTemplate.convertAndSend("/topic/whatsapp/" + conversation.getCompany().getId(), notificationEvent);
+
+            sendHumanHandoffWhatsAppNotification(conversation);
+        }
+    }
+
+    private void sendHumanHandoffWhatsAppNotification(WhatsAppConversation conversation) {
+        try {
+            var configOpt = followUpService.getConfigByCompany(conversation.getCompany().getId());
+
+            if (configOpt.isEmpty()) {
+                log.debug("Nenhuma configuração de follow-up para empresa {}, pulando notificação WhatsApp de handoff",
+                        conversation.getCompany().getId());
+                return;
+            }
+
+            var config = configOpt.get();
+
+            if (!Boolean.TRUE.equals(config.getHumanHandoffNotificationEnabled())) {
+                log.debug("Notificação WhatsApp de handoff desabilitada para empresa {}",
+                        conversation.getCompany().getId());
+                return;
+            }
+
+            String targetPhone = config.getHumanHandoffPhone();
+            if (targetPhone == null || targetPhone.isBlank()) {
+                log.warn("Número de telefone para handoff não configurado para empresa {}",
+                        conversation.getCompany().getId());
+                return;
+            }
+
+            String leadName = conversation.getContactName() != null ? conversation.getContactName() : "Lead";
+            String leadPhone = conversation.getPhoneNumber() != null ? conversation.getPhoneNumber() : "N/A";
+
+            String notificationMessage;
+            if (config.getHumanHandoffMessage() != null && !config.getHumanHandoffMessage().isBlank()) {
+                notificationMessage = config.getHumanHandoffMessage().replace("{leadName}", leadName)
+                        .replace("{phoneNumber}", leadPhone)
+                        .replace("{conversationId}", conversation.getId().toString());
+            } else {
+                notificationMessage = String.format("*Atendimento Humano Solicitado*\n\n"
+                        + "O lead *%s* (%s) está solicitando atendimento humano.\n\n" + "Acesse o painel para atender.",
+                        leadName, leadPhone);
+            }
+
+            var connections = whatsAppConnectionRepository.findByCompanyId(conversation.getCompany().getId());
+            if (connections.isEmpty()) {
+                log.warn(
+                        "Nenhuma conexão WhatsApp ativa para empresa {}, não foi possível enviar notificação de handoff",
+                        conversation.getCompany().getId());
+                return;
+            }
+
+            UserWhatsAppConnection connection = connections.stream().filter(c -> Boolean.TRUE.equals(c.getIsActive()))
+                    .findFirst().orElse(connections.get(0));
+            SendWhatsAppMessageRequest request = SendWhatsAppMessageRequest.builder().phoneNumber(targetPhone)
+                    .message(notificationMessage).uazapInstance(connection.getInstanceName()).build();
+
+            uazapService.sendTextMessage(request, conversation.getCompany());
+
+            log.info("Notificação WhatsApp de handoff enviada para {} (empresa {})", targetPhone,
+                    conversation.getCompany().getName());
+
+        } catch (Exception e) {
+            log.error("Erro ao enviar notificação WhatsApp de handoff: {}", e.getMessage(), e);
         }
     }
 
     private WhatsAppMessageResponse toMessageResponse(WhatsAppMessage message) {
-        return WhatsAppMessageResponse.builder()
-                .id(message.getId())
-                .conversationId(message.getConversation().getId())
-                .leadId(message.getLead() != null ? message.getLead().getId() : null)
-                .messageId(message.getMessageId())
-                .content(message.getContent())
-                .fromMe(message.getFromMe())
-                .messageType(message.getMessageType())
-                .mediaType(message.getMediaType())
-                .mediaUrl(message.getMediaUrl())
-                .mediaDuration(message.getMediaDuration())
-                .transcription(message.getTranscription())
-                .status(message.getStatus())
-                .messageTimestamp(message.getMessageTimestamp())
-                .createdAt(message.getCreatedAt())
-                .build();
+        return WhatsAppMessageResponse.builder().id(message.getId()).conversationId(message.getConversation().getId())
+                .leadId(message.getLead() != null ? message.getLead().getId() : null).messageId(message.getMessageId())
+                .content(message.getContent()).fromMe(message.getFromMe()).messageType(message.getMessageType())
+                .mediaType(message.getMediaType()).mediaUrl(message.getMediaUrl())
+                .mediaDuration(message.getMediaDuration()).transcription(message.getTranscription())
+                .status(message.getStatus()).messageTimestamp(message.getMessageTimestamp())
+                .createdAt(message.getCreatedAt()).build();
     }
 
     private WhatsAppConversationResponse toConversationResponse(WhatsAppConversation conversation) {
-        return WhatsAppConversationResponse.builder()
-                .id(conversation.getId())
+        return WhatsAppConversationResponse.builder().id(conversation.getId())
                 .companyId(conversation.getCompany() != null ? conversation.getCompany().getId() : null)
                 .leadId(conversation.getLead() != null ? conversation.getLead().getId() : null)
-                .phoneNumber(conversation.getPhoneNumber())
-                .waChatId(conversation.getWaChatId())
-                .contactName(conversation.getContactName())
-                .profilePictureUrl(conversation.getProfilePictureUrl())
-                .unreadCount(conversation.getUnreadCount())
-                .lastMessageText(conversation.getLastMessageText())
-                .lastMessageTimestamp(conversation.getLastMessageTimestamp())
-                .isArchived(conversation.getIsArchived())
-                .isBlocked(conversation.getIsBlocked())
-                .uazapInstance(conversation.getUazapInstance())
-                .supportMode(conversation.getSupportMode())
-                .createdAt(conversation.getCreatedAt())
-                .updatedAt(conversation.getUpdatedAt())
-                .build();
+                .phoneNumber(conversation.getPhoneNumber()).waChatId(conversation.getWaChatId())
+                .contactName(conversation.getContactName()).profilePictureUrl(conversation.getProfilePictureUrl())
+                .unreadCount(conversation.getUnreadCount()).lastMessageText(conversation.getLastMessageText())
+                .lastMessageTimestamp(conversation.getLastMessageTimestamp()).isArchived(conversation.getIsArchived())
+                .isBlocked(conversation.getIsBlocked()).uazapInstance(conversation.getUazapInstance())
+                .supportMode(conversation.getSupportMode()).createdAt(conversation.getCreatedAt())
+                .updatedAt(conversation.getUpdatedAt()).build();
     }
 
     private KnowledgeBase findKnowledgeBaseForConversation(WhatsAppConversation conversation) {
@@ -462,18 +503,14 @@ public class AIAgentService {
             String instanceName = conversation.getUazapInstance();
 
             if (instanceName != null && !instanceName.isEmpty()) {
-                return whatsAppConnectionRepository.findByInstanceName(instanceName)
-                        .stream()
-                        .findFirst()
-                        .orElse(null);
+                return whatsAppConnectionRepository.findByInstanceName(instanceName).stream().findFirst().orElse(null);
             }
 
             String baseUrl = conversation.getUazapBaseUrl();
             String token = conversation.getUazapToken();
 
             if (baseUrl != null && token != null) {
-                return whatsAppConnectionRepository.findByInstanceBaseUrlAndInstanceToken(baseUrl, token)
-                        .orElse(null);
+                return whatsAppConnectionRepository.findByInstanceBaseUrlAndInstanceToken(baseUrl, token).orElse(null);
             }
 
             return null;
@@ -487,9 +524,7 @@ public class AIAgentService {
     private List<String> getRecentConversationHistory(UUID conversationId, int limit) {
         try {
             List<WhatsAppMessage> recentMessages = messageRepository
-                    .findByConversationIdOrderByMessageTimestampDesc(conversationId)
-                    .stream()
-                    .limit(limit)
+                    .findByConversationIdOrderByMessageTimestampDesc(conversationId).stream().limit(limit)
                     .collect(Collectors.toList());
 
             java.util.Collections.reverse(recentMessages);

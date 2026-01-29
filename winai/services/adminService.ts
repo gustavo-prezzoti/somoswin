@@ -276,4 +276,89 @@ export interface UpdateSystemPromptRequest {
     isDefault?: boolean;
 }
 
+
+export interface FollowUpConfig {
+    id?: string;
+    companyId: string;
+    enabled: boolean;
+    inactivityMinutes: number;
+    recurrenceMinutes: number;
+    maxFollowUps: number;
+    messageType: 'AI' | 'CUSTOM';
+    customMessage?: string;
+    triggerOnAiResponse: boolean;
+    triggerOnLeadMessage: boolean;
+    startHour: number;
+    endHour: number;
+    // Handoff Humano
+    humanHandoffNotificationEnabled?: boolean;
+    humanHandoffPhone?: string;
+    humanHandoffMessage?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface FollowUpStatus {
+    id: string;
+    conversationId: string;
+    contactName?: string;
+    phoneNumber?: string;
+    lastMessageSender: string;
+    lastMessageTime: string;
+    followUpCount: number;
+    nextFollowUpTime?: string;
+    isPaused: boolean;
+    isEligible: boolean;
+}
+
+export interface FollowUpConfigRequest {
+    companyId: string;
+    enabled: boolean;
+    inactivityMinutes: number;
+    recurrenceMinutes?: number;
+    maxFollowUps?: number;
+    messageType: string;
+    customMessage?: string;
+    triggerOnAiResponse?: boolean;
+    triggerOnLeadMessage?: boolean;
+    startHour?: number;
+    endHour?: number;
+    // Handoff Humano
+    humanHandoffNotificationEnabled?: boolean;
+    humanHandoffPhone?: string;
+    humanHandoffMessage?: string;
+}
+
+
+export const followUpService = {
+    getConfig: async (companyId: string): Promise<FollowUpConfig | null> => {
+        try {
+            return await httpClient.get<FollowUpConfig>(`/admin/followup/config/${companyId}`);
+        } catch {
+            return null;
+        }
+    },
+
+    saveConfig: async (config: FollowUpConfigRequest): Promise<FollowUpConfig> => {
+        return await httpClient.post<FollowUpConfig>('/admin/followup/config', config);
+    },
+
+    getStatuses: async (companyId: string): Promise<FollowUpStatus[]> => {
+        return await httpClient.get<FollowUpStatus[]>(`/admin/followup/status/${companyId}`);
+    },
+
+    pauseFollowUp: async (conversationId: string): Promise<void> => {
+        await httpClient.put(`/admin/followup/status/${conversationId}/pause`);
+    },
+
+    resumeFollowUp: async (conversationId: string): Promise<void> => {
+        await httpClient.put(`/admin/followup/status/${conversationId}/resume`);
+    },
+
+    resetFollowUp: async (conversationId: string): Promise<void> => {
+        await httpClient.delete(`/admin/followup/status/${conversationId}`);
+    }
+};
+
 export default adminService;
+
