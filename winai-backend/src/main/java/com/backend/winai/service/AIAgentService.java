@@ -198,6 +198,12 @@ public class AIAgentService {
         log.info("Starting processAndRespond for conversation: {}, user message: {} chars", conv.getId(),
                 userMessage != null ? userMessage.length() : 0);
 
+        // Check if conversation is already in HUMAN mode
+        if ("HUMAN".equalsIgnoreCase(conv.getSupportMode())) {
+            log.info("Conversation {} is in HUMAN mode, skipping AI response", conv.getId());
+            return null;
+        }
+
         String aiResponse = processMessageWithAI(conv, userMessage, leadName, imageUrl);
 
         if (aiResponse != null && !aiResponse.isEmpty()) {
@@ -636,18 +642,73 @@ public class AIAgentService {
 
     public List<String> getRecentConversationHistory(UUID conversationId, int limit) {
         try {
+            // 1. Buscar mensagens ordenadas da mais recente para a mais antiga
             List<WhatsAppMessage> recentMessages = messageRepository
                     .findByConversationIdOrderByMessageTimestampDesc(conversationId).stream().limit(limit)
                     .collect(Collectors.toList());
 
-            java.util.Collections.reverse(recentMessages);
+            // 2. Buscar configuração de handoff para identificar mensagens de sistema
+            // Precisamos da companyId, vamos tentar pegar da primeira mensagem ou buscar a
+            // conversation
+            String customHandoffMsg = null;
+            if (!recentMessages.isEmpty()) {
+                try {
+                    UUID infoCompanyId = null;
+                    if (recentMessages.get(0).getConversation() != null
+                            && recentMessages.get(0).getConversation().getCompany() != null) {
+                        infoCompanyId = recentMessages.get(0).getConversation().getCompany().getId();
+                    } else {
+                        // Fallback: buscar conversation ID
+                        var conv = conversationRepository.findById(conversationId).orElse(null);
+                        if (conv != null && conv.getCompany() != null) {
+                            infoCompanyId = conv.getCompany().getId();
+                        }
+                    }
+
+                    if (infoCompanyId != null) {
+                        var configOpt = followUpService.getConfigByCompany(infoCompanyId);
+                        if (configOpt.isPresent()) {
+                            customHandoffMsg = configOpt.get().getHumanHandoffClientMessage();
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("Erro ao buscar config de handoff para filtro de histórico: {}", ex.getMessage());
+                }
+            }
+
+            final String defaultHandoffMsgPrefix = "Entendi! Vou chamar nossa especialista humana"; // Prefixo do
+                                                                                                    // default
+            final String customHandoffMsgFinal = customHandoffMsg;
 
             List<String> history = new ArrayList<>();
+
+            // 3. Iterar da MAIS RECENTE para a MAIS ANTIGA
+            // Se encontrarmos uma mensagem de handoff da IA, paramos de adicionar (reset de
+            // contexto)
             for (WhatsAppMessage msg : recentMessages) {
                 if (msg.getContent() != null && !msg.getContent().isEmpty()) {
+
+                    // Verificação de Handoff (Reset de Contexto)
+                    if (Boolean.TRUE.equals(msg.getFromMe())) {
+                        boolean isDefaultHandoff = msg.getContent().startsWith(defaultHandoffMsgPrefix);
+                        boolean isCustomHandoff = customHandoffMsgFinal != null &&
+                                !customHandoffMsgFinal.isBlank() &&
+                                msg.getContent().trim().equals(customHandoffMsgFinal.trim());
+
+                        if (isDefaultHandoff || isCustomHandoff) {
+                            log.info(
+                                    "Histórico truncado: mensagem de handoff detectada (ID: {}). Ignorando mensagens anteriores.",
+                                    msg.getId());
+                            break; // PARE de adicionar mensagens mais antigas
+                        }
+                    }
+
                     history.add(msg.getContent());
                 }
             }
+
+            // 4. Inverter para ordem cronológica (Antiga -> Recente) para enviar à OpenAI
+            java.util.Collections.reverse(history);
 
             return history;
 
