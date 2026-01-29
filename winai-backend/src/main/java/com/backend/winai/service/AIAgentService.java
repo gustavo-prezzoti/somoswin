@@ -572,16 +572,20 @@ public class AIAgentService {
     private UserWhatsAppConnection findConnectionForConversation(WhatsAppConversation conversation) {
         try {
             String instanceName = conversation.getUazapInstance();
+            UUID companyId = conversation.getCompany().getId();
 
             if (instanceName != null && !instanceName.isEmpty()) {
-                return whatsAppConnectionRepository.findByInstanceName(instanceName).stream().findFirst().orElse(null);
+                return whatsAppConnectionRepository.findByCompanyIdAndInstanceName(companyId, instanceName)
+                        .orElse(null);
             }
 
             String baseUrl = conversation.getUazapBaseUrl();
             String token = conversation.getUazapToken();
 
             if (baseUrl != null && token != null) {
-                return whatsAppConnectionRepository.findByInstanceBaseUrlAndInstanceToken(baseUrl, token).orElse(null);
+                return whatsAppConnectionRepository.findByInstanceBaseUrlAndInstanceToken(baseUrl, token)
+                        .filter(conn -> conn.getCompany().getId().equals(companyId))
+                        .orElse(null);
             }
 
             return null;

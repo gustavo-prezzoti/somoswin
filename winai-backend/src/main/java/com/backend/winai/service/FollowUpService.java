@@ -241,19 +241,19 @@ public class FollowUpService {
             return;
         }
 
-        // AGRUPAR POR TELEFONE PARA EVITAR MÚLTIPLAS CONVERSAS PRO MESMO LEAD
-        // Isso resolve o problema de o lead estar em múltiplas instâncias ou conversas
-        // duplicadas.
-        java.util.Map<String, List<FollowUpStatus>> byPhone = pendingList.stream()
-                .filter(fs -> fs.getConversation().getPhoneNumber() != null)
-                .collect(Collectors.groupingBy(fs -> fs.getConversation().getPhoneNumber()));
+        java.util.Map<String, List<FollowUpStatus>> byCompanyAndPhone = pendingList.stream()
+                .filter(fs -> fs.getConversation().getPhoneNumber() != null
+                        && fs.getConversation().getCompany() != null)
+                .collect(Collectors.groupingBy(fs -> fs.getConversation().getCompany().getId().toString() + "_"
+                        + fs.getConversation().getPhoneNumber()));
 
-        log.info("[FOLLOW-UP WORKER] Encontrados {} follow-ups pendentes para {} telefones únicos.",
-                pendingList.size(), byPhone.size());
+        log.info("[FOLLOW-UP WORKER] Encontrados {} follow-ups pendentes para {} chaves únicas (Empresa_Telefone).",
+                pendingList.size(), byCompanyAndPhone.size());
 
-        for (java.util.Map.Entry<String, List<FollowUpStatus>> entry : byPhone.entrySet()) {
-            String phone = entry.getKey();
+        for (java.util.Map.Entry<String, List<FollowUpStatus>> entry : byCompanyAndPhone.entrySet()) {
+            String compositeKey = entry.getKey();
             List<FollowUpStatus> statuses = entry.getValue();
+            String phone = compositeKey.split("_")[1];
 
             // Pega o primeiro (mais antigo/pendente) para processar
             FollowUpStatus target = statuses.get(0);
