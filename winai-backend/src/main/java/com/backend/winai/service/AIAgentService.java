@@ -411,7 +411,21 @@ public class AIAgentService {
         conversation.setSupportMode("HUMAN");
         conversationRepository.save(conversation);
 
-        // 2. Send handoff message to client
+        // 2. BROADCAST MODE CHANGE IMMEDIATELY for real-time UI feedback
+        // Send to both specific conversation AND general company topics
+        try {
+            UUID companyId = conversation.getCompany().getId();
+            com.backend.winai.dto.response.WebSocketMessage modeChange = com.backend.winai.dto.response.WebSocketMessage
+                    .builder().type("SUPPORT_MODE_CHANGED").conversationId(conversation.getId().toString())
+                    .mode("HUMAN").companyId(companyId).build();
+
+            messagingTemplate.convertAndSend("/topic/whatsapp/" + companyId, modeChange);
+            messagingTemplate.convertAndSend("/topic/whatsapp/conversations/" + companyId, modeChange);
+        } catch (Exception e) {
+            log.warn("Falha ao enviar broadcast inicial de handoff: {}", e.getMessage());
+        }
+
+        // 3. Send handoff message to client
         String handoffMsg = "Entendi! Vou chamar nossa especialista humana para continuar seu atendimento agora mesmo. 🧡 Aguarde só um momento. 🌿✨";
 
         // Tentar obter mensagem personalizada da configuração
@@ -428,7 +442,7 @@ public class AIAgentService {
         sendAIResponse(conversation, handoffMsg);
         persistAndNotify(conversation, handoffMsg);
 
-        // 3. Create notifications for all company users
+        // 4. Create notifications for all company users
         if (conversation.getCompany() != null) {
             List<User> companyUsers = userRepository.findByCompanyId(conversation.getCompany().getId());
             String title = "Atendimento Humano Solicitado";
@@ -442,16 +456,7 @@ public class AIAgentService {
                 notificationRepository.save(notification);
             }
 
-            // 4. Notifications are sent via persistAndNotify above which calls
-            // sendWebSocketUpdate
-            // We only need to send explicit mode change and notification events below.
-
-            // 5. Send explicit mode change and notification events
-            com.backend.winai.dto.response.WebSocketMessage modeChange = com.backend.winai.dto.response.WebSocketMessage
-                    .builder().type("SUPPORT_MODE_CHANGED").conversationId(conversation.getId().toString())
-                    .mode("HUMAN").companyId(conversation.getCompany().getId()).build();
-            messagingTemplate.convertAndSend("/topic/whatsapp/" + conversation.getCompany().getId(), modeChange);
-
+            // 5. Send notification event (Mode change was already sent at #2)
             com.backend.winai.dto.response.WebSocketMessage notificationEvent = com.backend.winai.dto.response.WebSocketMessage
                     .builder().type("NOTIFICATION_RECEIVED").companyId(conversation.getCompany().getId()).build();
             messagingTemplate.convertAndSend("/topic/whatsapp/" + conversation.getCompany().getId(), notificationEvent);

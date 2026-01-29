@@ -377,6 +377,8 @@ public class OpenAiService {
         systemPrompt.append(
                 "   - SE o usuário pedir explicitamente para falar com um humano, use a ferramenta 'escalar_humano'.\n");
         systemPrompt.append(
+                "   - Se você ver no histórico que o atendente já foi solicitado ou que a ferramenta 'escalar_humano' já foi chamada anteriormente, NÃO chame a ferramenta novamente. Simplesmente informe que o atendente já está a caminho.\n");
+        systemPrompt.append(
                 "   - SE o usuário quiser reagendar ou cancelar algo que você não pode fazer, use a ferramenta respectiva.\n");
         systemPrompt.append(
                 "   - NÃO tente simular um humano ou mentir. Se for solicitado, mude para o modo humano imediatamente.\n");
