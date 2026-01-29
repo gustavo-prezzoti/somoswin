@@ -277,7 +277,7 @@ public class AIAgentService {
         return chunks;
     }
 
-    private void persistAndNotify(WhatsAppConversation conversation, String aiResponse) {
+    public void persistAndNotify(WhatsAppConversation conversation, String aiResponse) {
         try {
             if (aiResponse == null || aiResponse.trim().isEmpty()) {
                 log.warn("Received empty AI response for conversation: {}", conversation.getId());
@@ -521,7 +521,7 @@ public class AIAgentService {
         }
     }
 
-    private List<String> getRecentConversationHistory(UUID conversationId, int limit) {
+    public List<String> getRecentConversationHistory(UUID conversationId, int limit) {
         try {
             List<WhatsAppMessage> recentMessages = messageRepository
                     .findByConversationIdOrderByMessageTimestampDesc(conversationId).stream().limit(limit)

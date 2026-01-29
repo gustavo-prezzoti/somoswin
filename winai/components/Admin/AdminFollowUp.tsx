@@ -237,26 +237,6 @@ const AdminFollowUp = () => {
                                     </p>
                                 </div>
 
-                                {/* Máximo de Follow-ups */}
-                                <div className="group">
-                                    <label className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 group-hover:text-amber-600 transition-colors">
-                                        <Settings size={14} />
-                                        Limite de Tentativas
-                                        <Info size={12} className="text-gray-300 group-hover:text-amber-400" />
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={formData.maxFollowUps}
-                                        onChange={e => updateForm('maxFollowUps', parseInt(e.target.value) || 3)}
-                                        className="w-full px-6 py-5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-amber-500/10 focus:bg-white focus:border-amber-200 transition-all font-black text-gray-800 text-lg"
-                                        min={1}
-                                        max={10}
-                                    />
-                                    <p className="text-[10px] font-bold text-gray-400 mt-2 italic flex items-center gap-1">
-                                        <Info size={10} />
-                                        Número máximo de tentativas de reengajamento por conversa.
-                                    </p>
-                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">

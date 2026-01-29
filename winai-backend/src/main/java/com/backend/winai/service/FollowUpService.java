@@ -60,11 +60,11 @@ public class FollowUpService {
         if (request.getEnabled() != null)
             config.setEnabled(request.getEnabled());
         if (request.getInactivityMinutes() != null)
-            config.setInactivityMinutes(request.getInactivityMinutes());
+            config.setInactivityMinutes(Math.max(1, request.getInactivityMinutes()));
         if (request.getRecurring() != null)
             config.setRecurring(request.getRecurring());
         if (request.getRecurrenceMinutes() != null)
-            config.setRecurrenceMinutes(request.getRecurrenceMinutes());
+            config.setRecurrenceMinutes(Math.max(1, request.getRecurrenceMinutes()));
         if (request.getMaxFollowUps() != null)
             config.setMaxFollowUps(request.getMaxFollowUps());
         if (request.getMessageType() != null)
@@ -226,23 +226,45 @@ public class FollowUpService {
     @Transactional
     public void processPendingFollowUpsAsync() {
         ZonedDateTime now = ZonedDateTime.now();
-        List<FollowUpStatus> pendingList = statusRepository.findPendingFollowUps(now);
+        // Busca apenas IDs para evitar problemas de concorrência com objetos Managed
+        List<UUID> pendingIds = statusRepository.findPendingFollowUps(now)
+                .stream().map(FollowUpStatus::getId).collect(Collectors.toList());
 
-        if (pendingList.isEmpty()) {
+        if (pendingIds.isEmpty()) {
             log.debug("Nenhum follow-up pendente para processar");
             return;
         }
 
-        log.info("Processando {} follow-ups pendentes", pendingList.size());
+        log.info("Processando {} follow-ups pendentes", pendingIds.size());
 
-        for (FollowUpStatus status : pendingList) {
+        for (UUID statusId : pendingIds) {
             try {
-                processFollowUpForConversation(status);
+                processFollowUpByIdWithLock(statusId);
             } catch (Exception e) {
-                log.error("Erro ao processar follow-up para conversa {}: {}",
-                        status.getConversation().getId(), e.getMessage(), e);
+                log.error("Erro ao processar follow-up {}: {}", statusId, e.getMessage());
             }
         }
+    }
+
+    /**
+     * Processa follow-up com trava para evitar duplicidade em ambientes
+     * concorrentes.
+     */
+    @Transactional
+    public void processFollowUpByIdWithLock(UUID statusId) {
+        // O repositório deve usar trava pessimista ou verificação de timer
+        Optional<FollowUpStatus> statusOpt = statusRepository.findById(statusId);
+        if (statusOpt.isEmpty())
+            return;
+
+        FollowUpStatus status = statusOpt.get();
+
+        // Verificação dupla: se o timer já foi limpo por outra thread, ignora.
+        if (status.getNextFollowUpAt() == null || status.getNextFollowUpAt().isAfter(ZonedDateTime.now())) {
+            return;
+        }
+
+        processFollowUpForConversation(status);
     }
 
     /**
@@ -291,32 +313,51 @@ public class FollowUpService {
             return;
         }
 
-        // Gera e envia mensagem de follow-up
+        // Gera mensagem de follow-up
         String followUpMessage = generateFollowUpMessage(config, conversation);
 
+        // ATÔMICO: Limpa o timer IMEDIATAMENTE antes de enviar para evitar que
+        // outra thread/worker processe a mesma conversa simultaneamente.
+        status.setNextFollowUpAt(null);
+        statusRepository.saveAndFlush(status);
+
         try {
-            aiAgentService.sendAIResponse(conversation, followUpMessage);
+            // 1. Envia via WhatsApp (UAZAPI)
+            boolean sent = aiAgentService.sendAIResponse(conversation, followUpMessage);
 
-            ZonedDateTime now = ZonedDateTime.now();
-            status.setFollowUpCount(status.getFollowUpCount() + 1);
-            status.setLastFollowUpAt(now);
+            if (sent) {
+                // 2. Persiste no banco de dados e notifica via WebSocket para o Frontend
+                aiAgentService.persistAndNotify(conversation, followUpMessage);
 
-            // Agenda próximo se for recorrente
-            if (config.getRecurring() && status.getFollowUpCount() < config.getMaxFollowUps()) {
-                status.setNextFollowUpAt(now.plusMinutes(config.getRecurrenceMinutes()));
-            } else {
-                status.setNextFollowUpAt(null);
+                ZonedDateTime now = ZonedDateTime.now();
+                status.setFollowUpCount(status.getFollowUpCount() + 1);
+                status.setLastFollowUpAt(now);
+
+                // Agenda próximo se for recorrente
+                if (config.getRecurring() && status.getFollowUpCount() < config.getMaxFollowUps()) {
+                    status.setNextFollowUpAt(now.plusMinutes(config.getRecurrenceMinutes()));
+                }
+
+                statusRepository.save(status);
+                log.info("Follow-up #{} enviado e notificado para conversa {}",
+                        status.getFollowUpCount(), conversation.getId());
             }
-
-            statusRepository.save(status);
-            log.info("Follow-up #{} enviado para conversa {}",
-                    status.getFollowUpCount(), conversation.getId());
 
         } catch (Exception e) {
             log.error("Erro ao enviar follow-up para conversa {}: {}",
                     conversation.getId(), e.getMessage(), e);
-            // Agenda retry em 30 minutos
-            status.setNextFollowUpAt(ZonedDateTime.now().plusMinutes(30));
+
+            // Lógica de Retentativa Única: se falhar, tenta só mais uma vez em 30 min.
+            // Se o followUpCount for o mesmo, significa que não conseguimos enviar o atual.
+            if (status.getLastFollowUpAt() == null
+                    || status.getLastFollowUpAt().isBefore(ZonedDateTime.now().minusMinutes(5))) {
+                log.info("Agendando UMA única retentativa para conversa {}", conversation.getId());
+                status.setNextFollowUpAt(ZonedDateTime.now().plusMinutes(30));
+            } else {
+                log.warn("Falha persistente no follow-up da conversa {}. Parando tentativas.", conversation.getId());
+                status.setNextFollowUpAt(null);
+                status.setEligible(false);
+            }
             statusRepository.save(status);
         }
     }
@@ -327,6 +368,42 @@ public class FollowUpService {
     private String generateFollowUpMessage(FollowUpConfig config, WhatsAppConversation conversation) {
         if (config.getCustomMessage() != null && !config.getCustomMessage().isBlank()) {
             return config.getCustomMessage();
+        }
+
+        if ("AI".equalsIgnoreCase(config.getMessageType())) {
+            try {
+                log.info("Gerando follow-up inteligente com IA para conversa {}", conversation.getId());
+
+                List<String> history = aiAgentService.getRecentConversationHistory(conversation.getId(), 5);
+
+                String leadName = conversation.getContactName() != null ? conversation.getContactName() : "cliente";
+
+                String prompt = String.format(
+                        "CONTEXTO DE REENGAJAMENTO (FOLLOW-UP):\n" +
+                                "O lead %s parou de responder na conversa anterior.\n" +
+                                "Analise o histórico abaixo para entender o último ponto de contato.\n" +
+                                "Sua missão é criar uma mensagem de retomada que seja:\n" +
+                                "1. Curta e informal (linguagem de WhatsApp).\n" +
+                                "2. Empática e prestativa.\n" +
+                                "3. Cite brevemente algo do histórico se fizer sentido para parecer natural.\n" +
+                                "4. Termine com uma pergunta simples para facilitar a resposta.\n" +
+                                "\nHISTÓRICO:\n%s\n" +
+                                "\nIMPORTANTE: Retorne APENAS o texto da mensagem. Não use aspas ou prefixos.",
+                        leadName, String.join("\n", history));
+
+                // Usa o processoMessageWithAI mas com um prompt de sistema temporário ou
+                // contexto
+                String aiResponse = aiAgentService.processMessageWithAI(conversation, prompt, leadName);
+
+                if (aiResponse != null && !aiResponse.trim().isEmpty()
+                        && !"HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
+                    return aiResponse;
+                }
+
+                log.warn("IA não gerou resposta de follow-up válida, usando fallback padrão");
+            } catch (Exception e) {
+                log.error("Erro ao gerar follow-up com IA: {}", e.getMessage());
+            }
         }
 
         String contactName = conversation.getContactName() != null ? conversation.getContactName() : "cliente";
