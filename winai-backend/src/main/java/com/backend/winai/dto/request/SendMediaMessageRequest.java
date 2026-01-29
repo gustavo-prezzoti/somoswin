@@ -29,4 +29,7 @@ public class SendMediaMessageRequest {
 
     // Instância do WhatsApp a ser usada
     private String uazapInstance;
+
+    private String uazapBaseUrl;
+    private String uazapToken;
 }

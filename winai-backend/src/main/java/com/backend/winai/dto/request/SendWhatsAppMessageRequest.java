@@ -23,4 +23,7 @@ public class SendWhatsAppMessageRequest {
     private UUID leadId; // Opcional: associar mensagem a um lead
 
     private String uazapInstance; // Opcional: instância do WhatsApp a ser usada
+
+    private String uazapBaseUrl; // Opcional: Base URL específica
+    private String uazapToken; // Opcional: Token específico
 }

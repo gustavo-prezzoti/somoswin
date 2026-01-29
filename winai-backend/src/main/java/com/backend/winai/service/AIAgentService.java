@@ -515,7 +515,8 @@ public class AIAgentService {
             UserWhatsAppConnection connection = connections.stream().filter(c -> Boolean.TRUE.equals(c.getIsActive()))
                     .findFirst().orElse(connections.get(0));
             SendWhatsAppMessageRequest request = SendWhatsAppMessageRequest.builder().phoneNumber(targetPhone)
-                    .message(notificationMessage).uazapInstance(connection.getInstanceName()).build();
+                    .message(notificationMessage).uazapInstance(connection.getInstanceName())
+                    .uazapBaseUrl(connection.getInstanceBaseUrl()).uazapToken(connection.getInstanceToken()).build();
 
             uazapService.sendTextMessage(request, conversation.getCompany());
 

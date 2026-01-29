@@ -6,6 +6,7 @@ import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.WhatsAppMessage;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
+import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +33,7 @@ public class UazapService {
 
     private final WhatsAppConversationRepository conversationRepository;
     private final WhatsAppMessageRepository messageRepository;
+    private final UserWhatsAppConnectionRepository userWhatsAppConnectionRepository;
     private final RestTemplate restTemplate; // Injetado com timeout configurado
 
     @Value("${uazap.default-base-url}")
@@ -52,9 +54,15 @@ public class UazapService {
     @Transactional
     public WhatsAppMessage sendTextMessage(SendWhatsAppMessageRequest request, Company company) {
         // Build config - use instance from request if provided
-        Map<String, String> config = getUazapConfig(company);
+        Map<String, String> config = getUazapConfig(company, request.getUazapInstance());
         if (request.getUazapInstance() != null && !request.getUazapInstance().isEmpty()) {
             config.put("instance", request.getUazapInstance());
+        }
+        if (request.getUazapBaseUrl() != null && !request.getUazapBaseUrl().isEmpty()) {
+            config.put("baseUrl", request.getUazapBaseUrl());
+        }
+        if (request.getUazapToken() != null && !request.getUazapToken().isEmpty()) {
+            config.put("token", request.getUazapToken());
         }
 
         // Buscar ou criar conversa
@@ -276,13 +284,47 @@ public class UazapService {
      * Obtém configuração do Uazap (pode ser por company ou usar defaults)
      */
     private Map<String, String> getUazapConfig(Company company) {
+        return getUazapConfig(company, null);
+    }
+
+    private Map<String, String> getUazapConfig(Company company, String instanceName) {
         Map<String, String> config = new HashMap<>();
         config.put("baseUrl", defaultBaseUrl);
         config.put("token", defaultToken);
         config.put("instance", defaultInstance);
 
-        // TODO: Implementar busca de configuração por company se necessário
-        // Por enquanto usa os valores padrão do application.properties
+        if (company != null) {
+            // Tentar encontrar conexão da empresa
+            List<com.backend.winai.entity.UserWhatsAppConnection> connections = userWhatsAppConnectionRepository
+                    .findByCompanyId(company.getId());
+
+            com.backend.winai.entity.UserWhatsAppConnection selectedConn = null;
+
+            if (instanceName != null && !instanceName.isEmpty()) {
+                // Se instância foi pedida, buscar especificamente ela
+                selectedConn = connections.stream()
+                        .filter(c -> instanceName.equals(c.getInstanceName()))
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            if (selectedConn == null) {
+                // Fallback: primeira ativa
+                selectedConn = connections.stream()
+                        .filter(c -> Boolean.TRUE.equals(c.getIsActive()))
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            if (selectedConn != null) {
+                if (selectedConn.getInstanceBaseUrl() != null)
+                    config.put("baseUrl", selectedConn.getInstanceBaseUrl());
+                if (selectedConn.getInstanceToken() != null)
+                    config.put("token", selectedConn.getInstanceToken());
+                if (selectedConn.getInstanceName() != null)
+                    config.put("instance", selectedConn.getInstanceName());
+            }
+        }
 
         return config;
     }
@@ -406,9 +448,15 @@ public class UazapService {
     public WhatsAppMessage sendMediaMessage(com.backend.winai.dto.request.SendMediaMessageRequest request,
             Company company, byte[] fileContent) {
         // Build config - use instance from request if provided
-        Map<String, String> config = getUazapConfig(company);
+        Map<String, String> config = getUazapConfig(company, request.getUazapInstance());
         if (request.getUazapInstance() != null && !request.getUazapInstance().isEmpty()) {
             config.put("instance", request.getUazapInstance());
+        }
+        if (request.getUazapBaseUrl() != null && !request.getUazapBaseUrl().isEmpty()) {
+            config.put("baseUrl", request.getUazapBaseUrl());
+        }
+        if (request.getUazapToken() != null && !request.getUazapToken().isEmpty()) {
+            config.put("token", request.getUazapToken());
         }
 
         // Buscar ou criar conversa
