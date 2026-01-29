@@ -515,6 +515,13 @@ public class MarketingService {
         metaConnectionRepository.findByCompany(user.getCompany()).ifPresent(conn -> {
             conn.setConnected(false);
             conn.setAccessToken(null);
+            conn.setAdAccountId(null);
+            conn.setPageId(null);
+            conn.setBusinessId(null);
+            conn.setInstagramBusinessId(null);
+            conn.setMetaUserId(null);
+            conn.setTokenExpiresAt(null);
+            conn.setLongLived(false);
             metaConnectionRepository.save(conn);
         });
     }
@@ -776,7 +783,7 @@ public class MarketingService {
             // Fetch Insights (reach, impressions, total_interactions, profile_views,
             // website_clicks)
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach,impressions,total_interactions,profile_views,website_clicks&period=day&metric_type=total_value&access_token=%s",
+                    "%s/%s/insights?metric=reach,views,total_interactions,profile_views,website_clicks&period=day&metric_type=total_value&access_token=%s",
                     metaApiBaseUrl, igId, conn.getAccessToken());
             ResponseEntity<String> insightsRes = getWithRetry(insightsUrl);
             JsonNode insightsData = objectMapper.readTree(insightsRes.getBody()).get("data");
@@ -822,6 +829,12 @@ public class MarketingService {
                             m.setReach(v);
                         else if ("profile_views".equals(name))
                             m.setProfileViews(v);
+                        else if ("views".equals(name)) // Mapped from 'impressions' in API v19+
+                            m.setImpressions(v);
+                        else if ("total_interactions".equals(name))
+                            m.setInteractions(v);
+                        else if ("website_clicks".equals(name))
+                            m.setWebsiteClicks(v);
                     }
                 }
             }
