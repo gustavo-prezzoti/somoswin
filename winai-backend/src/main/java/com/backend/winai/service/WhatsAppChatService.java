@@ -38,6 +38,7 @@ public class WhatsAppChatService {
         private final UazapService uazapService;
         private final SupabaseStorageService supabaseStorageService;
         private final UserWhatsAppConnectionRepository userWhatsAppConnectionRepository;
+        private final FollowUpService followUpService;
 
         /**
          * Busca todas as conversas de uma empresa
@@ -142,6 +143,9 @@ public class WhatsAppChatService {
 
                 WhatsAppMessage message = uazapService.sendTextMessage(request, company);
 
+                // Update follow-up status (cancel pending as human responded)
+                followUpService.updateLastMessage(message.getConversation().getId(), "HUMAN");
+
                 // Associar lead se fornecido
                 if (request.getLeadId() != null) {
                         Lead lead = leadRepository.findById(request.getLeadId())
@@ -227,6 +231,9 @@ public class WhatsAppChatService {
                         byte[] fileBytes = file.getBytes();
                         WhatsAppMessage message = uazapService.sendMediaMessage(request, company, fileBytes);
 
+                        // Update follow-up status (cancel pending as human responded)
+                        followUpService.updateLastMessage(message.getConversation().getId(), "HUMAN");
+
                         // 4. Associar lead se fornecido
                         if (leadId != null) {
                                 Lead lead = leadRepository.findById(leadId)
@@ -252,6 +259,9 @@ public class WhatsAppChatService {
                                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
                 WhatsAppMessage message = uazapService.sendMediaMessage(request, company);
+
+                // Update follow-up status (cancel pending as human responded)
+                followUpService.updateLastMessage(message.getConversation().getId(), "HUMAN");
 
                 // Associar lead se fornecido
                 if (request.getLeadId() != null) {

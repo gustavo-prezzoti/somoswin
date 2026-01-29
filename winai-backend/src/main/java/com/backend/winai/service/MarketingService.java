@@ -65,6 +65,8 @@ public class MarketingService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private volatile int latestUsageRate = 0;
+
     public String getFrontendUrl() {
         return frontendUrl;
     }
@@ -563,15 +565,13 @@ public class MarketingService {
 
         try {
             syncCampaigns(conn);
-            Thread.sleep(60000); // 1 minute breath
+            adaptiveThrottle();
             syncInsights(conn);
-            Thread.sleep(60000); // 1 minute breath
+            adaptiveThrottle();
             syncInstagramData(conn);
 
             // Sync dashboard metrics after raw data is updated
             metricsSyncService.syncDashboardMetrics(conn.getCompany(), 7);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
             if (e.getResponseBodyAsString().contains("\"code\":17")
                     || e.getResponseBodyAsString().contains("\"code\": 17")) {
@@ -617,8 +617,7 @@ public class MarketingService {
 
                         com.backend.winai.entity.MetaCampaign savedCampaign = metaCampaignRepository.save(campaign);
 
-                        log.info("Campaign {} synced. Waiting 60s as requested...", metaId);
-                        Thread.sleep(60000);
+                        adaptiveThrottle();
 
                         syncAdSets(conn, savedCampaign);
                     } catch (Exception e) {
@@ -665,8 +664,7 @@ public class MarketingService {
 
                         com.backend.winai.entity.MetaAdSet savedAdSet = metaAdSetRepository.save(adSet);
 
-                        log.info("AdSet {} synced. Waiting 60s as requested...", metaId);
-                        Thread.sleep(60000);
+                        adaptiveThrottle();
 
                         syncAds(conn, savedAdSet);
                     } catch (Exception e) {
@@ -701,8 +699,7 @@ public class MarketingService {
 
                         metaAdRepository.save(ad);
 
-                        log.info("Ad {} synced. Waiting 60s as requested...", metaId);
-                        Thread.sleep(60000);
+                        adaptiveThrottle();
                     } catch (Exception e) {
                         log.error("Error processing ad {}", node.get("id").asText(), e);
                     }
@@ -908,7 +905,9 @@ public class MarketingService {
         int maxAttempts = 3;
         for (int i = 0; i < maxAttempts; i++) {
             try {
-                return restTemplate.getForEntity(uri, String.class);
+                ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
+                updateUsageRate(response);
+                return response;
             } catch (org.springframework.web.client.HttpClientErrorException e) {
                 String body = e.getResponseBodyAsString();
                 // Code 17 is "User request limit reached", also check 429 status
@@ -931,5 +930,73 @@ public class MarketingService {
             }
         }
         return null; // Should not be reached
+    }
+
+    private void updateUsageRate(ResponseEntity<?> response) {
+        try {
+            // Check X-App-Usage
+            String appUsage = response.getHeaders().getFirst("X-App-Usage");
+            if (appUsage != null) {
+                parseUsageJson(appUsage);
+            }
+
+            // Check X-Business-Use-Case (modern Marketing API)
+            String bizUsage = response.getHeaders().getFirst("X-Business-Use-Case");
+            if (bizUsage != null) {
+                // Format: {"business_id":[{"type":"adsbackend","call_count":10,...}]}
+                JsonNode node = objectMapper.readTree(bizUsage);
+                Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+                while (fields.hasNext()) {
+                    JsonNode bizNode = fields.next().getValue();
+                    if (bizNode.isArray() && bizNode.size() > 0) {
+                        parseUsageJson(bizNode.get(0).toString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to parse Meta usage headers: {}", e.getMessage());
+        }
+    }
+
+    private void parseUsageJson(String json) {
+        try {
+            JsonNode node = objectMapper.readTree(json);
+            int max = 0;
+            if (node.has("call_count"))
+                max = Math.max(max, node.get("call_count").asInt());
+            if (node.has("total_cputime"))
+                max = Math.max(max, node.get("total_cputime").asInt());
+            if (node.has("total_time"))
+                max = Math.max(max, node.get("total_time").asInt());
+
+            if (max > 0) {
+                this.latestUsageRate = max;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+    }
+
+    private void adaptiveThrottle() {
+        try {
+            // Base delay to spread requests evenly (1 second)
+            long delay = 1000;
+
+            if (latestUsageRate > 90) {
+                delay = 60000; // Critical: 1 minute
+                log.warn("CRITICAL: Meta API usage at {}%. Sleeping 60s...", latestUsageRate);
+            } else if (latestUsageRate > 80) {
+                delay = 15000; // Warning: 15s
+                log.info("CAUTION: Meta API usage at {}%. Sleeping 15s...", latestUsageRate);
+            } else if (latestUsageRate > 60) {
+                delay = 5000; // Moderate: 5s
+            } else if (latestUsageRate > 30) {
+                delay = 2000; // Light: 2s
+            }
+
+            Thread.sleep(delay);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

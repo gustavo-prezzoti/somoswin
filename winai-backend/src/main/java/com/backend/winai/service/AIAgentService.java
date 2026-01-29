@@ -439,6 +439,9 @@ public class AIAgentService {
         conversation.setSupportMode("HUMAN");
         conversationRepository.save(conversation);
 
+        // 1.1 Pause automated follow-ups during human intervention
+        followUpService.pauseFollowUp(conversation.getId());
+
         // 2. BROADCAST MODE CHANGE IMMEDIATELY for real-time UI feedback
         // Send to both specific conversation AND general company topics
         try {

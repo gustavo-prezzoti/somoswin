@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(name = "followup.worker.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "followup.worker.enabled", havingValue = "true", matchIfMissing = false)
 public class FollowUpScheduler {
 
     private final FollowUpService followUpService;
