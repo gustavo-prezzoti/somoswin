@@ -243,11 +243,20 @@ const SocialMedia: React.FC = () => {
 
       // Optimistic update
       let content = currentPrompt;
-      if (currentFile) {
-         content += `\n[Anexo: ${currentFile.name}]`;
-      }
+      // We don't need to append [Anexo] text anymore since we render the visual component, 
+      // but keeping it in content might be useful for context if the image fails. 
+      // However, user specifically complained about the text "[Anexo: ...]". 
+      // So I will NOT append it to content, relying on the visual attachment.
 
-      const userMsg: ChatMessage = { role: 'user', content: content };
+      const userMsg: ChatMessage = {
+         role: 'user',
+         content: content,
+         // For optimistic UI, we might use a local object URL for preview if we wanted to be fancy,
+         // but for now let's just wait for the upload to finish before showing the URL.
+         // Actually, to make it feel instant, we should probably generate a local URL.
+         attachmentUrl: currentFile ? URL.createObjectURL(currentFile) : undefined,
+         attachmentType: currentFile ? (currentFile.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT') : undefined
+      };
       setMessages(prev => [...prev, userMsg]);
       setPrompt('');
       setSelectedFile(null); // Clear immediately
@@ -429,6 +438,41 @@ const SocialMedia: React.FC = () => {
                               ? 'bg-[#003d2b] text-white rounded-tr-none'
                               : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
                               }`}>
+
+                              {/* Attachment Rendering */}
+                              {msg.attachmentUrl && (
+                                 <div className={`mb-4 rounded-2xl overflow-hidden ${msg.role === 'user' ? 'bg-black/20' : 'bg-gray-50 border border-gray-100'}`}>
+                                    {msg.attachmentType === 'IMAGE' ? (
+                                       <img
+                                          src={msg.attachmentUrl}
+                                          alt="Anexo"
+                                          className="w-full h-auto max-h-[300px] object-cover"
+                                          onError={(e) => {
+                                             // Fallback for failed images
+                                             e.currentTarget.style.display = 'none';
+                                          }}
+                                       />
+                                    ) : (
+                                       <a
+                                          href={msg.attachmentUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-3 p-4 hover:bg-black/5 transition-colors"
+                                       >
+                                          <div className={`p-2 rounded-lg ${msg.role === 'user' ? 'bg-white/20' : 'bg-emerald-100 text-emerald-600'}`}>
+                                             <FileText size={20} />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                             <p className="text-xs font-bold truncate underline underline-offset-2">
+                                                Ver documento anexo
+                                             </p>
+                                             <p className="text-[9px] opacity-70 font-medium uppercase">Clique para abrir</p>
+                                          </div>
+                                       </a>
+                                    )}
+                                 </div>
+                              )}
+
                               <div className={`prose prose-sm max-w-none ${msg.role === 'user' ? 'prose-invert' : 'prose-emerald'}`}
                                  style={{
                                     '--tw-prose-headings': msg.role === 'user' ? 'rgb(255,255,255)' : 'rgb(5,65,41)',

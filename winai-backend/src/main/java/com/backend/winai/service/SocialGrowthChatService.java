@@ -162,6 +162,8 @@ public class SocialGrowthChatService {
         ChatMessageDTO userMsg = ChatMessageDTO.builder()
                 .role("user")
                 .content(finalUserMessage) // Message + extracted text
+                .attachmentUrl(request.getAttachmentUrl())
+                .attachmentType(request.getAttachmentType())
                 .build();
         messages.add(userMsg);
 
@@ -318,8 +320,9 @@ public class SocialGrowthChatService {
                     }
                 } else {
                     // Assume text-based (txt, csv, md)
-                    java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
-                    return s.hasNext() ? s.next() : "";
+                    try (java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A")) {
+                        return s.hasNext() ? s.next() : "";
+                    }
                 }
             }
         } catch (Exception e) {

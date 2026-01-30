@@ -3,6 +3,8 @@ import { httpClient as api } from './index';
 export interface ChatMessage {
     role: 'user' | 'assistant';
     content: string;
+    attachmentUrl?: string;
+    attachmentType?: string;
 }
 
 export interface SocialChat {

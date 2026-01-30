@@ -12,4 +12,6 @@ import lombok.NoArgsConstructor;
 public class ChatMessageDTO {
     private String role;
     private String content;
+    private String attachmentUrl;
+    private String attachmentType;
 }
