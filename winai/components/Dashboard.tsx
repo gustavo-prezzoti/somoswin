@@ -6,7 +6,7 @@ import { dashboardService, DashboardData } from '../services';
 import { marketingService } from '../services/api/marketing.service';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Lightbulb, Info, ArrowUpRight, MessageSquare } from 'lucide-react';
+import { Lightbulb, Info, ArrowUpRight, MessageSquare, AlertTriangle, Rocket } from 'lucide-react';
 
 interface MetricCardProps {
   icon: React.ElementType;
@@ -35,18 +35,23 @@ const MetricCard: React.FC<MetricCardProps> = ({ icon: Icon, label, value, trend
 );
 
 const InsightCard: React.FC<{ insight: any; onAction: (url: string) => void }> = ({ insight, onAction }) => {
-  const isSuggestion = insight.insightType === 'SUGGESTION';
-  const isNotification = insight.insightType === 'NOTIFICATION';
+  const isScale = insight.insightType === 'SCALE_BUDGET';
+  const isStalling = insight.insightType === 'LEAD_STALLING';
+  const isGrowth = insight.insightType === 'GROWTH_ORGANIC';
 
   return (
     <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm hover:shadow-xl hover:translate-y-[-4px] transition-all duration-300 group flex flex-col justify-between">
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className={`p-3 rounded-2xl ${isSuggestion ? 'bg-amber-50 text-amber-600' :
-            isNotification ? 'bg-rose-50 text-rose-600' :
-              'bg-blue-50 text-blue-600'
+          <div className={`p-3 rounded-2xl ${isScale ? 'bg-blue-50 text-blue-600' :
+            isStalling ? 'bg-rose-50 text-rose-600' :
+              isGrowth ? 'bg-amber-50 text-amber-600' :
+                'bg-gray-50 text-gray-600'
             }`}>
-            {isSuggestion ? <Lightbulb size={24} /> : isNotification ? <Info size={24} /> : <Zap size={24} />}
+            {isScale ? <TrendingUp size={24} /> :
+              isStalling ? <AlertTriangle size={24} /> :
+                isGrowth ? <Rocket size={24} /> :
+                  <Zap size={24} />}
           </div>
           <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{insight.suggestionSource}</span>
         </div>
