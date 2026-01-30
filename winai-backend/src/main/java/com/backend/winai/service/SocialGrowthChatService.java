@@ -141,6 +141,16 @@ public class SocialGrowthChatService {
             }
         }
 
+        // If message is empty but has attachment, set a default description for context
+        // and title
+        if ((finalUserMessage == null || finalUserMessage.trim().isEmpty()) && request.getAttachmentUrl() != null) {
+            if ("IMAGE".equals(request.getAttachmentType())) {
+                finalUserMessage = "Analise esta imagem.";
+            } else {
+                finalUserMessage = "Analise este documento.";
+            }
+        }
+
         // Add user message
         ChatMessageDTO userMsg = ChatMessageDTO.builder()
                 .role("user")
@@ -218,9 +228,16 @@ public class SocialGrowthChatService {
         try {
             chat.setLastMessage(aiResponse.length() > 250 ? aiResponse.substring(0, 247) + "..." : aiResponse);
             chat.setFullHistory(objectMapper.writeValueAsString(messages));
-            if (chat.getTitle() == null || chat.getTitle().equals("Novo Chat")) {
-                chat.setTitle(request.getMessage().length() > 30 ? request.getMessage().substring(0, 30) + "..."
-                        : request.getMessage());
+            if (chat.getTitle() == null || chat.getTitle().equals("Novo Chat") || chat.getTitle().trim().isEmpty()) {
+                String titleCandidate = request.getMessage();
+                if (titleCandidate == null || titleCandidate.trim().isEmpty()) {
+                    // If user didn't type text, use the detailed message (which we populated with
+                    // "Analise esta imagem" etc)
+                    titleCandidate = finalUserMessage;
+                }
+
+                chat.setTitle(titleCandidate.length() > 30 ? titleCandidate.substring(0, 30) + "..."
+                        : titleCandidate);
             }
             chatRepository.save(chat);
             log.debug("Chat saved successfully with {} messages", messages.size());
