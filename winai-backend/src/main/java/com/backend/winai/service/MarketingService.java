@@ -12,6 +12,7 @@ import com.backend.winai.repository.MetaAdSetRepository;
 import com.backend.winai.repository.MetaCampaignRepository;
 import com.backend.winai.repository.MetaConnectionRepository;
 import com.backend.winai.repository.MetaInsightRepository;
+import com.backend.winai.repository.CompanyRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +63,7 @@ public class MarketingService {
     private final MetaInsightRepository metaInsightRepository;
     private final InstagramMetricRepository instagramMetricRepository;
     private final MetricsSyncService metricsSyncService;
+    private final CompanyRepository companyRepository;
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -76,10 +78,12 @@ public class MarketingService {
     }
 
     public TrafficMetricsResponse getTrafficMetrics(User user) {
-        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(user.getCompany());
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
 
         if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()) {
-            log.warn("Metas Ads connection not found for company: {}", user.getCompany().getId());
+            log.warn("Metas Ads connection not found for company: {}", company.getId());
             return buildEmptyMetrics();
         }
 
@@ -497,7 +501,10 @@ public class MarketingService {
     }
 
     public Map<String, Object> getMetaConnectionStatus(User user) {
-        return metaConnectionRepository.findByCompany(user.getCompany())
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        return metaConnectionRepository.findByCompany(company)
                 .map(conn -> {
                     Map<String, Object> res = new HashMap<>();
                     res.put("connected", conn.isConnected());
@@ -512,8 +519,10 @@ public class MarketingService {
 
     @Transactional
     public void disconnectMeta(User user) {
-        metaConnectionRepository.findByCompany(user.getCompany()).ifPresent(conn -> {
-            com.backend.winai.entity.Company company = user.getCompany();
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        metaConnectionRepository.findByCompany(company).ifPresent(conn -> {
 
             // Cascade delete all related data
             instagramMetricRepository.deleteByCompany(company);

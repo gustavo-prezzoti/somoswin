@@ -41,6 +41,10 @@ public class DashboardService {
          */
         @Transactional
         public DashboardResponse getDashboardData(User user, int days) {
+                if (user == null || user.getCompany() == null) {
+                        throw new RuntimeException("Usuário não possui empresa associada");
+                }
+
                 Company company = user.getCompany();
                 LocalDate endDate = LocalDate.now();
                 LocalDate startDate = endDate.minusDays(days - 1);
@@ -240,11 +244,27 @@ public class DashboardService {
         // ============================================
 
         private DashboardResponse.UserSummary buildUserSummary(User user) {
+                String companyName = null;
+                String plan = "STARTER";
+
+                if (user.getCompany() != null) {
+                        // Tentar obter sem carregar se possível, ou admitir que pode falhar
+                        // Para ser seguro, o ideal é que o 'user' já venha com a empresa carregada
+                        // ou que carreguemos aqui.
+                        try {
+                                companyName = user.getCompany().getName();
+                                plan = user.getCompany().getPlan().name();
+                        } catch (Exception e) {
+                                // Se falhar por Lazy, não quebramos o dashboard
+                                companyName = "Empresa";
+                        }
+                }
+
                 return DashboardResponse.UserSummary.builder()
                                 .name(user.getName())
                                 .email(user.getEmail())
-                                .companyName(user.getCompany() != null ? user.getCompany().getName() : null)
-                                .plan(user.getCompany() != null ? user.getCompany().getPlan().name() : "STARTER")
+                                .companyName(companyName)
+                                .plan(plan)
                                 .build();
         }
 

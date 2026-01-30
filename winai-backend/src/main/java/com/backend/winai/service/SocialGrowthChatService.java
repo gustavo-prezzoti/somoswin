@@ -6,6 +6,7 @@ import com.backend.winai.entity.SocialGrowthChat;
 import com.backend.winai.entity.SocialMediaProfile;
 import com.backend.winai.entity.User;
 import com.backend.winai.entity.SystemPrompt;
+import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.SocialGrowthChatRepository;
 import com.backend.winai.repository.SocialMediaProfileRepository;
 import com.backend.winai.repository.SystemPromptRepository;
@@ -33,10 +34,14 @@ public class SocialGrowthChatService {
     private final ObjectMapper objectMapper;
     private final ChatMemoryService chatMemoryService;
     private final SystemPromptRepository systemPromptRepository;
+    private final CompanyRepository companyRepository;
 
     @Transactional(readOnly = true)
     public List<SocialChatResponse> listChats(User user) {
-        return chatRepository.findByCompanyOrderByCreatedAtDesc(user.getCompany())
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        return chatRepository.findByCompanyOrderByCreatedAtDesc(company)
                 .stream()
                 .map(chat -> SocialChatResponse.builder()
                         .id(chat.getId())
@@ -77,7 +82,8 @@ public class SocialGrowthChatService {
     public SendMessageResponse sendMessage(SendMessageRequest request, User user) {
         SocialGrowthChat chat;
         List<ChatMessageDTO> messages = new ArrayList<>();
-        Company company = user.getCompany();
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         if (request.getChatId() != null) {
             chat = chatRepository.findById(request.getChatId())

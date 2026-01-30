@@ -256,10 +256,13 @@ public class WhatsAppService {
      */
     @Transactional
     public WhatsAppMessageResponse sendMessage(SendWhatsAppMessageRequest request, User user) {
-        Company company = user.getCompany();
-        if (company == null) {
+        if (user == null || user.getCompany() == null) {
             throw new RuntimeException("Usuário não possui empresa associada");
         }
+
+        // Recarregar a empresa para evitar LazyInitializationException
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         // Associar lead se fornecido
         Lead lead = null;
@@ -327,10 +330,13 @@ public class WhatsAppService {
     @Transactional
     public WhatsAppMessageResponse sendMediaMessage(com.backend.winai.dto.request.SendMediaMessageRequest request,
             User user) {
-        Company company = user.getCompany();
-        if (company == null) {
+        if (user == null || user.getCompany() == null) {
             throw new RuntimeException("Usuário não possui empresa associada");
         }
+
+        // Recarregar a empresa para evitar LazyInitializationException
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         // Associar lead se fornecido
         Lead lead = null;
@@ -365,10 +371,13 @@ public class WhatsAppService {
      */
     @Transactional(readOnly = true)
     public List<WhatsAppConversationResponse> getConversations(User user) {
-        Company company = user.getCompany();
-        if (company == null) {
+        if (user == null || user.getCompany() == null) {
             throw new RuntimeException("Usuário não possui empresa associada");
         }
+
+        // Recarregar a empresa para evitar LazyInitializationException
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         List<WhatsAppConversation> conversations = conversationRepository
                 .findByCompanyAndIsArchivedOrderByLastMessageTimestampDesc(company, false);
@@ -383,10 +392,13 @@ public class WhatsAppService {
      */
     @Transactional(readOnly = true)
     public List<WhatsAppMessageResponse> getMessages(UUID conversationId, User user, Integer page, Integer limit) {
-        Company company = user.getCompany();
-        if (company == null) {
+        if (user == null || user.getCompany() == null) {
             throw new RuntimeException("Usuário não possui empresa associada");
         }
+
+        // Recarregar a empresa para evitar LazyInitializationException
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         WhatsAppConversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Conversa não encontrada"));
@@ -425,10 +437,13 @@ public class WhatsAppService {
      */
     @Transactional
     public void markConversationAsRead(UUID conversationId, User user) {
-        Company company = user.getCompany();
-        if (company == null) {
+        if (user == null || user.getCompany() == null) {
             throw new RuntimeException("Usuário não possui empresa associada");
         }
+
+        // Recarregar a empresa para evitar LazyInitializationException
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         WhatsAppConversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Conversa não encontrada"));
@@ -446,10 +461,13 @@ public class WhatsAppService {
      */
     @Transactional
     public WhatsAppConversationResponse toggleArchive(UUID conversationId, User user, Boolean archive) {
-        Company company = user.getCompany();
-        if (company == null) {
+        if (user == null || user.getCompany() == null) {
             throw new RuntimeException("Usuário não possui empresa associada");
         }
+
+        // Recarregar a empresa para evitar LazyInitializationException
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         WhatsAppConversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new RuntimeException("Conversa não encontrada"));
@@ -469,10 +487,16 @@ public class WhatsAppService {
      */
     @Transactional(readOnly = true)
     public Long getUnreadCount(User user) {
-        Company company = user.getCompany();
-        if (company == null) {
+        if (user == null || user.getCompany() == null) {
             return 0L;
         }
+
+        // Recarregar a empresa para evitar LazyInitializationException
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElse(null);
+
+        if (company == null)
+            return 0L;
 
         return conversationRepository.countUnreadByCompany(company);
     }
