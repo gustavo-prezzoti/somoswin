@@ -43,8 +43,8 @@ const InsightCard: React.FC<{ insight: any; onAction: (url: string) => void }> =
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className={`p-3 rounded-2xl ${isSuggestion ? 'bg-amber-50 text-amber-600' :
-              isNotification ? 'bg-rose-50 text-rose-600' :
-                'bg-blue-50 text-blue-600'
+            isNotification ? 'bg-rose-50 text-rose-600' :
+              'bg-blue-50 text-blue-600'
             }`}>
             {isSuggestion ? <Lightbulb size={24} /> : isNotification ? <Info size={24} /> : <Zap size={24} />}
           </div>
@@ -378,6 +378,35 @@ const Dashboard: React.FC = () => {
               <Settings2 size={16} className="group-hover:rotate-45 transition-transform" />
               {hasGoals ? 'GERENCIAR METAS' : 'CRIAR METAS'}
             </button>
+          </div>
+        </div>
+
+        <div className="space-y-8">
+          <div className="flex items-center justify-between px-2">
+            <div className="space-y-1">
+              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em]">IA Operations Center</span>
+              <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase italic">Insights da Operação</h2>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {data.insights && data.insights.length > 0 ? (
+              data.insights.map((insight) => (
+                <InsightCard
+                  key={insight.id}
+                  insight={insight}
+                  onAction={(url) => navigate(url)}
+                />
+              ))
+            ) : (
+              <div className="col-span-full bg-white p-12 rounded-[48px] border border-gray-100 shadow-sm text-center">
+                <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Zap size={24} className="text-emerald-500" />
+                </div>
+                <h3 className="text-lg font-black text-gray-800 uppercase italic">Aguardando Processamento Neural</h3>
+                <p className="text-gray-400 mt-2 max-w-sm mx-auto">Nossos agentes estão analisando seus dados para gerar sugestões de escala estratégica.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
