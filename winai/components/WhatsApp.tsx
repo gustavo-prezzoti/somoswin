@@ -227,6 +227,11 @@ const WhatsApp: React.FC = () => {
           lastMessageTimestamp: msg.messageTimestamp,
           unreadCount: 0 // Já está aberta, então não conta como não lida
         } : null);
+
+        // Marcar como lida no backend imediatamente se o chat estiver aberto
+        whatsappService.markAsRead(activeConversation.id).catch(err => {
+          console.error('Erro ao marcar como lida via WebSocket:', err);
+        });
       }
 
       // Atualizar lista de conversas - mover para o topo e atualizar preview
@@ -244,6 +249,8 @@ const WhatsApp: React.FC = () => {
           // Incrementar unread se não for a conversa ativa
           if (!activeConversation || msg.conversationId !== activeConversation.id) {
             conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+          } else {
+            conversation.unreadCount = 0; // Forçar a zero se for a ativa
           }
 
           // Remover da posição atual
@@ -300,6 +307,10 @@ const WhatsApp: React.FC = () => {
           // Se tem nova mensagem, mover para o topo
           if (conv.lastMessageTimestamp && conv.lastMessageTimestamp > (prev[index].lastMessageTimestamp || 0)) {
             const [movedConv] = updated.splice(index, 1);
+            // Garantir que unreadCount seja 0 se for a conversa ativa
+            if (activeConversation?.id === movedConv.id) {
+              movedConv.unreadCount = 0;
+            }
             updated.unshift(movedConv);
           }
 
@@ -312,7 +323,7 @@ const WhatsApp: React.FC = () => {
 
       // Atualizar conversa ativa se for a mesma
       if (activeConversation?.id === conv.id) {
-        setActiveConversation(prev => prev ? { ...prev, ...conv } : null);
+        setActiveConversation(prev => prev ? { ...prev, ...conv, unreadCount: 0 } : null);
       }
     }
 

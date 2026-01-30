@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, ArrowRight, Zap, Check, ShieldCheck, Cpu, TrendingUp, Loader2 } from 'lucide-react';
 import { authService } from '../services';
 import logoDark from '../logo_dark.png';
@@ -95,6 +95,13 @@ const Login: React.FC = () => {
                            disabled={isLoading}
                         />
                      </div>
+                  </div>
+
+                  <div className="px-2 pb-2">
+                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                        Ao efetuar o login você concorda com os{' '}
+                        <Link to="/termos" className="text-emerald-600 font-black hover:underline cursor-pointer">termos de aceite</Link>
+                     </p>
                   </div>
 
                   <div className="flex items-center justify-between px-2 text-[11px] font-black text-gray-400 uppercase tracking-widest">
