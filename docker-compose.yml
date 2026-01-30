@@ -158,7 +158,6 @@ services:
       - winai-network
     restart: unless-stopped
 
-
   # =====================================
   # Python Backend - Clinicorp Sync
   # =====================================
@@ -233,6 +232,27 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
+
+  # =====================================
+  # AI Jobs - Python Worker
+  # =====================================
+  winai-jobs:
+    build:
+      context: ./winai-jobs
+      dockerfile: Dockerfile
+    container_name: winai-jobs
+    environment:
+      - DB_HOST=aws-1-sa-east-1.pooler.supabase.com
+      - DB_PORT=5432
+      - DB_NAME=postgres
+      - DB_USER=postgres.wtfheobvaamelqifttjj
+      - DB_PASSWORD=JYAvOfrciMaY4m0j
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - backend
+    networks:
+      - winai-network
     restart: unless-stopped
 
 # =====================================
