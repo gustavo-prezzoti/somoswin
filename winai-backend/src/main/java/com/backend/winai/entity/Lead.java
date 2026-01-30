@@ -7,7 +7,11 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "leads", schema = "winai")
+@Table(name = "leads", schema = "winai", indexes = {
+        @Index(name = "idx_lead_email", columnList = "email"),
+        @Index(name = "idx_lead_phone", columnList = "phone"),
+        @Index(name = "idx_lead_name", columnList = "name")
+})
 @Data
 @Builder
 @NoArgsConstructor
