@@ -32,7 +32,7 @@ def fetch_company_data(conn, company_id):
 
         # 3. Fetch Active Campaigns
         cur.execute("""
-            SELECT name, status, objective, start_time
+            SELECT "name", status, objective, start_time
             FROM winai.meta_campaigns
             WHERE company_id = %s AND status = 'ACTIVE'
             LIMIT 5
@@ -41,11 +41,11 @@ def fetch_company_data(conn, company_id):
 
         # 4. Fetch Instagram Metrics (Last 7 days)
         cur.execute("""
-            SELECT date, impressions, reach, engagement_rate, follower_count
+            SELECT "date", impressions, reach, engagement_rate, follower_count
             FROM winai.instagram_metrics
             WHERE company_id = %s
-            AND date >= CURRENT_DATE - INTERVAL '7 days'
-            ORDER BY date DESC
+            AND "date" >= CURRENT_DATE - INTERVAL '7 days'
+            ORDER BY "date" DESC
         """, (company_id,))
         data['instagram_metrics'] = cur.fetchall()
         
@@ -56,8 +56,8 @@ def save_insights(conn, company_id, insights):
         for insight in insights:
             cur.execute("""
                 INSERT INTO winai.ai_insights 
-                (id, company_id, title, description, insight_type, priority, suggestion_source, action_url, action_label, is_read, is_dismissed, created_at, updated_at)
-                VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s, false, false, NOW(), NOW())
+                (company_id, title, description, insight_type, priority, suggestion_source, action_url, action_label, is_read, is_dismissed, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, false, false, NOW())
             """, (
                 company_id,
                 insight['title'],

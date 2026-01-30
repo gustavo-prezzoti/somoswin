@@ -37,6 +37,7 @@ def run_job():
                     logger.warning(f"No insights generated for {company['name']}")
             except Exception as e:
                 logger.error(f"Error processing company {company['name']}: {e}")
+                conn.rollback()
 
     except Exception as e:
         logger.error(f"Error during job execution: {e}")
