@@ -19,13 +19,15 @@ def fetch_company_data(conn, company_id):
         """, (company_id,))
         data['leads_summary'] = cur.fetchall()
 
-        # 2. Fetch Stalling Leads (New/Qualified, > 2 hours no update)
+        # 2. Fetch Stalling Leads (Last message from LEAD and > 2 hours no update)
+        # This is more accurate: we want leads that SPOKE to us and are waiting for US.
         cur.execute("""
             SELECT COUNT(*) as count
-            FROM winai.leads
-            WHERE company_id = %s
-            AND status IN ('NEW', 'QUALIFIED')
-            AND updated_at <= NOW() - INTERVAL '2 hours'
+            FROM winai.leads l
+            JOIN winai.followup_status fs ON l.id = fs.lead_id OR l.id::text = fs.conversation_id
+            WHERE l.company_id = %s
+            AND fs.last_message_from = 'LEAD'
+            AND fs.last_message_at <= NOW() - INTERVAL '2 hours'
         """, (company_id,))
         result = cur.fetchone()
         data['stalling_leads'] = result['count'] if result else 0
@@ -53,6 +55,13 @@ def fetch_company_data(conn, company_id):
 
 def save_insights(conn, company_id, insights):
     with conn.cursor() as cur:
+        # Prevent duplication: Delete today's insights for this company before inserting
+        cur.execute("""
+            DELETE FROM winai.ai_insights 
+            WHERE company_id = %s 
+            AND created_at >= CURRENT_DATE
+        """, (company_id,))
+        
         for insight in insights:
             cur.execute("""
                 INSERT INTO winai.ai_insights 

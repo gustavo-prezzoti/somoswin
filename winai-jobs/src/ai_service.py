@@ -66,7 +66,7 @@ def generate_insights(company_name, data):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert Digital Marketing Analyst AI."},
+                {"role": "system", "content": "You are an expert Digital Marketing Analyst AI. You MUST respond in Brazilian Portuguese (pt-BR)."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"}
