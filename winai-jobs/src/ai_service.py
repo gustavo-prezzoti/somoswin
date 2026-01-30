@@ -23,9 +23,9 @@ def generate_insights(company_name, data):
     - Instagram Metrics (Last 7 days): {data['instagram_metrics']}
 
     Task: Generate exactly 3 insights in JSON format with the following keys:
-    1. "scale_budget": Insight about scaling budget for campaigns (Type: OPTIMIZATION).
-    2. "lead_stalling": Notification about leads waiting for response (Type: NOTIFICATION).
-    3. "organic_growth": Suggestion for social media content based on engagement (Type: SUGGESTION).
+    1. "scale_budget": Insight about scaling budget for campaigns (Type: SCALE_BUDGET).
+    2. "lead_stalling": Notification about leads waiting for response (Type: LEAD_STALLING).
+    3. "organic_growth": Suggestion for social media content based on engagement (Type: GROWTH_ORGANIC).
 
     Format the 'description' using Markdown (bold **text** for numbers/emphasis).
     Limit descriptions to 1-2 sentences.
@@ -35,7 +35,7 @@ def generate_insights(company_name, data):
         {{
             "title": "Escalar Orçamento",
             "description": "...",
-            "insightType": "OPTIMIZATION",
+            "insightType": "SCALE_BUDGET",
             "actionUrl": "/campanhas",
             "actionLabel": "Acessar Campanhas",
             "suggestionSource": "Agente de Tráfego",
@@ -44,7 +44,7 @@ def generate_insights(company_name, data):
         {{
             "title": "Lead Stalling",
             "description": "...",
-            "insightType": "NOTIFICATION",
+            "insightType": "LEAD_STALLING",
             "actionUrl": "/whatsapp",
             "actionLabel": "Intervir via WhatsApp",
             "suggestionSource": "Agente SDR",
@@ -53,7 +53,7 @@ def generate_insights(company_name, data):
         {{
             "title": "Growth Orgânico",
             "description": "...",
-            "insightType": "SUGGESTION",
+            "insightType": "GROWTH_ORGANIC",
             "actionUrl": "/social",
             "actionLabel": "Criar Roteiros",
             "suggestionSource": "IA Social Media",
