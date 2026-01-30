@@ -128,27 +128,10 @@ public class SocialGrowthChatService {
             String type = request.getAttachmentType() != null ? request.getAttachmentType().toUpperCase() : "";
 
             if ("IMAGE".equals(type)) {
-                // For images, we pass the URL to OpenAI
-                // Ensure full URL if it's relative
-                imageUrl = request.getAttachmentUrl();
-                if (imageUrl.startsWith("/")) {
-                    // In production this should be a full URL reachable by OpenAI.
-                    // For local dev with local upload, OpenAI CANNOT see localhost.
-                    // IMPORTANT: If running locally, this image feature ONLY works if the URL is
-                    // public.
-                    // Since user is local, we might need a workaround or accept it won't work for
-                    // local files without ngrok.
-                    // However, the prompt implies "implement it", assuming env supports it.
-                    // I will proceed assuming the URL provided will be valid or adding a note.
-                    // Actually, for local files, we could encode base64? OpenAiService supports
-                    // URLs.
-                    // Let's assume the frontend sends a URL or we provide the relative path.
-                    // If it's a relative path /uploads/..., OpenAI can't reach it.
-                    // Workaround: Read file bytes and send as Base64 to OpenAI?
-                    // OpenAI API supports "data:image/jpeg;base64,..." in the url field.
-                    // YES! I will convert local file to Base64 data URL.
-                    imageUrl = convertLocalFileToBase64(request.getAttachmentUrl());
-                }
+                // For images, we ALWAYS convert to Base64 to ensure reliability.
+                // This avoids issues where OpenAI cannot access the Supabase URL (e.g.
+                // localhost, private bucket, etc.)
+                imageUrl = processImageAttachment(request.getAttachmentUrl());
             } else if ("DOCUMENT".equals(type)) {
                 // For docs, we extract content and append to message
                 String extractedText = extractDocumentContent(request.getAttachmentUrl());
@@ -215,11 +198,9 @@ public class SocialGrowthChatService {
         if (aiResponse == null || aiResponse.trim().isEmpty()) {
             log.error("🚨 Failed to get AI response after {} attempts", MAX_RETRIES);
 
-            String errorMessage = "Desculpe, tive um problema ao processar sua resposta.";
             if (lastException != null) {
                 String excMessage = lastException.getMessage();
                 log.error("Last exception details: {}", excMessage, lastException);
-                errorMessage += " (" + lastException.getClass().getSimpleName() + ")";
             }
 
             // More specific error message
@@ -263,31 +244,49 @@ public class SocialGrowthChatService {
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
 
-    private String convertLocalFileToBase64(String fileUrl) {
+    private String processImageAttachment(String fileUrl) {
         try {
             // Check if it's already a Data URL (base64)
             if (fileUrl.startsWith("data:")) {
                 return fileUrl;
             }
+
+            byte[] fileContent = null;
+            String mimeType = "image/jpeg";
+
             // Check if it's a remote URL (Supabase)
             if (fileUrl.startsWith("http")) {
-                // OpenAI supports URLs directly, so we just return it!
-                return fileUrl;
+                // Download and convert to Base64 to ensure OpenAI can see it
+                try (java.io.InputStream is = new java.net.URL(fileUrl).openStream()) {
+                    fileContent = is.readAllBytes();
+                    if (fileUrl.toLowerCase().endsWith(".png"))
+                        mimeType = "image/png";
+                    else if (fileUrl.toLowerCase().endsWith(".gif"))
+                        mimeType = "image/gif";
+                    else if (fileUrl.toLowerCase().endsWith(".webp"))
+                        mimeType = "image/webp";
+                }
+            } else {
+                // Fallback for local files
+                java.nio.file.Path filePath = java.nio.file.Paths
+                        .get(fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl);
+                if (java.nio.file.Files.exists(filePath)) {
+                    fileContent = java.nio.file.Files.readAllBytes(filePath);
+                    if (fileUrl.toLowerCase().endsWith(".png"))
+                        mimeType = "image/png";
+                }
             }
 
-            // Fallback for local files
-            java.nio.file.Path filePath = java.nio.file.Paths
-                    .get(fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl);
-            if (java.nio.file.Files.exists(filePath)) {
-                byte[] fileContent = java.nio.file.Files.readAllBytes(filePath);
+            if (fileContent != null) {
                 String base64 = java.util.Base64.getEncoder().encodeToString(fileContent);
-                return "data:image/jpeg;base64," + base64;
+                return "data:" + mimeType + ";base64," + base64;
             }
 
             return null;
         } catch (Exception e) {
-            log.error("Error handling image URL", e);
-            return null;
+            log.error("Error processing image attachment", e);
+            // Return content as is if conversion fails (fallback)
+            return fileUrl;
         }
     }
 
