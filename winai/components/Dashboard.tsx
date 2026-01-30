@@ -5,6 +5,8 @@ import { TrendingUp, Users, DollarSign, Percent, Zap, AlertCircle, Calendar, Set
 import { dashboardService, DashboardData } from '../services';
 import { marketingService } from '../services/api/marketing.service';
 import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import { Lightbulb, Info, ArrowUpRight, MessageSquare } from 'lucide-react';
 
 interface MetricCardProps {
   icon: React.ElementType;
@@ -31,6 +33,42 @@ const MetricCard: React.FC<MetricCardProps> = ({ icon: Icon, label, value, trend
     {trend !== "0%" && <p className="text-[10px] text-gray-400 mt-2">em relação ao período anterior</p>}
   </div>
 );
+
+const InsightCard: React.FC<{ insight: any; onAction: (url: string) => void }> = ({ insight, onAction }) => {
+  const isSuggestion = insight.insightType === 'SUGGESTION';
+  const isNotification = insight.insightType === 'NOTIFICATION';
+
+  return (
+    <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm hover:shadow-xl hover:translate-y-[-4px] transition-all duration-300 group flex flex-col justify-between">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className={`p-3 rounded-2xl ${isSuggestion ? 'bg-amber-50 text-amber-600' :
+              isNotification ? 'bg-rose-50 text-rose-600' :
+                'bg-blue-50 text-blue-600'
+            }`}>
+            {isSuggestion ? <Lightbulb size={24} /> : isNotification ? <Info size={24} /> : <Zap size={24} />}
+          </div>
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{insight.suggestionSource}</span>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xl font-black text-gray-800 tracking-tighter italic uppercase">{insight.title}</h3>
+          <div className="prose prose-sm prose-slate max-w-none text-gray-500 font-medium leading-relaxed">
+            <ReactMarkdown>{insight.description}</ReactMarkdown>
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={() => onAction(insight.actionUrl)}
+        className="mt-8 group/btn flex items-center justify-center gap-3 w-full bg-gray-50 hover:bg-emerald-600 hover:text-white text-gray-800 font-black py-4 rounded-[24px] border border-transparent hover:shadow-2xl hover:shadow-emerald-600/20 transition-all uppercase text-[10px] tracking-widest italic"
+      >
+        {insight.actionLabel}
+        <ArrowUpRight size={16} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
+      </button>
+    </div>
+  );
+};
 
 const EmptyState: React.FC<{ title: string; description: string; actionLabel?: string; onAction?: () => void; disabled?: boolean; disabledReason?: string }> = ({ title, description, actionLabel, onAction, disabled, disabledReason }) => (
   <div className="flex flex-col items-center justify-center py-8 text-center">

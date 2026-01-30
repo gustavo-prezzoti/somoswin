@@ -224,17 +224,43 @@ public class DashboardService {
                                                 .build());
                 goalRepository.saveAll(goals);
 
-                // Gera insights iniciais
+                // Gera insights iniciais específicos do WIN.AI 2026
                 List<AIInsight> insights = List.of(
                                 AIInsight.builder()
                                                 .company(company)
-                                                .title("Bem-vindo ao WIN.AI")
-                                                .description("Configure suas primeiras campanhas para começar a capturar leads qualificados.")
-                                                .suggestionSource("Sistema")
+                                                .title("Escalar Orçamento")
+                                                .description("Seu CPL está **15% abaixo da média**. Recomendamos aumentar o orçamento em **20%** nas campanhas de alta performance.")
+                                                .suggestionSource("Agente de Tráfego")
                                                 .insightType(InsightType.OPTIMIZATION)
+                                                .priority(InsightPriority.HIGH)
+                                                .actionUrl("/campanhas")
+                                                .actionLabel("Acessar Campanhas")
+                                                .isRead(false)
+                                                .isDismissed(false)
+                                                .build(),
+                                AIInsight.builder()
+                                                .company(company)
+                                                .title("Lead Stalling")
+                                                .description("O Agente SDR identificou **12 leads qualificados** aguardando resposta há mais de **2 horas**. Intervenha agora.")
+                                                .suggestionSource("Agente SDR")
+                                                .insightType(InsightType.NOTIFICATION)
+                                                .priority(InsightPriority.HIGH)
+                                                .actionUrl("/whatsapp")
+                                                .actionLabel("Intervir via WhatsApp")
+                                                .isRead(false)
+                                                .isDismissed(false)
+                                                .build(),
+                                AIInsight.builder()
+                                                .company(company)
+                                                .title("Growth Orgânico")
+                                                .description("Seus últimos **Reels de prova social** tiveram **40% mais engajamento**. Gere novos roteiros similares para manter o pico.")
+                                                .suggestionSource("IA Social Media")
+                                                .insightType(InsightType.SUGGESTION)
                                                 .priority(InsightPriority.MEDIUM)
-                                                .actionUrl("/campaigns")
-                                                .actionLabel("Criar Campanha")
+                                                .actionUrl("/social")
+                                                .actionLabel("Criar Roteiros")
+                                                .isRead(false)
+                                                .isDismissed(false)
                                                 .build());
                 insightRepository.saveAll(insights);
         }

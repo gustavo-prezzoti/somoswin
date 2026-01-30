@@ -6,5 +6,7 @@ public enum InsightType {
     GROWTH_ORGANIC, // Crescimento orgânico
     PERFORMANCE_ALERT, // Alerta de performance
     OPTIMIZATION, // Sugestão de otimização
-    MILESTONE // Marco alcançado
+    MILESTONE, // Marco alcançado
+    NOTIFICATION, // Notificação / Alerta imediato
+    SUGGESTION // Sugestão geral
 }
