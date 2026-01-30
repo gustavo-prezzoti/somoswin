@@ -55,11 +55,12 @@ def fetch_company_data(conn, company_id):
 
 def save_insights(conn, company_id, insights):
     with conn.cursor() as cur:
-        # Prevent duplication: Delete today's insights for this company before inserting
+        # Prevent duplication: Delete previous meaningful insights for this company before inserting.
+        # We want only the LATEST status of these 3 types.
         cur.execute("""
             DELETE FROM winai.ai_insights 
             WHERE company_id = %s 
-            AND created_at >= CURRENT_DATE
+            AND insight_type IN ('SCALE_BUDGET', 'LEAD_STALLING', 'GROWTH_ORGANIC')
         """, (company_id,))
         
         for insight in insights:
