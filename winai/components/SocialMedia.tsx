@@ -213,21 +213,14 @@ const SocialMedia: React.FC = () => {
       formData.append('file', file);
 
       try {
-         const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:18080'}/api/upload`, {
-            method: 'POST',
-            body: formData,
-         });
+         // Use the configured API client (Axios) which handles auth headers
+         const response = await socialChatService.uploadFile(formData);
 
-         if (!response.ok) {
-            throw new Error('Upload failed');
-         }
-
-         const data = await response.json();
          // Determine simplified type for backend
          let type = 'DOCUMENT';
          if (file.type.startsWith('image/')) type = 'IMAGE';
 
-         return { url: data.url, type };
+         return { url: response.url, type };
       } catch (error) {
          console.error('Upload error:', error);
          return null;

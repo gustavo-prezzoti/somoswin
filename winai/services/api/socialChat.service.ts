@@ -37,5 +37,9 @@ export const socialChatService = {
     },
     deleteChat: async (id: string): Promise<void> => {
         await api.delete(`/social/chat/${id}`);
+    },
+    uploadFile: async (formData: FormData): Promise<{ url: string, filename: string, type: string }> => {
+        // Axios automatically sets Content-Type to multipart/form-data when body is FormData
+        return api.post<{ url: string, filename: string, type: string }>('/upload', formData);
     }
 };
