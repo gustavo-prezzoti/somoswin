@@ -25,10 +25,12 @@ export const socialChatService = {
     getChatDetails: async (id: string): Promise<SocialChatDetail> => {
         return api.get<SocialChatDetail>(`/social/chat/${id}`);
     },
-    sendMessage: async (message: string, chatId?: string): Promise<{ message: ChatMessage, chatId: string }> => {
+    sendMessage: async (message: string, chatId?: string, attachmentUrl?: string, attachmentType?: string): Promise<{ message: ChatMessage, chatId: string }> => {
         return api.post<{ message: ChatMessage, chatId: string }>('/social/chat/send', {
             message,
-            chatId
+            chatId,
+            attachmentUrl,
+            attachmentType
         });
     },
     deleteChat: async (id: string): Promise<void> => {

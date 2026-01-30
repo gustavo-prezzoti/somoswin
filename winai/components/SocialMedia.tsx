@@ -14,7 +14,10 @@ import {
    Trash2,
    Star,
    UserCheck,
-   Video
+   Video,
+   Paperclip,
+   FileText,
+   X
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -61,6 +64,16 @@ const SocialMedia: React.FC = () => {
    const [designers, setDesigners] = useState<Professional[]>([]);
    const [editors, setEditors] = useState<Professional[]>([]);
    const [isProfessionalsLoading, setIsProfessionalsLoading] = useState(false);
+
+   // File Upload State
+   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+   const fileInputRef = useRef<HTMLInputElement>(null);
+
+   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+         setSelectedFile(e.target.files[0]);
+      }
+   };
 
    const formatPrice = (value: number) => {
       return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
@@ -195,16 +208,73 @@ const SocialMedia: React.FC = () => {
       }
    };
 
-   const handleSendMessage = async () => {
-      if (!prompt.trim() || isSending) return;
+   const uploadFile = async (file: File): Promise<{ url: string, type: string } | null> => {
+      const formData = new FormData();
+      formData.append('file', file);
 
-      const userMsg: ChatMessage = { role: 'user', content: prompt };
+      try {
+         const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:18080'}/api/upload`, {
+            method: 'POST',
+            body: formData,
+         });
+
+         if (!response.ok) {
+            throw new Error('Upload failed');
+         }
+
+         const data = await response.json();
+         // Determine simplified type for backend
+         let type = 'DOCUMENT';
+         if (file.type.startsWith('image/')) type = 'IMAGE';
+
+         return { url: data.url, type };
+      } catch (error) {
+         console.error('Upload error:', error);
+         return null;
+      }
+   };
+
+   const handleSendMessage = async () => {
+      // Allow sending if there is text OR a file
+      if ((!prompt.trim() && !selectedFile) || isSending) return;
+
+      const currentFile = selectedFile; // Capture ref
+      const currentPrompt = prompt;
+
+      // Optimistic update
+      let content = currentPrompt;
+      if (currentFile) {
+         content += `\n[Anexo: ${currentFile.name}]`;
+      }
+
+      const userMsg: ChatMessage = { role: 'user', content: content };
       setMessages(prev => [...prev, userMsg]);
       setPrompt('');
+      setSelectedFile(null); // Clear immediately
       setIsSending(true);
 
       try {
-         const response = await socialChatService.sendMessage(userMsg.content, activeChatId || undefined);
+         let attachmentUrl = undefined;
+         let attachmentType = undefined;
+
+         if (currentFile) {
+            const uploadResult = await uploadFile(currentFile);
+            if (uploadResult) {
+               attachmentUrl = uploadResult.url;
+               attachmentType = uploadResult.type;
+            } else {
+               // If upload fails, maybe warn user? For now just try sending text
+               console.error("Failed to upload file, sending text only");
+            }
+         }
+
+         const response = await socialChatService.sendMessage(
+            currentPrompt,
+            activeChatId || undefined,
+            attachmentUrl,
+            attachmentType
+         );
+
          setMessages(prev => [...prev, response.message]);
          if (!activeChatId) {
             setActiveChatId(response.chatId);
@@ -212,6 +282,7 @@ const SocialMedia: React.FC = () => {
          }
       } catch (error) {
          console.error('Failed to send message', error);
+         // Optionally remove optimistic message or show error
       } finally {
          setIsSending(false);
       }

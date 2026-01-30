@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -119,10 +120,48 @@ public class SocialGrowthChatService {
 
         String systemPrompt = buildPersistentSystemPrompt(profile);
 
+        // --- ATTACHMENT HANDLING ---
+        String finalUserMessage = request.getMessage();
+        String imageUrl = null;
+
+        if (request.getAttachmentUrl() != null && !request.getAttachmentUrl().isEmpty()) {
+            String type = request.getAttachmentType() != null ? request.getAttachmentType().toUpperCase() : "";
+
+            if ("IMAGE".equals(type)) {
+                // For images, we pass the URL to OpenAI
+                // Ensure full URL if it's relative
+                imageUrl = request.getAttachmentUrl();
+                if (imageUrl.startsWith("/")) {
+                    // In production this should be a full URL reachable by OpenAI.
+                    // For local dev with local upload, OpenAI CANNOT see localhost.
+                    // IMPORTANT: If running locally, this image feature ONLY works if the URL is
+                    // public.
+                    // Since user is local, we might need a workaround or accept it won't work for
+                    // local files without ngrok.
+                    // However, the prompt implies "implement it", assuming env supports it.
+                    // I will proceed assuming the URL provided will be valid or adding a note.
+                    // Actually, for local files, we could encode base64? OpenAiService supports
+                    // URLs.
+                    // Let's assume the frontend sends a URL or we provide the relative path.
+                    // If it's a relative path /uploads/..., OpenAI can't reach it.
+                    // Workaround: Read file bytes and send as Base64 to OpenAI?
+                    // OpenAI API supports "data:image/jpeg;base64,..." in the url field.
+                    // YES! I will convert local file to Base64 data URL.
+                    imageUrl = convertLocalFileToBase64(request.getAttachmentUrl());
+                }
+            } else if ("DOCUMENT".equals(type)) {
+                // For docs, we extract content and append to message
+                String extractedText = extractDocumentContent(request.getAttachmentUrl());
+                if (extractedText != null) {
+                    finalUserMessage += "\n\n[CONTEÚDO DO ARQUIVO ANEXO]:\n" + extractedText;
+                }
+            }
+        }
+
         // Add user message
         ChatMessageDTO userMsg = ChatMessageDTO.builder()
                 .role("user")
-                .content(request.getMessage())
+                .content(finalUserMessage) // Message + extracted text
                 .build();
         messages.add(userMsg);
 
@@ -139,7 +178,8 @@ public class SocialGrowthChatService {
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 log.debug("🔄 Attempting to get AI response (attempt {}/{})", attempt, MAX_RETRIES);
-                aiResponse = openAiService.generateResponse(systemPrompt, request.getMessage(), history);
+                // Pass imageUrl (can be null or Base64 data URI)
+                aiResponse = openAiService.generateResponse(systemPrompt, finalUserMessage, imageUrl, history);
 
                 if (aiResponse != null && !aiResponse.trim().isEmpty()) {
                     log.info("✅ AI response received successfully on attempt {}: {} chars", attempt,
@@ -203,7 +243,7 @@ public class SocialGrowthChatService {
             log.debug("Chat saved successfully with {} messages", messages.size());
 
             // Redis Memory update
-            chatMemoryService.saveMessage(chat.getId().toString(), "user", request.getMessage());
+            chatMemoryService.saveMessage(chat.getId().toString(), "user", finalUserMessage);
             chatMemoryService.saveMessage(chat.getId().toString(), "assistant", aiResponse);
 
         } catch (Exception e) {
@@ -214,6 +254,78 @@ public class SocialGrowthChatService {
                 .message(aiMsg)
                 .chatId(chat.getId())
                 .build();
+    }
+
+    // --- HELPER METHODS FOR ATTACHMENTS ---
+
+    @Value("${app.upload.dir:uploads}")
+    private String uploadDir;
+
+    private String convertLocalFileToBase64(String fileUrl) {
+        try {
+            // Check if it's already a Data URL (base64)
+            if (fileUrl.startsWith("data:")) {
+                return fileUrl;
+            }
+            // Check if it's a remote URL (Supabase)
+            if (fileUrl.startsWith("http")) {
+                // OpenAI supports URLs directly, so we just return it!
+                return fileUrl;
+            }
+
+            // Fallback for local files
+            java.nio.file.Path filePath = java.nio.file.Paths
+                    .get(fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl);
+            if (java.nio.file.Files.exists(filePath)) {
+                byte[] fileContent = java.nio.file.Files.readAllBytes(filePath);
+                String base64 = java.util.Base64.getEncoder().encodeToString(fileContent);
+                return "data:image/jpeg;base64," + base64;
+            }
+
+            return null;
+        } catch (Exception e) {
+            log.error("Error handling image URL", e);
+            return null;
+        }
+    }
+
+    private String extractDocumentContent(String fileUrl) {
+        try {
+            java.io.InputStream inputStream = null;
+
+            if (fileUrl.startsWith("http")) {
+                // Download from URL (Supabase)
+                inputStream = new java.net.URL(fileUrl).openStream();
+            } else {
+                // Local file (fallback)
+                java.nio.file.Path filePath = java.nio.file.Paths
+                        .get(fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl);
+                if (java.nio.file.Files.exists(filePath)) {
+                    inputStream = java.nio.file.Files.newInputStream(filePath);
+                }
+            }
+
+            if (inputStream == null) {
+                return "[Erro: Arquivo não encontrado ou inacessível]";
+            }
+
+            try (java.io.InputStream is = inputStream) {
+                if (fileUrl.toLowerCase().endsWith(".pdf")) {
+                    try (org.apache.pdfbox.pdmodel.PDDocument document = org.apache.pdfbox.pdmodel.PDDocument
+                            .load(is)) {
+                        org.apache.pdfbox.text.PDFTextStripper stripper = new org.apache.pdfbox.text.PDFTextStripper();
+                        return stripper.getText(document);
+                    }
+                } else {
+                    // Assume text-based (txt, csv, md)
+                    java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
+                    return s.hasNext() ? s.next() : "";
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error extracting document content", e);
+            return "[Erro ao ler arquivo: " + e.getMessage() + "]";
+        }
     }
 
     private String buildPersistentSystemPrompt(SocialMediaProfile profile) {

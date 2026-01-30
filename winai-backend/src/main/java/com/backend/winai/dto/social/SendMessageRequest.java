@@ -13,4 +13,6 @@ import java.util.UUID;
 public class SendMessageRequest {
     private String message;
     private UUID chatId;
+    private String attachmentUrl;
+    private String attachmentType; // IMAGE, DOCUMENT
 }
