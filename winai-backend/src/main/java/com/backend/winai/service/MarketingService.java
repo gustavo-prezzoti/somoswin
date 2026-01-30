@@ -513,16 +513,17 @@ public class MarketingService {
     @Transactional
     public void disconnectMeta(User user) {
         metaConnectionRepository.findByCompany(user.getCompany()).ifPresent(conn -> {
-            conn.setConnected(false);
-            conn.setAccessToken(null);
-            conn.setAdAccountId(null);
-            conn.setPageId(null);
-            conn.setBusinessId(null);
-            conn.setInstagramBusinessId(null);
-            conn.setMetaUserId(null);
-            conn.setTokenExpiresAt(null);
-            conn.setLongLived(false);
-            metaConnectionRepository.save(conn);
+            com.backend.winai.entity.Company company = user.getCompany();
+
+            // Cascade delete all related data
+            instagramMetricRepository.deleteByCompany(company);
+            metaInsightRepository.deleteByCompany(company);
+            metaAdRepository.deleteByCompany(company);
+            metaAdSetRepository.deleteByCompany(company);
+            metaCampaignRepository.deleteByCompany(company);
+
+            // Delete the connection itself
+            metaConnectionRepository.delete(conn);
         });
     }
 

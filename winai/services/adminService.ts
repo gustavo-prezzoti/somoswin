@@ -277,24 +277,26 @@ export interface UpdateSystemPromptRequest {
 }
 
 
+export interface FollowUpStepResponse {
+    id: string;
+    stepOrder: number;
+    delayMinutes: number;
+    messageType: 'AI' | 'CUSTOM';
+    customMessage?: string;
+    aiPrompt?: string;
+    active: boolean;
+}
+
 export interface FollowUpConfig {
     id?: string;
     companyId: string;
     enabled: boolean;
     inactivityMinutes: number;
-    recurrenceMinutes: number;
-    maxFollowUps: number;
-    messageType: 'AI' | 'CUSTOM';
-    customMessage?: string;
     triggerOnAiResponse: boolean;
     triggerOnLeadMessage: boolean;
     startHour: number;
     endHour: number;
-    // Handoff Humano
-    humanHandoffNotificationEnabled?: boolean;
-    humanHandoffPhone?: string;
-    humanHandoffMessage?: string;
-    humanHandoffClientMessage?: string;
+    steps: FollowUpStepResponse[];
     createdAt?: string;
     updatedAt?: string;
 }
@@ -312,23 +314,24 @@ export interface FollowUpStatus {
     isEligible: boolean;
 }
 
+export interface FollowUpStepRequest {
+    stepOrder?: number;
+    delayMinutes: number;
+    messageType: 'AI' | 'CUSTOM';
+    customMessage?: string;
+    aiPrompt?: string;
+    active: boolean;
+}
+
 export interface FollowUpConfigRequest {
     companyId: string;
     enabled: boolean;
     inactivityMinutes: number;
-    recurrenceMinutes?: number;
-    maxFollowUps?: number;
-    messageType: string;
-    customMessage?: string;
     triggerOnAiResponse?: boolean;
     triggerOnLeadMessage?: boolean;
     startHour?: number;
     endHour?: number;
-    // Handoff Humano
-    humanHandoffNotificationEnabled?: boolean;
-    humanHandoffPhone?: string;
-    humanHandoffMessage?: string;
-    humanHandoffClientMessage?: string;
+    steps: FollowUpStepRequest[];
 }
 
 
@@ -359,6 +362,39 @@ export const followUpService = {
 
     resetFollowUp: async (conversationId: string): Promise<void> => {
         await httpClient.delete(`/admin/followup/status/${conversationId}`);
+    }
+};
+
+export interface GlobalNotificationConfig {
+    id?: string;
+    companyId: string;
+    humanHandoffNotificationEnabled?: boolean;
+    humanHandoffPhone?: string;
+    humanHandoffMessage?: string;
+    humanHandoffClientMessage?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface GlobalNotificationConfigRequest {
+    companyId: string;
+    humanHandoffNotificationEnabled?: boolean;
+    humanHandoffPhone?: string;
+    humanHandoffMessage?: string;
+    humanHandoffClientMessage?: string;
+}
+
+export const globalNotificationService = {
+    getConfig: async (companyId: string): Promise<GlobalNotificationConfig | null> => {
+        try {
+            return await httpClient.get<GlobalNotificationConfig>(`/admin/global-notifications/${companyId}`);
+        } catch {
+            return null;
+        }
+    },
+
+    saveConfig: async (config: GlobalNotificationConfigRequest): Promise<GlobalNotificationConfig> => {
+        return await httpClient.post<GlobalNotificationConfig>('/admin/global-notifications', config);
     }
 };
 

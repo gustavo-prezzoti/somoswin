@@ -1,5 +1,8 @@
 package com.backend.winai.dto.request;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,81 +16,37 @@ import java.util.UUID;
 @AllArgsConstructor
 public class FollowUpConfigRequest {
 
+    @NotNull(message = "ID da empresa é obrigatório")
     private UUID companyId;
 
+    @NotNull(message = "Status ativado/desativado é obrigatório")
     private Boolean enabled;
 
     /**
      * Tempo de inatividade em minutos antes de disparar follow-up.
      */
+    @NotNull(message = "Tempo de inatividade é obrigatório")
+    @Min(value = 1, message = "Tempo de inatividade deve ser de pelo menos 1 minuto")
     private Integer inactivityMinutes;
+
+    @NotNull(message = "Trigger de mensagem do lead é obrigatória")
+    private Boolean triggerOnLeadMessage;
+
+    @NotNull(message = "Trigger de resposta da IA é obrigatória")
+    private Boolean triggerOnAiResponse;
+
+    @NotNull(message = "Hora de início é obrigatória")
+    @Min(0)
+    @Max(23)
+    private Integer startHour;
+
+    @NotNull(message = "Hora de fim é obrigatória")
+    @Min(0)
+    @Max(23)
+    private Integer endHour;
 
     /**
      * Se true, follow-ups são enviados periodicamente.
      */
-    private Boolean recurring;
-
-    /**
-     * Intervalo em minutos entre follow-ups recorrentes.
-     */
-    private Integer recurrenceMinutes;
-
-    /**
-     * Máximo de follow-ups por conversa.
-     */
-    private Integer maxFollowUps;
-
-    /**
-     * Tipo de mensagem: CONTINUATION ou CHECKING_IN
-     */
-    private String messageType;
-
-    /**
-     * Mensagem customizada para follow-up.
-     */
-    private String customMessage;
-
-    /**
-     * Considera última mensagem do lead para inatividade.
-     */
-    private Boolean triggerOnLeadMessage;
-
-    /**
-     * Considera última mensagem da IA para inatividade.
-     */
-    private Boolean triggerOnAiResponse;
-
-    /**
-     * Horário inicial para envio (0-23).
-     */
-    private Integer startHour;
-
-    /**
-     * Horário final para envio (0-23).
-     */
-    private Integer endHour;
-
-    // ==========================================
-    // Configurações de Notificação Handoff Humano
-    // ==========================================
-
-    /**
-     * Ativa notificação WhatsApp quando lead solicitar atendimento humano.
-     */
-    private Boolean humanHandoffNotificationEnabled;
-
-    /**
-     * Número de telefone para receber notificação de handoff.
-     */
-    private String humanHandoffPhone;
-
-    /**
-     * Mensagem customizada para notificação de handoff enviada ao AGENTE.
-     */
-    private String humanHandoffMessage;
-
-    /**
-     * Mensagem enviada ao LEAD quando solicitada a escala para humano.
-     */
-    private String humanHandoffClientMessage;
+    private java.util.List<FollowUpStepRequest> steps;
 }

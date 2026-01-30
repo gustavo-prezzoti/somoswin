@@ -42,6 +42,7 @@ public class AIAgentService {
     private final NotificationRepository notificationRepository;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
     private final FollowUpService followUpService;
+    private final GlobalNotificationService globalNotificationService;
 
     public AIAgentService(
             OpenAiService openAiService,
@@ -53,7 +54,8 @@ public class AIAgentService {
             UserRepository userRepository,
             NotificationRepository notificationRepository,
             org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate,
-            @org.springframework.context.annotation.Lazy FollowUpService followUpService) {
+            @org.springframework.context.annotation.Lazy FollowUpService followUpService,
+            GlobalNotificationService globalNotificationService) {
         this.openAiService = openAiService;
         this.connectionRepository = connectionRepository;
         this.whatsAppConnectionRepository = whatsAppConnectionRepository;
@@ -64,6 +66,7 @@ public class AIAgentService {
         this.notificationRepository = notificationRepository;
         this.messagingTemplate = messagingTemplate;
         this.followUpService = followUpService;
+        this.globalNotificationService = globalNotificationService;
     }
 
     @Transactional
@@ -464,10 +467,10 @@ public class AIAgentService {
 
             // Tentar obter mensagem personalizada da configuração
             try {
-                var configOpt = followUpService.getConfigByCompany(conversation.getCompany().getId());
-                if (configOpt.isPresent() && configOpt.get().getHumanHandoffClientMessage() != null
-                        && !configOpt.get().getHumanHandoffClientMessage().isBlank()) {
-                    handoffMsg = configOpt.get().getHumanHandoffClientMessage();
+                var globalConfig = globalNotificationService.getConfig(conversation.getCompany().getId());
+                if (globalConfig != null && globalConfig.getHumanHandoffClientMessage() != null
+                        && !globalConfig.getHumanHandoffClientMessage().isBlank()) {
+                    handoffMsg = globalConfig.getHumanHandoffClientMessage();
                 }
             } catch (Exception e) {
                 log.warn("Erro ao buscar mensagem personalizada de handoff, usando padrão: {}", e.getMessage());
@@ -502,15 +505,14 @@ public class AIAgentService {
 
     private void sendHumanHandoffWhatsAppNotification(WhatsAppConversation conversation) {
         try {
-            var configOpt = followUpService.getConfigByCompany(conversation.getCompany().getId());
+            var config = globalNotificationService.getConfig(conversation.getCompany().getId());
 
-            if (configOpt.isEmpty()) {
-                log.debug("Nenhuma configuração de follow-up para empresa {}, pulando notificação WhatsApp de handoff",
+            if (config == null) {
+                log.debug(
+                        "Nenhuma configuração de Notificação Global para empresa {}, pulando notificação WhatsApp de handoff",
                         conversation.getCompany().getId());
                 return;
             }
-
-            var config = configOpt.get();
 
             if (!Boolean.TRUE.equals(config.getHumanHandoffNotificationEnabled())) {
                 log.debug("Notificação WhatsApp de handoff desabilitada para empresa {}",
@@ -693,9 +695,9 @@ public class AIAgentService {
                     }
 
                     if (infoCompanyId != null) {
-                        var configOpt = followUpService.getConfigByCompany(infoCompanyId);
-                        if (configOpt.isPresent()) {
-                            customHandoffMsg = configOpt.get().getHumanHandoffClientMessage();
+                        var globalConfig = globalNotificationService.getConfig(infoCompanyId);
+                        if (globalConfig != null) {
+                            customHandoffMsg = globalConfig.getHumanHandoffClientMessage();
                         }
                     }
                 } catch (Exception ex) {

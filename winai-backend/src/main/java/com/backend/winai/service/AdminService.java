@@ -111,7 +111,7 @@ public class AdminService {
             List<UazapInstanceDTO> instances = uazapService.fetchInstances();
             stats.put("totalInstances", instances.size());
             stats.put("connectedInstances", instances.stream()
-                    .filter(i -> "open".equalsIgnoreCase(i.getStatus()))
+                    .filter(i -> "open".equalsIgnoreCase(i.getStatus()) || "connected".equalsIgnoreCase(i.getStatus()))
                     .count());
         } catch (Exception e) {
             log.error("Erro ao buscar instâncias para stats", e);

@@ -6,6 +6,7 @@ import com.backend.winai.dto.response.FollowUpStatusResponse;
 import com.backend.winai.service.FollowUpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -42,7 +43,7 @@ public class FollowUpController {
      * Cria ou atualiza configuração de follow-up.
      */
     @PostMapping("/config")
-    public ResponseEntity<FollowUpConfigResponse> saveConfig(@RequestBody FollowUpConfigRequest request) {
+    public ResponseEntity<FollowUpConfigResponse> saveConfig(@Valid @RequestBody FollowUpConfigRequest request) {
         log.info("Salvando configuração de follow-up para empresa {}", request.getCompanyId());
         FollowUpConfigResponse response = followUpService.saveConfig(request);
         return ResponseEntity.ok(response);

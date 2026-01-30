@@ -67,16 +67,6 @@ public class FollowUpService {
             config.setEnabled(request.getEnabled());
         if (request.getInactivityMinutes() != null)
             config.setInactivityMinutes(Math.max(1, request.getInactivityMinutes()));
-        if (request.getRecurring() != null)
-            config.setRecurring(request.getRecurring());
-        if (request.getRecurrenceMinutes() != null)
-            config.setRecurrenceMinutes(Math.max(1, request.getRecurrenceMinutes()));
-        if (request.getMaxFollowUps() != null)
-            config.setMaxFollowUps(request.getMaxFollowUps());
-        if (request.getMessageType() != null)
-            config.setMessageType(request.getMessageType());
-        if (request.getCustomMessage() != null)
-            config.setCustomMessage(request.getCustomMessage());
         if (request.getTriggerOnLeadMessage() != null)
             config.setTriggerOnLeadMessage(request.getTriggerOnLeadMessage());
         if (request.getTriggerOnAiResponse() != null)
@@ -86,15 +76,26 @@ public class FollowUpService {
         if (request.getEndHour() != null)
             config.setEndHour(request.getEndHour());
 
-        // Campos de handoff humano
-        if (request.getHumanHandoffNotificationEnabled() != null)
-            config.setHumanHandoffNotificationEnabled(request.getHumanHandoffNotificationEnabled());
-        if (request.getHumanHandoffPhone() != null)
-            config.setHumanHandoffPhone(request.getHumanHandoffPhone());
-        if (request.getHumanHandoffMessage() != null)
-            config.setHumanHandoffMessage(request.getHumanHandoffMessage());
-        if (request.getHumanHandoffClientMessage() != null)
-            config.setHumanHandoffClientMessage(request.getHumanHandoffClientMessage());
+        // Atualiza Steps
+        if (request.getSteps() != null) {
+            if (config.getSteps() == null) {
+                config.setSteps(new java.util.ArrayList<>());
+            }
+            config.getSteps().clear();
+            for (int i = 0; i < request.getSteps().size(); i++) {
+                var stepReq = request.getSteps().get(i);
+                var step = FollowUpStep.builder()
+                        .followUpConfig(config)
+                        .stepOrder(i + 1) // 1-based order
+                        .delayMinutes(stepReq.getDelayMinutes() != null ? stepReq.getDelayMinutes() : 60)
+                        .messageType(stepReq.getMessageType())
+                        .customMessage(stepReq.getCustomMessage())
+                        .aiPrompt(stepReq.getAiPrompt())
+                        .active(stepReq.getActive() != null ? stepReq.getActive() : true)
+                        .build();
+                config.getSteps().add(step);
+            }
+        }
 
         config = configRepository.save(config);
         log.info("Configuração de follow-up salva para empresa {}: enabled={}", company.getName(), config.getEnabled());
@@ -160,10 +161,10 @@ public class FollowUpService {
             status.setFollowUpCount(0);
         }
 
-        if (shouldSchedule && status.getFollowUpCount() < config.getMaxFollowUps()) {
+        if (shouldSchedule && !config.getSteps().isEmpty()) {
             ZonedDateTime nextFollowUp = now.plusMinutes(config.getInactivityMinutes());
             status.setNextFollowUpAt(nextFollowUp);
-            log.debug("Follow-up agendado para conversa {} em {}", conversationId, nextFollowUp);
+            log.debug("Follow-up inicial agendado para conversa {} em {}", conversationId, nextFollowUp);
         } else {
             status.setNextFollowUpAt(null);
         }
@@ -197,10 +198,16 @@ public class FollowUpService {
                     WhatsAppConversation conv = status.getConversation();
                     configRepository.findByCompanyId(conv.getCompany().getId())
                             .ifPresent(config -> {
-                                if (status.getFollowUpCount() < config.getMaxFollowUps()) {
-                                    ZonedDateTime nextFollowUp = ZonedDateTime.now()
-                                            .plusMinutes(config.getInactivityMinutes());
-                                    status.setNextFollowUpAt(nextFollowUp);
+                                if (!config.getSteps().isEmpty()) {
+                                    // Se resumir, reinicia timer para inactivityMinutes (reset seguro)
+                                    // Ou deveria tentar descobrir em qual step estava?
+                                    // Simplificação: agenda próximo check para inactivityMinutes
+                                    // Se já enviou alguns, o process vai identificar o próximo step
+                                    if (status.getFollowUpCount() < config.getSteps().size()) {
+                                        ZonedDateTime nextFollowUp = ZonedDateTime.now()
+                                                .plusMinutes(config.getInactivityMinutes());
+                                        status.setNextFollowUpAt(nextFollowUp);
+                                    }
                                 }
                             });
                     statusRepository.save(status);
@@ -348,14 +355,18 @@ public class FollowUpService {
             return;
         }
 
-        // Verifica limite máximo
-        if (status.getFollowUpCount() >= config.getMaxFollowUps()) {
-            log.debug("Limite de follow-ups atingido para conversa {}", conversation.getId());
+        // Verifica limite máximo baseado na lista de steps
+        int currentStepIndex = status.getFollowUpCount();
+        if (currentStepIndex >= config.getSteps().size()) {
+            log.debug("Todos os steps executados para conversa {}", conversation.getId());
             status.setNextFollowUpAt(null);
             status.setEligible(false);
             statusRepository.save(status);
             return;
         }
+
+        // Recupera o step atual
+        FollowUpStep currentStep = config.getSteps().get(currentStepIndex);
 
         // Verifica se conversa está em modo IA
         if (!"IA".equals(conversation.getSupportMode())) {
@@ -365,11 +376,11 @@ public class FollowUpService {
             return;
         }
 
-        // Gera mensagem de follow-up
-        String followUpMessage = generateFollowUpMessage(config, conversation);
+        // Gera mensagem de follow-up usando o step atual
+        String followUpMessage = generateFollowUpMessage(currentStep, conversation);
 
         try {
-            // 1. Envia via WhatsApp (UAZAPI) e persiste (gerenciando chunks se necessário)
+            // 1. Envia via WhatsApp
             boolean sent = aiAgentService.sendSplitResponse(conversation, followUpMessage);
 
             if (sent) {
@@ -377,14 +388,21 @@ public class FollowUpService {
                 status.setFollowUpCount(status.getFollowUpCount() + 1);
                 status.setLastFollowUpAt(now);
 
-                // Agenda próximo se for recorrente
-                if (config.getRecurring() && status.getFollowUpCount() < config.getMaxFollowUps()) {
-                    status.setNextFollowUpAt(now.plusMinutes(config.getRecurrenceMinutes()));
+                // Agenda próximo step se existir
+                int nextStepIndex = status.getFollowUpCount();
+                if (nextStepIndex < config.getSteps().size()) {
+                    FollowUpStep nextStep = config.getSteps().get(nextStepIndex);
+                    // Agendar próximo: now + delay do próximo step
+                    // Nota: O delay do step é "tempo a esperar APÓS o evento anterior".
+                    // Aqui, o evento anterior é este envio.
+                    status.setNextFollowUpAt(now.plusMinutes(nextStep.getDelayMinutes()));
+                } else {
+                    status.setNextFollowUpAt(null); // Fim do fluxo
                 }
 
                 statusRepository.save(status);
-                log.info("Follow-up #{} enviado e notificado para conversa {}",
-                        status.getFollowUpCount(), conversation.getId());
+                log.info("Follow-up Step #{} enviado para conversa {}", currentStep.getStepOrder(),
+                        conversation.getId());
             }
 
         } catch (Exception e) {
@@ -405,63 +423,43 @@ public class FollowUpService {
     }
 
     /**
-     * Gera mensagem de follow-up baseada na configuração.
+     * Gera mensagem de follow-up baseada no STEP atual.
      */
-    private String generateFollowUpMessage(FollowUpConfig config, WhatsAppConversation conversation) {
-        if (config.getCustomMessage() != null && !config.getCustomMessage().isBlank()) {
-            return config.getCustomMessage();
+    private String generateFollowUpMessage(FollowUpStep step, WhatsAppConversation conversation) {
+        if ("CUSTOM".equalsIgnoreCase(step.getMessageType()) && step.getCustomMessage() != null
+                && !step.getCustomMessage().isBlank()) {
+            return step.getCustomMessage();
         }
 
-        if ("AI".equalsIgnoreCase(config.getMessageType())) {
+        if ("AI".equalsIgnoreCase(step.getMessageType())) {
             try {
-                log.info("Gerando follow-up inteligente com IA para conversa {}", conversation.getId());
+                log.info("Gerando follow-up IA (Step {}) para conversa {}", step.getStepOrder(), conversation.getId());
 
                 List<String> history = aiAgentService.getRecentConversationHistory(conversation.getId(), 5);
-
                 String leadName = conversation.getContactName() != null ? conversation.getContactName() : "cliente";
 
                 String prompt = String.format(
-                        "CONTEXTO DE REENGAJAMENTO (FOLLOW-UP):\n" +
-                                "O lead %s parou de responder na conversa anterior.\n" +
-                                "Analise o histórico abaixo para entender o último ponto de contato.\n" +
-                                "Sua missão é criar uma mensagem de retomada que seja:\n" +
-                                "1. Curta e informal (linguagem de WhatsApp).\n" +
-                                "2. Empática e prestativa.\n" +
-                                "3. Cite brevemente algo do histórico se fizer sentido para parecer natural.\n" +
-                                "4. Termine com uma pergunta simples para facilitar a resposta.\n" +
-                                "5. Se quiser enviar mais de uma mensagem separada, use a tag [SPLIT] entre elas.\n" +
-                                "\nHISTÓRICO:\n%s\n" +
-                                "\nIMPORTANTE: Retorne APENAS o texto da mensagem. Não use aspas ou prefixos.",
-                        leadName, String.join("\n", history));
+                        "CONTEXTO DE REENGAJAMENTO (FOLLOW-UP - TENTATIVA %d):\n" +
+                                "O lead %s parou de responder.\n" +
+                                "Histórico recente abaixo.\n" +
+                                "Missão: Criar mensagem de retomada curta, empática e informal.\n" +
+                                "Histórico:\n%s\n" +
+                                "Retorne APENAS a mensagem.",
+                        step.getStepOrder(), leadName, String.join("\n", history));
 
-                // Usa o processoMessageWithAI mas com um prompt de sistema temporário ou
-                // contexto
                 String aiResponse = aiAgentService.processMessageWithAI(conversation, prompt, leadName);
 
                 if (aiResponse != null && !aiResponse.trim().isEmpty()
                         && !"HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
                     return aiResponse;
                 }
-
-                log.warn("IA não gerou resposta de follow-up válida, usando fallback padrão");
             } catch (Exception e) {
                 log.error("Erro ao gerar follow-up com IA: {}", e.getMessage());
             }
         }
 
-        String contactName = conversation.getContactName() != null ? conversation.getContactName() : "cliente";
-
-        return switch (config.getMessageType()) {
-            case "CONTINUATION" -> String.format(
-                    "Olá %s! 👋 Gostaria de continuar nossa conversa de onde paramos. Posso ajudar com mais alguma coisa?",
-                    contactName);
-            case "CHECKING_IN" -> String.format(
-                    "Oi %s! Tudo bem? Notei que faz um tempo que conversamos. Estou aqui se precisar de algo! 😊",
-                    contactName);
-            default -> String.format(
-                    "Olá %s! Estou passando para ver se posso ajudar com mais alguma coisa. 🙂",
-                    contactName);
-        };
+        // Fallback genérico se IA falhar ou se config antiga
+        return "Olá! Gostaria de saber se ainda posso ajudar com algo? 😊";
     }
 
     /**
@@ -504,21 +502,25 @@ public class FollowUpService {
                 .companyName(config.getCompany().getName())
                 .enabled(config.getEnabled())
                 .inactivityMinutes(config.getInactivityMinutes())
-                .recurring(config.getRecurring())
-                .recurrenceMinutes(config.getRecurrenceMinutes())
-                .maxFollowUps(config.getMaxFollowUps())
-                .messageType(config.getMessageType())
-                .customMessage(config.getCustomMessage())
                 .triggerOnLeadMessage(config.getTriggerOnLeadMessage())
                 .triggerOnAiResponse(config.getTriggerOnAiResponse())
                 .startHour(config.getStartHour())
                 .endHour(config.getEndHour())
-                .humanHandoffNotificationEnabled(config.getHumanHandoffNotificationEnabled())
-                .humanHandoffPhone(config.getHumanHandoffPhone())
-                .humanHandoffMessage(config.getHumanHandoffMessage())
-                .humanHandoffClientMessage(config.getHumanHandoffClientMessage())
                 .createdAt(config.getCreatedAt())
                 .updatedAt(config.getUpdatedAt())
+                .steps(config.getSteps().stream().map(this::toStepResponse).collect(Collectors.toList()))
+                .build();
+    }
+
+    private com.backend.winai.dto.response.FollowUpStepResponse toStepResponse(FollowUpStep step) {
+        return com.backend.winai.dto.response.FollowUpStepResponse.builder()
+                .id(step.getId())
+                .stepOrder(step.getStepOrder())
+                .delayMinutes(step.getDelayMinutes())
+                .messageType(step.getMessageType())
+                .customMessage(step.getCustomMessage())
+                .aiPrompt(step.getAiPrompt())
+                .active(step.getActive())
                 .build();
     }
 

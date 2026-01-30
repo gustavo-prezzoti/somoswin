@@ -19,22 +19,11 @@ public class FollowUpConfigResponse {
     private String companyName;
     private Boolean enabled;
     private Integer inactivityMinutes;
-    private Boolean recurring;
-    private Integer recurrenceMinutes;
-    private Integer maxFollowUps;
-    private String messageType;
-    private String customMessage;
     private Boolean triggerOnLeadMessage;
     private Boolean triggerOnAiResponse;
     private Integer startHour;
     private Integer endHour;
-
-    // Handoff Humano
-    private Boolean humanHandoffNotificationEnabled;
-    private String humanHandoffPhone;
-    private String humanHandoffMessage;
-
-    private String humanHandoffClientMessage;
+    private java.util.List<FollowUpStepResponse> steps;
 
     private ZonedDateTime createdAt;
     private ZonedDateTime updatedAt;

@@ -33,7 +33,9 @@ public class DatabaseMigrationConfig {
                             "custom_prompt", "custom_message",
                             "trigger_on_ai_message", "trigger_on_ai_response",
                             "time_window_start", "start_hour",
-                            "time_window_end", "end_hour"
+                            "time_window_end", "end_hour",
+                            "message_type", "active", "recurring",
+                            "recurrence_interval_minutes", "repeat"
                     };
 
                     for (String col : columns) {
