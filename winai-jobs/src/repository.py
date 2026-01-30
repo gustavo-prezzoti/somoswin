@@ -24,7 +24,8 @@ def fetch_company_data(conn, company_id):
         cur.execute("""
             SELECT COUNT(*) as count
             FROM winai.leads l
-            JOIN winai.followup_status fs ON l.id = fs.lead_id OR l.id::text = fs.conversation_id
+            JOIN winai.whatsapp_conversations wc ON l.id = wc.lead_id
+            JOIN winai.followup_status fs ON wc.id = fs.conversation_id
             WHERE l.company_id = %s
             AND fs.last_message_from = 'LEAD'
             AND fs.last_message_at <= NOW() - INTERVAL '2 hours'

@@ -482,18 +482,59 @@ const SocialMedia: React.FC = () => {
                   </div>
                   <div className="p-8 bg-white border-t border-gray-100">
                      <div className="max-w-4xl mx-auto relative">
+                        {/* Attachment Preview */}
+                        {selectedFile && (
+                           <div className="absolute -top-20 left-0 bg-white p-3 rounded-2xl shadow-lg border border-gray-100 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
+                              <div className="p-2 bg-emerald-50 rounded-lg">
+                                 {selectedFile.type.startsWith('image/') ? (
+                                    <Eye size={16} className="text-emerald-600" />
+                                 ) : (
+                                    <FileText size={16} className="text-emerald-600" />
+                                 )}
+                              </div>
+                              <div>
+                                 <p className="text-xs font-bold text-gray-800 truncate max-w-[150px]">{selectedFile.name}</p>
+                                 <p className="text-[9px] text-gray-400 font-bold uppercase">{selectedFile.type.split('/')[1]}</p>
+                              </div>
+                              <button
+                                 onClick={() => setSelectedFile(null)}
+                                 className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                              >
+                                 <X size={14} />
+                              </button>
+                           </div>
+                        )}
+
                         <input
                            type="text"
                            placeholder="Descreva sua ideia ou peça uma análise..."
-                           className="w-full pl-8 pr-20 py-6 bg-gray-50 rounded-[32px] border-none focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none transition-all font-medium text-sm"
+                           className="w-full pl-14 pr-20 py-6 bg-gray-50 rounded-[32px] border-none focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none transition-all font-medium text-sm"
                            value={prompt}
                            onChange={(e) => setPrompt(e.target.value)}
                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                            disabled={isSending}
                         />
+
+                        {/* Attachment Button */}
+                        <input
+                           type="file"
+                           ref={fileInputRef}
+                           className="hidden"
+                           onChange={handleFileSelect}
+                           accept=".jpg,.jpeg,.png,.pdf,.txt"
+                        />
+                        <button
+                           onClick={() => fileInputRef.current?.click()}
+                           disabled={isSending}
+                           className="absolute left-3 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                           title="Anexar arquivo (Imagem, PDF, TXT)"
+                        >
+                           <Paperclip size={20} />
+                        </button>
+
                         <button
                            onClick={handleSendMessage}
-                           disabled={isSending || !prompt.trim()}
+                           disabled={isSending || (!prompt.trim() && !selectedFile)}
                            className="absolute right-3 top-1/2 -translate-y-1/2 p-4 bg-emerald-600 text-white rounded-[24px] hover:bg-emerald-700 shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                            {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
