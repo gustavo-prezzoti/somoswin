@@ -377,18 +377,13 @@ public class OpenAiService {
         return null;
     }
 
-    public String generateResponseWithContext(String knowledgeBaseContent, String userMessage,
-            List<String> recentMessages) {
-        return generateResponseWithContext(null, knowledgeBaseContent, userMessage, recentMessages);
-    }
-
     public String generateResponseWithContext(String agentPrompt, String knowledgeBaseContent, String userMessage,
-            List<String> recentMessages) {
+            List<ChatMessage> recentMessages) {
         return generateResponseWithContext(agentPrompt, knowledgeBaseContent, userMessage, null, recentMessages);
     }
 
     public String generateResponseWithContext(String agentPrompt, String knowledgeBaseContent, String userMessage,
-            String imageUrl, List<String> recentMessages) {
+            String imageUrl, List<ChatMessage> recentMessages) {
         StringBuilder systemPrompt = new StringBuilder();
 
         if (agentPrompt != null && !agentPrompt.isEmpty()) {
@@ -416,7 +411,13 @@ public class OpenAiService {
         systemPrompt.append("6. Nunca invente informações que não estejam na base de conhecimento.\n");
         systemPrompt.append(
                 "7. Use a tag [SPLIT] para dividir mensagens longas em vários balões de conversa. Cada parte deve ser uma continuação direta sem repetir saudações ou introduções. O objetivo é um fluxo natural de mensagens sequenciais.\n");
-        systemPrompt.append("8. REGRAS PARA TRANSIÇÃO HUMANA:\n");
+        systemPrompt.append("8. REGRAS DE OURO PARA EVITAR REPETIÇÃO E SAUDAÇÕES:\n");
+        systemPrompt.append(
+                "   - Se houver histórico de conversa, NÃO comece com saudações (Olá, Oi, Tudo bem, etc.) nem reapresente o assistente.\n");
+        systemPrompt.append(
+                "   - NÃO repita informações que já foram ditas por você ou pelo usuário anteriormente na conversa.\n");
+        systemPrompt.append("   - Vá direto ao ponto da dúvida atual.\n");
+        systemPrompt.append("9. REGRAS PARA TRANSIÇÃO HUMANA:\n");
         systemPrompt.append(
                 "   - SE o usuário pedir explicitamente para falar com um humano, use a ferramenta 'escalar_humano'.\n");
         systemPrompt.append(
@@ -433,12 +434,10 @@ public class OpenAiService {
         messages.add(sysMsg);
 
         if (recentMessages != null) {
-            for (int i = 0; i < recentMessages.size(); i++) {
-                String msg = recentMessages.get(i);
-                String role = (i % 2 == 0) ? "user" : "assistant";
+            for (ChatMessage msg : recentMessages) {
                 Map<String, Object> histMsg = new HashMap<>();
-                histMsg.put("role", role);
-                histMsg.put("content", msg);
+                histMsg.put("role", msg.getRole());
+                histMsg.put("content", msg.getContent());
                 messages.add(histMsg);
             }
         }

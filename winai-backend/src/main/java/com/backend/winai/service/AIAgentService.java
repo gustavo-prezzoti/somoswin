@@ -109,7 +109,7 @@ public class AIAgentService {
             log.info("Processing message with AI for conversation: {}, using knowledge base: {}", conv.getId(),
                     knowledgeBase.getName());
 
-            List<String> recentMessages = getRecentConversationHistory(conv.getId(), 10);
+            List<OpenAiService.ChatMessage> recentMessages = getRecentConversationHistory(conv.getId(), 10);
 
             // BRANCHING: Check for Custom System Templates (e.g., Clinicorp)
             if ("clinicorp".equalsIgnoreCase(knowledgeBase.getSystemTemplate())) {
@@ -118,7 +118,11 @@ public class AIAgentService {
                 String contextInfo = "Data atual: " + java.time.LocalDateTime.now() + "\nNome do Paciente/Lead: "
                         + (leadName != null ? leadName : "Não identificado");
 
-                String aiResponse = openAiService.generateClinicorpResponse(userMessage, recentMessages, contextInfo,
+                // Converter para o formato esperado pela Ísis (Clinicorp flow ainda usa
+                // List<String> no processamento interno de tokens)
+                List<String> rawMessages = recentMessages.stream().map(OpenAiService.ChatMessage::getContent)
+                        .collect(Collectors.toList());
+                String aiResponse = openAiService.generateClinicorpResponse(userMessage, rawMessages, contextInfo,
                         knowledgeBase.getAgentPrompt());
 
                 if (aiResponse != null) {
@@ -211,9 +215,11 @@ public class AIAgentService {
         // Convert history for classification
         List<com.backend.winai.service.OpenAiService.ChatMessage> historyForClass = new ArrayList<>();
         // Recuperar histórico recente (já truncado pelo fix anterior)
-        List<String> rawHistory = getRecentConversationHistory(conv.getId(), 6); // Menos contexto para classificar é ok
-        for (String histMsg : rawHistory) {
-            historyForClass.add(new com.backend.winai.service.OpenAiService.ChatMessage("user", histMsg)); // Simplificação
+        List<OpenAiService.ChatMessage> rawHistory = getRecentConversationHistory(conv.getId(), 6); // Menos contexto
+                                                                                                    // para classificar
+                                                                                                    // é ok
+        for (OpenAiService.ChatMessage histMsg : rawHistory) {
+            historyForClass.add(new com.backend.winai.service.OpenAiService.ChatMessage("user", histMsg.getContent())); // Simplificação
         }
 
         String intent = openAiService.analyzeIntent(userMessage, historyForClass);
@@ -224,7 +230,44 @@ public class AIAgentService {
             return "HUMAN_HANDOFF_REQUESTED";
         }
 
+        // --- ENHANCEMENT: Typing Indicator and Delay ---
+        long startTime = System.currentTimeMillis();
+        String phoneNumber = conv.getPhoneNumber();
+        String baseUrl = conv.getUazapBaseUrl();
+        String token = conv.getUazapToken();
+
+        // Iniciar "digitando"
+        uazapService.setPresence(phoneNumber, "composing", baseUrl, token);
+
+        // Processamento da IA
         String aiResponse = processMessageWithAI(conv, userMessage, leadName, imageUrl);
+
+        // Manter "digitando" e esperar até completar o tempo mínimo (ex: 15-20s se for
+        // o caso)
+        // O usuário pediu "em 20 segundos", então vamos garantir que demore
+        // aproximadamente isso
+        // se a IA for rápida demais.
+        long targetProcessingTime = 20000; // 20 segundos
+
+        while (true) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            if (elapsed >= targetProcessingTime) {
+                break;
+            }
+
+            // A cada 7 segundos, renova o status de digitando (o WhatsApp costuma resetar
+            // após ~10s)
+            if (elapsed % 7000 < 500) {
+                uazapService.setPresence(phoneNumber, "composing", baseUrl, token);
+            }
+
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
 
         if (aiResponse != null && !aiResponse.isEmpty()) {
             log.info("AI generated response: {} chars", aiResponse.length());
@@ -669,7 +712,7 @@ public class AIAgentService {
         }
     }
 
-    public List<String> getRecentConversationHistory(UUID conversationId, int limit) {
+    public List<OpenAiService.ChatMessage> getRecentConversationHistory(UUID conversationId, int limit) {
         try {
             // 1. Buscar mensagens ordenadas da mais recente para a mais antiga
             List<WhatsAppMessage> recentMessages = messageRepository
@@ -677,8 +720,6 @@ public class AIAgentService {
                     .collect(Collectors.toList());
 
             // 2. Buscar configuração de handoff para identificar mensagens de sistema
-            // Precisamos da companyId, vamos tentar pegar da primeira mensagem ou buscar a
-            // conversation
             String customHandoffMsg = null;
             if (!recentMessages.isEmpty()) {
                 try {
@@ -687,7 +728,6 @@ public class AIAgentService {
                             && recentMessages.get(0).getConversation().getCompany() != null) {
                         infoCompanyId = recentMessages.get(0).getConversation().getCompany().getId();
                     } else {
-                        // Fallback: buscar conversation ID
                         var conv = conversationRepository.findById(conversationId).orElse(null);
                         if (conv != null && conv.getCompany() != null) {
                             infoCompanyId = conv.getCompany().getId();
@@ -705,15 +745,12 @@ public class AIAgentService {
                 }
             }
 
-            final String defaultHandoffMsgPrefix = "Entendi! Vou chamar nossa especialista humana"; // Prefixo do
-                                                                                                    // default
+            final String defaultHandoffMsgPrefix = "Entendi! Vou chamar nossa especialista humana";
             final String customHandoffMsgFinal = customHandoffMsg;
 
-            List<String> history = new ArrayList<>();
+            List<OpenAiService.ChatMessage> history = new ArrayList<>();
 
             // 3. Iterar da MAIS RECENTE para a MAIS ANTIGA
-            // Se encontrarmos uma mensagem de handoff da IA, paramos de adicionar (reset de
-            // contexto)
             for (WhatsAppMessage msg : recentMessages) {
                 if (msg.getContent() != null && !msg.getContent().isEmpty()) {
 
@@ -728,15 +765,16 @@ public class AIAgentService {
                             log.info(
                                     "Histórico truncado: mensagem de handoff detectada (ID: {}). Ignorando mensagens anteriores.",
                                     msg.getId());
-                            break; // PARE de adicionar mensagens mais antigas
+                            break;
                         }
                     }
 
-                    history.add(msg.getContent());
+                    String role = Boolean.TRUE.equals(msg.getFromMe()) ? "assistant" : "user";
+                    history.add(new OpenAiService.ChatMessage(role, msg.getContent()));
                 }
             }
 
-            // 4. Inverter para ordem cronológica (Antiga -> Recente) para enviar à OpenAI
+            // 4. Inverter para ordem cronológica (Antiga -> Recente)
             java.util.Collections.reverse(history);
 
             return history;

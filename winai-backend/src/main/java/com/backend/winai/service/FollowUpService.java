@@ -435,8 +435,12 @@ public class FollowUpService {
             try {
                 log.info("Gerando follow-up IA (Step {}) para conversa {}", step.getStepOrder(), conversation.getId());
 
-                List<String> history = aiAgentService.getRecentConversationHistory(conversation.getId(), 5);
+                List<OpenAiService.ChatMessage> history = aiAgentService
+                        .getRecentConversationHistory(conversation.getId(), 5);
                 String leadName = conversation.getContactName() != null ? conversation.getContactName() : "cliente";
+
+                String historyText = history.stream().map(m -> m.getRole() + ": " + m.getContent())
+                        .collect(Collectors.joining("\n"));
 
                 String prompt = String.format(
                         "CONTEXTO DE REENGAJAMENTO (FOLLOW-UP - TENTATIVA %d):\n" +
@@ -445,7 +449,7 @@ public class FollowUpService {
                                 "Missão: Criar mensagem de retomada curta, empática e informal.\n" +
                                 "Histórico:\n%s\n" +
                                 "Retorne APENAS a mensagem.",
-                        step.getStepOrder(), leadName, String.join("\n", history));
+                        step.getStepOrder(), leadName, historyText);
 
                 String aiResponse = aiAgentService.processMessageWithAI(conversation, prompt, leadName);
 

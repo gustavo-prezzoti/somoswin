@@ -380,6 +380,44 @@ public class UazapService {
     }
 
     /**
+     * Define o status de presença (typing, recorded, available, unavailable)
+     */
+    public void setPresence(String phoneNumber, String presence, String baseUrl, String token) {
+        if (baseUrl == null || token == null || phoneNumber == null) {
+            return;
+        }
+
+        try {
+            // Extrair instancia se possivel
+            String instance = null;
+            if (baseUrl.contains("/instance/")) {
+                // Tentar extrair da URL se ja estiver formatada (raro no Uazap)
+            }
+
+            // O endpoint padrão da Evolution para presence é /chat/presence/{instance}
+            // Mas o Uazap pode variar. Vamos tentar o padrão sugerido.
+            // No Uazap/Evolution v1/v2, geralmente é um POST para /chat/presence
+            String url = baseUrl.replaceAll("/$", "") + "/chat/presence";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("token", token);
+            headers.set("apikey", adminToken);
+
+            Map<String, String> body = new HashMap<>();
+            body.put("number", phoneNumber);
+            body.put("presence", presence); // "composing" para digitando
+
+            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
+
+            restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
+            log.debug("Presença '{}' enviada para {}", presence, phoneNumber);
+        } catch (Exception e) {
+            log.warn("Erro ao definir presença para {}: {}", phoneNumber, e.getMessage());
+        }
+    }
+
+    /**
      * Extrai o ID da mensagem da resposta do Uazap
      */
     private String extractMessageId(Map<String, Object> responseBody) {
