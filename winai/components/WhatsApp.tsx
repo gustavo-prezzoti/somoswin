@@ -32,6 +32,10 @@ const WhatsApp: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
 
+  // Estados para Modais de Confirmação
+  const [showClearChatModal, setShowClearChatModal] = useState(false);
+  const [showDeleteLeadModal, setShowDeleteLeadModal] = useState(false);
+
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -1043,23 +1047,7 @@ const WhatsApp: React.FC = () => {
               <div className="flex items-center gap-1">
                 {/* Botão Limpar Chat */}
                 <button
-                  onClick={async () => {
-                    if (confirm('Tem certeza que deseja apagar TODAS as mensagens desta conversa? Essa ação não pode ser desfeita.')) {
-                      try {
-                        setIsLoading(true);
-                        await whatsappService.clearMessages(activeConversation.id);
-                        setMessages([]);
-                        // Atualiza a conversa na lista também
-                        setActiveConversation(prev => prev ? { ...prev, lastMessageText: null, lastMessageTimestamp: Date.now() } : null);
-                        loadConversations();
-                      } catch (error) {
-                        console.error('Erro ao limpar chat:', error);
-                        alert('Erro ao limpar o chat.');
-                      } finally {
-                        setIsLoading(false);
-                      }
-                    }
-                  }}
+                  onClick={() => setShowClearChatModal(true)}
                   className="p-2.5 rounded-lg transition-all text-gray-400 hover:bg-rose-50 hover:text-rose-500"
                   title="Limpar Conversa"
                 >
@@ -1069,21 +1057,7 @@ const WhatsApp: React.FC = () => {
                 {/* Botão Excluir Lead (Somente se for Lead) */}
                 {activeConversation.leadId && (
                   <button
-                    onClick={async () => {
-                      if (confirm('ATENÇÃO: Deseja EXCLUIR este lead permanentemente? Essa ação removerá o lead do sistema.')) {
-                        try {
-                          setIsLoading(true);
-                          await import('../services/api/lead.service').then(m => m.leadService.deleteLead(activeConversation.leadId!)); // Import dinâmico para evitar ciclo se houver
-                          setActiveConversation(null);
-                          loadConversations();
-                        } catch (error) {
-                          console.error('Erro ao excluir lead:', error);
-                          alert('Erro ao excluir o lead.');
-                        } finally {
-                          setIsLoading(false);
-                        }
-                      }
-                    }}
+                    onClick={() => setShowDeleteLeadModal(true)}
                     className="p-2.5 rounded-lg transition-all text-gray-400 hover:bg-rose-50 hover:text-rose-600"
                     title="Excluir Lead"
                   >
@@ -1384,6 +1358,100 @@ const WhatsApp: React.FC = () => {
               )}
 
 
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de Confirmação - Limpar Chat */}
+      {showClearChatModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mb-2">
+                <Trash2 className="text-rose-500" size={32} />
+              </div>
+              <h3 className="text-xl font-black text-gray-900">Limpar Conversa?</h3>
+              <p className="text-gray-500 text-sm leading-relaxed">
+                Tem certeza que deseja apagar <strong>TODAS</strong> as mensagens desta conversa? Essa ação é irreversível.
+              </p>
+
+              <div className="flex gap-3 w-full mt-4">
+                <button
+                  onClick={() => setShowClearChatModal(false)}
+                  className="flex-1 py-3 px-4 rounded-xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!activeConversation) return;
+                    try {
+                      setIsLoading(true);
+                      await whatsappService.clearMessages(activeConversation.id);
+                      setMessages([]);
+                      setHasMore(false); // Reset pagination
+                      setPage(0);
+
+                      // Atualiza a conversa na lista
+                      setActiveConversation(prev => prev ? { ...prev, lastMessageText: null, lastMessageTimestamp: Date.now() } : null);
+                      loadConversations();
+                      setShowClearChatModal(false);
+                    } catch (error) {
+                      console.error('Erro ao limpar chat:', error);
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl bg-rose-500 text-white font-bold hover:bg-rose-600 shadow-lg shadow-rose-500/20 transition-all"
+                >
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Sim, Limpar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação - Excluir Lead */}
+      {showDeleteLeadModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mb-2">
+                <UserMinus className="text-rose-500" size={32} />
+              </div>
+              <h3 className="text-xl font-black text-gray-900">Excluir Lead?</h3>
+              <p className="text-gray-500 text-sm leading-relaxed">
+                Deseja realmente remover este lead da sua base? Todos os dados associados serão perdidos.
+              </p>
+
+              <div className="flex gap-3 w-full mt-4">
+                <button
+                  onClick={() => setShowDeleteLeadModal(false)}
+                  className="flex-1 py-3 px-4 rounded-xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!activeConversation?.leadId) return;
+                    try {
+                      setIsLoading(true);
+                      await import('../services/api/lead.service').then(m => m.leadService.deleteLead(activeConversation.leadId!));
+                      setActiveConversation(null);
+                      loadConversations();
+                      setShowDeleteLeadModal(false);
+                    } catch (error) {
+                      console.error('Erro ao excluir lead:', error);
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl bg-rose-500 text-white font-bold hover:bg-rose-600 shadow-lg shadow-rose-500/20 transition-all"
+                >
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Sim, Excluir'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
