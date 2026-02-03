@@ -257,7 +257,7 @@ public class AIAgentService {
         String token = conv.getUazapToken();
 
         // Iniciar "digitando"
-        uazapService.setPresence(phoneNumber, "composing", baseUrl, token);
+        uazapService.setPresence(phoneNumber, "composing", baseUrl, token, conv.getUazapInstance());
 
         // Processamento da IA
         String aiResponse = processMessageWithAI(conv, userMessage, leadName, imageUrl);
@@ -278,7 +278,7 @@ public class AIAgentService {
             // A cada 7 segundos, renova o status de digitando (o WhatsApp costuma resetar
             // após ~10s)
             if (elapsed % 7000 < 500) {
-                uazapService.setPresence(phoneNumber, "composing", baseUrl, token);
+                uazapService.setPresence(phoneNumber, "composing", baseUrl, token, conv.getUazapInstance());
             }
 
             try {
@@ -335,51 +335,70 @@ public class AIAgentService {
             if (conversation.getLead() == null)
                 return;
 
-            // Flags para forçar atualização
-            boolean forceUpdate = false;
-
-            // 1. Tag explícita da IA
-            if (aiResponse != null && aiResponse.contains("[SUMMARY]")) {
-                forceUpdate = true;
-                log.info("Forcing Lead Memory Update: [SUMMARY] tag detected.");
-            }
-            // 2. Transição para Humano
-            if ("HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
-                forceUpdate = true;
-                log.info("Forcing Lead Memory Update: Human Handoff detected.");
-            }
-
             // Recarregar lead para garantir estado atual
             com.backend.winai.entity.Lead lead = leadRepository.findById(conversation.getLead().getId()).orElse(null);
             if (lead == null)
                 return;
 
-            List<OpenAiService.ChatMessage> history = getRecentConversationHistory(conversation.getId(), 20);
-            if (history.isEmpty())
-                return;
+            // 1. Incrementar contador de interações
+            int currentCount = lead.getInteractionCount() != null ? lead.getInteractionCount() : 0;
+            currentCount++;
+            lead.setInteractionCount(currentCount);
 
-            // THROTTLING: Atualizar apenas se passou 60 minutos desde a última vez
-            // OU se é a primeira vez
-            // UNLESS forceUpdate is true
+            // Flags para forçar atualização
+            boolean forceUpdate = false;
+            String triggerReason = "Time/Throttle";
+
+            // 2. Transição para Humano (REGRA CRÍTICA)
+            if ("HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
+                forceUpdate = true;
+                triggerReason = "Human Handoff";
+            }
+            // 3. Tag explícita da IA
+            else if (aiResponse != null && aiResponse.contains("[SUMMARY]")) {
+                forceUpdate = true;
+                triggerReason = "[SUMMARY] Tag";
+            }
+            // 4. Regra de Volume (A cada 5 interações)
+            else if (currentCount >= 5) {
+                forceUpdate = true;
+                triggerReason = "5 Interactions Volume";
+            }
+
+            // Se não for forçado, aplica regra de tempo (apenas backup: 60 min)
             if (!forceUpdate && lead.getLastSummaryAt() != null) {
                 long minutesSinceLastUpdate = java.time.Duration
                         .between(lead.getLastSummaryAt(), java.time.LocalDateTime.now()).toMinutes();
-                // Aumentado para 60 minutos para economia, já que temos trigger inteligente
-                // agora
                 if (minutesSinceLastUpdate < 60) {
-                    log.debug("Skipping lead memory update. Last update was {} minutes ago.", minutesSinceLastUpdate);
+                    // Apenas salva o incremento do contador de interações
+                    leadRepository.save(lead);
                     return;
                 }
             }
 
+            // Realiza atualização do RESUMO
+            List<OpenAiService.ChatMessage> history = getRecentConversationHistory(conversation.getId(), 30); // Aumentado
+                                                                                                              // para
+                                                                                                              // pegar
+                                                                                                              // contexto
+                                                                                                              // maior
+            if (history.isEmpty())
+                return;
+
+            log.info("Updating Lead Memory. Reason: {}", triggerReason);
+
             String currentSummary = lead.getAiSummary();
             String newSummary = openAiService.summarizeConversationContext(currentSummary, history);
 
-            if (newSummary != null && !newSummary.equals(currentSummary)) {
+            if (newSummary != null) {
                 lead.setAiSummary(newSummary);
                 lead.setLastSummaryAt(java.time.LocalDateTime.now());
+                lead.setInteractionCount(0); // Resetar contador após gerar resumo
                 leadRepository.save(lead);
-                log.info("Memória do Lead {} atualizada. Tamanho do resumo: {}", lead.getId(), newSummary.length());
+                log.info("Memória do Lead {} atualizada com sucesso.", lead.getId());
+            } else {
+                // Se falhar resumo mas incrementou count, salva o count
+                leadRepository.save(lead);
             }
         } catch (Exception e) {
             log.error("Erro ao atualizar memória do lead: {}", e.getMessage());

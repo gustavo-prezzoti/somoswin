@@ -382,39 +382,77 @@ public class UazapService {
     /**
      * Define o status de presença (typing, recorded, available, unavailable)
      */
-    public void setPresence(String phoneNumber, String presence, String baseUrl, String token) {
+    public void setPresence(String phoneNumber, String presence, String baseUrl, String token, String instanceName) {
         if (baseUrl == null || token == null || phoneNumber == null) {
             return;
         }
 
         try {
-            // Extrair instancia se possivel
-            String instance = null;
-            if (baseUrl.contains("/instance/")) {
-                // Tentar extrair da URL se ja estiver formatada (raro no Uazap)
-            }
+            // Ajuste para endpoint correto da Evolution API / Uazap
+            // Versões recentes: /chat/sendPresence/{instance} ou /chat/sendPresence
 
-            // O endpoint padrão da Evolution para presence é /chat/presence/{instance}
-            // Mas o Uazap pode variar. Vamos tentar o padrão sugerido.
-            // No Uazap/Evolution v1/v2, geralmente é um POST para /chat/presence
-            String url = baseUrl.replaceAll("/$", "") + "/chat/presence";
+            String url;
+            if (instanceName != null && !instanceName.isEmpty()) {
+                // Se tem instanceName, usa o padrão mais robusto da Evolution
+                url = baseUrl.replaceAll("/$", "") + "/chat/sendPresence/" + instanceName;
+            } else {
+                // Fallback legado
+                url = baseUrl.replaceAll("/$", "") + "/chat/sendPresence";
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.set("token", token);
             headers.set("apikey", adminToken);
 
-            Map<String, String> body = new HashMap<>();
+            Map<String, Object> body = new HashMap<>();
             body.put("number", phoneNumber);
             body.put("presence", presence); // "composing" para digitando
+            // Adicionar delay opcional se for composing, ajuda a manter o status
+            if ("composing".equals(presence)) {
+                body.put("delay", 10000); // 10s
+            }
 
-            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
             restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
-            log.debug("Presença '{}' enviada para {}", presence, phoneNumber);
+            log.debug("Presença '{}' enviada para {} (URL: {})", presence, phoneNumber, url);
         } catch (Exception e) {
+            // Fallback silencioso para endpoint antigo se o novo falhar (404)
+            try {
+                if (e.getMessage() != null && e.getMessage().contains("404")) {
+                    String fallbackUrl = baseUrl.replaceAll("/$", "") + "/chat/presence";
+                    if (instanceName != null && !instanceName.isEmpty()) {
+                        fallbackUrl += "/" + instanceName;
+                    }
+
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    headers.set("token", token);
+                    headers.set("apikey", adminToken);
+
+                    Map<String, Object> body = new HashMap<>();
+                    body.put("number", phoneNumber);
+                    body.put("presence", presence);
+
+                    HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+                    restTemplate.exchange(fallbackUrl, HttpMethod.POST, requestEntity, Map.class);
+                    log.debug("Fallback de presença executado com sucesso para {}", phoneNumber);
+                    return;
+                }
+            } catch (Exception ex2) {
+                // Ignorar erro do fallback
+            }
+
             log.warn("Erro ao definir presença para {}: {}", phoneNumber, e.getMessage());
         }
+    }
+
+    /**
+     * Fallback for older calls without instanceName (deprecated)
+     */
+    public void setPresence(String phoneNumber, String presence, String baseUrl, String token) {
+        setPresence(phoneNumber, presence, baseUrl, token, null);
     }
 
     /**

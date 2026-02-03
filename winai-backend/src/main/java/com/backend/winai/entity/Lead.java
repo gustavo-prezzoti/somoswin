@@ -54,6 +54,10 @@ public class Lead {
     @Column(name = "last_summary_at")
     private LocalDateTime lastSummaryAt; // Controle para evitar atualizações excessivas
 
+    @Column(name = "interaction_count")
+    @Builder.Default
+    private Integer interactionCount = 0; // Conta interações para gerar resumo a cada X mensagens
+
     @Column(name = "manually_qualified")
     @Builder.Default
     private Boolean manuallyQualified = false; // Flag para impedir IA de sobrescrever qualificação manual
