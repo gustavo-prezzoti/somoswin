@@ -123,4 +123,11 @@ public class WhatsAppChatController {
             @Parameter(description = "Modo: IA ou HUMAN") @RequestParam String mode) {
         return ResponseEntity.ok(chatService.toggleSupportMode(conversationId, mode));
     }
+
+    @Operation(summary = "Limpar Conversa", description = "Deleta todas as mensagens de uma conversa")
+    @DeleteMapping("/conversations/{conversationId}/messages")
+    public ResponseEntity<Void> clearMessages(@PathVariable UUID conversationId) {
+        chatService.clearMessages(conversationId);
+        return ResponseEntity.ok().build();
+    }
 }

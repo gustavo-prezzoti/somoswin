@@ -158,6 +158,12 @@ export const whatsappService = {
     async updateDefaultSupportMode(mode: 'IA' | 'HUMAN'): Promise<void> {
         return await httpClient.put<void>('/whatsapp/settings/support-mode', { mode });
     },
+    /**
+     * Limpa todas as mensagens de uma conversa
+     */
+    async clearMessages(conversationId: string): Promise<void> {
+        return await httpClient.delete<void>(`/whatsapp/chat/conversations/${conversationId}/messages`);
+    },
 };
 
 export default whatsappService;

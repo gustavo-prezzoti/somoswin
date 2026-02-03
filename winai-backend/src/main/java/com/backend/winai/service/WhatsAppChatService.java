@@ -329,6 +329,24 @@ public class WhatsAppChatService {
                 return mapToConversationResponse(conversation, false);
         }
 
+        /**
+         * Limpa todas as mensagens de uma conversa
+         */
+        @Transactional
+        public void clearMessages(UUID conversationId) {
+                WhatsAppConversation conversation = conversationRepository.findById(conversationId)
+                                .orElseThrow(() -> new RuntimeException("Conversation not found"));
+
+                // Deletar todas as mensagens
+                messageRepository.deleteByConversation(conversation);
+
+                // Limpar última mensagem da conversa
+                conversation.setLastMessageText(null);
+                conversation.setLastMessageTimestamp(System.currentTimeMillis()); // Atualiza timestamp para refletir a
+                                                                                  // ação
+                conversationRepository.save(conversation);
+        }
+
         // ========== Métodos auxiliares de mapeamento ==========
 
         private WhatsAppConversationResponse mapToConversationResponse(WhatsAppConversation conversation,

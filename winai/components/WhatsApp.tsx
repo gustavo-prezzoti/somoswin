@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Send, Phone, Video, Paperclip, Smile, CheckCheck, ChevronRight, ChevronLeft, Bot, UserCheck, Zap, Info, MoreHorizontal, Loader2, Mic, Image, FileText, X, Trash2, StopCircle } from 'lucide-react';
+import { Search, Send, Phone, Video, Paperclip, Smile, CheckCheck, ChevronRight, ChevronLeft, Bot, UserCheck, Zap, Info, MoreHorizontal, Loader2, Mic, Image, FileText, X, Trash2, StopCircle, UserMinus } from 'lucide-react';
 import { whatsappService, WhatsAppConversation, WhatsAppMessage } from '../services/api/whatsapp.service';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { userService } from '../services/api/user.service';
@@ -1041,10 +1041,61 @@ const WhatsApp: React.FC = () => {
               </div>
               <div className="h-8 w-px bg-gray-100"></div>
               <div className="flex items-center gap-1">
+                {/* Botão Limpar Chat */}
+                <button
+                  onClick={async () => {
+                    if (confirm('Tem certeza que deseja apagar TODAS as mensagens desta conversa? Essa ação não pode ser desfeita.')) {
+                      try {
+                        setIsLoading(true);
+                        await whatsappService.clearMessages(activeConversation.id);
+                        setMessages([]);
+                        // Atualiza a conversa na lista também
+                        setActiveConversation(prev => prev ? { ...prev, lastMessageText: null, lastMessageTimestamp: Date.now() } : null);
+                        loadConversations();
+                      } catch (error) {
+                        console.error('Erro ao limpar chat:', error);
+                        alert('Erro ao limpar o chat.');
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }
+                  }}
+                  className="p-2.5 rounded-lg transition-all text-gray-400 hover:bg-rose-50 hover:text-rose-500"
+                  title="Limpar Conversa"
+                >
+                  <Trash2 size={18} />
+                </button>
+
+                {/* Botão Excluir Lead (Somente se for Lead) */}
+                {activeConversation.leadId && (
+                  <button
+                    onClick={async () => {
+                      if (confirm('ATENÇÃO: Deseja EXCLUIR este lead permanentemente? Essa ação removerá o lead do sistema.')) {
+                        try {
+                          setIsLoading(true);
+                          await import('../services/api/lead.service').then(m => m.leadService.deleteLead(activeConversation.leadId!)); // Import dinâmico para evitar ciclo se houver
+                          setActiveConversation(null);
+                          loadConversations();
+                        } catch (error) {
+                          console.error('Erro ao excluir lead:', error);
+                          alert('Erro ao excluir o lead.');
+                        } finally {
+                          setIsLoading(false);
+                        }
+                      }
+                    }}
+                    className="p-2.5 rounded-lg transition-all text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+                    title="Excluir Lead"
+                  >
+                    <UserMinus size={18} />
+                  </button>
+                )}
+
                 <button
                   onClick={() => setIsDetailsOpen(!isDetailsOpen)}
                   className={`p-2.5 rounded-lg transition-all ${isDetailsOpen ? 'text-emerald-600 bg-emerald-50' : 'text-gray-400 hover:bg-gray-50'
                     }`}
+                  title="Detalhes"
                 >
                   <Info size={18} />
                 </button>
