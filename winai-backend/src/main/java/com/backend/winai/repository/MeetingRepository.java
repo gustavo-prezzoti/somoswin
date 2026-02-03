@@ -4,6 +4,7 @@ import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Meeting;
 import com.backend.winai.entity.MeetingStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +16,10 @@ import java.util.UUID;
 
 @Repository
 public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
+
+        @Modifying
+        @Query("UPDATE Meeting m SET m.lead = null WHERE m.lead.id = :leadId")
+        void clearLeadReference(@Param("leadId") UUID leadId);
 
         List<Meeting> findByCompanyAndMeetingDateBetweenOrderByMeetingDateAscMeetingTimeAsc(
                         Company company, LocalDate startDate, LocalDate endDate);

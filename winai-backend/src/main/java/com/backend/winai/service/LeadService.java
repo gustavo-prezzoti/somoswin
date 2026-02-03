@@ -6,6 +6,9 @@ import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Lead;
 import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.repository.LeadRepository;
+import com.backend.winai.repository.WhatsAppMessageRepository;
+import com.backend.winai.repository.WhatsAppConversationRepository;
+import com.backend.winai.repository.MeetingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +27,9 @@ import java.util.stream.Collectors;
 public class LeadService {
 
     private final LeadRepository leadRepository;
+    private final WhatsAppMessageRepository messageRepository;
+    private final WhatsAppConversationRepository conversationRepository;
+    private final MeetingRepository meetingRepository;
 
     private static final Map<LeadStatus, String> STATUS_LABELS = Map.of(
             LeadStatus.NEW, "Novo",
@@ -127,6 +133,13 @@ public class LeadService {
     public void deleteLead(Company company, UUID id) {
         Lead lead = leadRepository.findByIdAndCompany(id, company)
                 .orElseThrow(() -> new RuntimeException("Lead não encontrado"));
+
+        // Limpar referências em outras tabelas para evitar violação de chave
+        // estrangeira
+        messageRepository.clearLeadReference(id);
+        conversationRepository.clearLeadReference(id);
+        meetingRepository.clearLeadReference(id);
+
         leadRepository.delete(lead);
     }
 

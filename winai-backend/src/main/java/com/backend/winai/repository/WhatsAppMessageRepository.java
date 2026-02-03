@@ -3,6 +3,7 @@ package com.backend.winai.repository;
 import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.WhatsAppMessage;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,6 +14,10 @@ import java.util.UUID;
 
 @Repository
 public interface WhatsAppMessageRepository extends JpaRepository<WhatsAppMessage, UUID> {
+
+        @Modifying
+        @Query("UPDATE WhatsAppMessage m SET m.lead = null WHERE m.lead.id = :leadId")
+        void clearLeadReference(@Param("leadId") UUID leadId);
 
         Optional<WhatsAppMessage> findByMessageId(String messageId);
 
