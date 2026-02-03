@@ -34,6 +34,7 @@ public class AIAgentService {
 
     private final OpenAiService openAiService;
     private final KnowledgeBaseConnectionRepository connectionRepository;
+    private final com.backend.winai.repository.KnowledgeBaseRepository knowledgeBaseRepository;
     private final UserWhatsAppConnectionRepository whatsAppConnectionRepository;
     private final WhatsAppMessageRepository messageRepository;
     private final UazapService uazapService;
@@ -53,6 +54,7 @@ public class AIAgentService {
     public AIAgentService(
             OpenAiService openAiService,
             KnowledgeBaseConnectionRepository connectionRepository,
+            com.backend.winai.repository.KnowledgeBaseRepository knowledgeBaseRepository,
             UserWhatsAppConnectionRepository whatsAppConnectionRepository,
             WhatsAppMessageRepository messageRepository,
             UazapService uazapService,
@@ -65,6 +67,7 @@ public class AIAgentService {
             com.backend.winai.repository.LeadRepository leadRepository) {
         this.openAiService = openAiService;
         this.connectionRepository = connectionRepository;
+        this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.whatsAppConnectionRepository = whatsAppConnectionRepository;
         this.messageRepository = messageRepository;
         this.uazapService = uazapService;
@@ -112,7 +115,7 @@ public class AIAgentService {
             // FORCE INITIALIZATION of the proxy to avoid LazyInitializationException
             // even inside Transactional if it came from a detached web of objects
             try {
-                knowledgeBase = connectionRepository.findKnowledgeBaseById(knowledgeBase.getId()).orElse(knowledgeBase);
+                knowledgeBase = knowledgeBaseRepository.findById(knowledgeBase.getId()).orElse(knowledgeBase);
             } catch (Exception e) {
                 log.warn("Failed to re-fetch KB, trying to use as is: {}", e.getMessage());
             }
