@@ -109,6 +109,14 @@ public class AIAgentService {
                 return null;
             }
 
+            // FORCE INITIALIZATION of the proxy to avoid LazyInitializationException
+            // even inside Transactional if it came from a detached web of objects
+            try {
+                knowledgeBase = connectionRepository.findKnowledgeBaseById(knowledgeBase.getId()).orElse(knowledgeBase);
+            } catch (Exception e) {
+                log.warn("Failed to re-fetch KB, trying to use as is: {}", e.getMessage());
+            }
+
             if (!Boolean.TRUE.equals(knowledgeBase.getIsActive())) {
                 log.debug("Knowledge base is not active: {}", knowledgeBase.getId());
                 return null;
