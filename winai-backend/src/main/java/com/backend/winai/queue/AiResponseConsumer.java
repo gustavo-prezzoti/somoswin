@@ -52,7 +52,12 @@ public class AiResponseConsumer {
 
                 // Se houveram 3 segundos de silêncio (DEBOUNCE_DELAY_MS), processamos
                 if (now - lastTimestamp >= DEBOUNCE_DELAY_MS) {
-                    processMergedMessages(convId);
+                    // ATOMICIDADE: Remove do set imediatamente para evitar que outra thread pegue
+                    Long removed = redisTemplate.opsForSet().remove("ai_active_debounces", convId);
+
+                    if (removed != null && removed > 0) {
+                        processMergedMessages(convId);
+                    }
                 }
             }
         } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
@@ -65,8 +70,8 @@ public class AiResponseConsumer {
     private void processMergedMessages(String convId) {
         executorService.submit(() -> {
             try {
-                // 1. Tira do Set de vigilância ANTES do processamento (evita duplicidade)
-                redisTemplate.opsForSet().remove("ai_active_debounces", convId);
+                // 1. Removido daqui para evitar race condition
+                // redisTemplate.opsForSet().remove("ai_active_debounces", convId);
 
                 String bufferKey = "ai_buffer:" + convId;
                 String metaKey = "ai_metadata:" + convId;
