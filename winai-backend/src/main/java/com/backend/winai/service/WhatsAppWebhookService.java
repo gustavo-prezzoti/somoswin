@@ -226,8 +226,10 @@ public class WhatsAppWebhookService {
             boolean queued = aiResponseProducer.sendMessage(queueMessage);
 
             if (!queued) {
-                log.warn("Falha ao enfileirar (Redis indisponível?). Executando processamento síncrono (fallback).");
-                aiAgentService.processAndRespond(conversation, userMessage, leadName);
+                log.error(
+                        "CRÍTICO: Falha ao enfileirar mensagem para IA. A mensagem NÃO será processada para evitar duplicação e race conditions.");
+                // NÃO executar fallback síncrono: aiAgentService.processAndRespond(content,
+                // userMessage, leadName);
             }
 
         } catch (Exception e) {

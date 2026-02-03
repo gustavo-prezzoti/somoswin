@@ -8,6 +8,8 @@ import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.service.AIAgentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Profile("!followup-worker")
+@ConditionalOnProperty(name = "META_SYNC_ENABLED", havingValue = "false", matchIfMissing = true)
 public class AiResponseConsumer {
 
     private final RedisTemplate<String, Object> redisTemplate;
