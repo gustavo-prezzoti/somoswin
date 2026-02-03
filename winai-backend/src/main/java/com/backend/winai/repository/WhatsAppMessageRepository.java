@@ -59,4 +59,6 @@ public interface WhatsAppMessageRepository extends JpaRepository<WhatsAppMessage
         @Query("SELECT m FROM WhatsAppMessage m WHERE m.conversation.id = :conversationId ORDER BY m.messageTimestamp DESC")
         List<WhatsAppMessage> findByConversationIdOrderByMessageTimestampDesc(
                         @Param("conversationId") UUID conversationId);
+
+        void deleteByConversation(WhatsAppConversation conversation);
 }
