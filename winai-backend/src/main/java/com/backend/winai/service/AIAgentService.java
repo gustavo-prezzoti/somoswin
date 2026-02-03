@@ -45,6 +45,11 @@ public class AIAgentService {
     private final GlobalNotificationService globalNotificationService;
     private final com.backend.winai.repository.LeadRepository leadRepository;
 
+    // ASYNC DEBOUNCING FIELDS
+    private final java.util.concurrent.ScheduledExecutorService scheduler = java.util.concurrent.Executors
+            .newScheduledThreadPool(10);
+    private final java.util.concurrent.ConcurrentHashMap<UUID, java.util.concurrent.ScheduledFuture<?>> debounceMap = new java.util.concurrent.ConcurrentHashMap<>();
+
     public AIAgentService(
             OpenAiService openAiService,
             KnowledgeBaseConnectionRepository connectionRepository,
@@ -217,113 +222,113 @@ public class AIAgentService {
     @Transactional
     public String processAndRespond(WhatsAppConversation conversation, String userMessage, String leadName,
             String imageUrl) {
-        // Recarregar a conversation com a company para evitar
-        // LazyInitializationException em background
-        WhatsAppConversation conv = conversationRepository.findByIdWithCompany(conversation.getId())
-                .orElse(conversation);
+        UUID conversationId = conversation.getId();
+        log.info(">>> [ASYNC DEBOUNCE] Received message for conversation {}. Scheduling/Rescheduling AI response...",
+                conversationId);
 
-        log.info("Starting processAndRespond for conversation: {}, user message: {} chars", conv.getId(),
-                userMessage != null ? userMessage.length() : 0);
+        // 1. Cancel previous task if exists (DEBOUNCING)
+        java.util.concurrent.ScheduledFuture<?> existingTask = debounceMap.get(conversationId);
+        if (existingTask != null && !existingTask.isDone()) {
+            boolean cancelled = existingTask.cancel(false);
+            log.info(">>> [ASYNC DEBOUNCE] Previous task cancelled? {}", cancelled);
+        }
 
-        // Check if conversation is already in HUMAN mode
+        // 2. Set "Composing" immediately to acknowledge receipt
+        // Typing indicator removed as per user request
+
+        // 3. Schedule new task for 20 seconds
+        java.util.concurrent.ScheduledFuture<?> newTask = scheduler.schedule(() -> {
+            try {
+                // Remove self from map to clean up
+                debounceMap.remove(conversationId);
+                executeScheduledAIProcessing(conversationId, leadName, imageUrl);
+            } catch (Exception e) {
+                log.error("Error in scheduled AI processing for {}: {}", conversationId, e.getMessage(), e);
+            }
+        }, 20, java.util.concurrent.TimeUnit.SECONDS);
+
+        debounceMap.put(conversationId, newTask);
+
+        return "QUEUED_FOR_PROCESSING";
+    }
+
+    /**
+     * Lógica real de processamento da IA, executada após os 20s de silêncio.
+     * Busca o histórico ATUALIZADO (incluindo todas as msgs que chegaram no delay).
+     */
+    @Transactional
+    protected void executeScheduledAIProcessing(UUID conversationId, String leadName, String imageUrl) {
+        log.info(">>> [ASYNC EXECUTION] Starting delayed AI processing for conversation {}", conversationId);
+
+        // 1. Re-fetch conversation to ensure attached session and latest data
+        WhatsAppConversation conv = conversationRepository.findByIdWithCompany(conversationId).orElse(null);
+        if (conv == null) {
+            log.error("Conversation {} not found during scheduled execution", conversationId);
+            return;
+        }
+
+        // 2. Check Human Mode again (maybe switched during the wait)
         if ("HUMAN".equalsIgnoreCase(conv.getSupportMode())) {
-            log.info("Conversation {} is in HUMAN mode, skipping AI response", conv.getId());
-            return null;
+            log.info("Conversation {} switched to HUMAN mode during wait. Aborting AI.", conversationId);
+            return;
         }
 
-        // 0. Intent Classification Step (The "Brain" before the "Mouth")
-        // Convert history for classification
-        List<com.backend.winai.service.OpenAiService.ChatMessage> historyForClass = new ArrayList<>();
-        // Recuperar histórico recente (já truncado pelo fix anterior)
-        List<OpenAiService.ChatMessage> rawHistory = getRecentConversationHistory(conv.getId(), 6); // Menos contexto
-                                                                                                    // para classificar
-                                                                                                    // é ok
+        // 3. Renew Typing Indicator
+        // Removed as per user request
+
+        // 4. Intent Classification Phase
+        // Fetch fresh history (Process all accumulated messages)
+        List<OpenAiService.ChatMessage> rawHistory = getRecentConversationHistory(conversationId, 6);
+        List<OpenAiService.ChatMessage> historyForClass = new ArrayList<>();
         for (OpenAiService.ChatMessage histMsg : rawHistory) {
-            historyForClass.add(new com.backend.winai.service.OpenAiService.ChatMessage("user", histMsg.getContent())); // Simplificação
+            historyForClass.add(new OpenAiService.ChatMessage("user", histMsg.getContent()));
         }
 
-        String intent = openAiService.analyzeIntent(userMessage, historyForClass);
+        // Use the very last message for context, but history drives the intent
+        String lastUserMessage = !rawHistory.isEmpty() ? rawHistory.get(rawHistory.size() - 1).getContent() : "";
+
+        String intent = openAiService.analyzeIntent(lastUserMessage, historyForClass);
 
         if ("HANDOFF".equals(intent)) {
-            log.info("🎯 Intent Classifier detected HANDOFF request. Switching to HUMAN mode immediately.");
-            handleHumanHandoff(conv, true); // Envia mensagem padrão "Vou chamar..."
-            return "HUMAN_HANDOFF_REQUESTED";
+            log.info("🎯 Intent Classifier detected HANDOFF. Switching to HUMAN.");
+            handleHumanHandoff(conv, true);
+            updateLeadMemory(conv, "HUMAN_HANDOFF_REQUESTED"); // Força update de memória
+            return;
         }
 
-        // --- ENHANCEMENT: Typing Indicator and Delay ---
-        long startTime = System.currentTimeMillis();
-        String phoneNumber = conv.getPhoneNumber();
-        String baseUrl = conv.getUazapBaseUrl();
-        String token = conv.getUazapToken();
-
-        // Iniciar "digitando"
-        uazapService.setPresence(phoneNumber, "composing", baseUrl, token, conv.getUazapInstance());
-
-        // Processamento da IA
-        String aiResponse = processMessageWithAI(conv, userMessage, leadName, imageUrl);
-
-        // Manter "digitando" e esperar até completar o tempo mínimo (ex: 15-20s se for
-        // o caso)
-        // O usuário pediu "em 20 segundos", então vamos garantir que demore
-        // aproximadamente isso
-        // se a IA for rápida demais.
-        long targetProcessingTime = 20000; // 20 segundos
-
-        while (true) {
-            long elapsed = System.currentTimeMillis() - startTime;
-            if (elapsed >= targetProcessingTime) {
-                break;
-            }
-
-            // A cada 7 segundos, renova o status de digitando (o WhatsApp costuma resetar
-            // após ~10s)
-            if (elapsed % 7000 < 500) {
-                uazapService.setPresence(phoneNumber, "composing", baseUrl, token, conv.getUazapInstance());
-            }
-
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
+        // 5. Generate Response
+        // Note: processMessageWithAI will reload history internally for 30 messages
+        // context
+        String aiResponse = processMessageWithAI(conv, lastUserMessage, leadName, imageUrl);
 
         if (aiResponse != null && !aiResponse.isEmpty()) {
-            log.info("AI generated response: {} chars", aiResponse.length());
-
-            // Check for Human Handoff Request from Tool Call
+            // Check for Human Handoff Request from Tool Call inside Loop
             if ("HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
                 handleHumanHandoff(conv);
-                // Forçar atualização do resumo antes de passar para humano
                 updateLeadMemory(conv, "HUMAN_HANDOFF_REQUESTED");
-                return "HUMAN_HANDOFF_REQUESTED";
+                return;
             }
 
-            // DETECT SPECIAL SUMMARY FLAG
+            // Detect Summary Tag
             boolean forceValidation = aiResponse.contains("[SUMMARY]");
             if (forceValidation) {
                 aiResponse = aiResponse.replace("[SUMMARY]", "").trim();
             }
 
-            // Delegar para o método que gerencia múltiplas mensagens
+            // Send
             sendSplitResponse(conv, aiResponse);
 
-            // Atualizar status de follow-up - IA respondeu
+            // Update Follow-up
             try {
                 followUpService.updateLastMessage(conv.getId(), "AI");
             } catch (Exception e) {
-                log.warn("Erro ao atualizar follow-up para conversa {}: {}", conv.getId(), e.getMessage());
             }
 
-            // Atualizar memória de longo prazo
+            // Update Memory
             updateLeadMemory(conv, forceValidation ? "[SUMMARY]" : aiResponse);
-
-            return aiResponse;
         } else {
-            log.warn("AI response is null or empty");
+            log.warn("AI returned empty response in scheduled task for {}", conversationId);
         }
-        return null;
     }
 
     /**
