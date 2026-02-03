@@ -48,6 +48,12 @@ public class Lead {
     @Column(length = 500)
     private String source; // Origem do lead (campanha, orgânico, etc)
 
+    @Column(columnDefinition = "TEXT")
+    private String aiSummary; // Memória de longo prazo da IA sobre este lead
+
+    @Column(name = "last_summary_at")
+    private LocalDateTime lastSummaryAt; // Controle para evitar atualizações excessivas
+
     @Column(name = "manually_qualified")
     @Builder.Default
     private Boolean manuallyQualified = false; // Flag para impedir IA de sobrescrever qualificação manual

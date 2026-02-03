@@ -426,6 +426,11 @@ public class OpenAiService {
                 "   - SE o usuário quiser reagendar ou cancelar algo que você não pode fazer, use a ferramenta respectiva.\n");
         systemPrompt.append(
                 "   - NÃO tente simular um humano ou mentir. Se for solicitado, mude para o modo humano imediatamente.\n");
+        systemPrompt.append("10. REGRAS PARA MEMÓRIA (IMPORTANTE):\n");
+        systemPrompt.append(
+                "   - Se você perceber que um assunto foi CONCLUÍDO, FINALIZADO ou a conversa está encerrando (tchau, obrigado, resolvido), ADICIONE a tag [SUMMARY] no final da sua resposta.\n");
+        systemPrompt.append(
+                "   - A tag [SUMMARY] avisará o sistema para salvar as informações importantes desta conversa na memória de longo prazo.\n");
 
         List<Map<String, Object>> messages = new ArrayList<>();
         Map<String, Object> sysMsg = new HashMap<>();
@@ -1019,6 +1024,52 @@ public class OpenAiService {
     }
 
     // Inner DTO to replace external library dependency
+    public String summarizeConversationContext(String currentSummary, List<ChatMessage> recentMessages) {
+        if (!isChatEnabled() || recentMessages == null || recentMessages.isEmpty()) {
+            return currentSummary;
+        }
+
+        try {
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("Você é um especialista em sumarização de contexto para assistentes de IA.\n");
+            prompt.append("Seu objetivo é criar ou atualizar um RESUMO CONCISO mas RICO sobre o usuário (Lead).\n\n");
+
+            if (currentSummary != null && !currentSummary.isEmpty()) {
+                prompt.append("=== RESUMO EXISTENTE ===\n");
+                prompt.append(currentSummary).append("\n");
+                prompt.append("========================\n\n");
+            } else {
+                prompt.append("=== NENHUM RESUMO EXISTENTE ===\n\n");
+            }
+
+            prompt.append("=== MENSAGENS RECENTES ===\n");
+            for (ChatMessage msg : recentMessages) {
+                prompt.append(msg.getRole()).append(": ").append(msg.getContent()).append("\n");
+            }
+            prompt.append("==========================\n\n");
+
+            prompt.append("INSTRUÇÕES:\n");
+            prompt.append("1. Atualize o resumo com informações novas das mensagens recentes.\n");
+            prompt.append(
+                    "2. Mantenha informações cruciais: Nome do usuário, preferências, intenção atual, status, detalhes pessoais.\n");
+            prompt.append("3. Se o nome do usuário foi mencionado, DESTAQUE isso claramente.\n");
+            prompt.append("4. Remova detalhes triviais ou conversas antigas irrelevantes.\n");
+            prompt.append(
+                    "5. O resumo deve ser em texto corrido ou tópicos, pronto para ser injetado no System Prompt numa próxima conversa.\n");
+            prompt.append(
+                    "6. Se o usuário mudou de assunto, atualize o contexto para o novo tópico mantendo dados perfil.\n");
+            prompt.append("7. MÁXIMO de 1000 caracteres.\n");
+
+            String updatedSummary = generateResponse(prompt.toString(),
+                    "Atualize o resumo com base nas mensagens acima.");
+            return updatedSummary != null ? updatedSummary : currentSummary;
+
+        } catch (Exception e) {
+            log.error("Erro ao gerar resumo de conversa: {}", e.getMessage());
+            return currentSummary;
+        }
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

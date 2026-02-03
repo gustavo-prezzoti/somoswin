@@ -43,6 +43,7 @@ public class AIAgentService {
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
     private final FollowUpService followUpService;
     private final GlobalNotificationService globalNotificationService;
+    private final com.backend.winai.repository.LeadRepository leadRepository;
 
     public AIAgentService(
             OpenAiService openAiService,
@@ -55,7 +56,8 @@ public class AIAgentService {
             NotificationRepository notificationRepository,
             org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate,
             @org.springframework.context.annotation.Lazy FollowUpService followUpService,
-            GlobalNotificationService globalNotificationService) {
+            GlobalNotificationService globalNotificationService,
+            com.backend.winai.repository.LeadRepository leadRepository) {
         this.openAiService = openAiService;
         this.connectionRepository = connectionRepository;
         this.whatsAppConnectionRepository = whatsAppConnectionRepository;
@@ -67,6 +69,7 @@ public class AIAgentService {
         this.messagingTemplate = messagingTemplate;
         this.followUpService = followUpService;
         this.globalNotificationService = globalNotificationService;
+        this.leadRepository = leadRepository;
     }
 
     @Transactional
@@ -109,7 +112,7 @@ public class AIAgentService {
             log.info("Processing message with AI for conversation: {}, using knowledge base: {}", conv.getId(),
                     knowledgeBase.getName());
 
-            List<OpenAiService.ChatMessage> recentMessages = getRecentConversationHistory(conv.getId(), 10);
+            List<OpenAiService.ChatMessage> recentMessages = getRecentConversationHistory(conv.getId(), 30);
 
             // BRANCHING: Check for Custom System Templates (e.g., Clinicorp)
             if ("clinicorp".equalsIgnoreCase(knowledgeBase.getSystemTemplate())) {
@@ -131,11 +134,28 @@ public class AIAgentService {
             }
 
             // Standard Flow
-            // Enhance Prompt with Lead Name if available
+            // Enhance Prompt with Lead Name AND Summary if available
             String enhancedAgentPrompt = knowledgeBase.getAgentPrompt();
+            StringBuilder contextBuilder = new StringBuilder();
+
             if (leadName != null && !leadName.isEmpty()) {
+                contextBuilder.append("\n[CONTEXTO DO USUÁRIO]\nNome do usuário: ").append(leadName).append("\n");
+            }
+
+            // --- INJEÇÃO DA MEMÓRIA DE LONGO PRAZO ---
+            if (conv.getLead() != null) {
+                // Ensure lead is loaded or fetch it if lazy failed (though conv fetch above
+                // should help, but Lead is ManyToOne)
+                // Just safe check
+                String summary = conv.getLead().getAiSummary();
+                if (summary != null && !summary.isEmpty()) {
+                    contextBuilder.append("\n[MEMÓRIA DE LONGO PRAZO / RESUMO]\n").append(summary).append("\n");
+                }
+            }
+
+            if (contextBuilder.length() > 0) {
                 enhancedAgentPrompt = (enhancedAgentPrompt != null ? enhancedAgentPrompt : "")
-                        + "\n[CONTEXTO DO USUÁRIO]\nNome do usuário: " + leadName;
+                        + contextBuilder.toString();
             }
 
             String aiResponse = openAiService.generateResponseWithContext(enhancedAgentPrompt,
@@ -275,7 +295,15 @@ public class AIAgentService {
             // Check for Human Handoff Request from Tool Call
             if ("HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
                 handleHumanHandoff(conv);
+                // Forçar atualização do resumo antes de passar para humano
+                updateLeadMemory(conv, "HUMAN_HANDOFF_REQUESTED");
                 return "HUMAN_HANDOFF_REQUESTED";
+            }
+
+            // DETECT SPECIAL SUMMARY FLAG
+            boolean forceValidation = aiResponse.contains("[SUMMARY]");
+            if (forceValidation) {
+                aiResponse = aiResponse.replace("[SUMMARY]", "").trim();
             }
 
             // Delegar para o método que gerencia múltiplas mensagens
@@ -288,12 +316,74 @@ public class AIAgentService {
                 log.warn("Erro ao atualizar follow-up para conversa {}: {}", conv.getId(), e.getMessage());
             }
 
+            // Atualizar memória de longo prazo
+            updateLeadMemory(conv, forceValidation ? "[SUMMARY]" : aiResponse);
+
             return aiResponse;
         } else {
             log.warn("AI response is null or empty");
         }
-
         return null;
+    }
+
+    /**
+     * Atualiza a memória de longo prazo do Lead com base no histórico recente.
+     */
+    @Transactional
+    public void updateLeadMemory(WhatsAppConversation conversation, String aiResponse) {
+        try {
+            if (conversation.getLead() == null)
+                return;
+
+            // Flags para forçar atualização
+            boolean forceUpdate = false;
+
+            // 1. Tag explícita da IA
+            if (aiResponse != null && aiResponse.contains("[SUMMARY]")) {
+                forceUpdate = true;
+                log.info("Forcing Lead Memory Update: [SUMMARY] tag detected.");
+            }
+            // 2. Transição para Humano
+            if ("HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
+                forceUpdate = true;
+                log.info("Forcing Lead Memory Update: Human Handoff detected.");
+            }
+
+            // Recarregar lead para garantir estado atual
+            com.backend.winai.entity.Lead lead = leadRepository.findById(conversation.getLead().getId()).orElse(null);
+            if (lead == null)
+                return;
+
+            List<OpenAiService.ChatMessage> history = getRecentConversationHistory(conversation.getId(), 20);
+            if (history.isEmpty())
+                return;
+
+            // THROTTLING: Atualizar apenas se passou 60 minutos desde a última vez
+            // OU se é a primeira vez
+            // UNLESS forceUpdate is true
+            if (!forceUpdate && lead.getLastSummaryAt() != null) {
+                long minutesSinceLastUpdate = java.time.Duration
+                        .between(lead.getLastSummaryAt(), java.time.LocalDateTime.now()).toMinutes();
+                // Aumentado para 60 minutos para economia, já que temos trigger inteligente
+                // agora
+                if (minutesSinceLastUpdate < 60) {
+                    log.debug("Skipping lead memory update. Last update was {} minutes ago.", minutesSinceLastUpdate);
+                    return;
+                }
+            }
+
+            String currentSummary = lead.getAiSummary();
+            String newSummary = openAiService.summarizeConversationContext(currentSummary, history);
+
+            if (newSummary != null && !newSummary.equals(currentSummary)) {
+                lead.setAiSummary(newSummary);
+                lead.setLastSummaryAt(java.time.LocalDateTime.now());
+                leadRepository.save(lead);
+                log.info("Memória do Lead {} atualizada. Tamanho do resumo: {}", lead.getId(), newSummary.length());
+            }
+        } catch (Exception e) {
+            log.error("Erro ao atualizar memória do lead: {}", e.getMessage());
+        }
     }
 
     /**
