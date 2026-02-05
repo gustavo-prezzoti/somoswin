@@ -56,13 +56,132 @@ public class MarketingService {
     @Value("${meta.sync.cron:0 */30 * * * *}")
     private String syncCron;
 
+    public java.util.List<Map<String, Object>> getRealTimeCampaigns(Company company) {
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
+        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()
+                || connectionOpt.get().getAdAccountId() == null) {
+            return new ArrayList<>();
+        }
+
+        MetaConnection conn = connectionOpt.get();
+        String accessToken = conn.getAccessToken();
+
+        try {
+            // Fetch campaigns with insights
+            String url = String.format(
+                    "%s/%s/campaigns?fields=id,name,status,objective,insights%%7Bspend,clicks,actions%%7D&date_preset=last_30d&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(), accessToken);
+
+            ResponseEntity<String> response = getWithRetry(url);
+            String responseBody = response.getBody();
+            log.info("Meta Campaigns Response for company {}: {}", company.getId(), responseBody);
+            JsonNode data = objectMapper.readTree(responseBody).get("data");
+
+            List<Map<String, Object>> result = new ArrayList<>();
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    Map<String, Object> campaign = new HashMap<>();
+                    campaign.put("id", node.get("id").asText());
+                    campaign.put("name", node.get("name").asText());
+                    campaign.put("status", node.get("status").asText());
+
+                    double spend = 0.0;
+                    long clicks = 0;
+                    long conversions = 0;
+
+                    if (node.has("insights") && node.get("insights").has("data")) {
+                        JsonNode insights = node.get("insights").get("data");
+                        if (insights.isArray() && insights.size() > 0) {
+                            JsonNode i = insights.get(0);
+                            spend = i.has("spend") ? i.get("spend").asDouble() : 0.0;
+                            clicks = i.has("clicks") ? i.get("clicks").asLong() : 0;
+
+                            if (i.has("actions")) {
+                                for (JsonNode action : i.get("actions")) {
+                                    String actionType = action.get("action_type").asText();
+                                    if ("onsite_conversion.messaging_conversation_started_7d".equals(actionType) ||
+                                            "lead".equals(actionType)) {
+                                        conversions += action.get("value").asLong();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    campaign.put("spend", spend);
+                    campaign.put("clicks", clicks);
+                    campaign.put("conversions", conversions);
+                    result.add(campaign);
+                }
+            }
+            return result;
+
+        } catch (Exception e) {
+            log.error("Error fetching RealTimeCampaigns for company {}", company.getId(), e);
+            return new ArrayList<>();
+        }
+    }
+
+    public java.util.List<Map<String, Object>> getRealTimeInsights(Company company, int days) {
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
+        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()
+                || connectionOpt.get().getAdAccountId() == null) {
+            return new ArrayList<>();
+        }
+
+        MetaConnection conn = connectionOpt.get();
+        String accessToken = conn.getAccessToken();
+
+        try {
+            LocalDate endDate = LocalDate.now();
+            LocalDate startDate = endDate.minusDays(days);
+            String timeRange = String.format("{\"since\":\"%s\",\"until\":\"%s\"}", startDate, endDate);
+
+            // Fetch daily breakdown
+            String url = String.format(
+                    "%s/%s/insights?fields=spend,impressions,clicks,reach,actions,date_start&time_range=%s&time_increment=1&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(),
+                    java.net.URLEncoder.encode(timeRange, "UTF-8"),
+                    accessToken);
+
+            ResponseEntity<String> response = getWithRetry(url);
+            String responseBody = response.getBody();
+            log.info("Meta Insights Response for company {}: {}", company.getId(), responseBody);
+            JsonNode data = objectMapper.readTree(responseBody).get("data");
+
+            List<Map<String, Object>> result = new ArrayList<>();
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    Map<String, Object> dayData = new HashMap<>();
+                    dayData.put("date", node.get("date_start").asText());
+                    dayData.put("spend", node.has("spend") ? node.get("spend").asDouble() : 0.0);
+                    dayData.put("impressions", node.has("impressions") ? node.get("impressions").asLong() : 0L);
+                    dayData.put("clicks", node.has("clicks") ? node.get("clicks").asLong() : 0L);
+
+                    long conversions = 0;
+                    if (node.has("actions")) {
+                        for (JsonNode action : node.get("actions")) {
+                            String actionType = action.get("action_type").asText();
+                            if ("onsite_conversion.messaging_conversation_started_7d".equals(actionType) ||
+                                    "lead".equals(actionType)) {
+                                conversions += action.get("value").asLong();
+                            }
+                        }
+                    }
+                    dayData.put("conversions", conversions);
+                    result.add(dayData);
+                }
+            }
+            return result;
+
+        } catch (Exception e) {
+            log.error("Error fetching RealTimeInsights for company {}", company.getId(), e);
+            return new ArrayList<>();
+        }
+    }
+
     private final MetaConnectionRepository metaConnectionRepository;
-    private final MetaCampaignRepository metaCampaignRepository;
-    private final MetaAdSetRepository metaAdSetRepository;
-    private final MetaAdRepository metaAdRepository;
-    private final MetaInsightRepository metaInsightRepository;
-    private final InstagramMetricRepository instagramMetricRepository;
-    private final MetricsSyncService metricsSyncService;
+    // Repositories for detailed storage removed - we now fetch live
     private final CompanyRepository companyRepository;
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -102,7 +221,9 @@ public class MarketingService {
                     "%s/%s/insights?fields=spend,impressions,clicks,actions,date_start&date_preset=last_14d&time_increment=1&access_token=%s",
                     metaApiBaseUrl, adAccountId, accessToken);
             ResponseEntity<String> historyResponse = getWithRetry(historyUrl);
-            JsonNode historyData = objectMapper.readTree(historyResponse.getBody()).get("data");
+            String historyBody = historyResponse.getBody();
+            log.info("Meta Traffic Metrics Response for user {}: {}", user.getId(), historyBody);
+            JsonNode historyData = objectMapper.readTree(historyBody).get("data");
 
             return mapToResponse(historyData);
 
@@ -128,7 +249,9 @@ public class MarketingService {
             String igAccountUrl = String.format("%s/%s?fields=instagram_business_account&access_token=%s",
                     metaApiBaseUrl, pageId, accessToken);
             ResponseEntity<String> igAccountRes = getWithRetry(igAccountUrl);
-            JsonNode igAccountNode = objectMapper.readTree(igAccountRes.getBody()).get("instagram_business_account");
+            String igAccountBody = igAccountRes.getBody();
+            log.info("Meta/IG Account ID Response for page {}: {}", pageId, igAccountBody);
+            JsonNode igAccountNode = objectMapper.readTree(igAccountBody).get("instagram_business_account");
 
             if (igAccountNode == null) {
                 log.warn("No Instagram Business Account linked to page {}", pageId);
@@ -276,6 +399,20 @@ public class MarketingService {
             MetaConnection connection = metaConnectionRepository.findByCompanyId(java.util.UUID.fromString(companyId))
                     .orElse(new MetaConnection());
 
+            // Check if reconnecting to a different account - clean old data in cascade
+            boolean isReconnecting = connection.getId() != null &&
+                    (connection.getMetaUserId() == null || !connection.getMetaUserId().equals(metaUserId));
+
+            if (isReconnecting) {
+                log.info("Reconnecting Meta account for company {}. Cleaning old synced data...", companyId);
+                Company company = companyRepository.findById(java.util.UUID.fromString(companyId))
+                        .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+                // No longer need to delete from synced tables as they are removed/unused
+
+                log.info("Old Meta data cleaned for company {}", companyId);
+            }
+
             connection.setCompany(Company.builder().id(java.util.UUID.fromString(companyId)).build());
             connection.setAccessToken(longLivedToken);
             connection.setMetaUserId(metaUserId);
@@ -294,29 +431,17 @@ public class MarketingService {
             log.info("Meta connection saved for company {} - AdAccountId: {}, BusinessId: {}",
                     companyId, connection.getAdAccountId(), connection.getBusinessId());
 
-            // Trigger initial sync in background
             if (connection.getAdAccountId() != null) {
-                try {
-                    final MetaConnection finalConn = connection;
-                    log.info("Starting initial Meta sync in background for company {}", companyId);
-                    java.util.concurrent.CompletableFuture.runAsync(() -> {
-                        try {
-                            log.info("Initial sync started for company {}", finalConn.getCompany().getId());
-                            syncAccountData(finalConn);
-                            log.info("Initial sync completed for company {}", finalConn.getCompany().getId());
-                        } catch (Exception e) {
-                            log.error("Initial Meta sync failed for company {}", finalConn.getCompany().getId(), e);
-                        }
-                    });
-                } catch (Exception e) {
-                    log.warn("Failed to schedule initial Meta sync", e);
-                }
+                log.info("Ad Account configured: {}", connection.getAdAccountId());
+                // No sync triggered
             } else {
-                log.warn("No Ad Account found during OAuth. Sync will not run until an Ad Account is configured.");
+                log.warn("No Ad Account found during OAuth.");
             }
 
             return frontendUrl + "/configuracoes?meta=connected";
-        } catch (Exception e) {
+        } catch (
+
+        Exception e) {
             log.error("Error in meta callback", e);
             return frontendUrl + "/configuracoes?error=meta_auth_failed";
         }
@@ -517,6 +642,188 @@ public class MarketingService {
                 .orElse(Map.of("connected", false));
     }
 
+    /**
+     * Retorna detalhes completos da conexão Meta incluindo nomes legíveis
+     * das contas, páginas e Instagram para exibição no frontend
+     */
+    public Map<String, Object> getMetaConnectionDetails(User user) {
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
+
+        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()) {
+            return Map.of("connected", false);
+        }
+
+        MetaConnection conn = connectionOpt.get();
+        String accessToken = conn.getAccessToken();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("connected", true);
+        result.put("connectedAt", conn.getCreatedAt());
+        result.put("tokenExpiresAt", conn.getTokenExpiresAt());
+        result.put("metaUserId", conn.getMetaUserId());
+
+        // Fetch Ad Account details
+        if (conn.getAdAccountId() != null) {
+            try {
+                String adAccountUrl = String.format(
+                        "%s/%s?fields=name,account_status,currency,timezone_name,business_name&access_token=%s",
+                        metaApiBaseUrl, conn.getAdAccountId(), accessToken);
+                ResponseEntity<String> response = getWithRetry(adAccountUrl);
+                JsonNode data = objectMapper.readTree(response.getBody());
+
+                Map<String, Object> adAccount = new HashMap<>();
+                adAccount.put("id", conn.getAdAccountId());
+                adAccount.put("name", data.has("name") ? data.get("name").asText() : "Conta de Anúncios");
+                adAccount.put("status",
+                        data.has("account_status") ? getAccountStatusLabel(data.get("account_status").asInt())
+                                : "Desconhecido");
+                adAccount.put("currency", data.has("currency") ? data.get("currency").asText() : "BRL");
+                adAccount.put("timezone",
+                        data.has("timezone_name") ? data.get("timezone_name").asText() : "America/Sao_Paulo");
+                adAccount.put("businessName", data.has("business_name") ? data.get("business_name").asText() : null);
+                result.put("adAccount", adAccount);
+            } catch (Exception e) {
+                log.warn("Failed to fetch ad account details: {}", e.getMessage());
+                result.put("adAccount",
+                        Map.of("id", conn.getAdAccountId(), "name", "Conta de Anúncios", "status", "Ativo"));
+            }
+        }
+
+        // Fetch Page details
+        if (conn.getPageId() != null) {
+            try {
+                String pageUrl = String.format("%s/%s?fields=name,category,fan_count,picture&access_token=%s",
+                        metaApiBaseUrl, conn.getPageId(), accessToken);
+                ResponseEntity<String> response = getWithRetry(pageUrl);
+                JsonNode data = objectMapper.readTree(response.getBody());
+
+                log.info("Page API response for {}: {}", conn.getPageId(), response.getBody());
+
+                Map<String, Object> page = new HashMap<>();
+                page.put("id", conn.getPageId());
+                page.put("name", data.has("name") ? data.get("name").asText() : "Página");
+                page.put("category", data.has("category") ? data.get("category").asText() : "Negócios");
+                page.put("fanCount", data.has("fan_count") ? data.get("fan_count").asLong() : 0);
+                if (data.has("picture") && data.get("picture").has("data")) {
+                    page.put("pictureUrl", data.get("picture").get("data").get("url").asText());
+                }
+                result.put("page", page);
+            } catch (Exception e) {
+                log.warn("Failed to fetch page details: {}", e.getMessage());
+                result.put("page", Map.of("id", conn.getPageId(), "name", "Página do Facebook"));
+            }
+        }
+
+        // Fetch Instagram Business Account details
+        if (conn.getInstagramBusinessId() != null) {
+            try {
+                String igUrl = String.format(
+                        "%s/%s?fields=username,name,profile_picture_url,followers_count,media_count&access_token=%s",
+                        metaApiBaseUrl, conn.getInstagramBusinessId(), accessToken);
+                ResponseEntity<String> response = getWithRetry(igUrl);
+                JsonNode data = objectMapper.readTree(response.getBody());
+
+                Map<String, Object> instagram = new HashMap<>();
+                instagram.put("id", conn.getInstagramBusinessId());
+                instagram.put("username", data.has("username") ? data.get("username").asText() : "instagram");
+                instagram.put("name", data.has("name") ? data.get("name").asText() : "Instagram Business");
+                instagram.put("profilePictureUrl",
+                        data.has("profile_picture_url") ? data.get("profile_picture_url").asText() : null);
+                instagram.put("followersCount", data.has("followers_count") ? data.get("followers_count").asLong() : 0);
+                instagram.put("mediaCount", data.has("media_count") ? data.get("media_count").asLong() : 0);
+                result.put("instagram", instagram);
+            } catch (Exception e) {
+                log.warn("Failed to fetch Instagram details: {}", e.getMessage());
+                result.put("instagram", Map.of("id", conn.getInstagramBusinessId(), "username", "instagram"));
+            }
+        }
+
+        // Fetch campaigns summary (Live)
+        try {
+            String campaignsUrl = String.format(
+                    "%s/%s/campaigns?fields=status&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(), accessToken);
+            ResponseEntity<String> response = getWithRetry(campaignsUrl);
+            if (response.getBody() != null) {
+                JsonNode data = objectMapper.readTree(response.getBody()).get("data");
+                long total = 0;
+                long active = 0;
+                if (data != null && data.isArray()) {
+                    total = data.size();
+                    for (JsonNode node : data) {
+                        if ("ACTIVE".equalsIgnoreCase(node.path("status").asText())) {
+                            active++;
+                        }
+                    }
+                }
+                Map<String, Object> campaigns = new HashMap<>();
+                campaigns.put("total", total);
+                campaigns.put("active", active);
+                result.put("campaigns", campaigns);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch campaigns summary: {}", e.getMessage());
+        }
+
+        // Fetch insights summary (last 30 days) (Live)
+        try {
+            // Using date_preset=last_30d
+            String insightsUrl = String.format(
+                    "%s/%s/insights?fields=spend,impressions,clicks,actions&date_preset=last_30d&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(), accessToken);
+
+            ResponseEntity<String> response = getWithRetry(insightsUrl);
+            if (response.getBody() != null) {
+                JsonNode data = objectMapper.readTree(response.getBody()).get("data");
+
+                double totalSpend = 0.0;
+                long totalImpressions = 0;
+                long totalClicks = 0;
+                int daysWithData = 0;
+
+                if (data != null && data.isArray() && data.size() > 0) {
+                    daysWithData = 1; // The summary endpoint returns aggregated data usually as one object if no
+                                      // time_increment is set, or we can simply check if data exists
+                    JsonNode summary = data.get(0);
+                    totalSpend = summary.path("spend").asDouble(0.0);
+                    totalImpressions = summary.path("impressions").asLong(0);
+                    totalClicks = summary.path("clicks").asLong(0);
+                }
+
+                Map<String, Object> insightsSummary = new HashMap<>();
+                insightsSummary.put("period", "Últimos 30 dias");
+                insightsSummary.put("totalSpend", String.format("R$ %.2f", totalSpend));
+                insightsSummary.put("totalImpressions", totalImpressions);
+                insightsSummary.put("totalClicks", totalClicks);
+                insightsSummary.put("daysWithData", daysWithData > 0 ? "30+" : "0");
+                result.put("insights", insightsSummary);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch insights summary: {}", e.getMessage());
+        }
+
+        return result;
+    }
+
+    private String getAccountStatusLabel(int status) {
+        return switch (status) {
+            case 1 -> "Ativo";
+            case 2 -> "Desativado";
+            case 3 -> "Não Definido";
+            case 7 -> "Pendente de Revisão";
+            case 8 -> "Pendente de Fechamento";
+            case 9 -> "Em Período de Carência";
+            case 100 -> "Pendente de Risco";
+            case 101 -> "Fechado por Risco";
+            case 201 -> "Ação Necessária";
+            case 202 -> "Fechado Extra";
+            default -> "Desconhecido (" + status + ")";
+        };
+    }
+
     @Transactional
     public void disconnectMeta(User user) {
         Company company = companyRepository.findById(user.getCompany().getId())
@@ -524,332 +831,14 @@ public class MarketingService {
 
         metaConnectionRepository.findByCompany(company).ifPresent(conn -> {
 
-            // Cascade delete all related data
-            instagramMetricRepository.deleteByCompany(company);
-            metaInsightRepository.deleteByCompany(company);
-            metaAdRepository.deleteByCompany(company);
-            metaAdSetRepository.deleteByCompany(company);
-            metaCampaignRepository.deleteByCompany(company);
-
             // Delete the connection itself
             metaConnectionRepository.delete(conn);
         });
     }
 
-    // Cron job to sync everything automatically every 6 hours
-    // Cron job to sync everything automatically every 30 minutes (configurable)
-    @org.springframework.scheduling.annotation.Scheduled(cron = "${meta.sync.cron:0 */30 * * * *}")
-    public void syncAllCompaniesMetaData() {
-        if (!metaSyncEnabled) {
-            return;
-        }
-        log.info("Starting automatic Meta synchronization for all companies...");
-        List<MetaConnection> connections = metaConnectionRepository.findAll();
-        for (MetaConnection conn : connections) {
-            if (conn.isConnected() && conn.getAccessToken() != null) {
-                try {
-                    checkAndRefreshToken(conn);
-                    syncAccountData(conn);
-                } catch (Exception e) {
-                    log.error("Failed to sync Meta data for company {}", conn.getCompany().getId(), e);
-                }
-            }
-        }
-    }
+    // Sync methods removed as we are moving to Live Fetching
 
-    private void checkAndRefreshToken(MetaConnection conn) {
-        // If token expires in less than 7 days, try to refresh it
-        if (conn.getTokenExpiresAt() != null &&
-                conn.getTokenExpiresAt().isBefore(ZonedDateTime.now().plusDays(7))) {
-            log.info("Refreshing long-lived token for company {}", conn.getCompany().getId());
-            try {
-                String refreshUrl = String.format(
-                        "https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=%s&client_secret=%s&fb_exchange_token=%s",
-                        clientId, clientSecret, conn.getAccessToken());
-                ResponseEntity<String> res = getWithRetry(refreshUrl);
-                JsonNode body = objectMapper.readTree(res.getBody());
-                if (body != null && body.has("access_token")) {
-                    conn.setAccessToken(body.get("access_token").asText());
-                    long expiresIn = body.has("expires_in") ? body.get("expires_in").asLong()
-                            : 5184000;
-                    conn.setTokenExpiresAt(ZonedDateTime.now().plusSeconds(expiresIn));
-                    metaConnectionRepository.save(conn);
-                }
-            } catch (Exception e) {
-                log.error("Error refreshing token for company {}", conn.getCompany().getId(), e);
-            }
-        }
-    }
-
-    @Transactional
-    public void syncAccountData(MetaConnection conn) {
-        log.info("Syncing Meta data for company {}", conn.getCompany().getId());
-        if (conn.getAdAccountId() == null)
-            return;
-
-        try {
-            syncCampaigns(conn);
-            adaptiveThrottle();
-            syncInsights(conn);
-            adaptiveThrottle();
-            syncInstagramData(conn);
-
-            // Sync dashboard metrics after raw data is updated
-            metricsSyncService.syncDashboardMetrics(conn.getCompany(), 30);
-        } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
-            if (e.getResponseBodyAsString().contains("\"code\":17")
-                    || e.getResponseBodyAsString().contains("\"code\": 17")) {
-                log.error("Company {} reached Meta Rate Limit. Skipping further sync for this cycle.",
-                        conn.getCompany().getId());
-            } else {
-                log.error("Error during syncAccountData for company {}", conn.getCompany().getId(), e);
-            }
-        } catch (Exception e) {
-            log.error("Error during syncAccountData for company {}", conn.getCompany().getId(), e);
-        }
-    }
-
-    private void syncCampaigns(MetaConnection conn) {
-        try {
-            String url = String.format(
-                    "%s/%s/campaigns?fields=id,name,status,objective,start_time,stop_time&access_token=%s",
-                    metaApiBaseUrl, conn.getAdAccountId(), conn.getAccessToken());
-            ResponseEntity<String> response = getWithRetry(url);
-            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
-
-            if (data != null && data.isArray()) {
-                for (JsonNode node : data) {
-                    try {
-                        String metaId = node.get("id").asText();
-                        com.backend.winai.entity.MetaCampaign campaign = metaCampaignRepository.findByMetaId(metaId)
-                                .orElse(new com.backend.winai.entity.MetaCampaign());
-
-                        campaign.setCompany(conn.getCompany());
-                        campaign.setMetaId(metaId);
-                        campaign.setName(node.get("name").asText());
-                        campaign.setStatus(node.get("status").asText());
-                        campaign.setObjective(node.get("objective").asText());
-
-                        java.time.format.DateTimeFormatter metaFormatter = java.time.format.DateTimeFormatter
-                                .ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
-                        if (node.has("start_time") && !node.get("start_time").isNull()) {
-                            campaign.setStartTime(ZonedDateTime.parse(node.get("start_time").asText(), metaFormatter));
-                        }
-                        if (node.has("stop_time") && !node.get("stop_time").isNull()) {
-                            campaign.setStopTime(ZonedDateTime.parse(node.get("stop_time").asText(), metaFormatter));
-                        }
-
-                        com.backend.winai.entity.MetaCampaign savedCampaign = metaCampaignRepository.save(campaign);
-
-                        adaptiveThrottle();
-
-                        syncAdSets(conn, savedCampaign);
-                    } catch (Exception e) {
-                        log.error("Error processing campaign {}", node.get("id").asText(), e);
-                    }
-                }
-            }
-        } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
-            if (e.getResponseBodyAsString().contains("\"code\":17")
-                    || e.getResponseBodyAsString().contains("\"code\": 17")) {
-                throw e;
-            }
-            log.error("Error syncing campaigns for company {}", conn.getCompany().getId(), e);
-        } catch (Exception e) {
-            log.error("Error syncing campaigns for company {}", conn.getCompany().getId(), e);
-        }
-    }
-
-    private void syncAdSets(MetaConnection conn, com.backend.winai.entity.MetaCampaign campaign) {
-        try {
-            String url = String.format(
-                    "%s/%s/adsets?fields=id,name,status,daily_budget,lifetime_budget&access_token=%s",
-                    metaApiBaseUrl, campaign.getMetaId(), conn.getAccessToken());
-            ResponseEntity<String> response = getWithRetry(url);
-            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
-
-            if (data != null && data.isArray()) {
-                for (JsonNode node : data) {
-                    try {
-                        String metaId = node.get("id").asText();
-                        com.backend.winai.entity.MetaAdSet adSet = metaAdSetRepository.findByMetaId(metaId)
-                                .orElse(new com.backend.winai.entity.MetaAdSet());
-
-                        adSet.setCompany(conn.getCompany());
-                        adSet.setCampaign(campaign);
-                        adSet.setMetaId(metaId);
-                        adSet.setName(node.get("name").asText());
-                        adSet.setStatus(node.get("status").asText());
-
-                        if (node.has("daily_budget"))
-                            adSet.setDailyBudget(node.get("daily_budget").asLong());
-                        if (node.has("lifetime_budget"))
-                            adSet.setLifetimeBudget(node.get("lifetime_budget").asLong());
-
-                        com.backend.winai.entity.MetaAdSet savedAdSet = metaAdSetRepository.save(adSet);
-
-                        adaptiveThrottle();
-
-                        syncAds(conn, savedAdSet);
-                    } catch (Exception e) {
-                        log.error("Error processing adset {}", node.get("id").asText(), e);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error syncing adsets for campaign {}", campaign.getMetaId(), e);
-        }
-    }
-
-    private void syncAds(MetaConnection conn, com.backend.winai.entity.MetaAdSet adSet) {
-        try {
-            String url = String.format("%s/%s/ads?fields=id,name,status&access_token=%s",
-                    metaApiBaseUrl, adSet.getMetaId(), conn.getAccessToken());
-            ResponseEntity<String> response = getWithRetry(url);
-            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
-
-            if (data != null && data.isArray()) {
-                for (JsonNode node : data) {
-                    try {
-                        String metaId = node.get("id").asText();
-                        com.backend.winai.entity.MetaAd ad = metaAdRepository.findByMetaId(metaId)
-                                .orElse(new com.backend.winai.entity.MetaAd());
-
-                        ad.setCompany(conn.getCompany());
-                        ad.setAdSet(adSet);
-                        ad.setMetaId(metaId);
-                        ad.setName(node.get("name").asText());
-                        ad.setStatus(node.get("status").asText());
-
-                        metaAdRepository.save(ad);
-
-                        adaptiveThrottle();
-                    } catch (Exception e) {
-                        log.error("Error processing ad {}", node.get("id").asText(), e);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error syncing ads for adset {}", adSet.getMetaId(), e);
-        }
-    }
-
-    private void syncInsights(MetaConnection conn) {
-        try {
-            String url = String.format(
-                    "%s/%s/insights?fields=spend,impressions,clicks,reach,inline_link_clicks,actions&date_preset=last_30d&time_increment=1&access_token=%s",
-                    metaApiBaseUrl, conn.getAdAccountId(), conn.getAccessToken());
-            ResponseEntity<String> response = getWithRetry(url);
-            JsonNode data = objectMapper.readTree(response.getBody()).get("data");
-
-            if (data != null && data.isArray()) {
-                for (JsonNode node : data) {
-                    LocalDate date = LocalDate.parse(node.get("date_start").asText());
-                    com.backend.winai.entity.MetaInsight insight = metaInsightRepository
-                            .findByCompanyIdAndDateAndLevelAndExternalId(
-                                    conn.getCompany().getId(), date, "account", conn.getAdAccountId())
-                            .orElse(new com.backend.winai.entity.MetaInsight());
-
-                    insight.setCompany(conn.getCompany());
-                    insight.setDate(date);
-                    insight.setLevel("account");
-                    insight.setExternalId(conn.getAdAccountId());
-                    insight.setSpend(node.has("spend") ? node.get("spend").asDouble() : 0.0);
-                    insight.setImpressions(node.has("impressions") ? node.get("impressions").asLong() : 0L);
-                    insight.setClicks(node.has("clicks") ? node.get("clicks").asLong() : 0L);
-                    insight.setReach(node.has("reach") ? node.get("reach").asLong() : 0L);
-                    insight.setInlineLinkClicks(
-                            node.has("inline_link_clicks") ? node.get("inline_link_clicks").asLong() : 0L);
-
-                    if (node.has("actions")) {
-                        for (JsonNode action : node.get("actions")) {
-                            if ("onsite_conversion.messaging_conversation_started_7d"
-                                    .equals(action.get("action_type").asText())) {
-                                insight.setConversions(action.get("value").asLong());
-                            }
-                        }
-                    }
-
-                    metaInsightRepository.save(insight);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error syncing insights for company {}", conn.getCompany().getId(), e);
-        }
-    }
-
-    private void syncInstagramData(MetaConnection conn) {
-        if (conn.getPageId() == null)
-            return;
-        try {
-            String igAccountUrl = String.format("%s/%s?fields=instagram_business_account&access_token=%s",
-                    metaApiBaseUrl, conn.getPageId(), conn.getAccessToken());
-            ResponseEntity<String> igAccountRes = getWithRetry(igAccountUrl);
-            JsonNode igNode = objectMapper.readTree(igAccountRes.getBody()).get("instagram_business_account");
-            if (igNode == null)
-                return;
-            String igId = igNode.get("id").asText();
-
-            // Fetch Insights (reach, impressions, total_interactions, profile_views,
-            // website_clicks)
-            String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach,views,total_interactions,profile_views,website_clicks&period=day&metric_type=total_value&access_token=%s",
-                    metaApiBaseUrl, igId, conn.getAccessToken());
-            ResponseEntity<String> insightsRes = getWithRetry(insightsUrl);
-            JsonNode insightsData = objectMapper.readTree(insightsRes.getBody()).get("data");
-
-            Map<LocalDate, com.backend.winai.entity.InstagramMetric> metricMap = new java.util.HashMap<>();
-            processInstagramInsights(insightsData, metricMap, conn);
-
-            String baseFieldsUrl = String.format("%s/%s?fields=followers_count&access_token=%s", metaApiBaseUrl, igId,
-                    conn.getAccessToken());
-            ResponseEntity<String> baseInfoRes = getWithRetry(baseFieldsUrl);
-            JsonNode baseInfo = objectMapper.readTree(baseInfoRes.getBody());
-            long followers = baseInfo.has("followers_count") ? baseInfo.get("followers_count").asLong() : 0;
-
-            for (com.backend.winai.entity.InstagramMetric m : metricMap.values()) {
-                if (m.getDate() != null && m.getDate().equals(LocalDate.now())) {
-                    m.setFollowerCount(followers);
-                }
-                instagramMetricRepository.save(m);
-            }
-        } catch (Exception e) {
-            log.error("Error syncing Instagram for company {}", conn.getCompany().getId(), e);
-        }
-    }
-
-    private void processInstagramInsights(JsonNode data,
-            Map<LocalDate, com.backend.winai.entity.InstagramMetric> metricMap,
-            MetaConnection conn) {
-        if (data != null && data.isArray()) {
-            for (JsonNode metric : data) {
-                String name = metric.get("name").asText();
-                JsonNode values = metric.get("values");
-                if (values != null && values.isArray()) {
-                    for (JsonNode val : values) {
-                        LocalDate date = LocalDate.parse(val.get("end_time").asText().split("T")[0]);
-                        com.backend.winai.entity.InstagramMetric m = metricMap.computeIfAbsent(date,
-                                d -> instagramMetricRepository.findByCompanyIdAndDate(conn.getCompany().getId(), d)
-                                        .orElse(new com.backend.winai.entity.InstagramMetric()));
-
-                        m.setCompany(conn.getCompany());
-                        m.setDate(date);
-                        long v = val.get("value").asLong();
-                        if ("reach".equals(name))
-                            m.setReach(v);
-                        else if ("profile_views".equals(name))
-                            m.setProfileViews(v);
-                        else if ("views".equals(name)) // Mapped from 'impressions' in API v19+
-                            m.setImpressions(v);
-                        else if ("total_interactions".equals(name))
-                            m.setInteractions(v);
-                        else if ("website_clicks".equals(name))
-                            m.setWebsiteClicks(v);
-                    }
-                }
-            }
-        }
-    }
+    // Methods removed
 
     public void createCampaign(CreateCampaignRequest request) {
         // Implementation for campaign creation...

@@ -16,4 +16,8 @@ public interface MetaCampaignRepository extends JpaRepository<MetaCampaign, UUID
     List<MetaCampaign> findByCompanyId(UUID companyId);
 
     void deleteByCompany(Company company);
+
+    long countByCompanyId(UUID companyId);
+
+    long countByCompanyIdAndStatus(UUID companyId, String status);
 }

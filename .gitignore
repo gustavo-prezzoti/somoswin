@@ -33,3 +33,16 @@ Thumbs.db
 .env.local
 .env.*
 winai-backend/src/main/resources/application.properties
+
+# Python
+venv/
+**/venv/
+__pycache__/
+**/__pycache__/
+
+# Documentation
+docs/
+
+# Temporary and Log files
+*.backup.yml
+**/compile_log*.txt

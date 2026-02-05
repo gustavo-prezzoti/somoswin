@@ -31,6 +31,57 @@ export interface CreateCampaignRequest {
     creativeSource: string;
 }
 
+export interface MetaAdAccountDetails {
+    id: string;
+    name: string;
+    status: string;
+    currency: string;
+    timezone: string;
+    businessName?: string;
+}
+
+export interface MetaPageDetails {
+    id: string;
+    name: string;
+    category: string;
+    fanCount: number;
+    pictureUrl?: string;
+}
+
+export interface MetaInstagramDetails {
+    id: string;
+    username: string;
+    name: string;
+    profilePictureUrl?: string;
+    followersCount: number;
+    mediaCount: number;
+}
+
+export interface MetaCampaignsSummary {
+    total: number;
+    active: number;
+}
+
+export interface MetaInsightsSummary {
+    period: string;
+    totalSpend: string;
+    totalImpressions: number;
+    totalClicks: number;
+    daysWithData: number;
+}
+
+export interface MetaConnectionDetails {
+    connected: boolean;
+    connectedAt?: string;
+    tokenExpiresAt?: string;
+    metaUserId?: string;
+    adAccount?: MetaAdAccountDetails;
+    page?: MetaPageDetails;
+    instagram?: MetaInstagramDetails;
+    campaigns?: MetaCampaignsSummary;
+    insights?: MetaInsightsSummary;
+}
+
 export const marketingService = {
     getMetrics: async (): Promise<TrafficMetrics> => {
         return api.get<TrafficMetrics>('/marketing/metrics');
@@ -43,6 +94,9 @@ export const marketingService = {
     },
     getStatus: async (): Promise<{ connected: boolean, adAccountId?: string, pageId?: string }> => {
         return api.get<{ connected: boolean, adAccountId?: string, pageId?: string }>('/marketing/status');
+    },
+    getDetails: async (): Promise<MetaConnectionDetails> => {
+        return api.get<MetaConnectionDetails>('/marketing/details');
     },
     disconnect: async (): Promise<void> => {
         await api.post('/marketing/disconnect', {});
@@ -59,3 +113,4 @@ export interface InstagramMetrics {
     interactions: MetricDetail;
     performanceHistory: DailyPerformance[];
 }
+

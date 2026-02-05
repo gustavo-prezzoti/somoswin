@@ -19,6 +19,7 @@ import { whatsappService } from '../services/api/whatsapp.service';
 import { ConfirmModal } from './ui/Modal';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
+import MetaConnectionManager from './MetaConnectionManager';
 
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'profile' | 'integrations'>('profile');
@@ -32,6 +33,7 @@ const Settings: React.FC = () => {
   const [showQrModal, setShowQrModal] = useState(false);
   const [isConnectingWhatsapp, setIsConnectingWhatsapp] = useState(false);
   const [profileData, setProfileData] = useState({ name: '', email: '', phone: '' });
+  const [showMetaDetails, setShowMetaDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toasts, showToast, removeToast } = useToast();
 
@@ -474,37 +476,48 @@ const Settings: React.FC = () => {
                           <p className="text-[11px] text-gray-400 font-medium">{item.desc}</p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          if (item.id === 'whatsapp') {
-                            if (item.status === 'connected') {
-                              handleWhatsAppDisconnect();
-                            } else {
-                              handleWhatsAppConnect();
-                            }
-                          } else if (item.id === 'calendar') {
-                            if (item.status === 'connected') {
-                              handleGoogleDisconnect();
-                            } else {
-                              handleGoogleConnect();
-                            }
-                          } else if (item.id === 'meta') {
-                            if (item.status === 'connected') {
-                              handleMetaDisconnect();
-                            } else {
-                              handleMetaConnect();
-                            }
-                          }
-                        }}
-                        disabled={item.id === 'whatsapp' && isConnectingWhatsapp}
-                        className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${item.status === 'connected' ? 'bg-white text-rose-500 border border-rose-100 hover:bg-rose-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20'
-                          }`}>
-                        {item.id === 'whatsapp' && isConnectingWhatsapp ? (
-                          <RefreshCw size={14} className="animate-spin" />
-                        ) : (
-                          item.status === 'connected' ? 'Desconectar' : item.action
+                      <div className="flex items-center gap-3">
+                        {/* Ver Detalhes button for Meta when connected */}
+                        {item.id === 'meta' && item.status === 'connected' && (
+                          <button
+                            onClick={() => setShowMetaDetails(true)}
+                            className="px-4 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-blue-100"
+                          >
+                            Ver Detalhes
+                          </button>
                         )}
-                      </button>
+                        <button
+                          onClick={() => {
+                            if (item.id === 'whatsapp') {
+                              if (item.status === 'connected') {
+                                handleWhatsAppDisconnect();
+                              } else {
+                                handleWhatsAppConnect();
+                              }
+                            } else if (item.id === 'calendar') {
+                              if (item.status === 'connected') {
+                                handleGoogleDisconnect();
+                              } else {
+                                handleGoogleConnect();
+                              }
+                            } else if (item.id === 'meta') {
+                              if (item.status === 'connected') {
+                                handleMetaDisconnect();
+                              } else {
+                                handleMetaConnect();
+                              }
+                            }
+                          }}
+                          disabled={item.id === 'whatsapp' && isConnectingWhatsapp}
+                          className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${item.status === 'connected' ? 'bg-white text-rose-500 border border-rose-100 hover:bg-rose-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20'
+                            }`}>
+                          {item.id === 'whatsapp' && isConnectingWhatsapp ? (
+                            <RefreshCw size={14} className="animate-spin" />
+                          ) : (
+                            item.status === 'connected' ? 'Desconectar' : item.action
+                          )}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -584,6 +597,11 @@ const Settings: React.FC = () => {
         variant={confirmModalConfig.variant}
         confirmLabel="Sim, Desconectar"
       />
+
+      {/* Meta Connection Details Modal */}
+      {showMetaDetails && (
+        <MetaConnectionManager onClose={() => setShowMetaDetails(false)} />
+      )}
 
       {/* Toast Container */}
       <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2">

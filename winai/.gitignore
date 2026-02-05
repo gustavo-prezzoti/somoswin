@@ -12,6 +12,11 @@ dist
 dist-ssr
 # *.local (Removido para manter .env.local conforme pedido)
 
+# Environment files (não commitar configurações locais)
+.env
+.env.local
+.env.*.local
+!.env.example
 
 # Editor directories and files
 .vscode/*

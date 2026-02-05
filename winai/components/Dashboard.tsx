@@ -206,7 +206,7 @@ const Dashboard: React.FC = () => {
   }
 
   const data = dashboardData;
-  const hasMetrics = data.metrics.leadsCaptured.value !== "0" || data.chartData.some(d => d.atual > 0);
+  const hasMetrics = data.metrics.leadsCaptured.value !== "0" || (data.metrics.investment && data.metrics.investment.value !== "R$ 0,00") || data.chartData.some(d => d.atual > 0);
   const hasGoals = data.goals.length > 0;
 
 

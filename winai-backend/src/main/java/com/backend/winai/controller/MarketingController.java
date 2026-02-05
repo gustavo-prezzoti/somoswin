@@ -66,6 +66,11 @@ public class MarketingController {
         return ResponseEntity.ok(marketingService.getMetaConnectionStatus(user));
     }
 
+    @GetMapping("/details")
+    public ResponseEntity<Map<String, Object>> getMetaDetails(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(marketingService.getMetaConnectionDetails(user));
+    }
+
     @PostMapping("/disconnect")
     public ResponseEntity<Void> disconnectMeta(@AuthenticationPrincipal User user) {
         marketingService.disconnectMeta(user);

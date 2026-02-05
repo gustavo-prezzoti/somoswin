@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -21,7 +20,7 @@ public class MetricsSyncService {
 
     private final DashboardMetricsRepository dashboardMetricsRepository;
     private final LeadRepository leadRepository;
-    private final MetaInsightRepository metaInsightRepository;
+    // MetaInsightRepository removed
     private final MeetingRepository meetingRepository;
 
     /**
@@ -49,44 +48,21 @@ public class MetricsSyncService {
                             company, date, date);
             long meetingsCount = meetingsCreatedToday.size();
 
-            // 2. Dados da Meta Insight (Spend, Impressions, Clicks, Conversions)
-            List<MetaInsight> insights = metaInsightRepository.findByCompanyIdAndDateBetween(company.getId(), date,
-                    date);
-            double totalSpend = insights.stream().filter(i -> i.getSpend() != null).mapToDouble(MetaInsight::getSpend)
-                    .sum();
-            long totalImpressions = insights.stream().filter(i -> i.getImpressions() != null)
-                    .mapToLong(MetaInsight::getImpressions).sum();
-            long totalClicks = insights.stream().filter(i -> i.getClicks() != null).mapToLong(MetaInsight::getClicks)
-                    .sum();
-            long metaConversions = insights.stream().filter(i -> i.getConversions() != null)
-                    .mapToLong(MetaInsight::getConversions).sum();
+            // 2. Dados da Meta Insight REMOVIDOS (Usando Live Fetching no DashboardService)
+            // Variáveis de custo e métricas Meta mantidas como 0.0 para compatibilidade de
+            // assinatura,
+            // mas não são mais lidas do banco syncado.
 
-            // 3. Leads capturados (MAX entre Leads do sistema e Conversões da Meta)
+            // 3. Leads capturados (Apenas Leads do sistema)
             long systemLeads = leadRepository.countByCompanyAndCreatedAtBetween(company, startOfDay, endOfDay);
-            long leadsCaptured = Math.max(systemLeads, metaConversions);
+            long leadsCaptured = systemLeads;
 
-            // Cálculos
+            // Cálculos (CPL/ROI serão calculados no DashboardService com dados Live)
+            // Aqui salvamos 0 ou valores parciais
             BigDecimal avgCpl = BigDecimal.ZERO;
-            if (leadsCaptured > 0) {
-                avgCpl = BigDecimal.valueOf(totalSpend / leadsCaptured).setScale(2, RoundingMode.HALF_UP);
-            }
-
             BigDecimal conversionRate = BigDecimal.ZERO;
-            if (totalClicks > 0) {
-                conversionRate = BigDecimal.valueOf((double) leadsCaptured / totalClicks * 100).setScale(2,
-                        RoundingMode.HALF_UP);
-            }
-
-            // ROI Estimado: (Leads * 100.0) / Investimento
-            // ROAS Estimado: Revenue (Leads * 100) / Investimento
             BigDecimal roi = BigDecimal.ZERO;
             BigDecimal roas = BigDecimal.ZERO;
-            double estimatedRevenue = leadsCaptured * 100.0;
-
-            if (totalSpend > 0) {
-                roi = BigDecimal.valueOf(estimatedRevenue / totalSpend).setScale(2, RoundingMode.HALF_UP);
-                roas = roi; // In this simplified estimation, ROAS and ROI (on ad spend) are similar
-            }
 
             // Busca ou cria registro de métrica
             DashboardMetrics metrics = dashboardMetricsRepository.findByCompanyAndDate(company, date)
@@ -100,18 +76,15 @@ public class MetricsSyncService {
             metrics.setConversionRate(conversionRate);
             metrics.setRoi(roi);
             metrics.setRoas(roas);
-            metrics.setInvestment(BigDecimal.valueOf(totalSpend).setScale(2, RoundingMode.HALF_UP));
-            metrics.setClicks((int) totalClicks);
-            metrics.setImpressions(totalImpressions);
+            metrics.setInvestment(BigDecimal.ZERO);
+            metrics.setClicks(0);
+            metrics.setImpressions(0L);
 
             // Métricas para o gráfico
             metrics.setLeadsCurrentPeriod((int) leadsCaptured);
-            // leadsPreviousPeriod é preenchido pelo DashboardService na hora de montar a
-            // resposta,
-            // ou podemos preencher aqui buscando o dia anterior.
 
-            // Score de Performance (Cálculo fictício mas baseado em algo real)
-            int score = calculatePerformanceScore((int) leadsCaptured, totalSpend, (int) meetingsCount);
+            // Score de Performance (Baseado apenas em Leads e Meetings por enquanto)
+            int score = calculatePerformanceScore((int) leadsCaptured, (int) meetingsCount);
             metrics.setPerformanceScore(score);
 
             dashboardMetricsRepository.save(metrics);
@@ -121,37 +94,26 @@ public class MetricsSyncService {
         }
     }
 
-    private int calculatePerformanceScore(int leads, double spend, int meetings) {
-        if (leads == 0 && spend == 0)
+    private int calculatePerformanceScore(int leads, int meetings) {
+        if (leads == 0 && meetings == 0)
             return 0;
         int score = 40; // Base score for active operation
 
-        // Leads volume (0-30 points)
+        // Leads volume (0-40 points)
         if (leads > 20)
-            score += 30;
+            score += 40;
         else if (leads > 10)
             score += 20;
         else if (leads > 0)
             score += 10;
 
-        // Meetings / Conversions (0-30 points)
+        // Meetings / Conversions (0-20 points)
         if (meetings > 5)
-            score += 30;
-        else if (meetings > 2)
             score += 20;
-        else if (meetings > 0)
+        else if (meetings > 2)
             score += 10;
-
-        // Efficiency (CPL) (0-30 points)
-        if (leads > 0 && spend > 0) {
-            double cpl = spend / leads;
-            if (cpl < 10.0)
-                score += 30;
-            else if (cpl < 25.0)
-                score += 20;
-            else if (cpl < 50.0)
-                score += 10;
-        }
+        else if (meetings > 0)
+            score += 5;
 
         // Cap at 100
         return Math.min(100, score);
