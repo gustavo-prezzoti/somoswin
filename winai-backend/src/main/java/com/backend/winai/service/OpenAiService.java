@@ -35,8 +35,8 @@ public class OpenAiService {
     @Value("${openai.model.vision:gpt-4o}")
     private String visionModel;
 
-    @Value("${openai.temperature:0.7}")
-    private Double temperature;
+    @Value("${openai.reasoning-effort:medium}")
+    private String reasoningEffort;
 
     @Value("${openai.max-tokens:1024}")
     private Integer maxTokens;
@@ -183,6 +183,11 @@ public class OpenAiService {
             body.put("model", currentModel);
             body.put("messages", messages);
             body.put("max_completion_tokens", maxTokens);
+
+            // GPT-5 reasoning parameters for consistent responses
+            if (currentModel.startsWith("gpt-5")) {
+                body.put("reasoning_effort", reasoningEffort);
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -386,6 +391,23 @@ public class OpenAiService {
             String imageUrl, List<ChatMessage> recentMessages) {
         StringBuilder systemPrompt = new StringBuilder();
 
+        // === CONTEXTO TEMPORAL (Data, Hora Brasília, Dia da Semana) ===
+        java.time.ZonedDateTime nowBrasilia = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Sao_Paulo"));
+        String dataAtual = nowBrasilia.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        String horaAtual = nowBrasilia.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+        String diaSemana = nowBrasilia.getDayOfWeek().getDisplayName(java.time.format.TextStyle.FULL,
+                new java.util.Locale("pt", "BR"));
+        // Capitalizar primeira letra
+        diaSemana = diaSemana.substring(0, 1).toUpperCase() + diaSemana.substring(1);
+
+        systemPrompt.append("=== CONTEXTO TEMPORAL ===\n");
+        systemPrompt.append("Data atual: ").append(dataAtual).append("\n");
+        systemPrompt.append("Horário atual (Brasília): ").append(horaAtual).append("\n");
+        systemPrompt.append("Dia da semana: ").append(diaSemana).append("\n");
+        systemPrompt.append(
+                "Use essas informações para interpretar pedidos como 'amanhã', 'segunda-feira', 'próxima semana', etc.\n");
+        systemPrompt.append("=========================\n\n");
+
         if (agentPrompt != null && !agentPrompt.isEmpty()) {
             systemPrompt.append(agentPrompt);
             systemPrompt.append("\n\n");
@@ -460,6 +482,11 @@ public class OpenAiService {
             body.put("model", currentTextModel);
             body.put("messages", messages);
             body.put("tools", tools);
+
+            // GPT-5 reasoning parameters for consistent responses
+            if (currentTextModel.startsWith("gpt-5")) {
+                body.put("reasoning_effort", reasoningEffort);
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -638,13 +665,24 @@ public class OpenAiService {
                 }
             }
 
-            // 1. System Prompt Construction
-            String now = java.time.LocalDateTime.now()
-                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            // 1. System Prompt Construction - CONTEXTO TEMPORAL COM TIMEZONE BRASÍLIA
+            java.time.ZonedDateTime nowBrasilia = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Sao_Paulo"));
+            String dataAtual = nowBrasilia.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+            String horaAtual = nowBrasilia.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+            String diaSemana = nowBrasilia.getDayOfWeek().getDisplayName(java.time.format.TextStyle.FULL,
+                    new java.util.Locale("pt", "BR"));
+            diaSemana = diaSemana.substring(0, 1).toUpperCase() + diaSemana.substring(1);
+
             StringBuilder sysPrompt = new StringBuilder();
 
             // DADOS DINÂMICOS DO CONTEXTO (SEMPRE ACOMPANHAM O PROMPT)
-            sysPrompt.append("HOJE: ").append(now).append("\n\n");
+            sysPrompt.append("=== CONTEXTO TEMPORAL ===\n");
+            sysPrompt.append("Data atual: ").append(dataAtual).append("\n");
+            sysPrompt.append("Horário atual (Brasília): ").append(horaAtual).append("\n");
+            sysPrompt.append("Dia da semana: ").append(diaSemana).append("\n");
+            sysPrompt.append(
+                    "Use essas informações para interpretar pedidos como 'amanhã', 'segunda-feira', 'próxima semana', etc.\n");
+            sysPrompt.append("=========================\n\n");
             sysPrompt.append("telefone: ").append(telefone).append("\n");
             sysPrompt.append("nome_paciente: ").append(nome_paciente).append("\n");
             sysPrompt.append("paciente_id_clinicorp: ").append(paciente_id).append("\n");
@@ -745,6 +783,11 @@ public class OpenAiService {
                 body.put("model", currentTextModel); // Clinicorp uses text model
                 body.put("messages", messages);
                 body.put("tools", tools);
+
+                // GPT-5 reasoning parameters for consistent responses
+                if (currentTextModel.startsWith("gpt-5")) {
+                    body.put("reasoning_effort", reasoningEffort);
+                }
 
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
