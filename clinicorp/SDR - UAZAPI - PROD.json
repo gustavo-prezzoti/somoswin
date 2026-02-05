@@ -410,7 +410,7 @@
         "model": {
           "__rl": true,
           "mode": "list",
-          "value": "gpt-4o-mini"
+          "value": "gpt-5"
         },
         "options": {
           "maxTokens": 300,

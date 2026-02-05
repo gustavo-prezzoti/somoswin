@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     
     # OpenAI Configuration
     openai_api_key: str = ""
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-5"
     
     # Redis Configuration
     redis_host: str = "redis"

@@ -64,7 +64,7 @@ def generate_insights(company_name, data):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5",
             messages=[
                 {"role": "system", "content": "You are an expert Digital Marketing Analyst AI. You MUST respond in Brazilian Portuguese (pt-BR)."},
                 {"role": "user", "content": prompt}

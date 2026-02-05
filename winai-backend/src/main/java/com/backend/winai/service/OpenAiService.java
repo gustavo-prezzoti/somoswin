@@ -29,7 +29,7 @@ public class OpenAiService {
     @Value("${openai.api-key:${openai.api.key:}}")
     private String apiKey;
 
-    @Value("${openai.model:gpt-4o-mini}")
+    @Value("${openai.model:gpt-5}")
     private String model;
 
     @Value("${openai.model.vision:gpt-4o}")
@@ -48,7 +48,7 @@ public class OpenAiService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Fallback models if primary model fails
-    private static final String[] FALLBACK_MODELS = { "gpt-4o", "gpt-4-turbo", "gpt-4o-mini", "gpt-4" };
+    private static final String[] FALLBACK_MODELS = { "gpt-5", "gpt-4o", "gpt-4-turbo", "gpt-4o-mini", "gpt-4" };
     private String currentTextModel;
     private String currentVisionModel;
 
