@@ -64,7 +64,7 @@ public class TermsOfServiceService {
                             .id(terms.getId())
                             .version(terms.getVersion())
                             .content(content)
-                            .active(terms.isActive())
+                            .active(terms.getActive())
                             .createdAt(terms.getCreatedAt())
                             .build();
                 });
