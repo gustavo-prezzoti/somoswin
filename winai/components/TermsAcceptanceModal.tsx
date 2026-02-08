@@ -102,8 +102,8 @@ const TermsAcceptanceModal: React.FC<TermsAcceptanceModalProps> = ({ onAccepted 
 
             while (remaining.length > 0) {
                 const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
-                // Regex para capturar emojis
-                const checkMatch = remaining.match(/[✅❌⚠️📹]/);
+                // Regex com flag unicode para capturar emojis multi-byte corretamente
+                const checkMatch = remaining.match(/✅|❌|⚠️|⚠|📹/);
 
                 if (boldMatch && boldMatch.index !== undefined) {
                     if (boldMatch.index > 0) {
