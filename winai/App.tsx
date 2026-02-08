@@ -51,8 +51,11 @@ import AdminProfessionals from './components/Admin/AdminProfessionals';
 import AdminSupportChat from './components/Admin/AdminSupportChat';
 import AdminFollowUp from './components/Admin/AdminFollowUp';
 import AdminGlobalNotifications from './components/Admin/AdminGlobalNotifications';
+import AdminTerms from './components/Admin/AdminTerms';
+import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
+import { termsService } from './services/api/terms.service';
 import { useWebSocket } from './hooks/useWebSocket';
 
 import logoLight from './logo_light.png';
@@ -329,8 +332,43 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 };
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
+  const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
+  const [checkingTerms, setCheckingTerms] = useState(true);
   const user = localStorage.getItem('win_user');
+
+  useEffect(() => {
+    if (user) {
+      checkTermsStatus();
+    }
+  }, [user]);
+
+  const checkTermsStatus = async () => {
+    try {
+      const status = await termsService.checkAcceptanceStatus();
+      setTermsAccepted(status.hasAccepted);
+    } catch (error) {
+      console.error('Failed to check terms status:', error);
+      // Se falhar, assume que não precisa aceitar (graceful degradation)
+      setTermsAccepted(true);
+    } finally {
+      setCheckingTerms(false);
+    }
+  };
+
   if (!user) return <Navigate to="/login" replace />;
+
+  if (checkingTerms) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  if (termsAccepted === false) {
+    return <TermsAcceptanceModal onAccepted={() => setTermsAccepted(true)} />;
+  }
+
   return <Layout>{children}</Layout>;
 };
 
@@ -369,6 +407,7 @@ const App: React.FC = () => {
           <Route path="support-chat" element={<AdminSupportChat />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="notifications" element={<AdminGlobalNotifications />} />
+          <Route path="terms" element={<AdminTerms />} />
         </Route>
 
       </Routes>

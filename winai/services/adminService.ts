@@ -398,5 +398,45 @@ export const globalNotificationService = {
     }
 };
 
+// ========== TERMOS DE SERVIÇO ==========
+
+export interface TermsOfServiceAdmin {
+    id: string;
+    version: string;
+    content: string;
+    active: boolean;
+    createdAt: string;
+}
+
+export interface UserTermsAcceptanceAdmin {
+    userId: string;
+    userName: string;
+    userEmail: string;
+    companyName?: string;
+    hasAccepted: boolean;
+    termsVersion?: string;
+    acceptedAt?: string;
+}
+
+export interface CreateTermsRequest {
+    version: string;
+    content: string;
+}
+
+export const termsAdminService = {
+    getAllTerms: async (): Promise<TermsOfServiceAdmin[]> => {
+        return await httpClient.get<TermsOfServiceAdmin[]>('/admin/terms');
+    },
+
+    createTerms: async (data: CreateTermsRequest): Promise<TermsOfServiceAdmin> => {
+        return await httpClient.post<TermsOfServiceAdmin>('/admin/terms', data);
+    },
+
+    getAcceptances: async (): Promise<UserTermsAcceptanceAdmin[]> => {
+        return await httpClient.get<UserTermsAcceptanceAdmin[]>('/admin/terms/acceptances');
+    }
+};
+
 export default adminService;
+
 

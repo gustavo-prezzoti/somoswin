@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Smartphone, Settings, ArrowLeft, Link, Bot, Building2, X, Zap, Activity, Terminal, MessageCircle, Palette, Clock, Bell } from 'lucide-react';
+import { LayoutDashboard, Users, Smartphone, Settings, ArrowLeft, Link, Bot, Building2, X, Zap, Activity, Terminal, MessageCircle, Palette, Clock, Bell, FileText } from 'lucide-react';
 import './AdminSidebar.css';
 import logoBlack from '../../logo_black.png';
 
@@ -85,6 +85,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
 
                 <div className="admin-nav-section">
                     <div className="admin-nav-section-title">Sistema</div>
+                    <NavLink to="/admin/terms" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
+                        <FileText className="admin-nav-icon" />
+                        <span>Termos de Uso</span>
+                    </NavLink>
+
                     <NavLink to="/admin/settings" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
                         <Settings className="admin-nav-icon" />
                         <span>Configurações</span>
