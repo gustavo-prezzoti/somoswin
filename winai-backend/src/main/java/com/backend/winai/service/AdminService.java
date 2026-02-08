@@ -354,6 +354,16 @@ public class AdminService {
         if (companyDetails.getDefaultSupportMode() != null) {
             company.setDefaultSupportMode(companyDetails.getDefaultSupportMode());
         }
+        // Campos de contrato para termos de uso
+        if (companyDetails.getContratante() != null) {
+            company.setContratante(companyDetails.getContratante());
+        }
+        if (companyDetails.getDocumento() != null) {
+            company.setDocumento(companyDetails.getDocumento());
+        }
+        if (companyDetails.getEmailContratante() != null) {
+            company.setEmailContratante(companyDetails.getEmailContratante());
+        }
 
         Company savedCompany = companyRepository.save(company);
         log.info("Empresa atualizada: {}", savedCompany.getName());
