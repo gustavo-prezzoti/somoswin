@@ -294,6 +294,10 @@ public class AdminService {
                     map.put("name", company.getName());
                     map.put("defaultSupportMode", company.getDefaultSupportMode());
                     map.put("createdAt", company.getCreatedAt() != null ? company.getCreatedAt().toString() : null);
+                    // Campos de contrato para termos de uso
+                    map.put("contratante", company.getContratante());
+                    map.put("documento", company.getDocumento());
+                    map.put("emailContratante", company.getEmailContratante());
                     return map;
                 })
                 .collect(Collectors.toList());
