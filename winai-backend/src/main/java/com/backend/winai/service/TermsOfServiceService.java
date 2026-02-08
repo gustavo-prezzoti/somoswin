@@ -1,0 +1,150 @@
+package com.backend.winai.service;
+
+import com.backend.winai.dto.request.CreateTermsRequest;
+import com.backend.winai.dto.response.TermsOfServiceResponse;
+import com.backend.winai.dto.response.UserTermsAcceptanceResponse;
+import com.backend.winai.entity.TermsOfService;
+import com.backend.winai.entity.User;
+import com.backend.winai.entity.UserTermsAcceptance;
+import com.backend.winai.repository.TermsOfServiceRepository;
+import com.backend.winai.repository.UserRepository;
+import com.backend.winai.repository.UserTermsAcceptanceRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class TermsOfServiceService {
+
+    private final TermsOfServiceRepository termsRepository;
+    private final UserTermsAcceptanceRepository acceptanceRepository;
+    private final UserRepository userRepository;
+
+    public Optional<TermsOfServiceResponse> getActiveTerms() {
+        return termsRepository.findByActiveTrue()
+                .map(this::toResponse);
+    }
+
+    public List<TermsOfServiceResponse> getAllTerms() {
+        return termsRepository.findAll().stream()
+                .map(this::toResponse)
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public TermsOfServiceResponse createNewVersion(CreateTermsRequest request) {
+        if (termsRepository.findByVersion(request.getVersion()).isPresent()) {
+            throw new RuntimeException("Versão " + request.getVersion() + " já existe");
+        }
+
+        termsRepository.findByActiveTrue().ifPresent(existing -> {
+            existing.setActive(false);
+            termsRepository.save(existing);
+        });
+
+        TermsOfService newTerms = TermsOfService.builder()
+                .version(request.getVersion())
+                .content(request.getContent())
+                .active(true)
+                .build();
+
+        newTerms = termsRepository.save(newTerms);
+        log.info("Nova versão dos termos criada: {}", request.getVersion());
+
+        return toResponse(newTerms);
+    }
+
+    public boolean hasUserAcceptedCurrentTerms(UUID userId) {
+        return acceptanceRepository.hasUserAcceptedActiveTerms(userId);
+    }
+
+    @Transactional
+    public void acceptTerms(UUID userId, String ipAddress, String userAgent) {
+        TermsOfService activeTerms = termsRepository.findByActiveTrue()
+                .orElseThrow(() -> new RuntimeException("Nenhum termo de serviço ativo encontrado"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        if (acceptanceRepository.findByUserIdAndTermsOfServiceId(userId, activeTerms.getId()).isPresent()) {
+            log.info("Usuário {} já aceitou os termos versão {}", userId, activeTerms.getVersion());
+            return;
+        }
+
+        UserTermsAcceptance acceptance = UserTermsAcceptance.builder()
+                .user(user)
+                .termsOfService(activeTerms)
+                .ipAddress(ipAddress)
+                .userAgent(userAgent != null && userAgent.length() > 500
+                        ? userAgent.substring(0, 500)
+                        : userAgent)
+                .build();
+
+        acceptanceRepository.save(acceptance);
+        log.info("Usuário {} aceitou os termos versão {} - IP: {}",
+                user.getEmail(), activeTerms.getVersion(), ipAddress);
+    }
+
+    public List<UserTermsAcceptanceResponse> getUsersAcceptanceStatus() {
+        List<User> allUsers = userRepository.findAll();
+        Optional<TermsOfService> activeTermsOpt = termsRepository.findByActiveTrue();
+
+        if (activeTermsOpt.isEmpty()) {
+            return allUsers.stream()
+                    .map(u -> UserTermsAcceptanceResponse.builder()
+                            .userId(u.getId())
+                            .userName(u.getName())
+                            .userEmail(u.getEmail())
+                            .companyName(u.getCompany() != null ? u.getCompany().getName() : null)
+                            .hasAccepted(false)
+                            .termsVersion(null)
+                            .acceptedAt(null)
+                            .build())
+                    .collect(Collectors.toList());
+        }
+
+        TermsOfService activeTerms = activeTermsOpt.get();
+        Map<UUID, UserTermsAcceptance> acceptanceMap = acceptanceRepository
+                .findByTermsOfServiceId(activeTerms.getId())
+                .stream()
+                .collect(Collectors.toMap(a -> a.getUser().getId(), a -> a));
+
+        return allUsers.stream()
+                .map(u -> {
+                    UserTermsAcceptance acceptance = acceptanceMap.get(u.getId());
+                    return UserTermsAcceptanceResponse.builder()
+                            .userId(u.getId())
+                            .userName(u.getName())
+                            .userEmail(u.getEmail())
+                            .companyName(u.getCompany() != null ? u.getCompany().getName() : null)
+                            .hasAccepted(acceptance != null)
+                            .termsVersion(acceptance != null ? activeTerms.getVersion() : null)
+                            .acceptedAt(acceptance != null ? acceptance.getAcceptedAt() : null)
+                            .build();
+                })
+                .sorted((a, b) -> {
+                    if (a.getHasAccepted() != b.getHasAccepted()) {
+                        return a.getHasAccepted() ? 1 : -1;
+                    }
+                    return a.getUserName().compareToIgnoreCase(b.getUserName());
+                })
+                .collect(Collectors.toList());
+    }
+
+    private TermsOfServiceResponse toResponse(TermsOfService terms) {
+        return TermsOfServiceResponse.builder()
+                .id(terms.getId())
+                .version(terms.getVersion())
+                .content(terms.getContent())
+                .active(terms.getActive())
+                .createdAt(terms.getCreatedAt())
+                .build();
+    }
+}

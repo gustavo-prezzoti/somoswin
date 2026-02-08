@@ -4,9 +4,13 @@ import com.backend.winai.dto.request.AdminCreateUserRequest;
 import com.backend.winai.dto.request.AdminUpdateUserRequest;
 import com.backend.winai.dto.request.UpdateInstanceConfigRequest;
 import com.backend.winai.dto.request.CreateUserWhatsAppConnectionRequest;
+import com.backend.winai.dto.request.CreateTermsRequest;
 import com.backend.winai.dto.response.AdminInstanceResponse;
 import com.backend.winai.dto.response.AdminUserResponse;
+import com.backend.winai.dto.response.TermsOfServiceResponse;
+import com.backend.winai.dto.response.UserTermsAcceptanceResponse;
 import com.backend.winai.service.AdminService;
+import com.backend.winai.service.TermsOfServiceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -29,6 +33,7 @@ import java.util.UUID;
 public class AdminController {
 
     private final AdminService adminService;
+    private final TermsOfServiceService termsOfServiceService;
 
     // ========== ESTATÍSTICAS ==========
 
@@ -286,5 +291,25 @@ public class AdminController {
             @Parameter(description = "ID do prompt") @PathVariable UUID promptId) {
         adminService.deleteSystemPrompt(promptId);
         return ResponseEntity.ok().build();
+    }
+
+    // ========== TERMOS DE SERVIÇO ==========
+
+    @Operation(summary = "Listar Termos", description = "Lista todas as versões dos termos de serviço")
+    @GetMapping("/terms")
+    public ResponseEntity<List<TermsOfServiceResponse>> getAllTerms() {
+        return ResponseEntity.ok(termsOfServiceService.getAllTerms());
+    }
+
+    @Operation(summary = "Criar Nova Versão", description = "Cria uma nova versão dos termos de serviço")
+    @PostMapping("/terms")
+    public ResponseEntity<TermsOfServiceResponse> createTerms(@RequestBody CreateTermsRequest request) {
+        return ResponseEntity.ok(termsOfServiceService.createNewVersion(request));
+    }
+
+    @Operation(summary = "Status de Aceite", description = "Lista status de aceite dos termos por usuário")
+    @GetMapping("/terms/acceptances")
+    public ResponseEntity<List<UserTermsAcceptanceResponse>> getTermsAcceptances() {
+        return ResponseEntity.ok(termsOfServiceService.getUsersAcceptanceStatus());
     }
 }

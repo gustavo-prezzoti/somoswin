@@ -511,7 +511,12 @@ public class GoogleDriveService {
                     meeting.setMeetingDate(LocalDateTime.ofInstant(instant, zone).toLocalDate());
                     meeting.setMeetingTime(LocalDateTime.ofInstant(instant, zone).toLocalTime());
                 } else if (start != null && start.getDate() != null) {
-                    meeting.setMeetingDate(java.time.LocalDate.parse(start.getDate().toString()));
+                    // Para eventos de dia inteiro, o Google retorna a data sem hora
+                    // Precisamos pegar apenas a parte da data (yyyy-MM-dd) sem conversão de
+                    // timezone
+                    String dateStr = start.getDate().toStringRfc3339();
+                    // O formato é "yyyy-MM-dd", pegar apenas os primeiros 10 caracteres
+                    meeting.setMeetingDate(java.time.LocalDate.parse(dateStr.substring(0, 10)));
                     meeting.setMeetingTime(LocalTime.of(8, 0));
                 }
 
