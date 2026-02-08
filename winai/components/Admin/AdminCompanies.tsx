@@ -4,6 +4,27 @@ import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter }
 import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest } from '../../services/adminService';
 import { useModal } from './ModalContext';
 
+// Função para aplicar máscara de CPF ou CNPJ
+const formatDocumento = (value: string): string => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    if (numbers.length <= 11) {
+        // CPF: 000.000.000-00
+        return numbers
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    } else {
+        // CNPJ: 00.000.000/0000-00
+        return numbers
+            .replace(/(\d{2})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1/$2')
+            .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+    }
+};
+
 const AdminCompanies: React.FC = () => {
     const navigate = useNavigate();
     const { showAlert, showConfirm, showToast, closeModal } = useModal();
@@ -87,9 +108,10 @@ const AdminCompanies: React.FC = () => {
     };
 
     const openCompanyModal = (mode: 'create' | 'edit', company?: Company) => {
+        console.log('Opening modal for company:', company); // Debug log
         let currentName = company?.name || '';
         let currentContratante = company?.contratante || '';
-        let currentDocumento = company?.documento || '';
+        let currentDocumento = company?.documento ? formatDocumento(company.documento) : '';
         let currentEmailContratante = company?.emailContratante || '';
 
         const ModalBody = () => {
@@ -148,10 +170,11 @@ const AdminCompanies: React.FC = () => {
                                     type="text"
                                     value={documento}
                                     onChange={(e) => {
-                                        const val = e.target.value;
+                                        const val = formatDocumento(e.target.value);
                                         setDocumento(val);
                                         currentDocumento = val;
                                     }}
+                                    maxLength={18}
                                     className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-medium text-gray-800"
                                     placeholder="000.000.000-00 ou 00.000.000/0000-00"
                                 />
