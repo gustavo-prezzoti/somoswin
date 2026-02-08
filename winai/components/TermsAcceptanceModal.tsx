@@ -163,8 +163,10 @@ const TermsAcceptanceModal: React.FC<TermsAcceptanceModalProps> = ({ onAccepted 
                 trimmedLine.startsWith('CONTRATANTE:') || trimmedLine.startsWith('CNPJ') ||
                 trimmedLine.startsWith('Endereço:') || trimmedLine.startsWith('E-mail:')) {
                 flushList();
+                // Adicionar espaço extra antes do CONTRATANTE
+                const extraMargin = trimmedLine.startsWith('CONTRATANTE:') ? 'mt-4' : '';
                 elements.push(
-                    <p key={index} className="text-gray-600 mb-1 font-medium">
+                    <p key={index} className={`text-gray-600 mb-1 font-medium ${extraMargin}`}>
                         {formatInlineElements(trimmedLine)}
                     </p>
                 );
