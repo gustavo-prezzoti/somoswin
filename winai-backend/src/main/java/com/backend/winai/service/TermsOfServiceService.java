@@ -35,7 +35,7 @@ public class TermsOfServiceService {
      * Retorna os termos com os dados da empresa preenchidos
      */
     @Transactional(readOnly = true)
-    public Optional<TermsOfServiceResponse> getPersonalizedTerms(UUID userId) {
+    public Optional<TermsOfServiceResponse> getPersonalizedTerms(UUID userId, String ipAddress) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
@@ -59,6 +59,16 @@ public class TermsOfServiceService {
                             content = content.replace("[E-mail]", emailContratante);
                         }
                     }
+
+                    // Substituir placeholders de aceite eletrônico
+                    java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter
+                            .ofPattern("dd/MM/yyyy 'às' HH:mm:ss");
+                    String dataAceite = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Sao_Paulo"))
+                            .format(formatter);
+
+                    content = content.replace("[Gerado automaticamente pela plataforma]", dataAceite);
+                    content = content.replace("[Capturado automaticamente pela plataforma]",
+                            ipAddress != null ? ipAddress : "N/A");
 
                     return TermsOfServiceResponse.builder()
                             .id(terms.getId())

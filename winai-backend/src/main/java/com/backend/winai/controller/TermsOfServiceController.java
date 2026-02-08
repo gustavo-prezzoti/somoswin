@@ -33,8 +33,10 @@ public class TermsOfServiceController {
      */
     @GetMapping("/current/personalized")
     public ResponseEntity<TermsOfServiceResponse> getPersonalizedTerms(
-            @AuthenticationPrincipal User user) {
-        return termsService.getPersonalizedTerms(user.getId())
+            @AuthenticationPrincipal User user,
+            HttpServletRequest request) {
+        String ipAddress = getClientIpAddress(request);
+        return termsService.getPersonalizedTerms(user.getId(), ipAddress)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.noContent().build());
     }
