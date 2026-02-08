@@ -4,6 +4,10 @@ FROM python:3.9-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# Set timezone to Brasilia
+ENV TZ=America/Sao_Paulo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # Copy the current directory contents into the container at /app
 COPY . /app
 

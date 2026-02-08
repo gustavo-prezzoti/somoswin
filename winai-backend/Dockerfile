@@ -28,7 +28,11 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl tzdata
+
+# Set timezone to Brasilia
+ENV TZ=America/Sao_Paulo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Add non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

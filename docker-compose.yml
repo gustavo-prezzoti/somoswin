@@ -15,6 +15,8 @@ services:
     container_name: winai-redis
     ports:
       - "16379:6379"
+    environment:
+      - TZ=America/Sao_Paulo
     networks:
       - winai-network
     restart: unless-stopped
@@ -33,6 +35,8 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     environment:
+      # Timezone
+      - TZ=America/Sao_Paulo
       # Spring Profile for Docker
       - SPRING_PROFILES_ACTIVE=docker
 
@@ -104,6 +108,7 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     environment:
+      - TZ=America/Sao_Paulo
       - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require&currentSchema=winai
       - SPRING_DATASOURCE_USERNAME=postgres.wtfheobvaamelqifttjj
@@ -133,6 +138,7 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     environment:
+      - TZ=America/Sao_Paulo
       - SPRING_PROFILES_ACTIVE=docker,followup-worker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require&currentSchema=winai
       - SPRING_DATASOURCE_USERNAME=postgres.wtfheobvaamelqifttjj
@@ -172,6 +178,7 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     environment:
+      - TZ=America/Sao_Paulo
       - FLASK_ENV=production
       - CLINICORP_USERNAME=${CLINICORP_USERNAME}
       - CLINICORP_PASSWORD=${CLINICORP_PASSWORD}
@@ -195,6 +202,7 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     environment:
+      - TZ=America/Sao_Paulo
       - JAVA_API_URL=http://backend:8080
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:-winai-lq-f8a9b2c7e4d1-2026-xK9mN3pL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}

@@ -27,6 +27,10 @@ RUN npm run build
 # Stage 2: Production with Nginx
 FROM nginx:alpine
 
+# Set timezone to Brasilia
+ENV TZ=America/Sao_Paulo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
