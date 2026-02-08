@@ -49,12 +49,12 @@ public class Company {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "plan_id")
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
-    private Plan plan;
+    private Plan planEntity;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "varchar(255) default 'STARTER'")
+    @Column(name = "plan_type", nullable = false, columnDefinition = "varchar(255) default 'STARTER'")
     @Builder.Default
-    private UserPlan planType = UserPlan.STARTER;
+    private UserPlan plan = UserPlan.STARTER;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, columnDefinition = "varchar(255) default 'PENDING'")
