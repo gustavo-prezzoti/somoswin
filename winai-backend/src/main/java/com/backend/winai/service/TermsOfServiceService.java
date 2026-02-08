@@ -31,6 +31,45 @@ public class TermsOfServiceService {
                 .map(this::toResponse);
     }
 
+    /**
+     * Retorna os termos com os dados da empresa preenchidos
+     */
+    @Transactional(readOnly = true)
+    public Optional<TermsOfServiceResponse> getPersonalizedTerms(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        return termsRepository.findByActiveTrue()
+                .map(terms -> {
+                    String content = terms.getContent();
+
+                    // Substituir placeholders com dados da empresa
+                    if (user.getCompany() != null) {
+                        String contratante = user.getCompany().getContratante();
+                        String documento = user.getCompany().getDocumento();
+                        String emailContratante = user.getCompany().getEmailContratante();
+
+                        if (contratante != null && !contratante.isEmpty()) {
+                            content = content.replace("[Nome/Razão Social]", contratante);
+                        }
+                        if (documento != null && !documento.isEmpty()) {
+                            content = content.replace("[Documento]", documento);
+                        }
+                        if (emailContratante != null && !emailContratante.isEmpty()) {
+                            content = content.replace("[E-mail]", emailContratante);
+                        }
+                    }
+
+                    return TermsOfServiceResponse.builder()
+                            .id(terms.getId())
+                            .version(terms.getVersion())
+                            .content(content)
+                            .active(terms.isActive())
+                            .createdAt(terms.getCreatedAt())
+                            .build();
+                });
+    }
+
     public List<TermsOfServiceResponse> getAllTerms() {
         return termsRepository.findAll().stream()
                 .map(this::toResponse)

@@ -21,7 +21,7 @@ const TermsAcceptanceModal: React.FC<TermsAcceptanceModalProps> = ({ onAccepted 
 
     const loadTerms = async () => {
         try {
-            const data = await termsService.getCurrentTerms();
+            const data = await termsService.getPersonalizedTerms();
             setTerms(data);
         } catch (err) {
             setError('Erro ao carregar os termos de serviço');

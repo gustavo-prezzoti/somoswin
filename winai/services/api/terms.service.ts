@@ -30,6 +30,21 @@ export const termsService = {
         }
     },
 
+    /**
+     * Busca os termos personalizados com dados da empresa do usuário
+     */
+    async getPersonalizedTerms(): Promise<TermsOfService | null> {
+        try {
+            const response = await httpClient.get<TermsOfService>('/terms/current/personalized');
+            return response;
+        } catch (error: any) {
+            if (error.status === 204) {
+                return null;
+            }
+            throw error;
+        }
+    },
+
     async checkAcceptanceStatus(): Promise<TermsStatus> {
         return await httpClient.get<TermsStatus>('/terms/status');
     },

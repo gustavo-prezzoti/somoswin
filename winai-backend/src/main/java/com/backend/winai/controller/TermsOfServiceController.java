@@ -28,6 +28,17 @@ public class TermsOfServiceController {
                 .orElse(ResponseEntity.noContent().build());
     }
 
+    /**
+     * Retorna os termos com os dados da empresa preenchidos (para aceite)
+     */
+    @GetMapping("/current/personalized")
+    public ResponseEntity<TermsOfServiceResponse> getPersonalizedTerms(
+            @AuthenticationPrincipal User user) {
+        return termsService.getPersonalizedTerms(user.getId())
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> getAcceptanceStatus(
             @AuthenticationPrincipal User user) {
