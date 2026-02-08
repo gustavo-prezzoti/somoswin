@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter } from 'lucide-react';
-import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest } from '../../services/adminService';
+import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter, CreditCard, Info } from 'lucide-react';
+import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest, Plan } from '../../services/adminService';
 import { useModal } from './ModalContext';
 
 // Função para aplicar máscara de CPF ou CNPJ
@@ -78,6 +78,7 @@ const AdminCompanies: React.FC = () => {
         contratante: string,
         documento: string,
         emailContratante: string,
+        planId: string,
         selectedCompany?: Company | null
     ) => {
         if (!companyName.trim()) {
@@ -94,7 +95,8 @@ const AdminCompanies: React.FC = () => {
                     name: companyName,
                     contratante: contratante || undefined,
                     documento: documento || undefined,
-                    emailContratante: emailContratante || undefined
+                    emailContratante: emailContratante || undefined,
+                    planId: planId || undefined
                 };
                 await adminService.updateCompany(selectedCompany.id, request);
             }
@@ -107,18 +109,31 @@ const AdminCompanies: React.FC = () => {
         }
     };
 
-    const openCompanyModal = (mode: 'create' | 'edit', company?: Company) => {
+    const openCompanyModal = async (mode: 'create' | 'edit', company?: Company) => {
         console.log('Opening modal for company:', company); // Debug log
         let currentName = company?.name || '';
         let currentContratante = company?.contratante || '';
         let currentDocumento = company?.documento ? formatDocumento(company.documento) : '';
         let currentEmailContratante = company?.emailContratante || '';
+        let currentPlanId = company?.planId || '';
+
+        // Fetch available plans
+        let availablePlans: Plan[] = [];
+        try {
+            availablePlans = await adminService.getAllPlans();
+        } catch (error) {
+            console.error('Failed to fetch plans:', error);
+        }
 
         const ModalBody = () => {
             const [name, setName] = useState(currentName);
             const [contratante, setContratante] = useState(currentContratante);
             const [documento, setDocumento] = useState(currentDocumento);
             const [emailContratante, setEmailContratante] = useState(currentEmailContratante);
+            const [planId, setPlanId] = useState(currentPlanId);
+            const [showPlanDetails, setShowPlanDetails] = useState(false);
+
+            const selectedPlan = availablePlans.find(p => p.id === planId);
 
             return (
                 <div className="space-y-6 pt-2">
@@ -194,6 +209,55 @@ const AdminCompanies: React.FC = () => {
                                     placeholder="email@empresa.com.br"
                                 />
                             </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Plano Contratado</label>
+                                    {selectedPlan && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPlanDetails(!showPlanDetails)}
+                                            className="text-[9px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                                        >
+                                            <Info size={12} />
+                                            {showPlanDetails ? 'Ocultar' : 'Ver Detalhes'}
+                                        </button>
+                                    )}
+                                </div>
+                                <select
+                                    value={planId}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setPlanId(val);
+                                        currentPlanId = val;
+                                    }}
+                                    className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-medium text-gray-800"
+                                >
+                                    <option value="">Selecione um plano...</option>
+                                    {availablePlans.map(plan => (
+                                        <option key={plan.id} value={plan.id}>
+                                            {plan.displayName} - R$ {plan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
+                                        </option>
+                                    ))}
+                                </select>
+                                {showPlanDetails && selectedPlan && (
+                                    <div className="mt-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <CreditCard size={16} className="text-emerald-600" />
+                                            <span className="text-sm font-black text-emerald-800 uppercase">{selectedPlan.displayName}</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div><span className="text-gray-500">Mensalidade:</span> <span className="font-bold text-gray-700">R$ {selectedPlan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
+                                            <div><span className="text-gray-500">Taxa de Setup:</span> <span className="font-bold text-gray-700">R$ {selectedPlan.setupFee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
+                                            <div><span className="text-gray-500">Limite de Leads:</span> <span className="font-bold text-gray-700">{selectedPlan.leadLimit ?? 'Ilimitado'}</span></div>
+                                            <div><span className="text-gray-500">WhatsApps:</span> <span className="font-bold text-gray-700">{selectedPlan.whatsappLimit}</span></div>
+                                        </div>
+                                        {selectedPlan.description && (
+                                            <p className="mt-2 text-[10px] text-gray-600 border-t border-emerald-100 pt-2">{selectedPlan.description}</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -205,7 +269,7 @@ const AdminCompanies: React.FC = () => {
             body: <ModalBody />,
             confirmText: mode === 'create' ? 'Criar Empresa' : 'Salvar Alterações',
             onConfirm: async () => {
-                await handleSave(mode, currentName, currentContratante, currentDocumento, currentEmailContratante, company);
+                await handleSave(mode, currentName, currentContratante, currentDocumento, currentEmailContratante, currentPlanId, company);
             }
         });
     };

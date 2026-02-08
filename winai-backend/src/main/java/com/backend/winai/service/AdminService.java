@@ -34,6 +34,7 @@ import com.backend.winai.repository.MetaAdSetRepository;
 import com.backend.winai.repository.MetaAdRepository;
 import com.backend.winai.repository.MetaInsightRepository;
 import com.backend.winai.repository.SystemPromptRepository;
+import com.backend.winai.repository.PlanRepository;
 import com.backend.winai.entity.UserWhatsAppConnection;
 import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.KnowledgeBase;
@@ -85,6 +86,7 @@ public class AdminService {
     private final MetaAdRepository metaAdRepository;
     private final MetaInsightRepository metaInsightRepository;
     private final SystemPromptRepository systemPromptRepository;
+    private final PlanRepository planRepository;
     private final UazapService uazapService;
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -298,6 +300,11 @@ public class AdminService {
                     map.put("contratante", company.getContratante());
                     map.put("documento", company.getDocumento());
                     map.put("emailContratante", company.getEmailContratante());
+                    // Plano associado
+                    map.put("planId",
+                            company.getPlanEntity() != null ? company.getPlanEntity().getId().toString() : null);
+                    map.put("planName",
+                            company.getPlanEntity() != null ? company.getPlanEntity().getDisplayName() : null);
                     return map;
                 })
                 .collect(Collectors.toList());
@@ -309,6 +316,15 @@ public class AdminService {
     public Company getCompanyById(UUID companyId) {
         return companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+    }
+
+    /**
+     * Lista todos os planos ativos
+     */
+    public List<com.backend.winai.entity.Plan> getAllPlans() {
+        return planRepository.findAll().stream()
+                .filter(plan -> Boolean.TRUE.equals(plan.getActive()))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -367,6 +383,10 @@ public class AdminService {
         }
         if (companyDetails.getEmailContratante() != null) {
             company.setEmailContratante(companyDetails.getEmailContratante());
+        }
+        // Plano associado
+        if (companyDetails.getPlanEntity() != null) {
+            company.setPlanEntity(companyDetails.getPlanEntity());
         }
 
         Company savedCompany = companyRepository.save(company);

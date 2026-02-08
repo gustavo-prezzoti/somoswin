@@ -134,6 +134,14 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
+    // ========== PLANOS ==========
+
+    @Operation(summary = "Listar Planos", description = "Lista todos os planos ativos do sistema")
+    @GetMapping("/plans")
+    public ResponseEntity<List<com.backend.winai.entity.Plan>> getAllPlans() {
+        return ResponseEntity.ok(adminService.getAllPlans());
+    }
+
     // ========== INSTÂNCIAS WHATSAPP ==========
 
     @Operation(summary = "Listar Instâncias", description = "Lista todas as instâncias WhatsApp com estatísticas")

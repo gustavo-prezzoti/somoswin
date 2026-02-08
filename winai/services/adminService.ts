@@ -89,8 +89,23 @@ export interface Company {
     contratante?: string;
     documento?: string;
     emailContratante?: string;
+    planId?: string;
+    planName?: string;
     createdAt?: string;
     defaultSupportMode?: string;
+}
+
+export interface Plan {
+    id: string;
+    name: string;
+    displayName: string;
+    price: number;
+    setupFee: number;
+    leadLimit?: number;
+    userLimit?: number;
+    whatsappLimit: number;
+    active: boolean;
+    description?: string;
 }
 
 export interface CreateCompanyRequest {
@@ -102,6 +117,7 @@ export interface UpdateCompanyRequest {
     contratante?: string;
     documento?: string;
     emailContratante?: string;
+    planId?: string;
     defaultSupportMode?: string;
 }
 
@@ -168,6 +184,12 @@ const adminService = {
 
     deleteCompany: async (companyId: string): Promise<void> => {
         await httpClient.delete(`/admin/companies/${companyId}`);
+    },
+
+    // ========== PLANOS ==========
+
+    getAllPlans: async (): Promise<Plan[]> => {
+        return await httpClient.get<Plan[]>('/admin/plans');
     },
 
     // ========== INSTÂNCIAS WHATSAPP ==========

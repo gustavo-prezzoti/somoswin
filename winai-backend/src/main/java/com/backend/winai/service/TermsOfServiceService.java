@@ -48,6 +48,7 @@ public class TermsOfServiceService {
                         String contratante = user.getCompany().getContratante();
                         String documento = user.getCompany().getDocumento();
                         String emailContratante = user.getCompany().getEmailContratante();
+                        com.backend.winai.entity.Plan plan = user.getCompany().getPlanEntity();
 
                         if (contratante != null && !contratante.isEmpty()) {
                             content = content.replace("[Nome/Razão Social]", contratante);
@@ -57,6 +58,20 @@ public class TermsOfServiceService {
                         }
                         if (emailContratante != null && !emailContratante.isEmpty()) {
                             content = content.replace("[E-mail]", emailContratante);
+                        }
+
+                        // Substituir placeholders do plano
+                        if (plan != null) {
+                            content = content.replace("Plano Contratado:",
+                                    "Plano Contratado: " + plan.getDisplayName());
+                            content = content.replace("Mensalidade:", "Mensalidade: R$ " +
+                                    String.format("%,.2f", plan.getPrice()).replace(",", "X").replace(".", ",")
+                                            .replace("X", "."));
+                            content = content.replace("Taxa de Setup:", "Taxa de Setup: R$ " +
+                                    String.format("%,.2f", plan.getSetupFee()).replace(",", "X").replace(".", ",")
+                                            .replace("X", "."));
+                            content = content.replace("Implementação:", "Implementação: 7-10 dias úteis");
+                            content = content.replace("Vencimento:", "Vencimento: Todo dia 10");
                         }
                     }
 
