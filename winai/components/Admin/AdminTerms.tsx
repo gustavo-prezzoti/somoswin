@@ -9,7 +9,8 @@ import {
     CheckCircle,
     XCircle,
     Building2,
-    RefreshCw
+    RefreshCw,
+    Eye
 } from 'lucide-react';
 import { termsAdminService, TermsOfServiceAdmin, UserTermsAcceptanceAdmin } from '../../services/adminService';
 
@@ -22,6 +23,7 @@ const AdminTerms: React.FC = () => {
     const [newVersion, setNewVersion] = useState('');
     const [newContent, setNewContent] = useState('');
     const [creating, setCreating] = useState(false);
+    const [viewingTerm, setViewingTerm] = useState<TermsOfServiceAdmin | null>(null);
 
     useEffect(() => {
         loadData();
@@ -156,8 +158,8 @@ const AdminTerms: React.FC = () => {
                     <button
                         onClick={() => setActiveTab('users')}
                         className={`flex-1 px-4 py-3 font-medium transition-colors ${activeTab === 'users'
-                                ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-500'
-                                : 'text-gray-600 hover:bg-gray-50'
+                            ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-500'
+                            : 'text-gray-600 hover:bg-gray-50'
                             }`}
                     >
                         <div className="flex items-center justify-center gap-2">
@@ -168,8 +170,8 @@ const AdminTerms: React.FC = () => {
                     <button
                         onClick={() => setActiveTab('terms')}
                         className={`flex-1 px-4 py-3 font-medium transition-colors ${activeTab === 'terms'
-                                ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-500'
-                                : 'text-gray-600 hover:bg-gray-50'
+                            ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-500'
+                            : 'text-gray-600 hover:bg-gray-50'
                             }`}
                     >
                         <div className="flex items-center justify-center gap-2">
@@ -266,6 +268,13 @@ const AdminTerms: React.FC = () => {
                                 <p className="text-gray-600 text-sm line-clamp-3">
                                     {term.content.substring(0, 300)}...
                                 </p>
+                                <button
+                                    onClick={() => setViewingTerm(term)}
+                                    className="mt-3 flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                                >
+                                    <Eye size={16} />
+                                    Visualizar Conteúdo Completo
+                                </button>
                             </div>
                         ))}
                         {terms.length === 0 && (
@@ -341,6 +350,38 @@ const AdminTerms: React.FC = () => {
                                         Criar Versão
                                     </>
                                 )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* View Terms Modal */}
+            {viewingTerm && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="flex items-center justify-between p-4 border-b">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Termos de Uso - Versão {viewingTerm.version}</h2>
+                                <p className="text-sm text-gray-500">Criado em {formatDate(viewingTerm.createdAt)}</p>
+                            </div>
+                            <button onClick={() => setViewingTerm(null)} className="text-gray-500 hover:text-gray-700">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto flex-1">
+                            <div className="prose prose-sm max-w-none">
+                                <pre className="whitespace-pre-wrap font-sans text-gray-700 leading-relaxed">
+                                    {viewingTerm.content}
+                                </pre>
+                            </div>
+                        </div>
+                        <div className="flex justify-end p-4 border-t bg-gray-50">
+                            <button
+                                onClick={() => setViewingTerm(null)}
+                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                            >
+                                Fechar
                             </button>
                         </div>
                     </div>
