@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/terms")
+@RequestMapping("/api/v1/terms")
 @RequiredArgsConstructor
 @Slf4j
 public class TermsOfServiceController {
