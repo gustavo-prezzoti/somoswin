@@ -387,6 +387,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
               <li>• Razão Social / Nome do Contratante</li>
               <li>• CNPJ ou CPF</li>
               <li>• E-mail do Contratante</li>
+              <li>• Plano Contratado</li>
             </ul>
           </div>
           <button

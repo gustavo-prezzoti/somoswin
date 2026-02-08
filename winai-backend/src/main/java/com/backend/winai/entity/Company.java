@@ -77,6 +77,7 @@ public class Company {
     public boolean hasRequiredContractFields() {
         return contratante != null && !contratante.trim().isEmpty()
                 && documento != null && !documento.trim().isEmpty()
-                && emailContratante != null && !emailContratante.trim().isEmpty();
+                && emailContratante != null && !emailContratante.trim().isEmpty()
+                && planEntity != null;
     }
 }

@@ -147,7 +147,7 @@ public class TermsOfServiceService {
             response.put("hasAccepted", false);
             response.put("needsContractInfo", true);
             response.put("message",
-                    "Por favor, entre em contato com o administrador para preencher os dados da empresa.");
+                    "Por favor, entre em contato com o administrador para preencher os dados da empresa e configurar o plano contratado.");
             return response;
         }
 
