@@ -86,6 +86,9 @@ export interface GlobalWebhookConfig {
 export interface Company {
     id: string;
     name: string;
+    contratante?: string;
+    documento?: string;
+    emailContratante?: string;
     createdAt?: string;
     defaultSupportMode?: string;
 }
@@ -96,6 +99,9 @@ export interface CreateCompanyRequest {
 
 export interface UpdateCompanyRequest {
     name?: string;
+    contratante?: string;
+    documento?: string;
+    emailContratante?: string;
     defaultSupportMode?: string;
 }
 

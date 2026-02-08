@@ -10,7 +10,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -32,35 +31,7 @@ public class TermsOfServiceController {
     public ResponseEntity<Map<String, Object>> getAcceptanceStatus(
             @AuthenticationPrincipal User user) {
 
-        Map<String, Object> response = new HashMap<>();
-
-        // Verificar se a empresa tem os campos obrigatórios preenchidos
-        boolean hasRequiredFields = user.getCompany() != null
-                && user.getCompany().hasRequiredContractFields();
-
-        response.put("hasRequiredContractFields", hasRequiredFields);
-
-        // Se não tem os campos obrigatórios, não pode aceitar os termos
-        if (!hasRequiredFields) {
-            response.put("hasAccepted", false);
-            response.put("needsContractInfo", true);
-            response.put("message",
-                    "Por favor, entre em contato com o administrador para preencher os dados da empresa.");
-            return ResponseEntity.ok(response);
-        }
-
-        boolean hasAccepted = termsService.hasUserAcceptedCurrentTerms(user.getId());
-
-        response.put("hasAccepted", hasAccepted);
-        response.put("needsContractInfo", false);
-
-        if (!hasAccepted) {
-            termsService.getActiveTerms().ifPresent(terms -> {
-                response.put("termsId", terms.getId());
-                response.put("version", terms.getVersion());
-            });
-        }
-
+        Map<String, Object> response = termsService.getAcceptanceStatus(user.getId());
         return ResponseEntity.ok(response);
     }
 

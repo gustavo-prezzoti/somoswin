@@ -65,6 +65,43 @@ public class TermsOfServiceService {
         return acceptanceRepository.hasUserAcceptedActiveTerms(userId);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> getAcceptanceStatus(UUID userId) {
+        Map<String, Object> response = new HashMap<>();
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        // Verificar se a empresa tem os campos obrigatórios preenchidos
+        boolean hasRequiredFields = user.getCompany() != null
+                && user.getCompany().hasRequiredContractFields();
+
+        response.put("hasRequiredContractFields", hasRequiredFields);
+
+        // Se não tem os campos obrigatórios, não pode aceitar os termos
+        if (!hasRequiredFields) {
+            response.put("hasAccepted", false);
+            response.put("needsContractInfo", true);
+            response.put("message",
+                    "Por favor, entre em contato com o administrador para preencher os dados da empresa.");
+            return response;
+        }
+
+        boolean hasAccepted = acceptanceRepository.hasUserAcceptedActiveTerms(userId);
+
+        response.put("hasAccepted", hasAccepted);
+        response.put("needsContractInfo", false);
+
+        if (!hasAccepted) {
+            termsRepository.findByActiveTrue().ifPresent(terms -> {
+                response.put("termsId", terms.getId());
+                response.put("version", terms.getVersion());
+            });
+        }
+
+        return response;
+    }
+
     @Transactional
     public void acceptTerms(UUID userId, String ipAddress, String userAgent) {
         TermsOfService activeTerms = termsRepository.findByActiveTrue()

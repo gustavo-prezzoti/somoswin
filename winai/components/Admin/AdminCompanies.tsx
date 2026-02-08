@@ -51,7 +51,14 @@ const AdminCompanies: React.FC = () => {
         }
     };
 
-    const handleSave = async (mode: 'create' | 'edit', companyName: string, selectedCompany?: Company | null) => {
+    const handleSave = async (
+        mode: 'create' | 'edit',
+        companyName: string,
+        contratante: string,
+        documento: string,
+        emailContratante: string,
+        selectedCompany?: Company | null
+    ) => {
         if (!companyName.trim()) {
             showAlert('Erro', 'O nome da empresa é obrigatório.', 'error');
             return;
@@ -62,7 +69,12 @@ const AdminCompanies: React.FC = () => {
                 const request: CreateCompanyRequest = { name: companyName };
                 await adminService.createCompany(request);
             } else if (selectedCompany) {
-                const request: UpdateCompanyRequest = { name: companyName };
+                const request: UpdateCompanyRequest = {
+                    name: companyName,
+                    contratante: contratante || undefined,
+                    documento: documento || undefined,
+                    emailContratante: emailContratante || undefined
+                };
                 await adminService.updateCompany(selectedCompany.id, request);
             }
             fetchCompanies();
@@ -76,15 +88,22 @@ const AdminCompanies: React.FC = () => {
 
     const openCompanyModal = (mode: 'create' | 'edit', company?: Company) => {
         let currentName = company?.name || '';
+        let currentContratante = company?.contratante || '';
+        let currentDocumento = company?.documento || '';
+        let currentEmailContratante = company?.emailContratante || '';
 
         const ModalBody = () => {
             const [name, setName] = useState(currentName);
+            const [contratante, setContratante] = useState(currentContratante);
+            const [documento, setDocumento] = useState(currentDocumento);
+            const [emailContratante, setEmailContratante] = useState(currentEmailContratante);
+
             return (
                 <div className="space-y-6 pt-2">
                     <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex gap-3 mb-2">
                         <Building2 size={20} className="text-emerald-600 shrink-0 mt-1" />
                         <p className="text-[11px] font-bold text-emerald-800 uppercase tracking-widest leading-relaxed">
-                            {mode === 'create' ? 'Ao criar uma nova empresa, você habilita o provisionamento de instâncias e agentes dedicados para este cliente.' : 'A alteração do nome será refletida em todos os relatórios e faturas.'}
+                            {mode === 'create' ? 'Ao criar uma nova empresa, você habilita o provisionamento de instâncias e agentes dedicados para este cliente.' : 'Os campos abaixo são utilizados para gerar os Termos de Uso personalizados.'}
                         </p>
                     </div>
 
@@ -103,6 +122,57 @@ const AdminCompanies: React.FC = () => {
                             autoFocus
                         />
                     </div>
+
+                    <div className="border-t border-gray-100 pt-6">
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-4">📋 Dados para Termos de Uso</p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Nome do Contratante</label>
+                                <input
+                                    type="text"
+                                    value={contratante}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setContratante(val);
+                                        currentContratante = val;
+                                    }}
+                                    className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-medium text-gray-800"
+                                    placeholder="Nome completo ou Razão Social"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">CPF / CNPJ</label>
+                                <input
+                                    type="text"
+                                    value={documento}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setDocumento(val);
+                                        currentDocumento = val;
+                                    }}
+                                    className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-medium text-gray-800"
+                                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">E-mail do Contratante</label>
+                                <input
+                                    type="email"
+                                    value={emailContratante}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEmailContratante(val);
+                                        currentEmailContratante = val;
+                                    }}
+                                    className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-medium text-gray-800"
+                                    placeholder="email@empresa.com.br"
+                                />
+                            </div>
+                        </div>
+                    </div>
                 </div>
             );
         };
@@ -112,7 +182,7 @@ const AdminCompanies: React.FC = () => {
             body: <ModalBody />,
             confirmText: mode === 'create' ? 'Criar Empresa' : 'Salvar Alterações',
             onConfirm: async () => {
-                await handleSave(mode, currentName, company);
+                await handleSave(mode, currentName, currentContratante, currentDocumento, currentEmailContratante, company);
             }
         });
     };
