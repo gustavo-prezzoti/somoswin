@@ -12,6 +12,9 @@ export interface TermsStatus {
     hasAccepted: boolean;
     termsId?: string;
     version?: string;
+    needsContractInfo?: boolean;
+    hasRequiredContractFields?: boolean;
+    message?: string;
 }
 
 export const termsService = {

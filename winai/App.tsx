@@ -19,7 +19,8 @@ import {
   Share2,
   ChevronRight,
   Zap,
-  Target
+  Target,
+  AlertTriangle
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Goals from './components/Goals';
@@ -333,6 +334,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
+  const [needsContractInfo, setNeedsContractInfo] = useState(false);
   const [checkingTerms, setCheckingTerms] = useState(true);
   const user = localStorage.getItem('win_user');
 
@@ -345,6 +347,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const checkTermsStatus = async () => {
     try {
       const status = await termsService.checkAcceptanceStatus();
+      setNeedsContractInfo(status.needsContractInfo || false);
       setTermsAccepted(status.hasAccepted);
     } catch (error) {
       console.error('Failed to check terms status:', error);
@@ -361,6 +364,43 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-100">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  // Se precisa preencher dados do contrato, mostra mensagem de bloqueio
+  if (needsContractInfo) {
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+        <div className="bg-white rounded-2xl w-full max-w-lg p-8 text-center shadow-2xl">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="text-amber-600" size={32} />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Dados da Empresa Pendentes</h1>
+          <p className="text-gray-600 mb-6">
+            Para acessar a plataforma, é necessário que os dados da sua empresa estejam completos.
+            Entre em contato com o administrador para preencher as informações obrigatórias.
+          </p>
+          <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm font-medium text-gray-700 mb-2">Campos obrigatórios:</p>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• Razão Social / Nome do Contratante</li>
+              <li>• CNPJ ou CPF</li>
+              <li>• E-mail do Contratante</li>
+            </ul>
+          </div>
+          <button
+            onClick={() => {
+              localStorage.removeItem('win_user');
+              localStorage.removeItem('win_token');
+              localStorage.removeItem('win_refresh_token');
+              window.location.href = '/login';
+            }}
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition-colors"
+          >
+            Voltar ao Login
+          </button>
+        </div>
       </div>
     );
   }
