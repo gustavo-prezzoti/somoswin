@@ -307,9 +307,21 @@ const AdminCompanies: React.FC = () => {
                         </div>
 
                         <div className="flex-1">
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span className="text-[10px] font-bold text-emerald-600 uppercase">Ativa</span>
+                            <div className="flex items-center gap-3 mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    <span className="text-[10px] font-bold text-emerald-600 uppercase">Ativa</span>
+                                </div>
+                                {/* Badge de status do contrato */}
+                                {company.contratante && company.documento && company.emailContratante ? (
+                                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full uppercase">
+                                        ✓ Contrato Configurado
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full uppercase">
+                                        Contrato Pendente
+                                    </span>
+                                )}
                             </div>
                             <h3 className="font-bold text-xl text-gray-800 uppercase italic group-hover:text-emerald-700 transition-colors leading-tight">
                                 {company.name}
