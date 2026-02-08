@@ -122,8 +122,8 @@ public class AdminController {
     @PutMapping("/companies/{companyId}")
     public ResponseEntity<com.backend.winai.entity.Company> updateCompany(
             @Parameter(description = "ID da empresa") @PathVariable UUID companyId,
-            @RequestBody com.backend.winai.entity.Company companyDetails) {
-        return ResponseEntity.ok(adminService.updateCompany(companyId, companyDetails));
+            @RequestBody java.util.Map<String, Object> companyDetails) {
+        return ResponseEntity.ok(adminService.updateCompanyFromMap(companyId, companyDetails));
     }
 
     @Operation(summary = "Excluir Empresa", description = "Remove uma empresa do sistema")

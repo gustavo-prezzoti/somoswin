@@ -395,6 +395,45 @@ public class AdminService {
     }
 
     /**
+     * Atualiza uma empresa existente a partir de um Map (para receber planId como
+     * string)
+     */
+    @Transactional
+    public Company updateCompanyFromMap(UUID companyId, java.util.Map<String, Object> details) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        if (details.get("name") != null) {
+            company.setName((String) details.get("name"));
+        }
+        if (details.get("contratante") != null) {
+            company.setContratante((String) details.get("contratante"));
+        }
+        if (details.get("documento") != null) {
+            company.setDocumento((String) details.get("documento"));
+        }
+        if (details.get("emailContratante") != null) {
+            company.setEmailContratante((String) details.get("emailContratante"));
+        }
+        if (details.get("defaultSupportMode") != null) {
+            company.setDefaultSupportMode((String) details.get("defaultSupportMode"));
+        }
+
+        // Processar planId - buscar o Plan pelo ID
+        if (details.get("planId") != null) {
+            String planIdStr = (String) details.get("planId");
+            if (planIdStr != null && !planIdStr.isEmpty()) {
+                UUID planId = UUID.fromString(planIdStr);
+                planRepository.findById(planId).ifPresent(company::setPlanEntity);
+            }
+        }
+
+        Company savedCompany = companyRepository.save(company);
+        log.info("Empresa atualizada via Map: {}", savedCompany.getName());
+        return savedCompany;
+    }
+
+    /**
      * Exclui uma empresa
      */
     @Transactional

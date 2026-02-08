@@ -390,6 +390,15 @@ const AdminCompanies: React.FC = () => {
                             <h3 className="font-bold text-xl text-gray-800 uppercase italic group-hover:text-emerald-700 transition-colors leading-tight">
                                 {company.name}
                             </h3>
+                            {/* Badge do plano */}
+                            {company.planName && (
+                                <div className="flex items-center gap-2 mt-2">
+                                    <CreditCard size={14} className="text-violet-500" />
+                                    <span className="text-[11px] font-bold text-violet-700 bg-violet-50 px-2 py-1 rounded-lg uppercase">
+                                        {company.planName}
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="pt-8 mt-auto flex justify-between items-center relative z-10">
