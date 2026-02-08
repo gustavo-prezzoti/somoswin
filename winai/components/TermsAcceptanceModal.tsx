@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, JSX } from 'react';
-import { FileText, CheckCircle2, AlertTriangle, ScrollText, Check } from 'lucide-react';
+import { FileText, CheckCircle2, AlertTriangle, ScrollText, Check, XCircle, Video } from 'lucide-react';
 import { termsService, TermsOfService } from '../services/api/terms.service';
 
 interface TermsAcceptanceModalProps {
@@ -83,8 +83,26 @@ const TermsAcceptanceModal: React.FC<TermsAcceptanceModalProps> = ({ onAccepted 
             let remaining = text;
             let key = 0;
 
+            // Mapa de emojis para ícones Lucide
+            const emojiToIcon = (emoji: string, key: number): React.ReactNode => {
+                switch (emoji) {
+                    case '✅':
+                        return <CheckCircle2 key={key} className="inline-block w-4 h-4 text-emerald-500 mr-1" />;
+                    case '❌':
+                        return <XCircle key={key} className="inline-block w-4 h-4 text-red-500 mr-1" />;
+                    case '⚠️':
+                    case '⚠':
+                        return <AlertTriangle key={key} className="inline-block w-4 h-4 text-amber-500 mr-1" />;
+                    case '📹':
+                        return <Video key={key} className="inline-block w-4 h-4 text-blue-500 mr-1" />;
+                    default:
+                        return <span key={key} className="mr-1">{emoji}</span>;
+                }
+            };
+
             while (remaining.length > 0) {
                 const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+                // Regex para capturar emojis
                 const checkMatch = remaining.match(/[✅❌⚠️📹]/);
 
                 if (boldMatch && boldMatch.index !== undefined) {
@@ -98,7 +116,7 @@ const TermsAcceptanceModal: React.FC<TermsAcceptanceModalProps> = ({ onAccepted 
                         parts.push(<span key={key++}>{remaining.slice(0, checkMatch.index)}</span>);
                     }
                     const emoji = checkMatch[0];
-                    parts.push(<span key={key++} className="mr-1">{emoji}</span>);
+                    parts.push(emojiToIcon(emoji, key++));
                     remaining = remaining.slice(checkMatch.index + emoji.length);
                 } else {
                     parts.push(<span key={key++}>{remaining}</span>);
