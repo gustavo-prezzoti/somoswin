@@ -103,8 +103,6 @@ const AdminUsers: React.FC = () => {
             onConfirm: async () => {
                 try {
                     const updatedUser = await adminService.resetUserPassword(userId);
-                    // DEBUG: Show what we received
-                    alert('DEBUG API RESPONSE: ' + JSON.stringify(updatedUser));
 
                     if (updatedUser.tempPassword) {
                         showTempPasswordModal(name, email, updatedUser.tempPassword);
@@ -161,13 +159,16 @@ const AdminUsers: React.FC = () => {
             );
         };
 
-        showConfirm({
-            title: 'Credenciais de Acesso',
-            body: <TempPassBody />,
-            confirmText: 'Entendido, já copiei',
-            type: 'success',
-            onConfirm: () => { }
-        });
+        // Usar setTimeout para garantir que o modal de confirmação anterior feche antes de abrir este
+        setTimeout(() => {
+            showConfirm({
+                title: 'Credenciais de Acesso',
+                body: <TempPassBody />,
+                confirmText: 'Entendido, já copiei',
+                type: 'success',
+                onConfirm: () => { }
+            });
+        }, 100);
     };
 
     const handleSave = async (editingUser: AdminUser | null, formData: CreateUserRequest) => {
