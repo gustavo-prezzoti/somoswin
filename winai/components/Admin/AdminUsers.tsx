@@ -103,10 +103,13 @@ const AdminUsers: React.FC = () => {
             onConfirm: async () => {
                 try {
                     const updatedUser = await adminService.resetUserPassword(userId);
+                    // DEBUG: Show what we received
+                    alert('DEBUG API RESPONSE: ' + JSON.stringify(updatedUser));
+
                     if (updatedUser.tempPassword) {
                         showTempPasswordModal(name, email, updatedUser.tempPassword);
                     } else {
-                        showToast('Senha resetada, mas não foi possível recuperar a nova senha.', 'error');
+                        showToast('Senha resetada, mas tempPassword veio vazio.', 'error');
                     }
                 } catch (err: any) {
                     showToast('Erro ao resetar senha.', 'error');
