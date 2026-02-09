@@ -288,66 +288,69 @@ const AdminTerms: React.FC = () => {
 
             {/* Create Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-                        <div className="flex items-center justify-between p-4 border-b">
-                            <h2 className="text-lg font-bold text-gray-900">Nova Versão dos Termos</h2>
-                            <button onClick={() => setShowCreateModal(false)} className="text-gray-500 hover:text-gray-700">
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 lg:p-8">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
+                            <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Nova Versão dos Termos</h2>
+                            <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-50 rounded-lg">
                                 <X size={24} />
                             </button>
                         </div>
-                        <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
+                        <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
                                     Versão (ex: 1.1, 2.0)
                                 </label>
                                 <input
                                     type="text"
                                     value={newVersion}
                                     onChange={(e) => setNewVersion(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-bold text-gray-800"
                                     placeholder="Digite a versão"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Conteúdo (suporta Markdown)
+                            <div className="flex-1 flex flex-col">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                                    Conteúdo (Markdown)
                                 </label>
                                 <textarea
                                     value={newContent}
                                     onChange={(e) => setNewContent(e.target.value)}
                                     rows={15}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono text-sm"
-                                    placeholder="Cole aqui o conteúdo dos termos..."
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono text-sm text-gray-800 resize-none"
+                                    placeholder="# Termos de Serviço..."
                                 />
                             </div>
-                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                                <p className="text-amber-800 text-sm">
-                                    <strong>Atenção:</strong> Ao criar uma nova versão, todos os usuários precisarão aceitar novamente os termos.
+                            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex gap-3">
+                                <div className="shrink-0 mt-0.5">
+                                    <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">!</div>
+                                </div>
+                                <p className="text-amber-800 text-xs font-medium leading-relaxed">
+                                    <strong>Atenção:</strong> Ao criar uma nova versão, todos os usuários precisarão aceitar novamente os termos no próximo login.
                                 </p>
                             </div>
                         </div>
-                        <div className="flex justify-end gap-3 p-4 border-t bg-gray-50">
+                        <div className="flex justify-end gap-3 p-6 border-t border-gray-100 bg-gray-50/50 shrink-0">
                             <button
                                 onClick={() => setShowCreateModal(false)}
-                                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                                className="px-6 py-3 text-gray-600 hover:bg-white hover:shadow-lg rounded-xl transition-all font-bold text-sm tracking-wide border border-transparent hover:border-gray-100"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={handleCreateTerms}
                                 disabled={!newVersion || !newContent || creating}
-                                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none font-black text-sm uppercase tracking-wider"
                             >
                                 {creating ? (
                                     <>
                                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                                        Criando...
+                                        <span>Criando...</span>
                                     </>
                                 ) : (
                                     <>
                                         <Check size={18} />
-                                        Criar Versão
+                                        <span>Criar Versão</span>
                                     </>
                                 )}
                             </button>
@@ -358,30 +361,32 @@ const AdminTerms: React.FC = () => {
 
             {/* View Terms Modal */}
             {viewingTerm && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-                        <div className="flex items-center justify-between p-4 border-b">
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 lg:p-8">
+                    <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
                             <div>
-                                <h2 className="text-lg font-bold text-gray-900">Termos de Uso - Versão {viewingTerm.version}</h2>
-                                <p className="text-sm text-gray-500">Criado em {formatDate(viewingTerm.createdAt)}</p>
+                                <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Termos de Uso <span className="text-emerald-500">v{viewingTerm.version}</span></h2>
+                                <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wider">Criado em {formatDate(viewingTerm.createdAt)}</p>
                             </div>
-                            <button onClick={() => setViewingTerm(null)} className="text-gray-500 hover:text-gray-700">
+                            <button onClick={() => setViewingTerm(null)} className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-50 rounded-lg">
                                 <X size={24} />
                             </button>
                         </div>
-                        <div className="p-6 overflow-y-auto flex-1">
-                            <div className="prose prose-sm max-w-none">
-                                <pre className="whitespace-pre-wrap font-sans text-gray-700 leading-relaxed">
-                                    {viewingTerm.content}
-                                </pre>
+                        <div className="p-8 overflow-y-auto custom-scrollbar flex-1 bg-gray-50">
+                            <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm max-w-3xl mx-auto">
+                                <article className="prose prose-sm md:prose-base max-w-none prose-headings:font-black prose-headings:tracking-tight prose-headings:text-gray-900 prose-p:text-gray-600 prose-strong:text-gray-900 prose-emerald">
+                                    <pre className="whitespace-pre-wrap font-sans text-gray-700 leading-relaxed">
+                                        {viewingTerm.content}
+                                    </pre>
+                                </article>
                             </div>
                         </div>
-                        <div className="flex justify-end p-4 border-t bg-gray-50">
+                        <div className="flex justify-end p-6 border-t border-gray-100 bg-white shrink-0">
                             <button
                                 onClick={() => setViewingTerm(null)}
-                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                                className="px-8 py-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all font-black text-xs uppercase tracking-widest"
                             >
-                                Fechar
+                                Fechar Visualização
                             </button>
                         </div>
                     </div>
