@@ -23,6 +23,8 @@ export interface AdminUser {
     phone?: string;
     totalMessages: number;
     totalConversations: number;
+    mustChangePassword?: boolean;
+    tempPassword?: string;
 }
 
 export interface AdminInstance {
@@ -46,7 +48,7 @@ export interface AdminInstance {
 export interface CreateUserRequest {
     name: string;
     email: string;
-    password: string;
+    password?: string; // Optional now as backend generates it
     role: string;
     companyId: string;
 }
@@ -162,6 +164,10 @@ const adminService = {
 
     hardDeleteUser: async (userId: string): Promise<void> => {
         await httpClient.delete(`/admin/users/${userId}/permanent`);
+    },
+
+    resetUserPassword: async (userId: string): Promise<AdminUser> => {
+        return await httpClient.post<AdminUser>(`/admin/users/${userId}/reset-password`);
     },
 
     // ========== EMPRESAS ==========

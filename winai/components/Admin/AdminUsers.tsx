@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Lock, Unlock, User as UserIcon, Building2, Shield, Mail, Key, Search, MoreHorizontal } from 'lucide-react';
+import { Plus, Pencil, Trash2, Lock, Unlock, User as UserIcon, Building2, Shield, Mail, Key, Search, Copy, Check } from 'lucide-react';
 import adminService, { AdminUser, CreateUserRequest, UpdateUserRequest, Company } from '../../services/adminService';
 import { useModal } from './ModalContext';
 
 const AdminUsers: React.FC = () => {
     const navigate = useNavigate();
-    const { showAlert, showConfirm, showToast, closeModal } = useModal();
+    const { showAlert, showConfirm, showToast } = useModal();
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [companies, setCompanies] = useState<Company[]>([]);
@@ -94,6 +94,79 @@ const AdminUsers: React.FC = () => {
         });
     };
 
+    const handleResetPassword = (userId: string, name: string, email: string) => {
+        showConfirm({
+            title: 'Resetar Senha',
+            message: `Deseja gerar uma nova senha aleatória para ${name}? A senha atual deixará de funcionar imediatamente.`,
+            type: 'warning',
+            confirmText: 'Sim, gerar nova senha',
+            onConfirm: async () => {
+                try {
+                    const updatedUser = await adminService.resetUserPassword(userId);
+                    if (updatedUser.tempPassword) {
+                        showTempPasswordModal(name, email, updatedUser.tempPassword);
+                    } else {
+                        showToast('Senha resetada, mas não foi possível recuperar a nova senha.', 'error');
+                    }
+                } catch (err: any) {
+                    showToast('Erro ao resetar senha.', 'error');
+                }
+            }
+        });
+    };
+
+    const showTempPasswordModal = (name: string, email: string, tempPass: string) => {
+        const TempPassBody = () => {
+            const [copied, setCopied] = useState(false);
+
+            const handleCopy = () => {
+                navigator.clipboard.writeText(tempPass);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            };
+
+            return (
+                <div className="flex flex-col items-center gap-6 p-4">
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Key size={32} className="text-emerald-600" />
+                        </div>
+                        <h3 className="text-lg font-black text-gray-800 uppercase mb-2">Usuário Criado!</h3>
+                        <p className="text-sm text-gray-500 mb-6">
+                            Copie a senha temporária abaixo e envie para o usuário <strong>{name}</strong> via WhatsApp ou E-mail.
+                        </p>
+                    </div>
+
+                    <div className="w-full bg-gray-900 rounded-2xl p-6 relative group cursor-pointer" onClick={handleCopy}>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 text-center">Senha Temporária</p>
+                        <p className="text-2xl text-white font-mono text-center tracking-widest">{tempPass}</p>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 group-hover:text-emerald-400 transition-colors">
+                            {copied ? <Check size={20} /> : <Copy size={20} />}
+                        </div>
+                        {copied && (
+                            <div className="absolute -top-8 right-0 bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg animate-fade-in-up">
+                                COPIADO!
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-amber-50 text-amber-700 p-4 rounded-xl text-xs flex gap-3 items-start border border-amber-100">
+                        <Shield size={16} className="shrink-0 mt-0.5" />
+                        <p>Esta senha é válida apenas para o primeiro acesso. O usuário será obrigado a definir uma nova senha imediatamente após o login.</p>
+                    </div>
+                </div>
+            );
+        };
+
+        showConfirm({
+            title: 'Credenciais de Acesso',
+            body: <TempPassBody />,
+            confirmText: 'Entendido, já copiei',
+            type: 'success',
+            onConfirm: () => { }
+        });
+    };
+
     const handleSave = async (editingUser: AdminUser | null, formData: CreateUserRequest) => {
         if (!formData.companyId) {
             showAlert('Atenção', 'Selecione uma empresa para este usuário.', 'warning');
@@ -112,8 +185,12 @@ const AdminUsers: React.FC = () => {
                 await adminService.updateUser(editingUser.id, updateData);
                 showToast('Dados do usuário atualizados.');
             } else {
-                await adminService.createUser(formData);
+                const newUser = await adminService.createUser(formData);
                 showToast('Usuário criado com sucesso.');
+
+                if (newUser.tempPassword) {
+                    showTempPasswordModal(newUser.name, newUser.email, newUser.tempPassword);
+                }
             }
             const data = await adminService.getAllUsers();
             setUsers(data || []);
@@ -172,19 +249,20 @@ const AdminUsers: React.FC = () => {
                             />
                         </div>
 
-                        <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                <Key size={12} className="text-amber-500" /> {user ? 'Redefinir Token (Senha)' : 'Credencial de Acesso'}
-                            </label>
-                            <input
-                                type="password"
-                                value={data.password}
-                                onChange={(e) => updateField('password', e.target.value)}
-                                className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-amber-500/10 focus:bg-white transition-all font-bold text-gray-700"
-                                placeholder={user ? 'IMUTÁVEL (OPCIONAL)' : '••••••••'}
-                                required={!user}
-                            />
-                        </div>
+                        {user && (
+                            <div>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                    <Key size={12} className="text-amber-500" /> Redefinir Senha
+                                </label>
+                                <input
+                                    type="password"
+                                    value={data.password}
+                                    onChange={(e) => updateField('password', e.target.value)}
+                                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-amber-500/10 focus:bg-white transition-all font-bold text-gray-700"
+                                    placeholder="NOVA SENHA (OPCIONAL)"
+                                />
+                            </div>
+                        )}
 
                         <div>
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
@@ -277,7 +355,6 @@ const AdminUsers: React.FC = () => {
                 />
             </div>
 
-            {/* Responsive Table/Cards Layout */}
             <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse hidden md:table">
@@ -347,6 +424,9 @@ const AdminUsers: React.FC = () => {
                                                 <button onClick={() => handleDelete(user.id, true)} className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:shadow-xl rounded-xl transition-all border border-gray-100">
                                                     <Trash2 size={18} />
                                                 </button>
+                                                <button onClick={() => handleResetPassword(user.id, user.name, user.email)} className="p-3 bg-white text-gray-400 hover:text-amber-600 hover:shadow-xl rounded-xl transition-all border border-gray-100" title="Resetar Senha">
+                                                    <Key size={18} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -355,7 +435,6 @@ const AdminUsers: React.FC = () => {
                         </tbody>
                     </table>
 
-                    {/* Mobile Cards Layout */}
                     <div className="md:hidden grid grid-cols-1 gap-4 p-4">
                         {filteredUsers.map(user => (
                             <div key={user.id} className="bg-gray-50/50 rounded-3xl p-6 border border-gray-100 space-y-6">

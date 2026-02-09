@@ -41,6 +41,7 @@ import Notifications from './components/Notifications';
 import AdminLayout from './components/Admin/AdminLayout';
 import AdminLogin from './components/Admin/AdminLogin';
 import AdminDashboard from './components/Admin/AdminDashboard';
+import ChangePassword from './components/ChangePassword';
 import AdminUsers from './components/Admin/AdminUsers';
 import AdminInstances from './components/Admin/AdminInstances';
 import AdminSettings from './components/Admin/AdminSettings';
@@ -368,6 +369,27 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     );
   }
 
+  // Check for forced password change
+  // We need to parse user from local storage or state to check the flag
+  // The 'user' variable above is just the string from localStorage, let's parse it
+  try {
+    const userData = JSON.parse(user);
+    if (userData.mustChangePassword) {
+      // Allow access only to change-password route?
+      // Actually ProtectedRoute wraps the content. 
+      // If we are here, we are trying to access a protected route.
+      // We should redirect to /change-password
+      // But /change-password should probably NOT be wrapped in ProtectedRoute? 
+      // Or it SHOULD be, but we allow it.
+      // Let's add logic in App.tsx routes instead? 
+      // No, here is better.
+
+      return <Navigate to="/change-password" replace />;
+    }
+  } catch (e) {
+    // ignore
+  }
+
   // Se precisa preencher dados do contrato, mostra mensagem de bloqueio
   if (needsContractInfo) {
     return (
@@ -432,6 +454,10 @@ const App: React.FC = () => {
         <Route path="/academy" element={<ProtectedRoute><Academy /></ProtectedRoute>} />
         <Route path="/suporte" element={<ProtectedRoute><Support /></ProtectedRoute>} />
         <Route path="/configuracoes" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+
+        <Route path="/change-password" element={
+          localStorage.getItem('win_user') ? <ChangePassword /> : <Navigate to="/login" />
+        } />
 
         {/* Rotas Admin */}
         <Route path="/admin/login" element={<AdminLogin />} />

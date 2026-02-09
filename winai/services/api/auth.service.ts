@@ -66,6 +66,13 @@ export const authService = {
     },
 
     /**
+     * Altera a senha do usuário logado
+     */
+    async changePassword(newPassword: string): Promise<MessageResponse> {
+        return httpClient.post<MessageResponse>('/auth/change-password', { newPassword });
+    },
+
+    /**
      * Realiza logout do usuário
      */
     async logout(): Promise<void> {
