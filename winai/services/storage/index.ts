@@ -91,6 +91,7 @@ export const storageService = {
             plan: getPlanDisplayName(user.plan),
             isLoggedIn: true,
             company: user.company,
+            mustChangePassword: user.mustChangePassword,
         };
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(storedUser));
     },

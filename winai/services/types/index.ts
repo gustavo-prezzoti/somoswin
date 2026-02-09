@@ -23,6 +23,7 @@ export interface UserDTO {
     company: CompanyDTO | null;
     avatarUrl?: string | null;
     phone?: string | null;
+    mustChangePassword?: boolean;
 }
 
 export interface CompanyDTO {
@@ -111,6 +112,7 @@ export interface StoredUser {
     plan: string; // Nome amigável do plano
     isLoggedIn: boolean;
     company: CompanyDTO | null;
+    mustChangePassword?: boolean;
 }
 
 // ============================================
