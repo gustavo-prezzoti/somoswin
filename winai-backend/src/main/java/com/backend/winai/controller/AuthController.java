@@ -62,6 +62,16 @@ public class AuthController {
     }
 
     /**
+     * POST /api/v1/auth/change-password
+     * Altera a senha do usuário logado (ou força troca)
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<MessageResponse> changePassword(@RequestBody ChangePasswordRequest request,
+            java.security.Principal principal) {
+        return ResponseEntity.ok(authService.changePassword(principal.getName(), request.getNewPassword()));
+    }
+
+    /**
      * POST /api/v1/auth/logout
      * Invalida o refresh token
      */

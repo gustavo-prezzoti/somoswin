@@ -46,6 +46,10 @@ public class User implements UserDetails {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Column(name = "must_change_password")
+    @Builder.Default
+    private Boolean mustChangePassword = false;
+
     @Column(name = "email_verified")
     @Builder.Default
     private Boolean emailVerified = false;

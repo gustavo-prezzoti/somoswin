@@ -146,6 +146,18 @@ public class AuthService {
     }
 
     @Transactional
+    public MessageResponse changePassword(String email, String newPassword) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
+
+        return MessageResponse.success("Senha alterada com sucesso");
+    }
+
+    @Transactional
     public void logout(String refreshToken) {
         refreshTokenRepository.findByToken(refreshToken)
                 .ifPresent(refreshTokenRepository::delete);
@@ -185,6 +197,7 @@ public class AuthService {
                         .role(user.getRole().name())
                         .plan(user.getCompany() != null ? user.getCompany().getPlan().name() : "STARTER")
                         .company(companyDTO)
+                        .mustChangePassword(user.getMustChangePassword())
                         .build())
                 .build();
     }

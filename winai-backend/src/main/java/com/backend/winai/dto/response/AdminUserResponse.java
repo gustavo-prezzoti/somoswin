@@ -19,6 +19,8 @@ public class AdminUserResponse {
     private String email;
     private String role;
     private Boolean active;
+    private Boolean mustChangePassword;
+    private String tempPassword; // Only populated on creation if applicable
     private String avatarUrl;
     private ZonedDateTime createdAt;
     private ZonedDateTime lastLogin;

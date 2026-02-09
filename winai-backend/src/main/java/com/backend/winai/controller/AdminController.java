@@ -96,6 +96,13 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
+    @Operation(summary = "Resetar Senha do Usuário", description = "Gera uma nova senha aleatória para o usuário e a retorna")
+    @PostMapping("/users/{userId}/reset-password")
+    public ResponseEntity<AdminUserResponse> resetUserPassword(
+            @Parameter(description = "ID do usuário") @PathVariable UUID userId) {
+        return ResponseEntity.ok(adminService.resetUserPassword(userId));
+    }
+
     // ========== EMPRESAS ==========
 
     @Operation(summary = "Listar Empresas", description = "Lista todas as empresas do sistema")

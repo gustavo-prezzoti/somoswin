@@ -159,12 +159,16 @@ public class AdminService {
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
                 .role(parseRole(request.getRole()))
                 .phone(request.getPhone())
                 .isActive(true)
                 .emailVerified(true) // Admin pode criar verificado
+                .mustChangePassword(true) // Força alteração no primeiro login
                 .build();
+
+        // Gerar senha aleatória de 8 caracteres
+        String tempPassword = generateRandomPassword();
+        user.setPassword(passwordEncoder.encode(tempPassword));
 
         // Associar empresa se fornecida
         if (request.getCompanyId() != null && !request.getCompanyId().isEmpty()) {
@@ -176,7 +180,10 @@ public class AdminService {
         User savedUser = userRepository.save(user);
         log.info("Usuário criado pelo admin: {}", savedUser.getEmail());
 
-        return mapToAdminUserResponse(savedUser);
+        AdminUserResponse response = mapToAdminUserResponse(savedUser);
+        response.setTempPassword(tempPassword); // Retorna a senha temporária APENAS na criação
+
+        return response;
     }
 
     /**
@@ -281,6 +288,28 @@ public class AdminService {
 
         userRepository.delete(user);
         log.info("Usuário {} excluído permanentemente", userId);
+    }
+
+    /**
+     * Reseta a senha do usuário (Admin)
+     * Gera uma nova senha aleatória e retorna para o admin informar ao usuário
+     */
+    @Transactional
+    public AdminUserResponse resetUserPassword(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        String tempPassword = generateRandomPassword();
+        user.setPassword(passwordEncoder.encode(tempPassword));
+        user.setMustChangePassword(true);
+
+        User savedUser = userRepository.save(user);
+        log.info("Senha do usuário {} resetada pelo admin", userId);
+
+        AdminUserResponse response = mapToAdminUserResponse(savedUser);
+        response.setTempPassword(tempPassword);
+
+        return response;
     }
 
     // ========== EMPRESAS ==========
@@ -629,6 +658,7 @@ public class AdminService {
                 .lastLogin(user.getLastLogin())
                 .companyName(user.getCompany() != null ? user.getCompany().getName() : null)
                 .companyId(user.getCompany() != null ? user.getCompany().getId() : null)
+                .mustChangePassword(user.getMustChangePassword())
                 .totalMessages(0L) // TODO: Implementar contagem por usuário
                 .totalConversations(0L) // TODO: Implementar contagem por usuário
                 .build();
@@ -858,5 +888,15 @@ public class AdminService {
                 .createdAt(prompt.getCreatedAt())
                 .updatedAt(prompt.getUpdatedAt())
                 .build();
+    }
+
+    private String generateRandomPassword() {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%";
+        StringBuilder sb = new StringBuilder();
+        java.util.Random random = new java.util.Random();
+        for (int i = 0; i < 10; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 }

@@ -396,9 +396,6 @@ public class FollowUpService {
                     // Nota: O delay do step é "tempo a esperar APÓS o evento anterior".
                     // Aqui, o evento anterior é este envio.
                     ZonedDateTime proposedTime = now.plusMinutes(nextStep.getDelayMinutes());
-
-                    // Verifica se o horário proposto está dentro da janela comercial
-                    // Se não estiver, agenda para a próxima abertura da janela
                     if (!isWithinTimeWindowForDateTime(config, proposedTime)) {
                         proposedTime = calculateNextTimeWindowFrom(config, proposedTime);
                         log.info("Follow-up ajustado para horário comercial: {}", proposedTime);
@@ -483,39 +480,27 @@ public class FollowUpService {
         return isWithinTimeWindowForDateTime(config, ZonedDateTime.now());
     }
 
-    /**
-     * Verifica se um ZonedDateTime específico está dentro da janela de horário
-     * configurada.
-     * Usado para validar agendamentos futuros.
-     */
     private boolean isWithinTimeWindowForDateTime(FollowUpConfig config, ZonedDateTime dateTime) {
         int hour = dateTime.getHour();
         int start = config.getStartHour();
         int end = config.getEndHour();
 
         if (start <= end) {
-            // Janela normal (ex: 9-18)
-            // start=9, end=18 significa das 9:00 até 17:59 (end é exclusivo)
+ 
             return hour >= start && hour < end;
         } else {
-            // Janela atravessa meia-noite (ex: 22-6)
+
             return hour >= start || hour < end;
         }
     }
 
     /**
-     * Calcula próxima abertura da janela de horário a partir do momento atual.
+
      */
     private ZonedDateTime calculateNextTimeWindow(FollowUpConfig config) {
         return calculateNextTimeWindowFrom(config, ZonedDateTime.now());
     }
 
-    /**
-     * Calcula próxima abertura da janela de horário a partir de um ZonedDateTime
-     * específico.
-     * Se o horário proposto está fora da janela, retorna o início da próxima
-     * janela.
-     */
     private ZonedDateTime calculateNextTimeWindowFrom(FollowUpConfig config, ZonedDateTime proposedTime) {
         LocalTime startTime = LocalTime.of(config.getStartHour(), 0);
         int proposedHour = proposedTime.getHour();
@@ -523,23 +508,17 @@ public class FollowUpService {
         int end = config.getEndHour();
 
         if (start <= end) {
-            // Janela normal (ex: 9-18)
             if (proposedHour < start) {
-                // Antes da abertura no mesmo dia - agenda para abertura do mesmo dia
                 return proposedTime.with(startTime);
             } else if (proposedHour >= end) {
-                // Depois do fechamento - agenda para abertura do próximo dia
                 return proposedTime.plusDays(1).with(startTime);
             }
         } else {
-            // Janela atravessa meia-noite (ex: 22-6)
             if (proposedHour >= end && proposedHour < start) {
-                // Fora da janela (entre fechamento e abertura)
                 return proposedTime.with(startTime);
             }
         }
 
-        // Já está dentro da janela
         return proposedTime;
     }
 
