@@ -334,10 +334,21 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 };
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
+  const user = localStorage.getItem('win_user');
+
+  // Check for forced password change IMMEDIATELLY (Before terms check)
+  try {
+    const userData = user ? JSON.parse(user) : null;
+    if (userData?.mustChangePassword) {
+      return <Navigate to="/change-password" replace />;
+    }
+  } catch (e) {
+    // ignore
+  }
+
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
   const [needsContractInfo, setNeedsContractInfo] = useState(false);
   const [checkingTerms, setCheckingTerms] = useState(true);
-  const user = localStorage.getItem('win_user');
 
   useEffect(() => {
     if (user) {
@@ -369,26 +380,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     );
   }
 
-  // Check for forced password change
-  // We need to parse user from local storage or state to check the flag
-  // The 'user' variable above is just the string from localStorage, let's parse it
-  try {
-    const userData = JSON.parse(user);
-    if (userData.mustChangePassword) {
-      // Allow access only to change-password route?
-      // Actually ProtectedRoute wraps the content. 
-      // If we are here, we are trying to access a protected route.
-      // We should redirect to /change-password
-      // But /change-password should probably NOT be wrapped in ProtectedRoute? 
-      // Or it SHOULD be, but we allow it.
-      // Let's add logic in App.tsx routes instead? 
-      // No, here is better.
 
-      return <Navigate to="/change-password" replace />;
-    }
-  } catch (e) {
-    // ignore
-  }
 
   // Se precisa preencher dados do contrato, mostra mensagem de bloqueio
   if (needsContractInfo) {
