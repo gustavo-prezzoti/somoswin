@@ -66,7 +66,7 @@ public class GoogleDriveService {
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
-    private static final String APPLICATION_NAME = "Win AI";
+    private static final String APPLICATION_NAME = "Amplia";
     private static final GsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
     private static final List<String> SCOPES = java.util.Arrays.asList(
             DriveScopes.DRIVE_READONLY,

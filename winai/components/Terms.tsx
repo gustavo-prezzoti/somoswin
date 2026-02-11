@@ -15,7 +15,7 @@ const Terms: React.FC = () => {
                     <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                         <ArrowLeft size={20} className="text-gray-600" />
                     </button>
-                    <img src={logoDark} alt="WIN.AI" className="h-8 w-auto object-contain" />
+                    <img src={logoDark} alt="Amplia" className="h-8 w-auto object-contain" />
                 </div>
                 <div className="flex items-center gap-2 text-emerald-600 font-bold uppercase text-xs tracking-widest">
                     <Shield size={16} /> Termos de Uso
@@ -32,9 +32,9 @@ const Terms: React.FC = () => {
 
                     <div className="text-gray-600 space-y-8">
                         <section>
-                            <h3 className="text-xl font-black text-gray-900 uppercase italic mb-4">1. Visão Geral do Ecossistema WIN.AI</h3>
+                            <h3 className="text-xl font-black text-gray-900 uppercase italic mb-4">1. Visão Geral do Ecossistema Amplia</h3>
                             <p className="leading-relaxed">
-                                A WIN.AI é uma infraestrutura neural avançada projetada para automação de processos comerciais, qualificação de leads e gestão assistida por Inteligência Artificial. Ao utilizar nossa plataforma, você acessa um ecossistema que integra processamento de linguagem natural (LLM), sincronização em tempo real com canais de comunicação (WhatsApp/Z-API) e gestão estratégica de CRM.
+                                A Amplia é uma infraestrutura neural avançada projetada para automação de processos comerciais, qualificação de leads e gestão assistida por Inteligência Artificial. Ao utilizar nossa plataforma, você acessa um ecossistema que integra processamento de linguagem natural (LLM), sincronização em tempo real com canais de comunicação (WhatsApp/Z-API) e gestão estratégica de CRM.
                             </p>
                         </section>
 
@@ -53,7 +53,7 @@ const Terms: React.FC = () => {
                         <section>
                             <h3 className="text-xl font-black text-gray-900 uppercase italic mb-4">3. Integração WhatsApp e Políticas de Uso</h3>
                             <p className="leading-relaxed mb-4">
-                                A integração via Uazap/Z-API deve seguir estritamente as políticas comerciais do WhatsApp. A WIN.AI proíbe:
+                                A integração via Uazap/Z-API deve seguir estritamente as políticas comerciais do WhatsApp. A Amplia proíbe:
                             </p>
                             <ul className="list-disc pl-5 space-y-2 font-medium text-rose-600">
                                 <li>Prática de SPAM ou envio de mensagens em massa para leads que não forneceram consentimento prévio (Opt-in).</li>
@@ -65,14 +65,14 @@ const Terms: React.FC = () => {
                         <section>
                             <h3 className="text-xl font-black text-gray-900 uppercase italic mb-4">4. Privacidade e Segurança (LGPD)</h3>
                             <p className="leading-relaxed">
-                                Toda a infraestrutura WIN.AI é regida pelos princípios da Lei Geral de Proteção de Dados. Seus dados e os dados de seus leads são criptografados em repouso e em trânsito. A WIN.AI atua como Operadora de Dados, enquanto você (o cliente) atua como Controlador, sendo sua a responsabilidade legal de assegurar que os leads tenham plena ciência de que seus dados estão sendo processados por sistemas automatizados.
+                                Toda a infraestrutura Amplia é regida pelos princípios da Lei Geral de Proteção de Dados. Seus dados e os dados de seus leads são criptografados em repouso e em trânsito. A Amplia atua como Operadora de Dados, enquanto você (o cliente) atua como Controlador, sendo sua a responsabilidade legal de assegurar que os leads tenham plena ciência de que seus dados estão sendo processados por sistemas automatizados.
                             </p>
                         </section>
 
                         <section>
                             <h3 className="text-xl font-black text-gray-900 uppercase italic mb-4">5. Propriedade Intelectual</h3>
                             <p className="leading-relaxed">
-                                Todos os prompts, arquiteturas internas de agentes, designs de interface e algoritmos de scoring são propriedade exclusiva da WIN.AI Technologies. O acesso à plataforma concede uma licença de uso, não a posse do código-fonte ou da lógica proprietária dos modelos neurais.
+                                Todos os prompts, arquiteturas internas de agentes, designs de interface e algoritmos de scoring são propriedade exclusiva da Amplia Technologies. O acesso à plataforma concede uma licença de uso, não a posse do código-fonte ou da lógica proprietária dos modelos neurais.
                             </p>
                         </section>
 
@@ -86,7 +86,7 @@ const Terms: React.FC = () => {
 
                     <div className="pt-12 border-t border-gray-100">
                         <p className="text-xs text-gray-400 font-medium uppercase tracking-widest text-center">
-                            WIN.AI Technologies Ltd. • Todos os direitos reservados
+                            Amplia Technologies Ltd. • Todos os direitos reservados
                         </p>
                     </div>
                 </div>

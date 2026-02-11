@@ -188,7 +188,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
       >
         <div className="p-6 flex items-center justify-center">
           <div className="flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
-            <img src={logoLight} alt="WIN.AI" className={`${isSidebarOpen ? 'h-8' : 'h-6'} w-auto object-contain`} />
+            <img src={logoLight} alt="Amplia" className={`${isSidebarOpen ? 'h-8' : 'h-6'} w-auto object-contain`} />
           </div>
         </div>
 
@@ -274,7 +274,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
               >
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-black text-gray-800 tracking-tight truncate max-w-[200px]">{user?.name || 'Diretor Executivo'}</p>
-                  <p className="text-[9px] uppercase tracking-wider text-emerald-600 font-black">{user?.plan || 'WIN Ultra'}</p>
+                  <p className="text-[9px] uppercase tracking-wider text-emerald-600 font-black">{user?.plan || 'Amplia Ultra'}</p>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden border-2 border-emerald-500 shadow-lg shadow-emerald-500/10">
                   {user?.avatarUrl ? (

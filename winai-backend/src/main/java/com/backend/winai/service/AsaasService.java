@@ -117,7 +117,7 @@ public class AsaasService {
                 .value(plan.getPrice().doubleValue())
                 .nextDueDate(firstDueDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
                 .cycle("MONTHLY")
-                .description("Win AI - Plano " + plan.getDisplayName())
+                .description("Amplia - Plano " + plan.getDisplayName())
                 .externalReference(company.getId().toString())
                 .build();
 
@@ -296,7 +296,7 @@ public class AsaasService {
         paymentBody.put("value", chargeValue.doubleValue());
         paymentBody.put("dueDate", LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE));
         paymentBody.put("description", String.format(
-                "Win AI - Upgrade para Plano %s%s",
+                "Amplia - Upgrade para Plano %s%s",
                 newPlan.getDisplayName(),
                 credit.compareTo(BigDecimal.ZERO) > 0
                         ? String.format(" (crédito pro-rata R$ %s)", credit.setScale(2, RoundingMode.HALF_UP))

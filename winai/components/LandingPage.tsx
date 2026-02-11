@@ -85,7 +85,7 @@ const LandingPage: React.FC = () => {
          {/* Navbar */}
          <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100 h-20 flex items-center px-6 md:px-12">
             <div className="flex items-center gap-2 flex-1">
-               <img src={logoDark} alt="WIN.AI" className="h-10 w-auto object-contain" />
+               <img src={logoDark} alt="Amplia" className="h-10 w-auto object-contain" />
             </div>
             <div className="hidden lg:flex items-center gap-10 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                <button onClick={() => scrollTo('diagnostico')} className="hover:text-emerald-600 transition-colors">Como Funciona</button>
@@ -316,7 +316,7 @@ const LandingPage: React.FC = () => {
                                  name="company"
                                  required
                                  type="text"
-                                 placeholder="Ex: Win.AI Tech"
+                                 placeholder="Ex: Amplia Tech"
                                  className="w-full pl-12 pr-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
                                  onChange={handleInputChange}
                               />
@@ -378,9 +378,9 @@ const LandingPage: React.FC = () => {
          <footer className="py-24 px-6 md:px-12 border-t border-gray-100 bg-white">
             <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
                <div className="flex items-center gap-2">
-                  <img src={logoDark} alt="WIN.AI" className="h-10 w-auto object-contain" />
+                  <img src={logoDark} alt="Amplia" className="h-10 w-auto object-contain" />
                </div>
-               <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">WIN.AI TECHNOLOGIES LTD. • SISTEMA DE ALTA PERFORMANCE 2025</p>
+               <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">AMPLIA TECHNOLOGIES LTD. • SISTEMA DE ALTA PERFORMANCE 2025</p>
                <div className="flex items-center gap-3 text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">
                   <ShieldCheck size={16} /> Sistema de Vendas 100% Blindado
                </div>

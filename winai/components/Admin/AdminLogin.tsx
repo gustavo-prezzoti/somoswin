@@ -51,7 +51,7 @@ const AdminLogin: React.FC = () => {
             <div className="w-full max-w-md animate-in fade-in zoom-in duration-700">
                 <div className="flex flex-col items-center mb-10">
                     <div className="p-4 bg-white rounded-3xl shadow-2xl shadow-gray-200 mb-6 group hover:scale-105 transition-transform duration-500">
-                        <img src={logoBlack} alt="Win AI" className="h-10 w-auto" />
+                        <img src={logoBlack} alt="Amplia" className="h-10 w-auto" />
                     </div>
                     <div className="flex items-center gap-2 mb-2">
                         <ShieldCheck size={14} className="text-emerald-500" />

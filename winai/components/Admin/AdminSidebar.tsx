@@ -14,7 +14,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
         <aside className={`admin-sidebar ${isOpen ? 'open' : ''}`}>
             <div className="admin-sidebar-header">
                 <div className="admin-logo">
-                    <img src={logoBlack} alt="Win AI Admin" className="admin-logo-img" style={{ height: '36px', width: 'auto' }} />
+                    <img src={logoBlack} alt="Amplia Admin" className="admin-logo-img" style={{ height: '36px', width: 'auto' }} />
                 </div>
                 <button onClick={onClose} className="lg:hidden p-3 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all">
                     <X size={20} strokeWidth={3} />

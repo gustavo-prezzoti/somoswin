@@ -36,7 +36,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
                             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
                             Sistema
                         </p>
-                        <h2 className="text-lg font-black text-gray-900 tracking-tighter uppercase italic leading-none">Win AI • Admin</h2>
+                        <h2 className="text-lg font-black text-gray-900 tracking-tighter uppercase italic leading-none">Amplia • Admin</h2>
                     </div>
                 </div>
             </div>

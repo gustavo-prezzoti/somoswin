@@ -67,7 +67,7 @@ const Checkout: React.FC = () => {
                <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-600/20">
                   <span className="text-white font-black">W</span>
                </div>
-               <span className="font-black text-gray-800 tracking-tighter italic">WIN.AI</span>
+               <span className="font-black text-gray-800 tracking-tighter italic">Amplia</span>
             </div>
             <div className="flex items-center gap-2 text-emerald-600 font-bold text-[10px] uppercase tracking-widest border border-emerald-100 bg-emerald-50 px-3 py-1.5 rounded-full">
                <ShieldCheck size={14} /> Cadastro Seguro
@@ -256,7 +256,7 @@ const Checkout: React.FC = () => {
 
                <div className="pt-8 border-t border-gray-50">
                   <p className="text-[10px] text-gray-400 font-medium mb-8 text-center leading-relaxed">
-                     Ao clicar em finalizar, você concorda com nossos termos de uso e com a política de privacidade da WIN.AI Technologies.
+                     Ao clicar em finalizar, você concorda com nossos termos de uso e com a política de privacidade da Amplia Technologies.
                   </p>
                   <button
                      type="submit"
@@ -283,7 +283,7 @@ const Checkout: React.FC = () => {
          </main>
 
          <footer className="py-12 px-10 border-t border-gray-100 bg-white text-center">
-            <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">WIN.AI TECHNOLOGIES LTD. • SISTEMA DE ALTA PERFORMANCE 2025</p>
+            <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">Amplia TECHNOLOGIES LTD. • SISTEMA DE ALTA PERFORMANCE 2025</p>
          </footer>
       </div>
    );

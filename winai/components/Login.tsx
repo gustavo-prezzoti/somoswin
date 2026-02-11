@@ -47,7 +47,7 @@ const Login: React.FC = () => {
             {/* Left Side: Login Form */}
             <div className="p-10 md:p-20 space-y-10 flex flex-col justify-center bg-white">
                <div className="w-fit flex flex-col items-center space-y-6 -mt-12">
-                  <img src={logoDark} alt="WIN.AI" className="h-16 w-auto object-contain" />
+                  <img src={logoDark} alt="Amplia" className="h-16 w-auto object-contain" />
 
                   <div className="space-y-4 text-left w-full">
                      <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter leading-none italic uppercase">
@@ -179,7 +179,7 @@ const Login: React.FC = () => {
                      <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                      <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">Sistemas Online</span>
                   </div>
-                  <p className="text-emerald-100/30 text-[9px] font-bold uppercase tracking-widest">© 2025 WIN.AI TECHNOLOGIES</p>
+                  <p className="text-emerald-100/30 text-[9px] font-bold uppercase tracking-widest">© 2025 AMPLIA TECHNOLOGIES</p>
                </div>
             </div>
          </div>

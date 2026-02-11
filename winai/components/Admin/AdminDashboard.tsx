@@ -124,7 +124,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="relative">
                     <h1 className="text-5xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Dashboard</h1>
                     <p className="text-gray-500 font-bold text-sm tracking-tight mt-3 opacity-70 flex items-center gap-2">
-                        Visão geral do sistema Win AI
+                        Visão geral do sistema Amplia
                     </p>
                 </div>
 
