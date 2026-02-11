@@ -287,7 +287,7 @@ public class AsaasService {
         // Cria cobrança avulsa no Asaas (não é assinatura, é um payment único)
         Map<String, Object> paymentBody = new java.util.LinkedHashMap<>();
         paymentBody.put("customer", customerId);
-        paymentBody.put("billingType", "UNDEFINED");
+        paymentBody.put("billingType", "PIX");
         paymentBody.put("value", chargeValue.doubleValue());
         paymentBody.put("dueDate", LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE));
         paymentBody.put("description", String.format(
