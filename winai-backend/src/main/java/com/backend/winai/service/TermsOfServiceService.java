@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -161,6 +162,33 @@ public class TermsOfServiceService {
                 response.put("termsId", terms.getId());
                 response.put("version", terms.getVersion());
             });
+        }
+
+        // Verificar vigência da assinatura (apenas para usuários não-ADMIN)
+        boolean isAdmin = user.getRole() != null
+                && user.getRole().name().equals("ADMIN");
+
+        if (!isAdmin && user.getCompany() != null) {
+            var company = user.getCompany();
+            LocalDate endDate = company.getSubscriptionEndDate();
+            boolean expired = endDate != null && endDate.isBefore(LocalDate.now());
+            boolean noSubscription = company.getAsaasSubscriptionId() == null
+                    || company.getAsaasSubscriptionId().isBlank();
+
+            // Expirado OU sem assinatura ativa (e tem plano configurado)
+            boolean blocked = expired || (noSubscription && company.getPlanEntity() != null
+                    && !"ACTIVE".equals(company.getSubscriptionStatus()));
+
+            response.put("subscriptionExpired", blocked);
+
+            if (blocked) {
+                response.put("subscriptionPlanName",
+                        company.getPlanEntity() != null ? company.getPlanEntity().getDisplayName() : "Sem plano");
+                response.put("subscriptionEndDate",
+                        endDate != null ? endDate.toString() : null);
+            }
+        } else {
+            response.put("subscriptionExpired", false);
         }
 
         return response;

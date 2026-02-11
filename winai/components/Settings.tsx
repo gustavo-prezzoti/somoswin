@@ -31,7 +31,14 @@ import ToastComponent from './ui/Toast';
 import MetaConnectionManager from './MetaConnectionManager';
 
 const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'integrations' | 'subscription'>('profile');
+  const initialTab = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'subscription') return 'subscription';
+    if (tab === 'integrations') return 'integrations';
+    return 'profile';
+  })();
+  const [activeTab, setActiveTab] = useState<'profile' | 'integrations' | 'subscription'>(initialTab as any);
   const [user, setUser] = useState<any>(null);
   const [saved, setSaved] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);

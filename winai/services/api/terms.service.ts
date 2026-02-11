@@ -15,6 +15,9 @@ export interface TermsStatus {
     needsContractInfo?: boolean;
     hasRequiredContractFields?: boolean;
     message?: string;
+    subscriptionExpired?: boolean;
+    subscriptionPlanName?: string;
+    subscriptionEndDate?: string;
 }
 
 export const termsService = {
