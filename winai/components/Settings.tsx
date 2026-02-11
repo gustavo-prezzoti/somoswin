@@ -24,7 +24,7 @@ import { googleDriveService } from '../services/api/google-drive.service';
 import { userService } from '../services/api/user.service';
 import { marketingService } from '../services/api/marketing.service';
 import { whatsappService } from '../services/api/whatsapp.service';
-import { subscriptionService, SubscriptionDetails, PaymentRecord, PlanOption, PlanChangePreview } from '../services/api/subscription.service';
+import { subscriptionService, SubscriptionDetails, PaymentRecord, PlanOption, PlanChangePreview, PaginatedPayments } from '../services/api/subscription.service';
 import { ConfirmModal } from './ui/Modal';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
@@ -52,6 +52,10 @@ const Settings: React.FC = () => {
   const [showMetaDetails, setShowMetaDetails] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [paymentPage, setPaymentPage] = useState(0);
+  const [paymentTotalPages, setPaymentTotalPages] = useState(0);
+  const [paymentTotalCount, setPaymentTotalCount] = useState(0);
+  const [loadingPayments, setLoadingPayments] = useState(false);
   const [loadingSubscription, setLoadingSubscription] = useState(false);
   const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
   const [changingPlan, setChangingPlan] = useState(false);
@@ -353,16 +357,34 @@ const Settings: React.FC = () => {
     try {
       const [subData, payData, plansData] = await Promise.all([
         subscriptionService.getMySubscription(),
-        subscriptionService.getMyPayments(),
+        subscriptionService.getMyPayments(0, 10),
         subscriptionService.getAvailablePlans()
       ]);
       setSubscription(subData);
-      setPayments(payData);
+      setPayments(payData.data);
+      setPaymentPage(payData.page);
+      setPaymentTotalPages(payData.totalPages);
+      setPaymentTotalCount(payData.totalCount);
       setAvailablePlans(plansData);
     } catch (error) {
       console.error('Failed to load subscription:', error);
     } finally {
       setLoadingSubscription(false);
+    }
+  };
+
+  const loadPaymentPage = async (page: number) => {
+    setLoadingPayments(true);
+    try {
+      const payData = await subscriptionService.getMyPayments(page, 10);
+      setPayments(payData.data);
+      setPaymentPage(payData.page);
+      setPaymentTotalPages(payData.totalPages);
+      setPaymentTotalCount(payData.totalCount);
+    } catch (error) {
+      console.error('Failed to load payments:', error);
+    } finally {
+      setLoadingPayments(false);
     }
   };
 
@@ -815,14 +837,14 @@ const Settings: React.FC = () => {
                         <h3 className="text-lg font-black text-gray-900 uppercase italic tracking-tight">Histórico de Pagamentos</h3>
                       </div>
 
-                      {payments.length === 0 ? (
+                      {payments.length === 0 && !loadingPayments ? (
                         <div className="p-10 bg-gray-50 rounded-[32px] border border-gray-100 flex flex-col items-center justify-center text-center">
                           <FileText size={32} className="text-gray-300 mb-4" />
                           <p className="text-sm font-bold text-gray-400 uppercase">Nenhum pagamento registrado</p>
                           <p className="text-xs text-gray-400 mt-1">Os pagamentos aparecerão aqui assim que forem gerados.</p>
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className={`space-y-3 ${loadingPayments ? 'opacity-50 pointer-events-none' : ''}`}>
                           {payments.map((payment) => (
                             <div key={payment.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:shadow-sm transition-all">
                               <div className="flex items-center gap-4">
@@ -842,9 +864,14 @@ const Settings: React.FC = () => {
                                     : <DollarSign size={18} />}
                                 </div>
                                 <div>
-                                  <p className="text-sm font-black text-gray-800">
-                                    R$ {payment.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-black text-gray-800">
+                                      R$ {payment.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                    {payment.type === 'PLAN_CHANGE' && (
+                                      <span className="px-2 py-0.5 rounded text-[8px] font-bold uppercase bg-blue-100 text-blue-600">Troca de Plano</span>
+                                    )}
+                                  </div>
                                   <p className="text-[10px] text-gray-400 font-medium">
                                     Vencimento: {payment.dueDate ? new Date(payment.dueDate + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
                                     {payment.paymentDate && (
@@ -869,6 +896,31 @@ const Settings: React.FC = () => {
                               </div>
                             </div>
                           ))}
+
+                          {/* Paginação */}
+                          {paymentTotalPages > 1 && (
+                            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                              <p className="text-xs text-gray-400">
+                                {paymentTotalCount} pagamento{paymentTotalCount !== 1 ? 's' : ''} · Página {paymentPage + 1} de {paymentTotalPages}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => loadPaymentPage(paymentPage - 1)}
+                                  disabled={paymentPage === 0 || loadingPayments}
+                                  className="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                >
+                                  Anterior
+                                </button>
+                                <button
+                                  onClick={() => loadPaymentPage(paymentPage + 1)}
+                                  disabled={paymentPage >= paymentTotalPages - 1 || loadingPayments}
+                                  className="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                >
+                                  Próxima
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

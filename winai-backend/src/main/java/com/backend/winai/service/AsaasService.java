@@ -393,16 +393,28 @@ public class AsaasService {
         }
 
         // Cria nova assinatura recorrente com o novo plano
-        createSubscription(companyId, newPlanId);
+        try {
+            createSubscription(companyId, newPlanId);
 
-        // Limpa dados pendentes
-        Company updated = companyRepository.findById(companyId).orElse(company);
-        updated.setPendingPlan(null);
-        updated.setPendingPlanPaymentId(null);
-        companyRepository.save(updated);
+            // Limpa dados pendentes
+            Company updated = companyRepository.findById(companyId).orElse(company);
+            updated.setPendingPlan(null);
+            updated.setPendingPlanPaymentId(null);
+            companyRepository.save(updated);
 
-        log.info("[ASAAS] Troca de plano concluída para empresa {} - Novo plano: {}",
-                company.getName(), newPlan.getDisplayName());
+            log.info("[ASAAS] Troca de plano concluída para empresa {} - Novo plano: {}",
+                    company.getName(), newPlan.getDisplayName());
+        } catch (Exception e) {
+            log.error("[ASAAS] Erro ao criar nova assinatura para empresa {} - Plano {}: {}",
+                    company.getName(), newPlan.getDisplayName(), e.getMessage());
+            // Limpa pendência mesmo com erro para não ficar em estado inconsistente
+            Company updated = companyRepository.findById(companyId).orElse(company);
+            updated.setPendingPlan(null);
+            updated.setPendingPlanPaymentId(null);
+            updated.setSubscriptionStatus("ERROR");
+            companyRepository.save(updated);
+            throw e;
+        }
     }
 
     /**
@@ -446,52 +458,104 @@ public class AsaasService {
     }
 
     /**
-     * Lista histórico de pagamentos da assinatura no Asaas.
+     * Lista histórico de pagamentos no Asaas (assinatura + cobranças avulsas de troca de plano).
+     * Retorna resultado paginado com totalCount, page, limit e data.
      */
     @SuppressWarnings("unchecked")
-    public java.util.List<Map<String, Object>> getPaymentHistory(UUID companyId) {
+    public Map<String, Object> getPaymentHistory(UUID companyId, int page, int limit) {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada: " + companyId));
 
-        if (company.getAsaasSubscriptionId() == null || company.getAsaasSubscriptionId().isBlank()) {
-            return java.util.Collections.emptyList();
-        }
+        java.util.List<Map<String, Object>> allPayments = new java.util.ArrayList<>();
 
-        try {
-            HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    asaasApiUrl + "/subscriptions/" + company.getAsaasSubscriptionId() + "/payments",
-                    HttpMethod.GET,
-                    entity,
-                    Map.class);
+        // 1) Pagamentos da assinatura recorrente
+        if (company.getAsaasSubscriptionId() != null && !company.getAsaasSubscriptionId().isBlank()) {
+            try {
+                HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
+                ResponseEntity<Map> response = restTemplate.exchange(
+                        asaasApiUrl + "/subscriptions/" + company.getAsaasSubscriptionId() + "/payments",
+                        HttpMethod.GET, entity, Map.class);
 
-            if (response.getBody() != null) {
-                var data = response.getBody();
-                var payments = (java.util.List<Map<String, Object>>) data.get("data");
-                if (payments != null) {
-                    return payments.stream().map(p -> {
-                        Map<String, Object> item = new java.util.LinkedHashMap<>();
-                        item.put("id", p.get("id"));
-                        item.put("status", p.get("status"));
-                        item.put("value", p.get("value"));
-                        item.put("netValue", p.get("netValue"));
-                        item.put("dueDate", p.get("dueDate"));
-                        item.put("paymentDate", p.get("paymentDate"));
-                        item.put("confirmedDate", p.get("confirmedDate"));
-                        item.put("billingType", p.get("billingType"));
-                        item.put("invoiceUrl", p.get("invoiceUrl"));
-                        item.put("bankSlipUrl", p.get("bankSlipUrl"));
-                        item.put("invoiceNumber", p.get("invoiceNumber"));
-                        item.put("description", p.get("description"));
-                        return item;
-                    }).collect(java.util.stream.Collectors.toList());
+                if (response.getBody() != null) {
+                    var payments = (java.util.List<Map<String, Object>>) response.getBody().get("data");
+                    if (payments != null) {
+                        payments.forEach(p -> allPayments.add(mapPayment(p, "SUBSCRIPTION")));
+                    }
                 }
+            } catch (HttpClientErrorException e) {
+                log.error("[ASAAS] Erro ao buscar pagamentos da assinatura: {} - {}",
+                        e.getStatusCode(), e.getResponseBodyAsString());
             }
-        } catch (HttpClientErrorException e) {
-            log.error("[ASAAS] Erro ao buscar histórico de pagamentos: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
         }
 
-        return java.util.Collections.emptyList();
+        // 2) Cobranças avulsas do customer (troca de plano)
+        if (company.getAsaasCustomerId() != null && !company.getAsaasCustomerId().isBlank()) {
+            try {
+                HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
+                ResponseEntity<Map> response = restTemplate.exchange(
+                        asaasApiUrl + "/payments?customer=" + company.getAsaasCustomerId()
+                                + "&limit=50&order=desc",
+                        HttpMethod.GET, entity, Map.class);
+
+                if (response.getBody() != null) {
+                    var payments = (java.util.List<Map<String, Object>>) response.getBody().get("data");
+                    if (payments != null) {
+                        payments.stream()
+                                .filter(p -> {
+                                    String extRef = (String) p.get("externalReference");
+                                    return extRef != null && extRef.startsWith("PLAN_CHANGE:");
+                                })
+                                .forEach(p -> allPayments.add(mapPayment(p, "PLAN_CHANGE")));
+                    }
+                }
+            } catch (HttpClientErrorException e) {
+                log.error("[ASAAS] Erro ao buscar cobranças avulsas: {} - {}",
+                        e.getStatusCode(), e.getResponseBodyAsString());
+            }
+        }
+
+        // Ordena por dueDate desc
+        allPayments.sort((a, b) -> {
+            String dateA = (String) a.get("dueDate");
+            String dateB = (String) b.get("dueDate");
+            if (dateA == null) return 1;
+            if (dateB == null) return -1;
+            return dateB.compareTo(dateA);
+        });
+
+        // Paginação
+        int totalCount = allPayments.size();
+        int offset = page * limit;
+        java.util.List<Map<String, Object>> pageData = allPayments.stream()
+                .skip(offset)
+                .limit(limit)
+                .collect(java.util.stream.Collectors.toList());
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("data", pageData);
+        result.put("totalCount", totalCount);
+        result.put("page", page);
+        result.put("limit", limit);
+        result.put("totalPages", (int) Math.ceil((double) totalCount / limit));
+        return result;
+    }
+
+    private Map<String, Object> mapPayment(Map<String, Object> p, String type) {
+        Map<String, Object> item = new java.util.LinkedHashMap<>();
+        item.put("id", p.get("id"));
+        item.put("status", p.get("status"));
+        item.put("value", p.get("value"));
+        item.put("netValue", p.get("netValue"));
+        item.put("dueDate", p.get("dueDate"));
+        item.put("paymentDate", p.get("paymentDate"));
+        item.put("confirmedDate", p.get("confirmedDate"));
+        item.put("billingType", p.get("billingType"));
+        item.put("invoiceUrl", p.get("invoiceUrl"));
+        item.put("bankSlipUrl", p.get("bankSlipUrl"));
+        item.put("invoiceNumber", p.get("invoiceNumber"));
+        item.put("description", p.get("description"));
+        item.put("type", type);
+        return item;
     }
 
     /**

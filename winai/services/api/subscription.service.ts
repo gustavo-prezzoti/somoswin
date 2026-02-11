@@ -41,6 +41,15 @@ export interface PaymentRecord {
     bankSlipUrl: string | null;
     invoiceNumber: string | null;
     description: string | null;
+    type?: 'SUBSCRIPTION' | 'PLAN_CHANGE';
+}
+
+export interface PaginatedPayments {
+    data: PaymentRecord[];
+    totalCount: number;
+    page: number;
+    limit: number;
+    totalPages: number;
 }
 
 export interface PlanOption {
@@ -80,8 +89,8 @@ export const subscriptionService = {
         return await httpClient.get<SubscriptionDetails>('/asaas/my-subscription');
     },
 
-    getMyPayments: async (): Promise<PaymentRecord[]> => {
-        return await httpClient.get<PaymentRecord[]>('/asaas/my-subscription/payments');
+    getMyPayments: async (page = 0, limit = 10): Promise<PaginatedPayments> => {
+        return await httpClient.get<PaginatedPayments>(`/asaas/my-subscription/payments?page=${page}&limit=${limit}`);
     },
 
     getMyInvoice: async (): Promise<string> => {

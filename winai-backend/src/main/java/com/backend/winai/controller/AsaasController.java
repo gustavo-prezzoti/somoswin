@@ -94,13 +94,16 @@ public class AsaasController {
         return ResponseEntity.ok(asaasService.getSubscriptionDetails(user.getCompany().getId()));
     }
 
-    @Operation(summary = "Meu histórico de pagamentos", description = "Lista pagamentos da assinatura da empresa do usuário logado")
+    @Operation(summary = "Meu histórico de pagamentos", description = "Lista pagamentos da assinatura da empresa do usuário logado (paginado)")
     @GetMapping("/my-subscription/payments")
-    public ResponseEntity<List<Map<String, Object>>> getMyPayments(@AuthenticationPrincipal User user) {
+    public ResponseEntity<Map<String, Object>> getMyPayments(
+            @AuthenticationPrincipal User user,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int limit) {
         if (user.getCompany() == null) {
-            return ResponseEntity.ok(List.of());
+            return ResponseEntity.ok(Map.of("data", List.of(), "totalCount", 0, "page", page, "limit", limit));
         }
-        return ResponseEntity.ok(asaasService.getPaymentHistory(user.getCompany().getId()));
+        return ResponseEntity.ok(asaasService.getPaymentHistory(user.getCompany().getId(), page, limit));
     }
 
     @Operation(summary = "Meu link de pagamento", description = "Retorna o link de pagamento/fatura da assinatura do usuário logado")
