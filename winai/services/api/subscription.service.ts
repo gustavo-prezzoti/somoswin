@@ -48,6 +48,25 @@ export interface PlanOption {
     description: string;
 }
 
+export interface PlanChangePreview {
+    currentPlanName: string | null;
+    currentPlanPrice: number;
+    newPlanName: string;
+    newPlanPrice: number;
+    remainingDays: number;
+    proRataCredit: number;
+    firstPaymentValue: number;
+    nextPaymentsValue: number;
+}
+
+export interface PlanChangeResult {
+    success: boolean;
+    subscriptionId: string | null;
+    proRataCredit: number;
+    invoiceUrl: string | null;
+    message: string;
+}
+
 export const subscriptionService = {
     getMySubscription: async (): Promise<SubscriptionDetails> => {
         return await httpClient.get<SubscriptionDetails>('/asaas/my-subscription');
@@ -66,7 +85,11 @@ export const subscriptionService = {
         return await httpClient.get<PlanOption[]>('/asaas/plans');
     },
 
-    changePlan: async (planId: string): Promise<{ success: boolean; message: string }> => {
-        return await httpClient.post<{ success: boolean; message: string }>('/asaas/my-subscription/change-plan', { planId });
+    previewPlanChange: async (planId: string): Promise<PlanChangePreview> => {
+        return await httpClient.post<PlanChangePreview>('/asaas/my-subscription/preview-change', { planId });
+    },
+
+    changePlan: async (planId: string): Promise<PlanChangeResult> => {
+        return await httpClient.post<PlanChangeResult>('/asaas/my-subscription/change-plan', { planId });
     }
 };

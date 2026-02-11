@@ -44,12 +44,12 @@ public class AsaasController {
 
     @Operation(summary = "Atualizar assinatura", description = "Atualiza a assinatura para um novo plano (upgrade/downgrade)")
     @PutMapping("/subscriptions/{companyId}")
-    public ResponseEntity<AsaasSubscriptionResponse> updateSubscription(
+    public ResponseEntity<Map<String, Object>> updateSubscription(
             @PathVariable UUID companyId,
             @RequestBody Map<String, String> request) {
         UUID newPlanId = UUID.fromString(request.get("planId"));
 
-        AsaasSubscriptionResponse response = asaasService.updateSubscription(companyId, newPlanId);
+        Map<String, Object> response = asaasService.updateSubscription(companyId, newPlanId);
         return ResponseEntity.ok(response);
     }
 
@@ -135,7 +135,23 @@ public class AsaasController {
         return ResponseEntity.ok(result);
     }
 
-    @Operation(summary = "Trocar de plano", description = "Permite ao usuário logado trocar de plano (cancela assinatura antiga e cria nova)")
+    @Operation(summary = "Preview troca de plano", description = "Calcula o desconto pro-rata para troca de plano")
+    @PostMapping("/my-subscription/preview-change")
+    public ResponseEntity<Map<String, Object>> previewPlanChange(
+            @AuthenticationPrincipal User user,
+            @RequestBody Map<String, String> request) {
+        if (user.getCompany() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Usuário sem empresa associada"));
+        }
+        String planIdStr = request.get("planId");
+        if (planIdStr == null || planIdStr.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "planId é obrigatório"));
+        }
+        return ResponseEntity.ok(asaasService.previewPlanChange(
+                user.getCompany().getId(), UUID.fromString(planIdStr)));
+    }
+
+    @Operation(summary = "Trocar de plano", description = "Permite ao usuário logado trocar de plano (cancela assinatura antiga e cria nova com desconto pro-rata)")
     @PostMapping("/my-subscription/change-plan")
     public ResponseEntity<Map<String, Object>> changePlan(
             @AuthenticationPrincipal User user,
@@ -153,12 +169,8 @@ public class AsaasController {
         UUID planId = UUID.fromString(planIdStr);
 
         try {
-            AsaasSubscriptionResponse response = asaasService.updateSubscription(companyId, planId);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "subscriptionId", response.getId(),
-                    "message", "Plano alterado com sucesso. Uma nova cobrança foi gerada."
-            ));
+            Map<String, Object> result = asaasService.updateSubscription(companyId, planId);
+            return ResponseEntity.ok(result);
         } catch (Exception e) {
             log.error("[ASAAS] Erro ao trocar plano para empresa {}: {}", companyId, e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(

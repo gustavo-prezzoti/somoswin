@@ -24,7 +24,7 @@ import { googleDriveService } from '../services/api/google-drive.service';
 import { userService } from '../services/api/user.service';
 import { marketingService } from '../services/api/marketing.service';
 import { whatsappService } from '../services/api/whatsapp.service';
-import { subscriptionService, SubscriptionDetails, PaymentRecord, PlanOption } from '../services/api/subscription.service';
+import { subscriptionService, SubscriptionDetails, PaymentRecord, PlanOption, PlanChangePreview } from '../services/api/subscription.service';
 import { ConfirmModal } from './ui/Modal';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
@@ -48,6 +48,10 @@ const Settings: React.FC = () => {
   const [loadingSubscription, setLoadingSubscription] = useState(false);
   const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
   const [changingPlan, setChangingPlan] = useState(false);
+  const [planChangePreview, setPlanChangePreview] = useState<PlanChangePreview | null>(null);
+  const [showPlanChangeModal, setShowPlanChangeModal] = useState(false);
+  const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toasts, showToast, removeToast } = useToast();
 
@@ -355,27 +359,40 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleChangePlan = async (planId: string, planName: string) => {
-    setConfirmModalConfig({
-      title: 'Trocar de Plano',
-      message: `Deseja trocar para o plano ${planName}? A assinatura atual será cancelada e uma nova cobrança será gerada imediatamente.`,
-      variant: 'warning',
-      confirmLabel: 'Sim, Trocar Plano',
-      action: async () => {
-        setChangingPlan(true);
-        try {
-          await subscriptionService.changePlan(planId);
-          showToast('Plano alterado com sucesso! Uma nova cobrança foi gerada.');
-          await loadSubscription();
-        } catch (error: any) {
-          console.error('Failed to change plan:', error);
-          showToast('Erro ao trocar de plano.', 'error');
-        } finally {
-          setChangingPlan(false);
-        }
+  const handleChangePlan = async (planId: string) => {
+    setLoadingPreview(true);
+    setPendingPlanId(planId);
+    try {
+      const preview = await subscriptionService.previewPlanChange(planId);
+      setPlanChangePreview(preview);
+      setShowPlanChangeModal(true);
+    } catch (error) {
+      console.error('Failed to preview plan change:', error);
+      showToast('Erro ao calcular troca de plano.', 'error');
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const handleConfirmPlanChange = async () => {
+    if (!pendingPlanId) return;
+    setChangingPlan(true);
+    try {
+      const result = await subscriptionService.changePlan(pendingPlanId);
+      setShowPlanChangeModal(false);
+      setPlanChangePreview(null);
+      setPendingPlanId(null);
+      showToast('Plano alterado com sucesso!');
+      if (result.invoiceUrl) {
+        window.open(result.invoiceUrl, '_blank');
       }
-    });
-    setConfirmModalOpen(true);
+      await loadSubscription();
+    } catch (error: any) {
+      console.error('Failed to change plan:', error);
+      showToast('Erro ao trocar de plano.', 'error');
+    } finally {
+      setChangingPlan(false);
+    }
   };
 
   const handleOpenInvoice = async () => {
@@ -728,8 +745,8 @@ const Settings: React.FC = () => {
                                     </div>
                                   ) : (
                                     <button
-                                      onClick={() => handleChangePlan(plan.id, plan.displayName)}
-                                      disabled={changingPlan}
+                                      onClick={() => handleChangePlan(plan.id)}
+                                      disabled={changingPlan || loadingPreview}
                                       className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                                         changingPlan
                                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -738,7 +755,7 @@ const Settings: React.FC = () => {
                                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                       }`}
                                     >
-                                      {changingPlan ? (
+                                      {(changingPlan || (loadingPreview && pendingPlanId === plan.id)) ? (
                                         <RefreshCw size={14} className="inline animate-spin" />
                                       ) : isUpgrade ? (
                                         'Fazer Upgrade'
@@ -996,6 +1013,109 @@ const Settings: React.FC = () => {
         variant={confirmModalConfig.variant}
         confirmLabel={confirmModalConfig.confirmLabel}
       />
+
+      {/* Plan Change Modal */}
+      {showPlanChangeModal && planChangePreview && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-gray-100 bg-gradient-to-br from-[#002a1e] to-[#004d35] text-white">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white/10 backdrop-blur rounded-2xl">
+                  <CreditCard size={24} />
+                </div>
+                <div>
+                  <h3 className="font-black text-xl tracking-tight uppercase italic leading-none">Trocar de Plano</h3>
+                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest mt-1">Resumo da troca</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8 space-y-5">
+              {/* De → Para */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Plano Atual</p>
+                  <p className="text-sm font-black text-gray-800 uppercase italic">{planChangePreview.currentPlanName || 'Nenhum'}</p>
+                  <p className="text-xs font-bold text-gray-500">R$ {planChangePreview.currentPlanPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</p>
+                </div>
+                <div className="text-gray-300 font-black text-lg">→</div>
+                <div className="flex-1 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Novo Plano</p>
+                  <p className="text-sm font-black text-gray-800 uppercase italic">{planChangePreview.newPlanName}</p>
+                  <p className="text-xs font-bold text-emerald-700">R$ {planChangePreview.newPlanPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</p>
+                </div>
+              </div>
+
+              {/* Cálculo pro-rata */}
+              <div className="bg-gray-50 rounded-2xl border border-gray-100 p-5 space-y-3">
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Cálculo do desconto</p>
+
+                {planChangePreview.remainingDays > 0 ? (
+                  <>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Dias restantes de vigência</span>
+                      <span className="font-black text-gray-800">{planChangePreview.remainingDays} dias</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Crédito proporcional</span>
+                      <span className="font-black text-emerald-600">- R$ {planChangePreview.proRataCredit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
+                      <span className="text-sm font-bold text-gray-700">Valor desta cobrança</span>
+                      <span className="text-xl font-black text-gray-900">R$ {planChangePreview.firstPaymentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-gray-700">Valor desta cobrança</span>
+                    <span className="text-xl font-black text-gray-900">R$ {planChangePreview.firstPaymentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center text-xs text-gray-400 pt-1">
+                  <span>Próximas cobranças mensais</span>
+                  <span className="font-bold">R$ {planChangePreview.nextPaymentsValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+                Ao confirmar, a assinatura atual será cancelada e uma nova cobrança será gerada. Você será redirecionado para a página de pagamento.
+              </p>
+            </div>
+
+            <div className="p-6 bg-gray-50/50 flex gap-3 justify-end border-t border-gray-100">
+              <button
+                onClick={() => {
+                  setShowPlanChangeModal(false);
+                  setPlanChangePreview(null);
+                  setPendingPlanId(null);
+                }}
+                disabled={changingPlan}
+                className="px-6 py-3 bg-white border border-gray-200 text-gray-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmPlanChange}
+                disabled={changingPlan}
+                className="px-8 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 flex items-center gap-2"
+              >
+                {changingPlan ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink size={14} />
+                    Confirmar e Pagar
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Meta Connection Details Modal */}
       {showMetaDetails && (

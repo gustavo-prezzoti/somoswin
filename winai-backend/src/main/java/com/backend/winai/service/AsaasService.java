@@ -14,8 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -192,16 +195,78 @@ public class AsaasService {
     }
 
     /**
+     * Calcula o crédito pro-rata baseado nos dias restantes de vigência.
+     * Ex: plano atual R$497, faltam 15 de 30 dias = crédito de R$248,50
+     */
+    public BigDecimal calculateProRataCredit(Company company) {
+        if (company.getSubscriptionEndDate() == null || company.getPlanEntity() == null) {
+            return BigDecimal.ZERO;
+        }
+
+        LocalDate today = LocalDate.now();
+        LocalDate endDate = company.getSubscriptionEndDate();
+
+        if (!endDate.isAfter(today)) {
+            return BigDecimal.ZERO; // Vigência já expirou
+        }
+
+        long remainingDays = ChronoUnit.DAYS.between(today, endDate);
+        BigDecimal dailyRate = company.getPlanEntity().getPrice()
+                .divide(BigDecimal.valueOf(30), 4, RoundingMode.HALF_UP);
+        BigDecimal credit = dailyRate.multiply(BigDecimal.valueOf(remainingDays))
+                .setScale(2, RoundingMode.HALF_UP);
+
+        log.info("[ASAAS] Pro-rata: {} dias restantes x R${}/dia = crédito R${}",
+                remainingDays, dailyRate, credit);
+        return credit;
+    }
+
+    /**
+     * Preview da troca de plano: retorna o cálculo do desconto pro-rata.
+     */
+    public Map<String, Object> previewPlanChange(UUID companyId, UUID newPlanId) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada: " + companyId));
+        Plan newPlan = planRepository.findById(newPlanId)
+                .orElseThrow(() -> new RuntimeException("Plano não encontrado: " + newPlanId));
+
+        BigDecimal credit = calculateProRataCredit(company);
+        BigDecimal newPlanPrice = newPlan.getPrice();
+        BigDecimal firstPaymentValue = newPlanPrice.subtract(credit).max(BigDecimal.ZERO)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        long remainingDays = 0;
+        if (company.getSubscriptionEndDate() != null && company.getSubscriptionEndDate().isAfter(LocalDate.now())) {
+            remainingDays = ChronoUnit.DAYS.between(LocalDate.now(), company.getSubscriptionEndDate());
+        }
+
+        Map<String, Object> preview = new java.util.LinkedHashMap<>();
+        preview.put("currentPlanName", company.getPlanEntity() != null ? company.getPlanEntity().getDisplayName() : null);
+        preview.put("currentPlanPrice", company.getPlanEntity() != null ? company.getPlanEntity().getPrice() : 0);
+        preview.put("newPlanName", newPlan.getDisplayName());
+        preview.put("newPlanPrice", newPlanPrice);
+        preview.put("remainingDays", remainingDays);
+        preview.put("proRataCredit", credit);
+        preview.put("firstPaymentValue", firstPaymentValue);
+        preview.put("nextPaymentsValue", newPlanPrice);
+        return preview;
+    }
+
+    /**
      * Troca de plano: cancela a assinatura antiga no Asaas e cria uma nova
-     * com o novo plano, gerando cobrança imediata.
+     * com o novo plano. Aplica desconto pro-rata na primeira cobrança.
+     * Retorna o invoiceUrl da primeira cobrança.
      */
     @Transactional
-    public AsaasSubscriptionResponse updateSubscription(UUID companyId, UUID newPlanId) {
+    public Map<String, Object> updateSubscription(UUID companyId, UUID newPlanId) {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada: " + companyId));
 
         Plan newPlan = planRepository.findById(newPlanId)
                 .orElseThrow(() -> new RuntimeException("Plano não encontrado: " + newPlanId));
+
+        // Calcula crédito pro-rata antes de cancelar
+        BigDecimal credit = calculateProRataCredit(company);
 
         // Se já tem assinatura ativa, cancela no Asaas primeiro
         if (company.getAsaasSubscriptionId() != null && !company.getAsaasSubscriptionId().isBlank()) {
@@ -227,10 +292,87 @@ public class AsaasService {
             companyRepository.save(company);
         }
 
-        // Cria nova assinatura com o novo plano (gera cobrança imediata)
+        // Cria nova assinatura com o novo plano
         log.info("[ASAAS] Criando nova assinatura para empresa {} - Plano {}",
                 company.getName(), newPlan.getDisplayName());
-        return createSubscription(companyId, newPlanId);
+        AsaasSubscriptionResponse sub = createSubscription(companyId, newPlanId);
+
+        // Aplica desconto pro-rata na primeira cobrança
+        String invoiceUrl = null;
+        if (credit.compareTo(BigDecimal.ZERO) > 0 && sub != null) {
+            invoiceUrl = applyProRataDiscount(company, credit, newPlan);
+        } else if (sub != null) {
+            // Sem desconto, busca o invoice normalmente
+            invoiceUrl = getPaymentLink(companyId);
+        }
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("success", true);
+        result.put("subscriptionId", sub != null ? sub.getId() : null);
+        result.put("proRataCredit", credit);
+        result.put("invoiceUrl", invoiceUrl);
+        result.put("message", "Plano alterado com sucesso.");
+        return result;
+    }
+
+    /**
+     * Aplica desconto pro-rata na primeira cobrança da assinatura recém-criada.
+     * Busca o primeiro payment PENDING e atualiza o valor.
+     */
+    @SuppressWarnings("unchecked")
+    private String applyProRataDiscount(Company company, BigDecimal credit, Plan newPlan) {
+        if (company.getAsaasSubscriptionId() == null) return null;
+
+        try {
+            // Busca os payments da nova assinatura
+            HttpEntity<Void> getEntity = new HttpEntity<>(buildHeaders());
+            ResponseEntity<Map> paymentsResponse = restTemplate.exchange(
+                    asaasApiUrl + "/subscriptions/" + company.getAsaasSubscriptionId() + "/payments",
+                    HttpMethod.GET,
+                    getEntity,
+                    Map.class);
+
+            if (paymentsResponse.getBody() != null) {
+                var payments = (java.util.List<Map<String, Object>>) paymentsResponse.getBody().get("data");
+                if (payments != null && !payments.isEmpty()) {
+                    // Pega o primeiro payment PENDING
+                    for (Map<String, Object> payment : payments) {
+                        if ("PENDING".equals(payment.get("status"))) {
+                            String paymentId = (String) payment.get("id");
+                            BigDecimal originalValue = newPlan.getPrice();
+                            BigDecimal discountedValue = originalValue.subtract(credit)
+                                    .max(BigDecimal.ZERO)
+                                    .setScale(2, RoundingMode.HALF_UP);
+
+                            // Atualiza o valor do payment no Asaas
+                            Map<String, Object> updateBody = new java.util.LinkedHashMap<>();
+                            updateBody.put("value", discountedValue.doubleValue());
+                            updateBody.put("description", String.format(
+                                    "Win AI - Plano %s (desconto pro-rata R$ %s)",
+                                    newPlan.getDisplayName(),
+                                    credit.setScale(2, RoundingMode.HALF_UP)));
+
+                            HttpEntity<Map<String, Object>> updateEntity = new HttpEntity<>(updateBody, buildHeaders());
+                            restTemplate.exchange(
+                                    asaasApiUrl + "/payments/" + paymentId,
+                                    HttpMethod.PUT,
+                                    updateEntity,
+                                    Map.class);
+
+                            log.info("[ASAAS] Desconto pro-rata aplicado: R${} -> R${} (crédito R${}) - Payment {}",
+                                    originalValue, discountedValue, credit, paymentId);
+
+                            return (String) payment.get("invoiceUrl");
+                        }
+                    }
+                }
+            }
+        } catch (HttpClientErrorException e) {
+            log.error("[ASAAS] Erro ao aplicar desconto pro-rata: {} - {}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+        }
+
+        return getPaymentLink(company.getId());
     }
 
     /**
