@@ -90,7 +90,9 @@ public class SecurityConfig {
                                 "https://winai.com.br",
                                 "https://*.winai.com.br",
                                 "https://somoswin.com.br",
-                                "https://*.somoswin.com.br"));
+                                "https://*.somoswin.com.br",
+                                "https://somosamplia.com",
+                                "https://*.somosamplia.com"));
                 configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
                 configuration.setAllowedHeaders(List.of("*"));
                 configuration.setExposedHeaders(List.of("Authorization"));
