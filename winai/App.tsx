@@ -353,13 +353,13 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const [needsContractInfo, setNeedsContractInfo] = useState(false);
   const [subscriptionExpired, setSubscriptionExpired] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState<{ planName?: string; endDate?: string }>({});
-  const [checkingTerms, setCheckingTerms] = useState(true);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   useEffect(() => {
     if (user) {
       checkTermsStatus();
     }
-  }, [user]);
+  }, [user, location.pathname]);
 
   const checkTermsStatus = async () => {
     try {
@@ -375,16 +375,15 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
       }
     } catch (error) {
       console.error('Failed to check terms status:', error);
-      // Se falhar, assume que não precisa aceitar (graceful degradation)
       setTermsAccepted(true);
     } finally {
-      setCheckingTerms(false);
+      setInitialCheckDone(true);
     }
   };
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (checkingTerms) {
+  if (!initialCheckDone) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-100">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent"></div>

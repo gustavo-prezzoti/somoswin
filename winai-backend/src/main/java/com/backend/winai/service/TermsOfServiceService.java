@@ -164,11 +164,11 @@ public class TermsOfServiceService {
             });
         }
 
-        // Verificar vigência da assinatura (apenas para usuários não-ADMIN)
-        boolean isAdmin = user.getRole() != null
-                && user.getRole().name().equals("ADMIN");
+        // Verificar vigência da assinatura (apenas SUPER_ADMIN é isento)
+        boolean isSuperAdmin = user.getRole() != null
+                && user.getRole().name().equals("SUPER_ADMIN");
 
-        if (!isAdmin && user.getCompany() != null) {
+        if (!isSuperAdmin && user.getCompany() != null) {
             var company = user.getCompany();
             LocalDate endDate = company.getSubscriptionEndDate();
             boolean expired = endDate != null && endDate.isBefore(LocalDate.now());
