@@ -217,7 +217,7 @@ public class DashboardService {
                                                 .build());
                 goalRepository.saveAll(goals);
 
-                // Gera insights iniciais específicos do WIN.AI 2026
+                // Gera insights iniciais específicos do Amplia 2026
                 List<AIInsight> insights = List.of(
                                 AIInsight.builder()
                                                 .company(company)
@@ -715,7 +715,7 @@ public class DashboardService {
                                                 .company(company)
                                                 .title(title)
                                                 .description(desc)
-                                                .suggestionSource("WIN.AI Intelligence")
+                                                .suggestionSource("Amplia Intelligence")
                                                 .insightType(InsightType.OPTIMIZATION)
                                                 .priority(InsightPriority.HIGH)
                                                 .isDismissed(false)
