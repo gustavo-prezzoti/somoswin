@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter, CreditCard, Info, DollarSign, ExternalLink, XCircle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter, CreditCard, Info, DollarSign, ExternalLink, XCircle, Calendar } from 'lucide-react';
 import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest, Plan, asaasService } from '../../services/adminService';
 import { useModal } from './ModalContext';
 
@@ -452,10 +452,21 @@ const AdminCompanies: React.FC = () => {
                                 </span>
                                 {company.subscriptionDueDate && (
                                     <span className="text-[9px] text-gray-400 font-medium">
-                                        Venc: {new Date(company.subscriptionDueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                        Próx. cobrança: {new Date(company.subscriptionDueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
                                     </span>
                                 )}
                             </div>
+                            {/* Vigência */}
+                            {(company.subscriptionStartDate || company.subscriptionEndDate) && (
+                                <div className="flex items-center gap-2 mt-1.5">
+                                    <Calendar size={12} className="text-gray-400" />
+                                    <span className="text-[9px] text-gray-500 font-medium">
+                                        Vigência: {company.subscriptionStartDate ? new Date(company.subscriptionStartDate + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                                        {' → '}
+                                        {company.subscriptionEndDate ? new Date(company.subscriptionEndDate + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="pt-6 mt-auto border-t border-gray-50 flex flex-col gap-3 relative z-10">
@@ -491,7 +502,7 @@ const AdminCompanies: React.FC = () => {
                                     className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-all"
                                 >
                                     <DollarSign size={14} />
-                                    Criar Assinatura Asaas
+                                    Ativar Assinatura Recorrente
                                 </button>
                             )}
                             {company.asaasSubscriptionId && (

@@ -572,8 +572,8 @@ const Settings: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Vigência */}
-                        {(subscription.subscriptionStartDate || subscription.subscriptionEndDate) && (
+                        {/* Vigência e Vencimento */}
+                        {(subscription.subscriptionStartDate || subscription.subscriptionEndDate || subscription.subscriptionDueDate) && (
                           <div className="flex flex-wrap gap-3 mb-3">
                             {subscription.subscriptionStartDate && (
                               <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-xl">
@@ -583,11 +583,31 @@ const Settings: React.FC = () => {
                                 </span>
                               </div>
                             )}
-                            {subscription.subscriptionEndDate && (
+                            {subscription.subscriptionEndDate && (() => {
+                              const endDate = new Date(subscription.subscriptionEndDate + 'T00:00:00');
+                              const today = new Date(); today.setHours(0,0,0,0);
+                              const diffDays = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                              const isExpiringSoon = diffDays <= 10 && diffDays > 0;
+                              const isExpired = diffDays <= 0;
+                              return (
+                                <div className={`flex items-center gap-2 backdrop-blur px-4 py-2 rounded-xl ${
+                                  isExpired ? 'bg-rose-500/20' : isExpiringSoon ? 'bg-amber-500/20' : 'bg-white/10'
+                                }`}>
+                                  <Calendar size={14} className={isExpired ? 'text-rose-400' : isExpiringSoon ? 'text-amber-400' : 'text-emerald-400'} />
+                                  <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                    isExpired ? 'text-rose-200' : isExpiringSoon ? 'text-amber-200' : 'text-emerald-200'
+                                  }`}>
+                                    Vigência até: {endDate.toLocaleDateString('pt-BR')}
+                                    {isExpired ? ' (Expirado)' : diffDays <= 30 ? ` (${diffDays} dias restantes)` : ''}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                            {subscription.subscriptionDueDate && (
                               <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-xl">
-                                <Calendar size={14} className="text-emerald-400" />
+                                <CreditCard size={14} className="text-emerald-400" />
                                 <span className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">
-                                  Vigência até: {new Date(subscription.subscriptionEndDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                  Próx. cobrança: {new Date(subscription.subscriptionDueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
                                 </span>
                               </div>
                             )}
@@ -595,21 +615,13 @@ const Settings: React.FC = () => {
                         )}
 
                         <div className="flex flex-wrap gap-3">
-                          {subscription.subscriptionDueDate && (
-                            <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-xl">
-                              <Calendar size={14} className="text-emerald-400" />
-                              <span className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">
-                                Próximo vencimento: {new Date(subscription.subscriptionDueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
-                              </span>
-                            </div>
-                          )}
                           {subscription.asaasSubscriptionId && (
                             <button
                               onClick={handleOpenInvoice}
                               className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white px-5 py-2 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest"
                             >
                               <ExternalLink size={14} />
-                              Ver Fatura / Pagar
+                              Ver Fatura Pendente
                             </button>
                           )}
                         </div>

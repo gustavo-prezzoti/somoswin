@@ -90,7 +90,9 @@ public class AsaasService {
     // ========== ASSINATURAS ==========
 
     /**
-     * Cria uma assinatura no Asaas para a empresa com base no plano.
+     * Cria uma assinatura recorrente no Asaas para a empresa com base no plano.
+     * O Asaas gera cobranças automaticamente a cada ciclo (MONTHLY).
+     * A primeira cobrança é gerada imediatamente (nextDueDate = hoje).
      */
     @Transactional
     public AsaasSubscriptionResponse createSubscription(UUID companyId, UUID planId) {
@@ -103,14 +105,14 @@ public class AsaasService {
         // Garante que o cliente existe no Asaas
         String customerId = ensureCustomer(company);
 
-        // Calcula próximo vencimento (dia 10 do próximo mês)
-        LocalDate nextDueDate = LocalDate.now().plusMonths(1).withDayOfMonth(10);
+        // Primeira cobrança: hoje. O Asaas gera as próximas automaticamente (mensal).
+        LocalDate firstDueDate = LocalDate.now();
 
         AsaasSubscriptionRequest request = AsaasSubscriptionRequest.builder()
                 .customer(customerId)
                 .billingType("UNDEFINED")
                 .value(plan.getPrice().doubleValue())
-                .nextDueDate(nextDueDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
+                .nextDueDate(firstDueDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
                 .cycle("MONTHLY")
                 .description("Win AI - Plano " + plan.getDisplayName())
                 .externalReference(company.getId().toString())
@@ -128,19 +130,17 @@ public class AsaasService {
                 AsaasSubscriptionResponse sub = response.getBody();
 
                 company.setAsaasSubscriptionId(sub.getId());
-                company.setSubscriptionStatus("ACTIVE");
-                company.setSubscriptionDueDate(nextDueDate);
+                company.setSubscriptionStatus("PENDING");
+                company.setSubscriptionDueDate(firstDueDate);
                 company.setPlanEntity(plan);
                 company.setPlan(com.backend.winai.entity.UserPlan.valueOf(plan.getName()));
-                // Definir vigência: início = hoje, fim = 1 ano a partir de hoje
-                if (company.getSubscriptionStartDate() == null) {
-                    company.setSubscriptionStartDate(LocalDate.now());
-                }
-                company.setSubscriptionEndDate(LocalDate.now().plusYears(1));
+                // Vigência: início = hoje, fim = hoje + 30 dias (será estendido ao confirmar pagamento)
+                company.setSubscriptionStartDate(LocalDate.now());
+                company.setSubscriptionEndDate(LocalDate.now().plusDays(30));
                 companyRepository.save(company);
 
-                log.info("[ASAAS] Assinatura criada: {} para empresa {} - Plano {}",
-                        sub.getId(), company.getName(), plan.getDisplayName());
+                log.info("[ASAAS] Assinatura recorrente criada: {} para empresa {} - Plano {} - Vencimento: {}",
+                        sub.getId(), company.getName(), plan.getDisplayName(), firstDueDate);
                 return sub;
             }
         } catch (HttpClientErrorException e) {
@@ -361,6 +361,12 @@ public class AsaasService {
 
     /**
      * Processa webhook de pagamento do Asaas.
+     * 
+     * Lógica de vigência contínua:
+     * - PAYMENT_CONFIRMED/RECEIVED: estende a vigência (dias restantes + 30 dias)
+     * - PAYMENT_CREATED: atualiza o próximo vencimento
+     * - PAYMENT_OVERDUE: marca como em atraso
+     * - PAYMENT_DELETED/REFUNDED: marca como cancelado
      */
     @Transactional
     public void processWebhook(AsaasWebhookPayload payload) {
@@ -394,14 +400,46 @@ public class AsaasService {
             case "PAYMENT_RECEIVED":
                 company.setSubscriptionStatus("ACTIVE");
                 company.setStatus(com.backend.winai.entity.AccountStatus.ACTIVE);
+
+                // Renovação contínua de vigência:
+                // Se ainda tem dias restantes, soma os dias restantes + 30 dias
+                // Se já venceu, começa de hoje + 30 dias
+                LocalDate today = LocalDate.now();
+                LocalDate currentEndDate = company.getSubscriptionEndDate();
+                LocalDate newEndDate;
+
+                if (currentEndDate != null && currentEndDate.isAfter(today)) {
+                    // Ainda tem dias restantes - soma 30 dias ao endDate atual
+                    newEndDate = currentEndDate.plusDays(30);
+                    log.info("[ASAAS WEBHOOK] Vigência estendida: {} -> {} (dias restantes + 30)",
+                            currentEndDate, newEndDate);
+                } else {
+                    // Já venceu ou nunca teve - começa de hoje + 30 dias
+                    newEndDate = today.plusDays(30);
+                    log.info("[ASAAS WEBHOOK] Vigência renovada a partir de hoje: {} -> {}",
+                            today, newEndDate);
+                }
+
+                company.setSubscriptionEndDate(newEndDate);
+
+                // Se não tinha startDate, define como hoje
+                if (company.getSubscriptionStartDate() == null) {
+                    company.setSubscriptionStartDate(today);
+                }
+
+                // Atualiza próximo vencimento com base no dueDate do pagamento
                 if (payment.getDueDate() != null) {
                     try {
-                        company.setSubscriptionDueDate(LocalDate.parse(payment.getDueDate()));
+                        LocalDate paidDueDate = LocalDate.parse(payment.getDueDate());
+                        // Próximo vencimento = dueDate do pagamento atual + 30 dias
+                        company.setSubscriptionDueDate(paidDueDate.plusDays(30));
                     } catch (Exception e) {
                         log.warn("[ASAAS WEBHOOK] Erro ao parsear dueDate: {}", payment.getDueDate());
                     }
                 }
-                log.info("[ASAAS WEBHOOK] Pagamento confirmado para empresa {}", company.getName());
+
+                log.info("[ASAAS WEBHOOK] Pagamento confirmado para empresa {} | Vigência até: {}",
+                        company.getName(), newEndDate);
                 break;
 
             case "PAYMENT_OVERDUE":
@@ -416,7 +454,17 @@ public class AsaasService {
                 break;
 
             case "PAYMENT_CREATED":
-                log.info("[ASAAS WEBHOOK] Nova cobrança criada para empresa {}", company.getName());
+                // Nova cobrança gerada pelo Asaas (recorrência automática)
+                // Atualiza o próximo vencimento
+                if (payment.getDueDate() != null) {
+                    try {
+                        company.setSubscriptionDueDate(LocalDate.parse(payment.getDueDate()));
+                        log.info("[ASAAS WEBHOOK] Nova cobrança criada para empresa {} | Vencimento: {}",
+                                company.getName(), payment.getDueDate());
+                    } catch (Exception e) {
+                        log.warn("[ASAAS WEBHOOK] Erro ao parsear dueDate: {}", payment.getDueDate());
+                    }
+                }
                 break;
 
             default:
