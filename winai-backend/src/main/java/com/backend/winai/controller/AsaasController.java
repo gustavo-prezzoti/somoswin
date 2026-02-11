@@ -42,15 +42,16 @@ public class AsaasController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Atualizar assinatura", description = "Atualiza a assinatura para um novo plano (upgrade/downgrade)")
+    @Operation(summary = "Atualizar assinatura (admin)", description = "Troca o plano diretamente sem pagamento (uso admin)")
     @PutMapping("/subscriptions/{companyId}")
     public ResponseEntity<Map<String, Object>> updateSubscription(
             @PathVariable UUID companyId,
             @RequestBody Map<String, String> request) {
         UUID newPlanId = UUID.fromString(request.get("planId"));
 
-        Map<String, Object> response = asaasService.updateSubscription(companyId, newPlanId);
-        return ResponseEntity.ok(response);
+        // Admin: troca direta sem pagamento
+        asaasService.adminChangePlan(companyId, newPlanId);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Plano alterado com sucesso"));
     }
 
     @Operation(summary = "Cancelar assinatura", description = "Cancela a assinatura da empresa no Asaas")

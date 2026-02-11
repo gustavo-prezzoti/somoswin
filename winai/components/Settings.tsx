@@ -364,11 +364,16 @@ const Settings: React.FC = () => {
     setPendingPlanId(planId);
     try {
       const preview = await subscriptionService.previewPlanChange(planId);
-      setPlanChangePreview(preview);
-      setShowPlanChangeModal(true);
-    } catch (error) {
+      if (preview && preview.newPlanName) {
+        setPlanChangePreview(preview);
+        setShowPlanChangeModal(true);
+      } else {
+        showToast('Erro ao carregar dados do plano.', 'error');
+      }
+    } catch (error: any) {
       console.error('Failed to preview plan change:', error);
-      showToast('Erro ao calcular troca de plano.', 'error');
+      showToast(error?.message || 'Erro ao calcular troca de plano.', 'error');
+      setPendingPlanId(null);
     } finally {
       setLoadingPreview(false);
     }
@@ -377,19 +382,24 @@ const Settings: React.FC = () => {
   const handleConfirmPlanChange = async () => {
     if (!pendingPlanId) return;
     setChangingPlan(true);
+    const planId = pendingPlanId;
+    // Fecha modal imediatamente
+    setShowPlanChangeModal(false);
+    setPlanChangePreview(null);
+    setPendingPlanId(null);
     try {
-      const result = await subscriptionService.changePlan(pendingPlanId);
-      setShowPlanChangeModal(false);
-      setPlanChangePreview(null);
-      setPendingPlanId(null);
-      showToast('Plano alterado com sucesso!');
-      if (result.invoiceUrl) {
+      const result = await subscriptionService.changePlan(planId);
+      // Abre invoice para pagamento imediato
+      if (result?.invoiceUrl) {
         window.open(result.invoiceUrl, '_blank');
+        showToast('Cobrança gerada! Efetue o pagamento para ativar o novo plano.');
+      } else {
+        showToast('Cobrança gerada. Verifique seu e-mail para efetuar o pagamento.');
       }
       await loadSubscription();
     } catch (error: any) {
       console.error('Failed to change plan:', error);
-      showToast('Erro ao trocar de plano.', 'error');
+      showToast(error?.message || 'Erro ao gerar cobrança. Tente novamente.', 'error');
     } finally {
       setChangingPlan(false);
     }
@@ -675,6 +685,24 @@ const Settings: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Pending Plan Change Banner */}
+                    {subscription.pendingPlan && (
+                      <div className="p-5 bg-amber-50 border-2 border-amber-200 rounded-[24px] flex items-center gap-4">
+                        <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <RefreshCw size={18} className="text-amber-600" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-black text-amber-800 uppercase italic">
+                            Troca de plano pendente
+                          </p>
+                          <p className="text-[11px] text-amber-600 font-medium mt-0.5">
+                            Aguardando pagamento para ativar o plano <strong>{subscription.pendingPlan.displayName}</strong> (R$ {subscription.pendingPlan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês).
+                            Após o pagamento, seu plano será atualizado automaticamente.
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Change Plan */}
                     {availablePlans.length > 0 && (
@@ -1079,7 +1107,7 @@ const Settings: React.FC = () => {
               </div>
 
               <p className="text-[10px] text-gray-400 text-center leading-relaxed">
-                Ao confirmar, a assinatura atual será cancelada e uma nova cobrança será gerada. Você será redirecionado para a página de pagamento.
+                Uma cobrança será gerada e você será redirecionado para a página de pagamento. Após a confirmação do pagamento, seu plano será atualizado automaticamente.
               </p>
             </div>
 

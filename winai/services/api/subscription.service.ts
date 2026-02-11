@@ -19,6 +19,13 @@ export interface SubscriptionDetails {
         whatsappLimit: number;
         description: string;
     } | null;
+    pendingPlan: {
+        id: string;
+        name: string;
+        displayName: string;
+        price: number;
+        paymentId: string;
+    } | null;
 }
 
 export interface PaymentRecord {
@@ -61,9 +68,10 @@ export interface PlanChangePreview {
 
 export interface PlanChangeResult {
     success: boolean;
-    subscriptionId: string | null;
-    proRataCredit: number;
+    paymentId: string | null;
     invoiceUrl: string | null;
+    chargeValue: number;
+    proRataCredit: number;
     message: string;
 }
 

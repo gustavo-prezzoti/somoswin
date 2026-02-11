@@ -504,9 +504,9 @@ public class AdminService {
                 && savedCompany.getEmailContratante() != null) {
             try {
                 if (hadActiveSubscription) {
-                    log.info("Plano alterado para empresa {}, recriando assinatura no Asaas...",
+                    log.info("Plano alterado pelo admin para empresa {}, recriando assinatura no Asaas...",
                             savedCompany.getName());
-                    asaasService.updateSubscription(companyId, newPlanId);
+                    asaasService.adminChangePlan(companyId, newPlanId);
                 } else {
                     log.info("Criando primeira assinatura no Asaas para empresa {}...",
                             savedCompany.getName());

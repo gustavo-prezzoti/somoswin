@@ -86,6 +86,13 @@ public class Company {
     @Column(name = "subscription_end_date")
     private LocalDate subscriptionEndDate;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pending_plan_id")
+    private Plan pendingPlan;
+
+    @Column(name = "pending_plan_payment_id")
+    private String pendingPlanPaymentId;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;

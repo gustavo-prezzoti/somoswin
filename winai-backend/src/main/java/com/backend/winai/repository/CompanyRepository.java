@@ -13,4 +13,6 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
     Optional<Company> findByAsaasSubscriptionId(String asaasSubscriptionId);
 
     Optional<Company> findByAsaasCustomerId(String asaasCustomerId);
+
+    Optional<Company> findByPendingPlanPaymentId(String pendingPlanPaymentId);
 }

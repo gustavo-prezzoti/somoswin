@@ -253,11 +253,12 @@ public class AsaasService {
     }
 
     /**
-     * Troca de plano: cancela a assinatura antiga no Asaas e cria uma nova
-     * com o novo plano. Aplica desconto pro-rata na primeira cobrança.
-     * Retorna o invoiceUrl da primeira cobrança.
+     * Troca de plano: cria uma cobrança avulsa no Asaas com desconto pro-rata.
+     * NÃO cancela a assinatura antiga nem cria nova imediatamente.
+     * A troca efetiva só acontece quando o pagamento for confirmado via webhook.
      */
     @Transactional
+    @SuppressWarnings("unchecked")
     public Map<String, Object> updateSubscription(UUID companyId, UUID newPlanId) {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada: " + companyId));
@@ -265,10 +266,102 @@ public class AsaasService {
         Plan newPlan = planRepository.findById(newPlanId)
                 .orElseThrow(() -> new RuntimeException("Plano não encontrado: " + newPlanId));
 
-        // Calcula crédito pro-rata antes de cancelar
-        BigDecimal credit = calculateProRataCredit(company);
+        // Garante que o cliente existe no Asaas
+        String customerId = ensureCustomer(company);
 
-        // Se já tem assinatura ativa, cancela no Asaas primeiro
+        // Calcula crédito pro-rata
+        BigDecimal credit = calculateProRataCredit(company);
+        BigDecimal chargeValue = newPlan.getPrice().subtract(credit)
+                .max(BigDecimal.ZERO)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        // Cria cobrança avulsa no Asaas (não é assinatura, é um payment único)
+        Map<String, Object> paymentBody = new java.util.LinkedHashMap<>();
+        paymentBody.put("customer", customerId);
+        paymentBody.put("billingType", "UNDEFINED");
+        paymentBody.put("value", chargeValue.doubleValue());
+        paymentBody.put("dueDate", LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE));
+        paymentBody.put("description", String.format(
+                "Win AI - Upgrade para Plano %s%s",
+                newPlan.getDisplayName(),
+                credit.compareTo(BigDecimal.ZERO) > 0
+                        ? String.format(" (crédito pro-rata R$ %s)", credit.setScale(2, RoundingMode.HALF_UP))
+                        : ""));
+        paymentBody.put("externalReference", "PLAN_CHANGE:" + company.getId() + ":" + newPlanId);
+
+        try {
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(paymentBody, buildHeaders());
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    asaasApiUrl + "/payments",
+                    HttpMethod.POST,
+                    entity,
+                    Map.class);
+
+            if (response.getBody() != null) {
+                String paymentId = (String) response.getBody().get("id");
+                String invoiceUrl = (String) response.getBody().get("invoiceUrl");
+
+                // Salva o plano pendente e o ID do pagamento na empresa
+                company.setPendingPlan(newPlan);
+                company.setPendingPlanPaymentId(paymentId);
+                companyRepository.save(company);
+
+                log.info("[ASAAS] Cobrança avulsa criada para troca de plano: {} | Valor: R${} | Empresa: {} | Plano: {}",
+                        paymentId, chargeValue, company.getName(), newPlan.getDisplayName());
+
+                Map<String, Object> result = new java.util.LinkedHashMap<>();
+                result.put("success", true);
+                result.put("paymentId", paymentId);
+                result.put("invoiceUrl", invoiceUrl);
+                result.put("chargeValue", chargeValue);
+                result.put("proRataCredit", credit);
+                result.put("message", "Cobrança gerada. Efetue o pagamento para ativar o novo plano.");
+                return result;
+            }
+        } catch (HttpClientErrorException e) {
+            log.error("[ASAAS] Erro ao criar cobrança avulsa para troca de plano: {} - {}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            throw new RuntimeException("Erro ao gerar cobrança: " + e.getResponseBodyAsString());
+        }
+
+        throw new RuntimeException("Falha ao criar cobrança para troca de plano");
+    }
+
+    /**
+     * Troca de plano direta (admin) - sem pagamento.
+     * Seta o plano pendente, salva e executa a troca imediatamente.
+     */
+    @Transactional
+    public void adminChangePlan(UUID companyId, UUID newPlanId) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada: " + companyId));
+        Plan newPlan = planRepository.findById(newPlanId)
+                .orElseThrow(() -> new RuntimeException("Plano não encontrado: " + newPlanId));
+
+        company.setPendingPlan(newPlan);
+        companyRepository.save(company);
+        executePlanChange(company);
+    }
+
+    /**
+     * Processa a troca efetiva de plano após confirmação de pagamento.
+     * Cancela a assinatura antiga e cria uma nova com o novo plano.
+     */
+    @Transactional
+    public void executePlanChange(Company company) {
+        Plan newPlan = company.getPendingPlan();
+        if (newPlan == null) {
+            log.warn("[ASAAS] Empresa {} não tem plano pendente para trocar", company.getName());
+            return;
+        }
+
+        UUID companyId = company.getId();
+        UUID newPlanId = newPlan.getId();
+
+        log.info("[ASAAS] Executando troca de plano para empresa {} -> Plano {}",
+                company.getName(), newPlan.getDisplayName());
+
+        // Cancela assinatura antiga no Asaas
         if (company.getAsaasSubscriptionId() != null && !company.getAsaasSubscriptionId().isBlank()) {
             String oldSubscriptionId = company.getAsaasSubscriptionId();
             try {
@@ -278,101 +371,29 @@ public class AsaasService {
                         HttpMethod.DELETE,
                         entity,
                         String.class);
-                log.info("[ASAAS] Assinatura antiga {} cancelada para troca de plano - Empresa {}",
+                log.info("[ASAAS] Assinatura antiga {} cancelada - Empresa {}",
                         oldSubscriptionId, company.getName());
             } catch (HttpClientErrorException e) {
-                log.error("[ASAAS] Erro ao cancelar assinatura antiga {}: {} - {}",
-                        oldSubscriptionId, e.getStatusCode(), e.getResponseBodyAsString());
-                throw new RuntimeException("Erro ao cancelar assinatura antiga: " + e.getResponseBodyAsString());
+                log.error("[ASAAS] Erro ao cancelar assinatura antiga {}: {}",
+                        oldSubscriptionId, e.getResponseBodyAsString());
             }
 
-            // Limpa dados da assinatura antiga
             company.setAsaasSubscriptionId(null);
             company.setSubscriptionDueDate(null);
             companyRepository.save(company);
         }
 
-        // Cria nova assinatura com o novo plano
-        log.info("[ASAAS] Criando nova assinatura para empresa {} - Plano {}",
+        // Cria nova assinatura recorrente com o novo plano
+        createSubscription(companyId, newPlanId);
+
+        // Limpa dados pendentes
+        Company updated = companyRepository.findById(companyId).orElse(company);
+        updated.setPendingPlan(null);
+        updated.setPendingPlanPaymentId(null);
+        companyRepository.save(updated);
+
+        log.info("[ASAAS] Troca de plano concluída para empresa {} - Novo plano: {}",
                 company.getName(), newPlan.getDisplayName());
-        AsaasSubscriptionResponse sub = createSubscription(companyId, newPlanId);
-
-        // Aplica desconto pro-rata na primeira cobrança
-        String invoiceUrl = null;
-        if (credit.compareTo(BigDecimal.ZERO) > 0 && sub != null) {
-            invoiceUrl = applyProRataDiscount(company, credit, newPlan);
-        } else if (sub != null) {
-            // Sem desconto, busca o invoice normalmente
-            invoiceUrl = getPaymentLink(companyId);
-        }
-
-        Map<String, Object> result = new java.util.LinkedHashMap<>();
-        result.put("success", true);
-        result.put("subscriptionId", sub != null ? sub.getId() : null);
-        result.put("proRataCredit", credit);
-        result.put("invoiceUrl", invoiceUrl);
-        result.put("message", "Plano alterado com sucesso.");
-        return result;
-    }
-
-    /**
-     * Aplica desconto pro-rata na primeira cobrança da assinatura recém-criada.
-     * Busca o primeiro payment PENDING e atualiza o valor.
-     */
-    @SuppressWarnings("unchecked")
-    private String applyProRataDiscount(Company company, BigDecimal credit, Plan newPlan) {
-        if (company.getAsaasSubscriptionId() == null) return null;
-
-        try {
-            // Busca os payments da nova assinatura
-            HttpEntity<Void> getEntity = new HttpEntity<>(buildHeaders());
-            ResponseEntity<Map> paymentsResponse = restTemplate.exchange(
-                    asaasApiUrl + "/subscriptions/" + company.getAsaasSubscriptionId() + "/payments",
-                    HttpMethod.GET,
-                    getEntity,
-                    Map.class);
-
-            if (paymentsResponse.getBody() != null) {
-                var payments = (java.util.List<Map<String, Object>>) paymentsResponse.getBody().get("data");
-                if (payments != null && !payments.isEmpty()) {
-                    // Pega o primeiro payment PENDING
-                    for (Map<String, Object> payment : payments) {
-                        if ("PENDING".equals(payment.get("status"))) {
-                            String paymentId = (String) payment.get("id");
-                            BigDecimal originalValue = newPlan.getPrice();
-                            BigDecimal discountedValue = originalValue.subtract(credit)
-                                    .max(BigDecimal.ZERO)
-                                    .setScale(2, RoundingMode.HALF_UP);
-
-                            // Atualiza o valor do payment no Asaas
-                            Map<String, Object> updateBody = new java.util.LinkedHashMap<>();
-                            updateBody.put("value", discountedValue.doubleValue());
-                            updateBody.put("description", String.format(
-                                    "Win AI - Plano %s (desconto pro-rata R$ %s)",
-                                    newPlan.getDisplayName(),
-                                    credit.setScale(2, RoundingMode.HALF_UP)));
-
-                            HttpEntity<Map<String, Object>> updateEntity = new HttpEntity<>(updateBody, buildHeaders());
-                            restTemplate.exchange(
-                                    asaasApiUrl + "/payments/" + paymentId,
-                                    HttpMethod.PUT,
-                                    updateEntity,
-                                    Map.class);
-
-                            log.info("[ASAAS] Desconto pro-rata aplicado: R${} -> R${} (crédito R${}) - Payment {}",
-                                    originalValue, discountedValue, credit, paymentId);
-
-                            return (String) payment.get("invoiceUrl");
-                        }
-                    }
-                }
-            }
-        } catch (HttpClientErrorException e) {
-            log.error("[ASAAS] Erro ao aplicar desconto pro-rata: {} - {}",
-                    e.getStatusCode(), e.getResponseBodyAsString());
-        }
-
-        return getPaymentLink(company.getId());
     }
 
     /**
@@ -498,6 +519,20 @@ public class AsaasService {
             details.put("plan", null);
         }
 
+        // Pending plan change info
+        if (company.getPendingPlan() != null) {
+            Plan pending = company.getPendingPlan();
+            Map<String, Object> pendingInfo = new java.util.LinkedHashMap<>();
+            pendingInfo.put("id", pending.getId());
+            pendingInfo.put("name", pending.getName());
+            pendingInfo.put("displayName", pending.getDisplayName());
+            pendingInfo.put("price", pending.getPrice());
+            pendingInfo.put("paymentId", company.getPendingPlanPaymentId());
+            details.put("pendingPlan", pendingInfo);
+        } else {
+            details.put("pendingPlan", null);
+        }
+
         return details;
     }
 
@@ -525,8 +560,16 @@ public class AsaasService {
         log.info("[ASAAS WEBHOOK] Evento: {} | Payment: {} | Status: {} | Subscription: {}",
                 event, payment.getId(), payment.getStatus(), payment.getSubscription());
 
+        // 1) Verifica se é um pagamento de troca de plano (cobrança avulsa)
+        Optional<Company> planChangeCompany = companyRepository.findByPendingPlanPaymentId(payment.getId());
+        if (planChangeCompany.isPresent()) {
+            processPlanChangeWebhook(event, planChangeCompany.get(), payment);
+            return;
+        }
+
+        // 2) Fluxo normal: pagamento de assinatura recorrente
         if (payment.getSubscription() == null || payment.getSubscription().isBlank()) {
-            log.debug("[ASAAS WEBHOOK] Pagamento sem assinatura, ignorando");
+            log.debug("[ASAAS WEBHOOK] Pagamento sem assinatura e sem troca de plano, ignorando: {}", payment.getId());
             return;
         }
 
@@ -619,6 +662,42 @@ public class AsaasService {
         companyRepository.save(company);
     }
 
+    /**
+     * Processa webhook de pagamento de troca de plano (cobrança avulsa).
+     * Quando o pagamento é confirmado, executa a troca efetiva de plano.
+     */
+    private void processPlanChangeWebhook(String event, Company company, AsaasWebhookPayload.Payment payment) {
+        log.info("[ASAAS WEBHOOK] Pagamento de troca de plano | Evento: {} | Empresa: {} | Payment: {}",
+                event, company.getName(), payment.getId());
+
+        switch (event) {
+            case "PAYMENT_CONFIRMED":
+            case "PAYMENT_RECEIVED":
+                log.info("[ASAAS WEBHOOK] Pagamento de troca de plano CONFIRMADO para empresa {} - Executando troca...",
+                        company.getName());
+                executePlanChange(company);
+                break;
+
+            case "PAYMENT_OVERDUE":
+                log.warn("[ASAAS WEBHOOK] Pagamento de troca de plano em ATRASO para empresa {}", company.getName());
+                break;
+
+            case "PAYMENT_DELETED":
+            case "PAYMENT_REFUNDED":
+                // Pagamento cancelado/estornado - limpa dados pendentes
+                company.setPendingPlan(null);
+                company.setPendingPlanPaymentId(null);
+                companyRepository.save(company);
+                log.info("[ASAAS WEBHOOK] Pagamento de troca de plano CANCELADO para empresa {} - Pendência removida",
+                        company.getName());
+                break;
+
+            default:
+                log.debug("[ASAAS WEBHOOK] Evento de troca de plano não tratado: {}", event);
+                break;
+        }
+    }
+
     // ========== CONSULTAS ==========
 
     /**
@@ -638,6 +717,14 @@ public class AsaasService {
                 "planName", company.getPlanEntity() != null ? company.getPlanEntity().getDisplayName() : company.getPlan().name(),
                 "planPrice", company.getPlanEntity() != null ? company.getPlanEntity().getPrice() : 0
         );
+    }
+
+    /**
+     * Retorna a empresa pelo ID (usado pelo controller admin).
+     */
+    public Company getCompanyById(UUID companyId) {
+        return companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada: " + companyId));
     }
 
     // ========== HELPERS ==========
