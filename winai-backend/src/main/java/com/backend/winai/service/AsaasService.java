@@ -519,10 +519,10 @@ public class AsaasService {
             }
         }
 
-        // Ordena por dueDate desc
+        // Ordena por dateCreated desc (mais preciso que dueDate quando há vários no mesmo dia)
         allPayments.sort((a, b) -> {
-            String dateA = (String) a.get("dueDate");
-            String dateB = (String) b.get("dueDate");
+            String dateA = (String) a.get("dateCreated");
+            String dateB = (String) b.get("dateCreated");
             if (dateA == null) return 1;
             if (dateB == null) return -1;
             return dateB.compareTo(dateA);
@@ -559,6 +559,7 @@ public class AsaasService {
         item.put("bankSlipUrl", p.get("bankSlipUrl"));
         item.put("invoiceNumber", p.get("invoiceNumber"));
         item.put("description", p.get("description"));
+        item.put("dateCreated", p.get("dateCreated"));
         item.put("type", type);
         return item;
     }
