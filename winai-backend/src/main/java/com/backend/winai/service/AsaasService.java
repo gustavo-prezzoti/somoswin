@@ -113,7 +113,7 @@ public class AsaasService {
 
         AsaasSubscriptionRequest request = AsaasSubscriptionRequest.builder()
                 .customer(customerId)
-                .billingType("UNDEFINED")
+                .billingType("PIX")
                 .value(plan.getPrice().doubleValue())
                 .nextDueDate(firstDueDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
                 .cycle("MONTHLY")
