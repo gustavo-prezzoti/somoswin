@@ -576,6 +576,24 @@ public class AsaasService {
             return;
         }
 
+        // 1b) Fallback: verifica pelo externalReference (caso pendingPlanPaymentId tenha sido sobrescrito)
+        String extRef = payment.getExternalReference();
+        if (extRef != null && extRef.startsWith("PLAN_CHANGE:")) {
+            try {
+                String[] parts = extRef.split(":");
+                UUID companyId = UUID.fromString(parts[1]);
+                Optional<Company> fallbackCompany = companyRepository.findById(companyId);
+                if (fallbackCompany.isPresent()) {
+                    log.info("[ASAAS WEBHOOK] Troca de plano detectada via externalReference: {} | Payment: {}",
+                            extRef, payment.getId());
+                    processPlanChangeWebhook(event, fallbackCompany.get(), payment);
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("[ASAAS WEBHOOK] Erro ao parsear externalReference: {}", extRef, e);
+            }
+        }
+
         // 2) Fluxo normal: pagamento de assinatura recorrente
         if (payment.getSubscription() == null || payment.getSubscription().isBlank()) {
             log.debug("[ASAAS WEBHOOK] Pagamento sem assinatura e sem troca de plano, ignorando: {}", payment.getId());
@@ -594,6 +612,7 @@ public class AsaasService {
         switch (event) {
             case "PAYMENT_CONFIRMED":
             case "PAYMENT_RECEIVED":
+            case "PAYMENT_RECEIVED_IN_CASH":
                 company.setSubscriptionStatus("ACTIVE");
                 company.setStatus(com.backend.winai.entity.AccountStatus.ACTIVE);
 
@@ -682,6 +701,25 @@ public class AsaasService {
         switch (event) {
             case "PAYMENT_CONFIRMED":
             case "PAYMENT_RECEIVED":
+            case "PAYMENT_RECEIVED_IN_CASH":
+                // Extrai o planId do externalReference para garantir que o plano correto é usado
+                // (o pendingPlan pode ter sido sobrescrito por outra troca)
+                String extRef = payment.getExternalReference();
+                if (extRef != null && extRef.startsWith("PLAN_CHANGE:")) {
+                    try {
+                        String[] parts = extRef.split(":");
+                        UUID targetPlanId = UUID.fromString(parts[2]);
+                        Plan targetPlan = planRepository.findById(targetPlanId).orElse(null);
+                        if (targetPlan != null) {
+                            company.setPendingPlan(targetPlan);
+                            company.setPendingPlanPaymentId(payment.getId());
+                            companyRepository.save(company);
+                        }
+                    } catch (Exception e) {
+                        log.warn("[ASAAS WEBHOOK] Erro ao extrair planId do externalReference: {}", extRef, e);
+                    }
+                }
+
                 log.info("[ASAAS WEBHOOK] Pagamento de troca de plano CONFIRMADO para empresa {} - Executando troca...",
                         company.getName());
                 executePlanChange(company);
