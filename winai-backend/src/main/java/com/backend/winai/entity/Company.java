@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.UUID;
 
@@ -64,6 +65,26 @@ public class Company {
     @Column(name = "default_support_mode")
     @Builder.Default
     private String defaultSupportMode = "IA"; // IA ou HUMAN
+
+    // Asaas Integration
+    @Column(name = "asaas_customer_id")
+    private String asaasCustomerId;
+
+    @Column(name = "asaas_subscription_id")
+    private String asaasSubscriptionId;
+
+    @Column(name = "subscription_status")
+    @Builder.Default
+    private String subscriptionStatus = "PENDING";
+
+    @Column(name = "subscription_due_date")
+    private LocalDate subscriptionDueDate;
+
+    @Column(name = "subscription_start_date")
+    private LocalDate subscriptionStartDate;
+
+    @Column(name = "subscription_end_date")
+    private LocalDate subscriptionEndDate;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

@@ -95,6 +95,12 @@ export interface Company {
     planName?: string;
     createdAt?: string;
     defaultSupportMode?: string;
+    asaasCustomerId?: string;
+    asaasSubscriptionId?: string;
+    subscriptionStatus?: string;
+    subscriptionDueDate?: string;
+    subscriptionStartDate?: string;
+    subscriptionEndDate?: string;
 }
 
 export interface Plan {
@@ -121,6 +127,8 @@ export interface UpdateCompanyRequest {
     emailContratante?: string;
     planId?: string;
     defaultSupportMode?: string;
+    subscriptionStartDate?: string;
+    subscriptionEndDate?: string;
 }
 
 export interface CreateUserWhatsAppConnectionRequest {
@@ -471,6 +479,52 @@ export const termsAdminService = {
     }
 };
 
+// ========== ASAAS INTEGRAÇÃO ==========
+
+export interface AsaasSubscriptionResponse {
+    id: string;
+    customer: string;
+    billingType: string;
+    value: number;
+    nextDueDate: string;
+    cycle: string;
+    status: string;
+    description: string;
+    externalReference: string;
+}
+
+export interface AsaasSubscriptionStatus {
+    companyId: string;
+    companyName: string;
+    asaasCustomerId: string;
+    asaasSubscriptionId: string;
+    subscriptionStatus: string;
+    subscriptionDueDate: string;
+    planName: string;
+    planPrice: number;
+}
+
+export const asaasService = {
+    createSubscription: async (companyId: string, planId: string): Promise<AsaasSubscriptionResponse> => {
+        return await httpClient.post<AsaasSubscriptionResponse>('/asaas/subscriptions', { companyId, planId });
+    },
+
+    updateSubscription: async (companyId: string, planId: string): Promise<AsaasSubscriptionResponse> => {
+        return await httpClient.put<AsaasSubscriptionResponse>(`/asaas/subscriptions/${companyId}`, { planId });
+    },
+
+    cancelSubscription: async (companyId: string): Promise<void> => {
+        await httpClient.delete(`/asaas/subscriptions/${companyId}`);
+    },
+
+    getSubscriptionStatus: async (companyId: string): Promise<AsaasSubscriptionStatus> => {
+        return await httpClient.get<AsaasSubscriptionStatus>(`/asaas/subscriptions/${companyId}/status`);
+    },
+
+    getPaymentLink: async (companyId: string): Promise<string> => {
+        const result = await httpClient.get<{ paymentLink: string }>(`/asaas/subscriptions/${companyId}/payment-link`);
+        return result.paymentLink;
+    }
+};
+
 export default adminService;
-
-

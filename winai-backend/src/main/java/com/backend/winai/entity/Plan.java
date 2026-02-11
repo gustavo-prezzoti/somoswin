@@ -48,6 +48,9 @@ public class Plan {
     @Builder.Default
     private Boolean active = true;
 
+    @Column(name = "asaas_plan_id")
+    private String asaasPlanId;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 

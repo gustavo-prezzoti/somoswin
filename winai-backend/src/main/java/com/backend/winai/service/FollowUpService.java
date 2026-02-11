@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +27,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class FollowUpService {
+
+    private static final ZoneId BRAZIL_ZONE = ZoneId.of("America/Sao_Paulo");
 
     private final FollowUpConfigRepository configRepository;
     private final FollowUpStatusRepository statusRepository;
@@ -163,6 +166,10 @@ public class FollowUpService {
 
         if (shouldSchedule && !config.getSteps().isEmpty()) {
             ZonedDateTime nextFollowUp = now.plusMinutes(config.getInactivityMinutes());
+            if (!isWithinTimeWindowForDateTime(config, nextFollowUp)) {
+                nextFollowUp = calculateNextTimeWindowFrom(config, nextFollowUp);
+                log.debug("Follow-up inicial ajustado para janela de horário: {}", nextFollowUp);
+            }
             status.setNextFollowUpAt(nextFollowUp);
             log.debug("Follow-up inicial agendado para conversa {} em {}", conversationId, nextFollowUp);
         } else {
@@ -206,6 +213,9 @@ public class FollowUpService {
                                     if (status.getFollowUpCount() < config.getSteps().size()) {
                                         ZonedDateTime nextFollowUp = ZonedDateTime.now()
                                                 .plusMinutes(config.getInactivityMinutes());
+                                        if (!isWithinTimeWindowForDateTime(config, nextFollowUp)) {
+                                            nextFollowUp = calculateNextTimeWindowFrom(config, nextFollowUp);
+                                        }
                                         status.setNextFollowUpAt(nextFollowUp);
                                     }
                                 }
@@ -481,15 +491,13 @@ public class FollowUpService {
     }
 
     private boolean isWithinTimeWindowForDateTime(FollowUpConfig config, ZonedDateTime dateTime) {
-        int hour = dateTime.getHour();
+        int hour = dateTime.withZoneSameInstant(BRAZIL_ZONE).getHour();
         int start = config.getStartHour();
         int end = config.getEndHour();
 
         if (start <= end) {
- 
             return hour >= start && hour < end;
         } else {
-
             return hour >= start || hour < end;
         }
     }
@@ -502,24 +510,30 @@ public class FollowUpService {
     }
 
     private ZonedDateTime calculateNextTimeWindowFrom(FollowUpConfig config, ZonedDateTime proposedTime) {
+        ZonedDateTime brazilTime = proposedTime.withZoneSameInstant(BRAZIL_ZONE);
         LocalTime startTime = LocalTime.of(config.getStartHour(), 0);
-        int proposedHour = proposedTime.getHour();
+        int proposedHour = brazilTime.getHour();
         int start = config.getStartHour();
         int end = config.getEndHour();
 
+        ZonedDateTime result;
         if (start <= end) {
             if (proposedHour < start) {
-                return proposedTime.with(startTime);
+                result = brazilTime.with(startTime);
             } else if (proposedHour >= end) {
-                return proposedTime.plusDays(1).with(startTime);
+                result = brazilTime.plusDays(1).with(startTime);
+            } else {
+                result = brazilTime;
             }
         } else {
             if (proposedHour >= end && proposedHour < start) {
-                return proposedTime.with(startTime);
+                result = brazilTime.with(startTime);
+            } else {
+                result = brazilTime;
             }
         }
 
-        return proposedTime;
+        return result.withZoneSameInstant(proposedTime.getZone());
     }
 
     // ========== MAPPERS ==========

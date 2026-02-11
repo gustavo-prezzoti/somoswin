@@ -334,6 +334,16 @@ public class AdminService {
                             company.getPlanEntity() != null ? company.getPlanEntity().getId().toString() : null);
                     map.put("planName",
                             company.getPlanEntity() != null ? company.getPlanEntity().getDisplayName() : null);
+                    // Asaas Integration
+                    map.put("asaasCustomerId", company.getAsaasCustomerId());
+                    map.put("asaasSubscriptionId", company.getAsaasSubscriptionId());
+                    map.put("subscriptionStatus", company.getSubscriptionStatus());
+                    map.put("subscriptionDueDate",
+                            company.getSubscriptionDueDate() != null ? company.getSubscriptionDueDate().toString() : null);
+                    map.put("subscriptionStartDate",
+                            company.getSubscriptionStartDate() != null ? company.getSubscriptionStartDate().toString() : null);
+                    map.put("subscriptionEndDate",
+                            company.getSubscriptionEndDate() != null ? company.getSubscriptionEndDate().toString() : null);
                     return map;
                 })
                 .collect(Collectors.toList());
@@ -453,7 +463,24 @@ public class AdminService {
             String planIdStr = (String) details.get("planId");
             if (planIdStr != null && !planIdStr.isEmpty()) {
                 UUID planId = UUID.fromString(planIdStr);
-                planRepository.findById(planId).ifPresent(company::setPlanEntity);
+                planRepository.findById(planId).ifPresent(plan -> {
+                    company.setPlanEntity(plan);
+                    company.setPlan(com.backend.winai.entity.UserPlan.valueOf(plan.getName()));
+                });
+            }
+        }
+
+        // Processar datas de vigência
+        if (details.get("subscriptionStartDate") != null) {
+            String startStr = (String) details.get("subscriptionStartDate");
+            if (startStr != null && !startStr.isEmpty()) {
+                company.setSubscriptionStartDate(java.time.LocalDate.parse(startStr));
+            }
+        }
+        if (details.get("subscriptionEndDate") != null) {
+            String endStr = (String) details.get("subscriptionEndDate");
+            if (endStr != null && !endStr.isEmpty()) {
+                company.setSubscriptionEndDate(java.time.LocalDate.parse(endStr));
             }
         }
 

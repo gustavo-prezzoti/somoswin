@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter, CreditCard, Info } from 'lucide-react';
-import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest, Plan } from '../../services/adminService';
+import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter, CreditCard, Info, DollarSign, ExternalLink, XCircle } from 'lucide-react';
+import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest, Plan, asaasService } from '../../services/adminService';
 import { useModal } from './ModalContext';
 
 // Função para aplicar máscara de CPF ou CNPJ
@@ -79,6 +79,8 @@ const AdminCompanies: React.FC = () => {
         documento: string,
         emailContratante: string,
         planId: string,
+        subscriptionStartDate: string,
+        subscriptionEndDate: string,
         selectedCompany?: Company | null
     ) => {
         if (!companyName.trim()) {
@@ -96,7 +98,9 @@ const AdminCompanies: React.FC = () => {
                     contratante: contratante || undefined,
                     documento: documento || undefined,
                     emailContratante: emailContratante || undefined,
-                    planId: planId || undefined
+                    planId: planId || undefined,
+                    subscriptionStartDate: subscriptionStartDate || undefined,
+                    subscriptionEndDate: subscriptionEndDate || undefined
                 };
                 await adminService.updateCompany(selectedCompany.id, request);
             }
@@ -116,6 +120,8 @@ const AdminCompanies: React.FC = () => {
         let currentDocumento = company?.documento ? formatDocumento(company.documento) : '';
         let currentEmailContratante = company?.emailContratante || '';
         let currentPlanId = company?.planId || '';
+        let currentStartDate = company?.subscriptionStartDate || '';
+        let currentEndDate = company?.subscriptionEndDate || '';
 
         // Fetch available plans
         let availablePlans: Plan[] = [];
@@ -131,6 +137,8 @@ const AdminCompanies: React.FC = () => {
             const [documento, setDocumento] = useState(currentDocumento);
             const [emailContratante, setEmailContratante] = useState(currentEmailContratante);
             const [planId, setPlanId] = useState(currentPlanId);
+            const [startDate, setStartDate] = useState(currentStartDate);
+            const [endDate, setEndDate] = useState(currentEndDate);
             const [showPlanDetails, setShowPlanDetails] = useState(false);
 
             const selectedPlan = availablePlans.find(p => p.id === planId);
@@ -258,6 +266,35 @@ const AdminCompanies: React.FC = () => {
                                     </div>
                                 )}
                             </div>
+
+                            <div className="grid grid-cols-2 gap-4 mt-4">
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Vigência - Início</label>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setStartDate(val);
+                                            currentStartDate = val;
+                                        }}
+                                        className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-medium text-gray-800"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Vigência - Final</label>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setEndDate(val);
+                                            currentEndDate = val;
+                                        }}
+                                        className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-medium text-gray-800"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -269,7 +306,7 @@ const AdminCompanies: React.FC = () => {
             body: <ModalBody />,
             confirmText: mode === 'create' ? 'Criar Empresa' : 'Salvar Alterações',
             onConfirm: async () => {
-                await handleSave(mode, currentName, currentContratante, currentDocumento, currentEmailContratante, currentPlanId, company);
+                await handleSave(mode, currentName, currentContratante, currentDocumento, currentEmailContratante, currentPlanId, currentStartDate, currentEndDate, company);
             }
         });
     };
@@ -399,13 +436,108 @@ const AdminCompanies: React.FC = () => {
                                     </span>
                                 </div>
                             )}
+                            {/* Asaas Subscription Status */}
+                            <div className="flex items-center gap-2 mt-2">
+                                <DollarSign size={14} className={company.subscriptionStatus === 'ACTIVE' ? 'text-emerald-500' : company.subscriptionStatus === 'OVERDUE' ? 'text-rose-500' : 'text-gray-400'} />
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                    company.subscriptionStatus === 'ACTIVE' ? 'text-emerald-700 bg-emerald-50' :
+                                    company.subscriptionStatus === 'OVERDUE' ? 'text-rose-700 bg-rose-50' :
+                                    company.subscriptionStatus === 'CANCELLED' ? 'text-gray-500 bg-gray-100' :
+                                    'text-amber-600 bg-amber-50'
+                                }`}>
+                                    {company.subscriptionStatus === 'ACTIVE' ? 'Assinatura Ativa' :
+                                     company.subscriptionStatus === 'OVERDUE' ? 'Pagamento Atrasado' :
+                                     company.subscriptionStatus === 'CANCELLED' ? 'Cancelada' :
+                                     'Sem Assinatura'}
+                                </span>
+                                {company.subscriptionDueDate && (
+                                    <span className="text-[9px] text-gray-400 font-medium">
+                                        Venc: {new Date(company.subscriptionDueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                    </span>
+                                )}
+                            </div>
                         </div>
 
-                        <div className="pt-8 mt-auto flex justify-between items-center relative z-10">
-                            <div className="flex flex-col">
-                                <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest leading-none">ID Identificador</span>
-                                <span className="text-[11px] font-bold text-gray-400 mt-1 uppercase font-mono tracking-tighter">#{company.id.slice(0, 8)}...</span>
+                        <div className="pt-6 mt-auto border-t border-gray-50 flex flex-col gap-3 relative z-10">
+                            <div className="flex justify-between items-center">
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest leading-none">ID Identificador</span>
+                                    <span className="text-[11px] font-bold text-gray-400 mt-1 uppercase font-mono tracking-tighter">#{company.id.slice(0, 8)}...</span>
+                                </div>
                             </div>
+                            {/* Asaas Actions */}
+                            {company.planId && !company.asaasSubscriptionId && (
+                                <button
+                                    onClick={async () => {
+                                        if (!company.contratante || !company.documento || !company.emailContratante) {
+                                            showAlert('Dados Incompletos', 'Preencha os dados do contratante (nome, CPF/CNPJ e e-mail) antes de criar a assinatura.', 'warning');
+                                            return;
+                                        }
+                                        showConfirm({
+                                            title: 'Criar Assinatura',
+                                            message: `Deseja criar uma assinatura no Asaas para "${company.name}" no plano ${company.planName}?`,
+                                            onConfirm: async () => {
+                                                try {
+                                                    await asaasService.createSubscription(company.id, company.planId!);
+                                                    showToast('Assinatura criada com sucesso no Asaas!');
+                                                    fetchCompanies();
+                                                } catch (error: any) {
+                                                    console.error('Erro ao criar assinatura:', error);
+                                                    showToast('Erro ao criar assinatura no Asaas.', 'error');
+                                                }
+                                            }
+                                        });
+                                    }}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-all"
+                                >
+                                    <DollarSign size={14} />
+                                    Criar Assinatura Asaas
+                                </button>
+                            )}
+                            {company.asaasSubscriptionId && (
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                const link = await asaasService.getPaymentLink(company.id);
+                                                if (link) {
+                                                    window.open(link, '_blank');
+                                                } else {
+                                                    showToast('Nenhum link de pagamento disponível.', 'error');
+                                                }
+                                            } catch {
+                                                showToast('Erro ao buscar link de pagamento.', 'error');
+                                            }
+                                        }}
+                                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-50 text-blue-700 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all"
+                                    >
+                                        <ExternalLink size={12} />
+                                        Ver Fatura
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            showConfirm({
+                                                title: 'Cancelar Assinatura',
+                                                message: `Tem certeza que deseja cancelar a assinatura de "${company.name}"? Esta ação não pode ser desfeita.`,
+                                                type: 'danger',
+                                                onConfirm: async () => {
+                                                    try {
+                                                        await asaasService.cancelSubscription(company.id);
+                                                        showToast('Assinatura cancelada.');
+                                                        fetchCompanies();
+                                                    } catch {
+                                                        showToast('Erro ao cancelar assinatura.', 'error');
+                                                    }
+                                                }
+                                            });
+                                        }}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-rose-100 transition-all"
+                                    >
+                                        <XCircle size={12} />
+                                        Cancelar
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}

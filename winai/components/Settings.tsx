@@ -10,19 +10,28 @@ import {
   Check,
   Upload,
   Facebook,
-  X
+  X,
+  CreditCard,
+  ExternalLink,
+  Calendar,
+  DollarSign,
+  FileText,
+  Users,
+  AlertCircle,
+  CheckCircle
 } from 'lucide-react';
 import { googleDriveService } from '../services/api/google-drive.service';
 import { userService } from '../services/api/user.service';
 import { marketingService } from '../services/api/marketing.service';
 import { whatsappService } from '../services/api/whatsapp.service';
+import { subscriptionService, SubscriptionDetails, PaymentRecord } from '../services/api/subscription.service';
 import { ConfirmModal } from './ui/Modal';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
 import MetaConnectionManager from './MetaConnectionManager';
 
 const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'integrations'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'integrations' | 'subscription'>('profile');
   const [user, setUser] = useState<any>(null);
   const [saved, setSaved] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -34,6 +43,9 @@ const Settings: React.FC = () => {
   const [isConnectingWhatsapp, setIsConnectingWhatsapp] = useState(false);
   const [profileData, setProfileData] = useState({ name: '', email: '', phone: '' });
   const [showMetaDetails, setShowMetaDetails] = useState(false);
+  const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [loadingSubscription, setLoadingSubscription] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toasts, showToast, removeToast } = useToast();
 
@@ -51,6 +63,7 @@ const Settings: React.FC = () => {
     checkGoogleConnection();
     checkMetaConnection();
     checkWhatsAppConnection();
+    loadSubscription();
     // Check for OAuth callback
     if (window.location.href.includes('google=connected')) {
       setGoogleConnected(true);
@@ -318,9 +331,82 @@ const Settings: React.FC = () => {
     }
   };
 
+  const loadSubscription = async () => {
+    setLoadingSubscription(true);
+    try {
+      const [subData, payData] = await Promise.all([
+        subscriptionService.getMySubscription(),
+        subscriptionService.getMyPayments()
+      ]);
+      setSubscription(subData);
+      setPayments(payData);
+    } catch (error) {
+      console.error('Failed to load subscription:', error);
+    } finally {
+      setLoadingSubscription(false);
+    }
+  };
+
+  const handleOpenInvoice = async () => {
+    try {
+      const url = await subscriptionService.getMyInvoice();
+      if (url) {
+        window.open(url, '_blank');
+      } else {
+        showToast('Nenhuma fatura disponível no momento.', 'error');
+      }
+    } catch {
+      showToast('Erro ao buscar fatura.', 'error');
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'ACTIVE': return 'Ativa';
+      case 'OVERDUE': return 'Em Atraso';
+      case 'CANCELLED': return 'Cancelada';
+      case 'PENDING': return 'Pendente';
+      default: return status;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'ACTIVE': return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+      case 'OVERDUE': return 'text-rose-700 bg-rose-50 border-rose-200';
+      case 'CANCELLED': return 'text-gray-500 bg-gray-50 border-gray-200';
+      default: return 'text-amber-700 bg-amber-50 border-amber-200';
+    }
+  };
+
+  const getPaymentStatusLabel = (status: string) => {
+    switch (status) {
+      case 'CONFIRMED': return 'Confirmado';
+      case 'RECEIVED': return 'Recebido';
+      case 'PENDING': return 'Pendente';
+      case 'OVERDUE': return 'Vencido';
+      case 'REFUNDED': return 'Estornado';
+      case 'RECEIVED_IN_CASH': return 'Recebido em Dinheiro';
+      default: return status;
+    }
+  };
+
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case 'CONFIRMED':
+      case 'RECEIVED':
+      case 'RECEIVED_IN_CASH': return 'text-emerald-700 bg-emerald-50';
+      case 'PENDING': return 'text-amber-700 bg-amber-50';
+      case 'OVERDUE': return 'text-rose-700 bg-rose-50';
+      case 'REFUNDED': return 'text-gray-500 bg-gray-100';
+      default: return 'text-gray-500 bg-gray-50';
+    }
+  };
+
   const tabs = [
     { id: 'profile', label: 'Perfil Executivo', icon: User },
     { id: 'integrations', label: 'Conexões Neurais', icon: Globe },
+    { id: 'subscription', label: 'Assinatura', icon: CreditCard },
   ];
 
   return (
@@ -431,6 +517,179 @@ const Settings: React.FC = () => {
                     />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'subscription' && (
+              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                {loadingSubscription ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <RefreshCw size={32} className="text-emerald-500 animate-spin" />
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Carregando assinatura...</span>
+                  </div>
+                ) : subscription && subscription.subscriptionStatus !== 'NO_COMPANY' ? (
+                  <>
+                    {/* Plan Card */}
+                    <div className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#002a1e] to-[#004d35] p-8 text-white">
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full -mr-32 -mt-32" />
+                      <div className="relative z-10">
+                        <div className="flex items-start justify-between mb-6">
+                          <div>
+                            <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-2">Plano Atual</p>
+                            <h2 className="text-3xl font-black tracking-tighter uppercase italic">
+                              {subscription.plan?.displayName || 'Sem Plano'}
+                            </h2>
+                          </div>
+                          <div className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest ${getStatusColor(subscription.subscriptionStatus)}`}>
+                            {subscription.subscriptionStatus === 'ACTIVE' && <CheckCircle size={12} className="inline mr-1.5 -mt-0.5" />}
+                            {subscription.subscriptionStatus === 'OVERDUE' && <AlertCircle size={12} className="inline mr-1.5 -mt-0.5" />}
+                            {getStatusLabel(subscription.subscriptionStatus)}
+                          </div>
+                        </div>
+
+                        {subscription.plan && (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div className="bg-white/10 backdrop-blur rounded-2xl p-4">
+                              <DollarSign size={16} className="text-emerald-400 mb-2" />
+                              <p className="text-[9px] font-bold text-emerald-300/70 uppercase tracking-wider">Mensalidade</p>
+                              <p className="text-lg font-black">R$ {subscription.plan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <div className="bg-white/10 backdrop-blur rounded-2xl p-4">
+                              <Users size={16} className="text-emerald-400 mb-2" />
+                              <p className="text-[9px] font-bold text-emerald-300/70 uppercase tracking-wider">Leads/mês</p>
+                              <p className="text-lg font-black">{subscription.plan.leadLimit ?? 'Ilimitado'}</p>
+                            </div>
+                            <div className="bg-white/10 backdrop-blur rounded-2xl p-4">
+                              <User size={16} className="text-emerald-400 mb-2" />
+                              <p className="text-[9px] font-bold text-emerald-300/70 uppercase tracking-wider">Usuários</p>
+                              <p className="text-lg font-black">{subscription.plan.userLimit ?? 'Ilimitado'}</p>
+                            </div>
+                            <div className="bg-white/10 backdrop-blur rounded-2xl p-4">
+                              <Smartphone size={16} className="text-emerald-400 mb-2" />
+                              <p className="text-[9px] font-bold text-emerald-300/70 uppercase tracking-wider">WhatsApp</p>
+                              <p className="text-lg font-black">{subscription.plan.whatsappLimit}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Vigência */}
+                        {(subscription.subscriptionStartDate || subscription.subscriptionEndDate) && (
+                          <div className="flex flex-wrap gap-3 mb-3">
+                            {subscription.subscriptionStartDate && (
+                              <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-xl">
+                                <Calendar size={14} className="text-emerald-400" />
+                                <span className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">
+                                  Início: {new Date(subscription.subscriptionStartDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                </span>
+                              </div>
+                            )}
+                            {subscription.subscriptionEndDate && (
+                              <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-xl">
+                                <Calendar size={14} className="text-emerald-400" />
+                                <span className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">
+                                  Vigência até: {new Date(subscription.subscriptionEndDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-3">
+                          {subscription.subscriptionDueDate && (
+                            <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-xl">
+                              <Calendar size={14} className="text-emerald-400" />
+                              <span className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">
+                                Próximo vencimento: {new Date(subscription.subscriptionDueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                              </span>
+                            </div>
+                          )}
+                          {subscription.asaasSubscriptionId && (
+                            <button
+                              onClick={handleOpenInvoice}
+                              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white px-5 py-2 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest"
+                            >
+                              <ExternalLink size={14} />
+                              Ver Fatura / Pagar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment History */}
+                    <div>
+                      <div className="flex items-center gap-3 mb-6">
+                        <FileText size={20} className="text-gray-400" />
+                        <h3 className="text-lg font-black text-gray-900 uppercase italic tracking-tight">Histórico de Pagamentos</h3>
+                      </div>
+
+                      {payments.length === 0 ? (
+                        <div className="p-10 bg-gray-50 rounded-[32px] border border-gray-100 flex flex-col items-center justify-center text-center">
+                          <FileText size={32} className="text-gray-300 mb-4" />
+                          <p className="text-sm font-bold text-gray-400 uppercase">Nenhum pagamento registrado</p>
+                          <p className="text-xs text-gray-400 mt-1">Os pagamentos aparecerão aqui assim que forem gerados.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {payments.map((payment) => (
+                            <div key={payment.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:shadow-sm transition-all">
+                              <div className="flex items-center gap-4">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                  payment.status === 'CONFIRMED' || payment.status === 'RECEIVED' || payment.status === 'RECEIVED_IN_CASH'
+                                    ? 'bg-emerald-100 text-emerald-600'
+                                    : payment.status === 'PENDING'
+                                    ? 'bg-amber-100 text-amber-600'
+                                    : payment.status === 'OVERDUE'
+                                    ? 'bg-rose-100 text-rose-600'
+                                    : 'bg-gray-100 text-gray-400'
+                                }`}>
+                                  {payment.status === 'CONFIRMED' || payment.status === 'RECEIVED' || payment.status === 'RECEIVED_IN_CASH'
+                                    ? <CheckCircle size={18} />
+                                    : payment.status === 'OVERDUE'
+                                    ? <AlertCircle size={18} />
+                                    : <DollarSign size={18} />}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-black text-gray-800">
+                                    R$ {payment.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </p>
+                                  <p className="text-[10px] text-gray-400 font-medium">
+                                    Vencimento: {payment.dueDate ? new Date(payment.dueDate + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                                    {payment.paymentDate && (
+                                      <> · Pago em: {new Date(payment.paymentDate + 'T00:00:00').toLocaleDateString('pt-BR')}</>  
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${getPaymentStatusColor(payment.status)}`}>
+                                  {getPaymentStatusLabel(payment.status)}
+                                </span>
+                                {payment.invoiceUrl && (
+                                  <button
+                                    onClick={() => window.open(payment.invoiceUrl!, '_blank')}
+                                    className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                    title="Ver fatura"
+                                  >
+                                    <ExternalLink size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-16 bg-gray-50 rounded-[32px] border border-gray-100 flex flex-col items-center justify-center text-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-6 text-gray-300">
+                      <CreditCard size={32} />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-800 uppercase italic">Sem Assinatura</h3>
+                    <p className="text-sm text-gray-400 mt-2 max-w-md">Sua empresa ainda não possui uma assinatura ativa. Entre em contato com o suporte para ativar seu plano.</p>
+                  </div>
+                )}
               </div>
             )}
 
