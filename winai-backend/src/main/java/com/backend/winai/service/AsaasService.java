@@ -278,7 +278,7 @@ public class AsaasService {
         }
 
         BigDecimal chargeValue = planPrice.subtract(credit)
-                .max(new BigDecimal("0.01"))
+                .max(new BigDecimal("5.00"))
                 .setScale(2, RoundingMode.HALF_UP);
 
         log.info("[ASAAS] Troca de plano - Preço: R${}, Crédito: R${}, Valor cobrança: R${}",
