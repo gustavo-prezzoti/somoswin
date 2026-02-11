@@ -153,7 +153,7 @@ public class AsaasService {
     }
 
     /**
-     * Cancela a assinatura no Asaas.
+     * Cancela a assinatura no Asaas e limpa todos os dados locais.
      */
     @Transactional
     public void cancelSubscription(UUID companyId) {
@@ -165,27 +165,35 @@ public class AsaasService {
             return;
         }
 
+        String oldSubscriptionId = company.getAsaasSubscriptionId();
+
         try {
             HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
             restTemplate.exchange(
-                    asaasApiUrl + "/subscriptions/" + company.getAsaasSubscriptionId(),
+                    asaasApiUrl + "/subscriptions/" + oldSubscriptionId,
                     HttpMethod.DELETE,
                     entity,
                     String.class);
-
-            company.setSubscriptionStatus("CANCELLED");
-            companyRepository.save(company);
-            log.info("[ASAAS] Assinatura {} cancelada para empresa {}",
-                    company.getAsaasSubscriptionId(), company.getName());
         } catch (HttpClientErrorException e) {
             log.error("[ASAAS] Erro ao cancelar assinatura {}: {} - {}",
-                    company.getAsaasSubscriptionId(), e.getStatusCode(), e.getResponseBodyAsString());
+                    oldSubscriptionId, e.getStatusCode(), e.getResponseBodyAsString());
             throw new RuntimeException("Erro ao cancelar assinatura: " + e.getResponseBodyAsString());
         }
+
+        // Limpa todos os dados de assinatura
+        company.setAsaasSubscriptionId(null);
+        company.setSubscriptionStatus("CANCELLED");
+        company.setSubscriptionDueDate(null);
+        company.setSubscriptionEndDate(null);
+        companyRepository.save(company);
+
+        log.info("[ASAAS] Assinatura {} cancelada e dados limpos para empresa {}",
+                oldSubscriptionId, company.getName());
     }
 
     /**
-     * Atualiza a assinatura para um novo plano (upgrade/downgrade).
+     * Troca de plano: cancela a assinatura antiga no Asaas e cria uma nova
+     * com o novo plano, gerando cobrança imediata.
      */
     @Transactional
     public AsaasSubscriptionResponse updateSubscription(UUID companyId, UUID newPlanId) {
@@ -195,40 +203,34 @@ public class AsaasService {
         Plan newPlan = planRepository.findById(newPlanId)
                 .orElseThrow(() -> new RuntimeException("Plano não encontrado: " + newPlanId));
 
-        if (company.getAsaasSubscriptionId() == null || company.getAsaasSubscriptionId().isBlank()) {
-            log.info("[ASAAS] Empresa {} sem assinatura ativa, criando nova...", company.getName());
-            return createSubscription(companyId, newPlanId);
-        }
-
-        try {
-            Map<String, Object> updateBody = Map.of(
-                    "value", newPlan.getPrice().doubleValue(),
-                    "description", "Win AI - Plano " + newPlan.getDisplayName()
-            );
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(updateBody, buildHeaders());
-            ResponseEntity<AsaasSubscriptionResponse> response = restTemplate.exchange(
-                    asaasApiUrl + "/subscriptions/" + company.getAsaasSubscriptionId(),
-                    HttpMethod.PUT,
-                    entity,
-                    AsaasSubscriptionResponse.class);
-
-            if (response.getBody() != null) {
-                company.setPlanEntity(newPlan);
-                company.setPlan(com.backend.winai.entity.UserPlan.valueOf(newPlan.getName()));
-                companyRepository.save(company);
-
-                log.info("[ASAAS] Assinatura {} atualizada para plano {} - Empresa {}",
-                        company.getAsaasSubscriptionId(), newPlan.getDisplayName(), company.getName());
-                return response.getBody();
+        // Se já tem assinatura ativa, cancela no Asaas primeiro
+        if (company.getAsaasSubscriptionId() != null && !company.getAsaasSubscriptionId().isBlank()) {
+            String oldSubscriptionId = company.getAsaasSubscriptionId();
+            try {
+                HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
+                restTemplate.exchange(
+                        asaasApiUrl + "/subscriptions/" + oldSubscriptionId,
+                        HttpMethod.DELETE,
+                        entity,
+                        String.class);
+                log.info("[ASAAS] Assinatura antiga {} cancelada para troca de plano - Empresa {}",
+                        oldSubscriptionId, company.getName());
+            } catch (HttpClientErrorException e) {
+                log.error("[ASAAS] Erro ao cancelar assinatura antiga {}: {} - {}",
+                        oldSubscriptionId, e.getStatusCode(), e.getResponseBodyAsString());
+                throw new RuntimeException("Erro ao cancelar assinatura antiga: " + e.getResponseBodyAsString());
             }
-        } catch (HttpClientErrorException e) {
-            log.error("[ASAAS] Erro ao atualizar assinatura {}: {} - {}",
-                    company.getAsaasSubscriptionId(), e.getStatusCode(), e.getResponseBodyAsString());
-            throw new RuntimeException("Erro ao atualizar assinatura: " + e.getResponseBodyAsString());
+
+            // Limpa dados da assinatura antiga
+            company.setAsaasSubscriptionId(null);
+            company.setSubscriptionDueDate(null);
+            companyRepository.save(company);
         }
 
-        throw new RuntimeException("Falha ao atualizar assinatura no Asaas");
+        // Cria nova assinatura com o novo plano (gera cobrança imediata)
+        log.info("[ASAAS] Criando nova assinatura para empresa {} - Plano {}",
+                company.getName(), newPlan.getDisplayName());
+        return createSubscription(companyId, newPlanId);
     }
 
     /**

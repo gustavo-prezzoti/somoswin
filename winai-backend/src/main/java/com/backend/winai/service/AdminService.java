@@ -87,6 +87,7 @@ public class AdminService {
     private final MetaInsightRepository metaInsightRepository;
     private final SystemPromptRepository systemPromptRepository;
     private final PlanRepository planRepository;
+    private final AsaasService asaasService;
     private final UazapService uazapService;
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -459,14 +460,23 @@ public class AdminService {
         }
 
         // Processar planId - buscar o Plan pelo ID
+        boolean planChanged = false;
+        UUID newPlanId = null;
+        boolean hadActiveSubscription = company.getAsaasSubscriptionId() != null
+                && !company.getAsaasSubscriptionId().isBlank();
+
         if (details.get("planId") != null) {
             String planIdStr = (String) details.get("planId");
             if (planIdStr != null && !planIdStr.isEmpty()) {
-                UUID planId = UUID.fromString(planIdStr);
-                planRepository.findById(planId).ifPresent(plan -> {
+                newPlanId = UUID.fromString(planIdStr);
+                var planOpt = planRepository.findById(newPlanId);
+                if (planOpt.isPresent()) {
+                    var plan = planOpt.get();
+                    planChanged = company.getPlanEntity() == null
+                            || !company.getPlanEntity().getId().equals(plan.getId());
                     company.setPlanEntity(plan);
                     company.setPlan(com.backend.winai.entity.UserPlan.valueOf(plan.getName()));
-                });
+                }
             }
         }
 
@@ -486,6 +496,28 @@ public class AdminService {
 
         Company savedCompany = companyRepository.save(company);
         log.info("Empresa atualizada via Map: {}", savedCompany.getName());
+
+        // Após salvar, atualizar assinatura no Asaas se o plano mudou
+        if (planChanged && newPlanId != null
+                && savedCompany.getContratante() != null
+                && savedCompany.getDocumento() != null
+                && savedCompany.getEmailContratante() != null) {
+            try {
+                if (hadActiveSubscription) {
+                    log.info("Plano alterado para empresa {}, recriando assinatura no Asaas...",
+                            savedCompany.getName());
+                    asaasService.updateSubscription(companyId, newPlanId);
+                } else {
+                    log.info("Criando primeira assinatura no Asaas para empresa {}...",
+                            savedCompany.getName());
+                    asaasService.createSubscription(companyId, newPlanId);
+                }
+            } catch (Exception e) {
+                log.error("Erro ao atualizar assinatura no Asaas para empresa {}: {}",
+                        savedCompany.getName(), e.getMessage());
+            }
+        }
+
         return savedCompany;
     }
 
