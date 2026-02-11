@@ -36,6 +36,18 @@ export interface PaymentRecord {
     description: string | null;
 }
 
+export interface PlanOption {
+    id: string;
+    name: string;
+    displayName: string;
+    price: number;
+    setupFee: number;
+    leadLimit: number | null;
+    userLimit: number | null;
+    whatsappLimit: number;
+    description: string;
+}
+
 export const subscriptionService = {
     getMySubscription: async (): Promise<SubscriptionDetails> => {
         return await httpClient.get<SubscriptionDetails>('/asaas/my-subscription');
@@ -48,5 +60,13 @@ export const subscriptionService = {
     getMyInvoice: async (): Promise<string> => {
         const result = await httpClient.get<{ invoiceUrl: string }>('/asaas/my-subscription/invoice');
         return result.invoiceUrl;
+    },
+
+    getAvailablePlans: async (): Promise<PlanOption[]> => {
+        return await httpClient.get<PlanOption[]>('/asaas/plans');
+    },
+
+    changePlan: async (planId: string): Promise<{ success: boolean; message: string }> => {
+        return await httpClient.post<{ success: boolean; message: string }>('/asaas/my-subscription/change-plan', { planId });
     }
 };

@@ -24,7 +24,7 @@ import { googleDriveService } from '../services/api/google-drive.service';
 import { userService } from '../services/api/user.service';
 import { marketingService } from '../services/api/marketing.service';
 import { whatsappService } from '../services/api/whatsapp.service';
-import { subscriptionService, SubscriptionDetails, PaymentRecord } from '../services/api/subscription.service';
+import { subscriptionService, SubscriptionDetails, PaymentRecord, PlanOption } from '../services/api/subscription.service';
 import { ConfirmModal } from './ui/Modal';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
@@ -46,6 +46,8 @@ const Settings: React.FC = () => {
   const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loadingSubscription, setLoadingSubscription] = useState(false);
+  const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
+  const [changingPlan, setChangingPlan] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toasts, showToast, removeToast } = useToast();
 
@@ -55,7 +57,8 @@ const Settings: React.FC = () => {
     title: '',
     message: '',
     action: () => { },
-    variant: 'danger' as 'danger' | 'warning' | 'default'
+    variant: 'danger' as 'danger' | 'warning' | 'default',
+    confirmLabel: 'Confirmar'
   });
 
   useEffect(() => {
@@ -213,6 +216,7 @@ const Settings: React.FC = () => {
       title: 'Desconectar Agente SDR (WhatsApp)',
       message: 'Tem certeza? A qualificação automática de leads será desativada imediatamente.',
       variant: 'danger',
+      confirmLabel: 'Sim, Desconectar',
       action: async () => {
         try {
           await whatsappService.disconnectSDRAgent();
@@ -241,6 +245,7 @@ const Settings: React.FC = () => {
       title: 'Desconectar Conta Google',
       message: 'Tem certeza? Isso desconectará o Drive e o Calendar e interromperá as sincronizações.',
       variant: 'danger',
+      confirmLabel: 'Sim, Desconectar',
       action: async () => {
         try {
           await googleDriveService.disconnect();
@@ -272,6 +277,7 @@ const Settings: React.FC = () => {
       title: 'Desconectar Meta (Facebook/Instagram)',
       message: 'Tem certeza? Isso interromperá a sincronização de leads e métricas de anúncios.',
       variant: 'danger',
+      confirmLabel: 'Sim, Desconectar',
       action: async () => {
         try {
           await marketingService.disconnect();
@@ -334,17 +340,42 @@ const Settings: React.FC = () => {
   const loadSubscription = async () => {
     setLoadingSubscription(true);
     try {
-      const [subData, payData] = await Promise.all([
+      const [subData, payData, plansData] = await Promise.all([
         subscriptionService.getMySubscription(),
-        subscriptionService.getMyPayments()
+        subscriptionService.getMyPayments(),
+        subscriptionService.getAvailablePlans()
       ]);
       setSubscription(subData);
       setPayments(payData);
+      setAvailablePlans(plansData);
     } catch (error) {
       console.error('Failed to load subscription:', error);
     } finally {
       setLoadingSubscription(false);
     }
+  };
+
+  const handleChangePlan = async (planId: string, planName: string) => {
+    setConfirmModalConfig({
+      title: 'Trocar de Plano',
+      message: `Deseja trocar para o plano ${planName}? A assinatura atual será cancelada e uma nova cobrança será gerada imediatamente.`,
+      variant: 'warning',
+      confirmLabel: 'Sim, Trocar Plano',
+      action: async () => {
+        setChangingPlan(true);
+        try {
+          await subscriptionService.changePlan(planId);
+          showToast('Plano alterado com sucesso! Uma nova cobrança foi gerada.');
+          await loadSubscription();
+        } catch (error: any) {
+          console.error('Failed to change plan:', error);
+          showToast('Erro ao trocar de plano.', 'error');
+        } finally {
+          setChangingPlan(false);
+        }
+      }
+    });
+    setConfirmModalOpen(true);
   };
 
   const handleOpenInvoice = async () => {
@@ -628,6 +659,103 @@ const Settings: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Change Plan */}
+                    {availablePlans.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-3 mb-6">
+                          <CreditCard size={20} className="text-gray-400" />
+                          <h3 className="text-lg font-black text-gray-900 uppercase italic tracking-tight">Planos Disponíveis</h3>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {availablePlans
+                            .sort((a, b) => a.price - b.price)
+                            .map((plan) => {
+                              const isCurrentPlan = subscription?.plan?.id === plan.id;
+                              const currentPrice = subscription?.plan?.price ?? 0;
+                              const isUpgrade = plan.price > currentPrice;
+                              const isDowngrade = plan.price < currentPrice;
+
+                              return (
+                                <div
+                                  key={plan.id}
+                                  className={`relative p-6 rounded-[24px] border-2 transition-all ${
+                                    isCurrentPlan
+                                      ? 'border-emerald-500 bg-emerald-50/50'
+                                      : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white hover:shadow-lg'
+                                  }`}
+                                >
+                                  {isCurrentPlan && (
+                                    <div className="absolute -top-3 left-6 px-3 py-1 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-full">
+                                      Plano Atual
+                                    </div>
+                                  )}
+
+                                  <div className="mb-4">
+                                    <h4 className="text-lg font-black text-gray-900 uppercase italic tracking-tight">
+                                      {plan.displayName}
+                                    </h4>
+                                    <div className="flex items-baseline gap-1 mt-2">
+                                      <span className="text-2xl font-black text-gray-900">
+                                        R$ {plan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                      </span>
+                                      <span className="text-[10px] font-bold text-gray-400 uppercase">/mês</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2 mb-6">
+                                    <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                                      <Users size={12} className="text-gray-400" />
+                                      <span><strong>{plan.leadLimit ?? 'Ilimitado'}</strong> leads/mês</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                                      <User size={12} className="text-gray-400" />
+                                      <span><strong>{plan.userLimit ?? 'Ilimitado'}</strong> usuários</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                                      <Smartphone size={12} className="text-gray-400" />
+                                      <span><strong>{plan.whatsappLimit}</strong> WhatsApp</span>
+                                    </div>
+                                    {plan.description && (
+                                      <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100">{plan.description}</p>
+                                    )}
+                                  </div>
+
+                                  {isCurrentPlan ? (
+                                    <div className="w-full py-3 text-center text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                                      <CheckCircle size={14} className="inline mr-1.5 -mt-0.5" />
+                                      Seu Plano
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleChangePlan(plan.id, plan.displayName)}
+                                      disabled={changingPlan}
+                                      className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        changingPlan
+                                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                          : isUpgrade
+                                          ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20'
+                                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                      }`}
+                                    >
+                                      {changingPlan ? (
+                                        <RefreshCw size={14} className="inline animate-spin" />
+                                      ) : isUpgrade ? (
+                                        'Fazer Upgrade'
+                                      ) : isDowngrade ? (
+                                        'Fazer Downgrade'
+                                      ) : (
+                                        'Selecionar'
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Payment History */}
                     <div>
                       <div className="flex items-center gap-3 mb-6">
@@ -866,7 +994,7 @@ const Settings: React.FC = () => {
         title={confirmModalConfig.title}
         message={confirmModalConfig.message}
         variant={confirmModalConfig.variant}
-        confirmLabel="Sim, Desconectar"
+        confirmLabel={confirmModalConfig.confirmLabel}
       />
 
       {/* Meta Connection Details Modal */}

@@ -12,6 +12,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import com.backend.winai.entity.Plan;
+import com.backend.winai.repository.PlanRepository;
+
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -24,6 +27,7 @@ import java.util.UUID;
 public class AsaasController {
 
     private final AsaasService asaasService;
+    private final PlanRepository planRepository;
 
     // ========== ADMIN ENDPOINTS (autenticados) ==========
 
@@ -106,6 +110,61 @@ public class AsaasController {
         }
         String link = asaasService.getPaymentLink(user.getCompany().getId());
         return ResponseEntity.ok(Map.of("invoiceUrl", link != null ? link : ""));
+    }
+
+    @Operation(summary = "Listar planos", description = "Retorna todos os planos disponíveis para o usuário")
+    @GetMapping("/plans")
+    public ResponseEntity<List<Map<String, Object>>> getAvailablePlans() {
+        List<Plan> plans = planRepository.findAll();
+        List<Map<String, Object>> result = plans.stream()
+                .filter(Plan::getActive)
+                .map(plan -> {
+                    Map<String, Object> map = new java.util.LinkedHashMap<>();
+                    map.put("id", plan.getId());
+                    map.put("name", plan.getName());
+                    map.put("displayName", plan.getDisplayName());
+                    map.put("price", plan.getPrice());
+                    map.put("setupFee", plan.getSetupFee());
+                    map.put("leadLimit", plan.getLeadLimit());
+                    map.put("userLimit", plan.getUserLimit());
+                    map.put("whatsappLimit", plan.getWhatsappLimit());
+                    map.put("description", plan.getDescription());
+                    return map;
+                })
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(result);
+    }
+
+    @Operation(summary = "Trocar de plano", description = "Permite ao usuário logado trocar de plano (cancela assinatura antiga e cria nova)")
+    @PostMapping("/my-subscription/change-plan")
+    public ResponseEntity<Map<String, Object>> changePlan(
+            @AuthenticationPrincipal User user,
+            @RequestBody Map<String, String> request) {
+        if (user.getCompany() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Usuário sem empresa associada"));
+        }
+
+        String planIdStr = request.get("planId");
+        if (planIdStr == null || planIdStr.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "planId é obrigatório"));
+        }
+
+        UUID companyId = user.getCompany().getId();
+        UUID planId = UUID.fromString(planIdStr);
+
+        try {
+            AsaasSubscriptionResponse response = asaasService.updateSubscription(companyId, planId);
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "subscriptionId", response.getId(),
+                    "message", "Plano alterado com sucesso. Uma nova cobrança foi gerada."
+            ));
+        } catch (Exception e) {
+            log.error("[ASAAS] Erro ao trocar plano para empresa {}: {}", companyId, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "error", "Erro ao trocar de plano: " + e.getMessage()
+            ));
+        }
     }
 
     // ========== WEBHOOK (público, sem autenticação) ==========
