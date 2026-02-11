@@ -21,7 +21,6 @@ import {
   Zap,
   Target,
   AlertTriangle,
-  CreditCard,
   ShieldAlert
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
@@ -431,10 +430,8 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     );
   }
 
-  // Se assinatura expirada, bloqueia acesso e força pagamento
-  // Permite acesso à página de configurações para o usuário poder pagar
-  const isSettingsPage = location.pathname === '/configuracoes';
-  if (subscriptionExpired && !isSettingsPage) {
+  // Se assinatura expirada ou sem assinatura ativa, bloqueia TODAS as rotas
+  if (subscriptionExpired) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center z-[9999] p-4">
         <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl">
@@ -443,8 +440,8 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
             <div className="w-20 h-20 bg-white/10 backdrop-blur rounded-3xl flex items-center justify-center mx-auto mb-5">
               <ShieldAlert size={40} />
             </div>
-            <h1 className="text-2xl font-black uppercase italic tracking-tight">Assinatura Expirada</h1>
-            <p className="text-rose-200 text-sm font-medium mt-2">Seu acesso à plataforma está bloqueado</p>
+            <h1 className="text-2xl font-black uppercase italic tracking-tight">Acesso Bloqueado</h1>
+            <p className="text-rose-200 text-sm font-medium mt-2">Sua assinatura não está ativa</p>
           </div>
 
           {/* Body */}
@@ -464,22 +461,20 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
                   </span>
                 </div>
               )}
+              {!subscriptionInfo.endDate && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-500">Status</span>
+                  <span className="text-sm font-bold text-rose-600">Sem assinatura ativa</span>
+                </div>
+              )}
             </div>
 
             <p className="text-sm text-gray-500 text-center leading-relaxed">
-              Para continuar utilizando a plataforma, é necessário regularizar o pagamento da sua assinatura.
+              Para utilizar a plataforma é necessário ter uma assinatura recorrente ativa.
+              Entre em contato com o administrador para ativar ou renovar sua assinatura.
             </p>
 
             <div className="space-y-3">
-              <button
-                onClick={() => {
-                  window.location.href = '/configuracoes?tab=subscription';
-                }}
-                className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2"
-              >
-                <CreditCard size={18} />
-                Regularizar Pagamento
-              </button>
               <button
                 onClick={() => {
                   localStorage.removeItem('win_user');
@@ -487,9 +482,9 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
                   localStorage.removeItem('win_refresh_token');
                   window.location.href = '/login';
                 }}
-                className="w-full py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold text-sm hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
+                className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-gray-800 transition-all flex items-center justify-center gap-2"
               >
-                <LogOut size={16} />
+                <LogOut size={18} />
                 Sair da Conta
               </button>
             </div>

@@ -171,13 +171,15 @@ public class TermsOfServiceService {
         if (!isSuperAdmin && user.getCompany() != null) {
             var company = user.getCompany();
             LocalDate endDate = company.getSubscriptionEndDate();
-            boolean expired = endDate != null && endDate.isBefore(LocalDate.now());
-            boolean noSubscription = company.getAsaasSubscriptionId() == null
-                    || company.getAsaasSubscriptionId().isBlank();
+            String subStatus = company.getSubscriptionStatus();
+            String subId = company.getAsaasSubscriptionId();
 
-            // Expirado OU sem assinatura ativa (e tem plano configurado)
-            boolean blocked = expired || (noSubscription && company.getPlanEntity() != null
-                    && !"ACTIVE".equals(company.getSubscriptionStatus()));
+            boolean expired = endDate != null && endDate.isBefore(LocalDate.now());
+            boolean noActiveSubscription = subId == null || subId.isBlank();
+            boolean statusNotActive = !"ACTIVE".equals(subStatus);
+
+            // Bloqueia se: vigência expirou OU não tem assinatura recorrente ativa
+            boolean blocked = expired || (noActiveSubscription && statusNotActive);
 
             response.put("subscriptionExpired", blocked);
 
