@@ -232,7 +232,8 @@ public class AsaasService {
 
         BigDecimal credit = calculateProRataCredit(company);
         BigDecimal newPlanPrice = newPlan.getPrice();
-        BigDecimal firstPaymentValue = newPlanPrice.subtract(credit).max(BigDecimal.ZERO)
+        BigDecimal firstPaymentValue = newPlanPrice.subtract(credit)
+                .max(new BigDecimal("5.00"))
                 .setScale(2, RoundingMode.HALF_UP);
 
         long remainingDays = 0;
