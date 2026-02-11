@@ -471,62 +471,37 @@ public class AsaasService {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada: " + companyId));
 
-        java.util.List<Map<String, Object>> allPayments = new java.util.ArrayList<>();
+        // Usa Map com id como chave para deduplicar pagamentos que aparecem em ambas as consultas
+        java.util.LinkedHashMap<String, Map<String, Object>> paymentMap = new java.util.LinkedHashMap<>();
 
-        // 1) Pagamentos da assinatura recorrente
-        if (company.getAsaasSubscriptionId() != null && !company.getAsaasSubscriptionId().isBlank()) {
-            try {
-                HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
-                ResponseEntity<Map> response = restTemplate.exchange(
-                        asaasApiUrl + "/subscriptions/" + company.getAsaasSubscriptionId() + "/payments",
-                        HttpMethod.GET, entity, Map.class);
-
-                if (response.getBody() != null) {
-                    var payments = (java.util.List<Map<String, Object>>) response.getBody().get("data");
-                    if (payments != null) {
-                        payments.forEach(p -> allPayments.add(mapPayment(p, "SUBSCRIPTION")));
-                    }
-                }
-            } catch (HttpClientErrorException e) {
-                log.error("[ASAAS] Erro ao buscar pagamentos da assinatura: {} - {}",
-                        e.getStatusCode(), e.getResponseBodyAsString());
-            }
-        }
-
-        // 2) Cobranças avulsas do customer (troca de plano)
+        // 1) Cobranças do customer (inclui TUDO: assinatura + avulsas), ordenado por mais recente
         if (company.getAsaasCustomerId() != null && !company.getAsaasCustomerId().isBlank()) {
             try {
                 HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
                 ResponseEntity<Map> response = restTemplate.exchange(
                         asaasApiUrl + "/payments?customer=" + company.getAsaasCustomerId()
-                                + "&limit=50&order=desc",
+                                + "&limit=50&order=desc&orderBy=dateCreated",
                         HttpMethod.GET, entity, Map.class);
 
                 if (response.getBody() != null) {
                     var payments = (java.util.List<Map<String, Object>>) response.getBody().get("data");
                     if (payments != null) {
-                        payments.stream()
-                                .filter(p -> {
-                                    String extRef = (String) p.get("externalReference");
-                                    return extRef != null && extRef.startsWith("PLAN_CHANGE:");
-                                })
-                                .forEach(p -> allPayments.add(mapPayment(p, "PLAN_CHANGE")));
+                        for (Map<String, Object> p : payments) {
+                            String id = (String) p.get("id");
+                            String extRef = (String) p.get("externalReference");
+                            String type = (extRef != null && extRef.startsWith("PLAN_CHANGE:")) ? "PLAN_CHANGE" : "SUBSCRIPTION";
+                            paymentMap.put(id, mapPayment(p, type));
+                        }
                     }
                 }
             } catch (HttpClientErrorException e) {
-                log.error("[ASAAS] Erro ao buscar cobranças avulsas: {} - {}",
+                log.error("[ASAAS] Erro ao buscar pagamentos do customer: {} - {}",
                         e.getStatusCode(), e.getResponseBodyAsString());
             }
         }
 
-        // Ordena por dateCreated desc (mais preciso que dueDate quando há vários no mesmo dia)
-        allPayments.sort((a, b) -> {
-            String dateA = (String) a.get("dateCreated");
-            String dateB = (String) b.get("dateCreated");
-            if (dateA == null) return 1;
-            if (dateB == null) return -1;
-            return dateB.compareTo(dateA);
-        });
+        // A API já retorna ordenado por dateCreated desc, então a ordem do LinkedHashMap está correta
+        java.util.List<Map<String, Object>> allPayments = new java.util.ArrayList<>(paymentMap.values());
 
         // Paginação
         int totalCount = allPayments.size();
