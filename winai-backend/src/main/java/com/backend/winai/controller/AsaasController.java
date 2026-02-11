@@ -67,10 +67,13 @@ public class AsaasController {
         return ResponseEntity.ok(asaasService.getSubscriptionStatus(companyId));
     }
 
-    @Operation(summary = "Histórico de pagamentos", description = "Lista pagamentos da assinatura de uma empresa")
+    @Operation(summary = "Histórico de pagamentos", description = "Lista pagamentos da assinatura de uma empresa (paginado)")
     @GetMapping("/subscriptions/{companyId}/payments")
-    public ResponseEntity<List<Map<String, Object>>> getPaymentHistory(@PathVariable UUID companyId) {
-        return ResponseEntity.ok(asaasService.getPaymentHistory(companyId));
+    public ResponseEntity<Map<String, Object>> getPaymentHistory(
+            @PathVariable UUID companyId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int limit) {
+        return ResponseEntity.ok(asaasService.getPaymentHistory(companyId, page, limit));
     }
 
     @Operation(summary = "Link de pagamento", description = "Retorna o link de pagamento da assinatura")
