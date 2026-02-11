@@ -271,9 +271,18 @@ public class AsaasService {
 
         // Calcula crédito pro-rata
         BigDecimal credit = calculateProRataCredit(company);
-        BigDecimal chargeValue = newPlan.getPrice().subtract(credit)
-                .max(BigDecimal.ZERO)
+        BigDecimal planPrice = newPlan.getPrice() != null ? newPlan.getPrice() : BigDecimal.ZERO;
+
+        if (planPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("O plano selecionado não possui preço configurado.");
+        }
+
+        BigDecimal chargeValue = planPrice.subtract(credit)
+                .max(new BigDecimal("0.01"))
                 .setScale(2, RoundingMode.HALF_UP);
+
+        log.info("[ASAAS] Troca de plano - Preço: R${}, Crédito: R${}, Valor cobrança: R${}",
+                planPrice, credit, chargeValue);
 
         // Cria cobrança avulsa no Asaas (não é assinatura, é um payment único)
         Map<String, Object> paymentBody = new java.util.LinkedHashMap<>();
