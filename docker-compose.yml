@@ -82,6 +82,14 @@ services:
       # Meta Sync
       - META_SYNC_ENABLED=false
 
+      # Asaas Payment Gateway
+      - ASAAS_API_URL=${ASAAS_API_URL}
+      - ASAAS_API_TOKEN=${ASAAS_API_TOKEN}
+
+      # Meta (Facebook/Instagram)
+      - META_CLIENT_ID=${META_CLIENT_ID}
+      - META_CLIENT_SECRET=${META_CLIENT_SECRET}
+
       # Internal API Key
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     depends_on:
@@ -116,6 +124,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - META_CLIENT_ID=${META_CLIENT_ID}
       - META_CLIENT_SECRET=${META_CLIENT_SECRET}
+      - ASAAS_API_URL=${ASAAS_API_URL}
+      - ASAAS_API_TOKEN=${ASAAS_API_TOKEN}
       - META_SYNC_ENABLED=true
       - META_SYNC_CRON=0 */30 * * * *
       - REDIS_HOST=redis
@@ -150,6 +160,9 @@ services:
       - UAZAP_DEFAULT_TOKEN=${UAZAP_TOKEN}
       - UAZAP_DEFAULT_INSTANCE=${UAZAP_INSTANCE}
       - UAZAP_ADMIN_TOKEN=${UAZAP_ADMIN_TOKEN}
+      # Asaas
+      - ASAAS_API_URL=${ASAAS_API_URL}
+      - ASAAS_API_TOKEN=${ASAAS_API_TOKEN}
       # Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379

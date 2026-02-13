@@ -53,12 +53,12 @@ public class Company {
     private Plan planEntity;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "plan_type", nullable = false, columnDefinition = "varchar(255) default 'STARTER'")
+    @Column(name = "plan_type", nullable = false)
     @Builder.Default
     private UserPlan plan = UserPlan.STARTER;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "varchar(255) default 'PENDING'")
+    @Column(nullable = false)
     @Builder.Default
     private AccountStatus status = AccountStatus.PENDING;
 
