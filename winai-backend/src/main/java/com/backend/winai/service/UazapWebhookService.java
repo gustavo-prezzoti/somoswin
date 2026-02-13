@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.dao.DataIntegrityViolationException;
+
 import java.util.Map;
 import java.util.Optional;
 
@@ -38,7 +40,6 @@ public class UazapWebhookService {
      *   "type": "..."
      * }
      */
-    @Transactional
     @SuppressWarnings("unchecked")
     public void processRawWebhook(Map<String, Object> raw) {
         try {
@@ -47,7 +48,7 @@ public class UazapWebhookService {
                 com.fasterxml.jackson.databind.ObjectMapper debugMapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 debugMapper.configure(com.fasterxml.jackson.databind.SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
                 String fullJson = debugMapper.writeValueAsString(raw);
-                log.info("[WEBHOOK] === PAYLOAD COMPLETO === {}", fullJson);
+                log.debug("[WEBHOOK] === PAYLOAD COMPLETO === {}", fullJson);
             } catch (Exception jsonEx) {
                 log.info("[WEBHOOK] Payload (toString): {}", raw);
             }
@@ -88,24 +89,10 @@ public class UazapWebhookService {
                 return;
             }
 
-            // Logar detalhes dos sub-objetos para debug
-            if (messageData != null) {
-                log.info("[WEBHOOK] message keys: {}", messageData.keySet());
-            }
-            if (chatData != null) {
-                log.info("[WEBHOOK] chat keys: {}", chatData.keySet());
-            }
-            if (eventData != null) {
-                log.info("[WEBHOOK] event keys: {}", eventData.keySet());
-            }
-            if (raw.get("chatSource") != null) {
-                log.info("[WEBHOOK] chatSource: {}", raw.get("chatSource"));
-            }
-
             // === EXTRAIR CAMPOS ===
             // Formato UaZap EventType=messages:
             //   message: { fromMe, sender, senderName, sender_pn, text, messageid, chatid, type, ... }
-            //   chat: { wa_chatid, wa_name, name, phone, wa_isGroup, ... }
+            //   chat: { wa_chatid, wa_name, name, phone, wa_isGroup, owner, ... }
             // Formato UaZap EventType=messages_update:
             //   event: { IsFromMe, Sender, Chat, MessageIDs, Timestamp, ... }
 
@@ -123,9 +110,10 @@ public class UazapWebhookService {
             String status = getStr(src, "status", null);
             Boolean wasSentByApi = getBoolean(src, "wasSentByApi", false);
 
-            // Telefone do contato: usar chat.wa_chatid (ex: 554791685019@s.whatsapp.net)
-            // Isso é o número do contato externo, independente de fromMe
-            String contactChatId = getStr(chatData, "wa_chatid", getStr(src, "chatid", getStr(src, "Chat", null)));
+            // Telefone do contato: usar message.chatid (ex: 554791685019@s.whatsapp.net)
+            // message.chatid é SEMPRE o número do contato externo na perspectiva da instância
+            // chat.wa_chatid pode ser o owner se o webhook vem de outra instância
+            String contactChatId = getStr(src, "chatid", getStr(chatData, "wa_chatid", getStr(src, "Chat", null)));
 
             // Nome do contato: chat.name ou chat.wa_name
             String contactName = getStr(chatData, "name", getStr(chatData, "wa_name",
@@ -181,7 +169,7 @@ public class UazapWebhookService {
             WhatsAppConversation conversation = findOrCreateConversation(
                     phoneNumber, company, instanceName, contactName, contactChatId);
 
-            // Verificar duplicata
+            // Verificar duplicata (check rápido, mas pode falhar em concorrência)
             if (messageId != null) {
                 Optional<WhatsAppMessage> existing = messageRepository.findByMessageId(messageId);
                 if (existing.isPresent()) {
@@ -213,7 +201,13 @@ public class UazapWebhookService {
                     .isGroup(Boolean.TRUE.equals(isGroup))
                     .build();
 
-            messageRepository.save(message);
+            try {
+                messageRepository.saveAndFlush(message);
+            } catch (DataIntegrityViolationException e) {
+                // Webhook duplicado (outra instância já salvou esta mensagem)
+                log.debug("[WEBHOOK] Mensagem duplicada (concurrent). MessageId: {}", messageId);
+                return;
+            }
 
             // Atualizar conversa
             if (!Boolean.TRUE.equals(isFromMe)) {
@@ -221,7 +215,7 @@ public class UazapWebhookService {
             }
             conversation.setLastMessageText(content);
             conversation.setLastMessageTimestamp(messageTimestamp);
-            conversationRepository.save(conversation);
+            conversationRepository.saveAndFlush(conversation);
 
             log.info("[WEBHOOK] ✅ Mensagem salva. Phone: {}, FromMe: {}, Type: {}, Content: {}",
                     phoneNumber, isFromMe, msgType,
