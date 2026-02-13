@@ -98,7 +98,7 @@ Qual deve ser o status deste lead?"""
                     {"role": "user", "content": user_content}
                 ],
                 temperature=0.1,
-                max_tokens=20
+                max_completion_tokens=500
             )
             
             result = response.choices[0].message.content.strip().upper()
