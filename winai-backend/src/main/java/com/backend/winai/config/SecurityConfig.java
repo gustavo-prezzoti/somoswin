@@ -41,6 +41,7 @@ public class SecurityConfig {
                                                                 "/api/v1/drive/callback",
                                                                 "/api/v1/whatsapp/webhook",
                                                                 "/api/v1/webhook/**",
+                                                                "/api/v1/webhooks/**",
                                                                 "/api/v1/uazap/**",
                                                                 "/api/v1/marketing/auth/meta/callback",
                                                                 "/api/v1/marketing/auth/meta/deauthorize",
