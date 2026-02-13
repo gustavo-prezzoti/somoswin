@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -24,7 +25,154 @@ public class UazapWebhookService {
     private final CompanyRepository companyRepository;
 
     /**
-     * Processa webhook de mensagem recebida do UaZap
+     * Processa webhook recebido como Map raw (sem tipagem forte).
+     * Isso evita erros de deserialização quando o UaZap envia campos com tipos variáveis.
+     */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public void processRawWebhook(Map<String, Object> raw) {
+        try {
+            // Extrair event (pode ser String ou Object)
+            String event = null;
+            Object eventObj = raw.get("event");
+            if (eventObj instanceof String) {
+                event = (String) eventObj;
+            } else if (eventObj instanceof Map) {
+                // event é um objeto, tentar extrair "event" de dentro ou usar toString
+                Map<String, Object> eventMap = (Map<String, Object>) eventObj;
+                event = eventMap.containsKey("event") ? String.valueOf(eventMap.get("event")) : eventObj.toString();
+            } else if (eventObj != null) {
+                event = eventObj.toString();
+            }
+
+            String instance = raw.get("instance") != null ? String.valueOf(raw.get("instance")) : null;
+            String owner = raw.get("owner") != null ? String.valueOf(raw.get("owner")) : null;
+
+            log.info("[WEBHOOK] Processando. Event: {}, Instance: {}, Owner: {}", event, instance, owner);
+
+            // Extrair data (pode ser Map)
+            Map<String, Object> data = null;
+            if (raw.get("data") instanceof Map) {
+                data = (Map<String, Object>) raw.get("data");
+            }
+
+            if (data == null) {
+                log.warn("[WEBHOOK] Sem dados de mensagem (data=null). Keys: {}. Ignorando.", raw.keySet());
+                return;
+            }
+
+            // Extrair campos do data
+            Boolean fromMe = data.get("fromMe") instanceof Boolean ? (Boolean) data.get("fromMe") : null;
+            Boolean wasSentByApi = data.get("wasSentByApi") instanceof Boolean ? (Boolean) data.get("wasSentByApi") : null;
+            Boolean isGroup = data.get("isGroup") instanceof Boolean ? (Boolean) data.get("isGroup") : null;
+            String sender = data.get("sender") != null ? String.valueOf(data.get("sender")) : null;
+            String senderPn = data.get("sender_pn") != null ? String.valueOf(data.get("sender_pn")) : null;
+            String senderName = data.get("senderName") != null ? String.valueOf(data.get("senderName")) : null;
+            String text = data.get("text") != null ? String.valueOf(data.get("text")) : null;
+            String messageId = data.get("messageid") != null ? String.valueOf(data.get("messageid")) : null;
+            String id = data.get("id") != null ? String.valueOf(data.get("id")) : null;
+            String type = data.get("type") != null ? String.valueOf(data.get("type")) : null;
+            String mediaType = data.get("mediaType") != null ? String.valueOf(data.get("mediaType")) : null;
+            String mediaUrl = data.get("url") != null ? String.valueOf(data.get("url")) : null;
+            String caption = data.get("caption") != null ? String.valueOf(data.get("caption")) : null;
+            String status = data.get("status") != null ? String.valueOf(data.get("status")) : null;
+            Long messageTimestamp = null;
+            if (data.get("messageTimestamp") instanceof Number) {
+                messageTimestamp = ((Number) data.get("messageTimestamp")).longValue();
+            }
+
+            log.info("[WEBHOOK] Data: fromMe={}, sender={}, senderName={}, text={}, msgId={}, type={}",
+                    fromMe, sender, senderName,
+                    text != null ? text.substring(0, Math.min(50, text.length())) : null,
+                    messageId, type);
+
+            // Ignorar mensagens enviadas por API
+            if (Boolean.TRUE.equals(wasSentByApi)) {
+                log.debug("[WEBHOOK] Mensagem enviada por API. Ignorando.");
+                return;
+            }
+
+            // Extrair número do telefone
+            String phoneNumber = null;
+            if (senderPn != null && !senderPn.isEmpty()) {
+                phoneNumber = cleanPhoneNumber(senderPn);
+            } else if (sender != null && !sender.isEmpty()) {
+                phoneNumber = cleanPhoneNumber(sender);
+            }
+
+            if (phoneNumber == null) {
+                log.warn("[WEBHOOK] Não foi possível extrair telefone. Sender: {}, SenderPn: {}", sender, senderPn);
+                return;
+            }
+
+            // Buscar empresa pela instância ou owner
+            Company company = findCompanyByInstance(instance != null ? instance : owner);
+            if (company == null) {
+                log.warn("[WEBHOOK] Empresa não encontrada para instância: {}. Usando padrão.", instance);
+                company = companyRepository.findAll().stream().findFirst().orElse(null);
+                if (company == null) {
+                    log.error("[WEBHOOK] Nenhuma empresa encontrada no sistema!");
+                    return;
+                }
+            }
+
+            // Buscar ou criar conversa
+            WhatsAppConversation conversation = findOrCreateConversation(
+                    phoneNumber, company, instance, senderName, id);
+
+            // Verificar duplicata
+            if (messageId != null) {
+                Optional<WhatsAppMessage> existing = messageRepository.findByMessageId(messageId);
+                if (existing.isPresent()) {
+                    log.debug("[WEBHOOK] Mensagem duplicada. MessageId: {}", messageId);
+                    return;
+                }
+            }
+
+            // Conteúdo da mensagem
+            String content = text;
+            if ((content == null || content.isEmpty()) && caption != null && !caption.isEmpty()) {
+                content = caption;
+            }
+            if (content == null || content.isEmpty()) {
+                content = "📎 " + (type != null ? type : "media");
+            }
+
+            // Criar mensagem
+            WhatsAppMessage message = WhatsAppMessage.builder()
+                    .conversation(conversation)
+                    .messageId(messageId)
+                    .content(content)
+                    .fromMe(Boolean.TRUE.equals(fromMe))
+                    .messageType(normalizeMessageType(type))
+                    .mediaType(mediaType)
+                    .mediaUrl(mediaUrl)
+                    .messageTimestamp(messageTimestamp)
+                    .status(status != null ? status : "received")
+                    .isGroup(Boolean.TRUE.equals(isGroup))
+                    .build();
+
+            messageRepository.save(message);
+
+            // Atualizar conversa
+            if (!Boolean.TRUE.equals(fromMe)) {
+                conversation.setUnreadCount(conversation.getUnreadCount() + 1);
+            }
+            conversation.setLastMessageText(content);
+            conversation.setLastMessageTimestamp(messageTimestamp);
+            conversationRepository.save(conversation);
+
+            log.info("[WEBHOOK] ✅ Mensagem salva. From: {}, Type: {}, Content: {}",
+                    phoneNumber, message.getMessageType(),
+                    content.length() > 50 ? content.substring(0, 50) + "..." : content);
+
+        } catch (Exception e) {
+            log.error("[WEBHOOK] Erro ao processar webhook", e);
+        }
+    }
+
+    /**
+     * Processa webhook de mensagem recebida do UaZap (método legado com DTO tipado)
      */
     @Transactional
     public void processWebhook(UazapWebhookPayload payload) {
@@ -58,7 +206,6 @@ public class UazapWebhookService {
             Company company = findCompanyByInstance(payload.getInstance());
             if (company == null) {
                 log.warn("Empresa não encontrada para instância: {}. Usando empresa padrão.", payload.getInstance());
-                // Buscar primeira empresa como fallback
                 company = companyRepository.findAll().stream().findFirst().orElse(null);
                 if (company == null) {
                     log.error("Nenhuma empresa encontrada no sistema!");

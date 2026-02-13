@@ -1,6 +1,5 @@
 package com.backend.winai.controller;
 
-import com.backend.winai.dto.webhook.UazapWebhookPayload;
 import com.backend.winai.service.UazapWebhookService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -9,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpServletRequest;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/webhooks/uazap")
@@ -21,16 +22,12 @@ public class UazapWebhookController {
 
     @Operation(summary = "Webhook UaZap", description = "Recebe notificações de mensagens do UaZap")
     @PostMapping("/message")
-    public ResponseEntity<Void> receiveMessage(@RequestBody UazapWebhookPayload payload, HttpServletRequest request) {
+    public ResponseEntity<Void> receiveMessage(@RequestBody Map<String, Object> rawPayload, HttpServletRequest request) {
         try {
-            log.info("[UAZAP-WEBHOOK] POST /message recebido de IP: {}, Event: {}, Instance: {}",
-                    request.getRemoteAddr(), payload.getEvent(), payload.getInstance());
-            log.info("[UAZAP-WEBHOOK] Payload data: fromMe={}, sender={}, text={}",
-                    payload.getData() != null ? payload.getData().getFromMe() : null,
-                    payload.getData() != null ? payload.getData().getSender() : null,
-                    payload.getData() != null ? (payload.getData().getText() != null ? payload.getData().getText().substring(0, Math.min(50, payload.getData().getText().length())) : null) : null);
+            log.info("[UAZAP-WEBHOOK] POST /message recebido de IP: {}", request.getRemoteAddr());
+            log.info("[UAZAP-WEBHOOK] Raw payload keys: {}", rawPayload.keySet());
 
-            webhookService.processWebhook(payload);
+            webhookService.processRawWebhook(rawPayload);
 
             return ResponseEntity.ok().build();
         } catch (Exception e) {
@@ -41,9 +38,20 @@ public class UazapWebhookController {
 
     @Operation(summary = "Webhook UaZap (Genérico)", description = "Endpoint genérico para todos os eventos do UaZap")
     @PostMapping
-    public ResponseEntity<Void> receiveWebhook(@RequestBody UazapWebhookPayload payload, HttpServletRequest request) {
+    public ResponseEntity<Void> receiveWebhook(@RequestBody Map<String, Object> rawPayload, HttpServletRequest request) {
         log.info("[UAZAP-WEBHOOK] POST / (genérico) recebido de IP: {}", request.getRemoteAddr());
-        return receiveMessage(payload, request);
+        return receiveMessage(rawPayload, request);
+    }
+
+    @Operation(summary = "Webhook UaZap (Path variável)", description = "Captura webhooks com path dinâmico do UaZap (addUrlEvents)")
+    @PostMapping("/{eventType}")
+    public ResponseEntity<Void> receiveWebhookByEvent(@PathVariable String eventType, @RequestBody Map<String, Object> rawPayload, HttpServletRequest request) {
+        log.info("[UAZAP-WEBHOOK] POST /{} recebido de IP: {}", eventType, request.getRemoteAddr());
+        // Injetar o eventType no payload se não existir
+        if (!rawPayload.containsKey("event") || rawPayload.get("event") == null) {
+            rawPayload.put("event", eventType);
+        }
+        return receiveMessage(rawPayload, request);
     }
 
     @Operation(summary = "Health Check", description = "Verifica se o webhook está funcionando")
