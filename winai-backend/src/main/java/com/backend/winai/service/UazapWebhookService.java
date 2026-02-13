@@ -42,6 +42,16 @@ public class UazapWebhookService {
     @SuppressWarnings("unchecked")
     public void processRawWebhook(Map<String, Object> raw) {
         try {
+            // LOG COMPLETO do payload para debug
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper debugMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                debugMapper.configure(com.fasterxml.jackson.databind.SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+                String fullJson = debugMapper.writeValueAsString(raw);
+                log.info("[WEBHOOK] === PAYLOAD COMPLETO === {}", fullJson);
+            } catch (Exception jsonEx) {
+                log.info("[WEBHOOK] Payload (toString): {}", raw);
+            }
+
             // Extrair campos do nível raiz
             String eventType = raw.get("EventType") != null ? String.valueOf(raw.get("EventType")) : null;
             String instanceName = raw.get("instanceName") != null ? String.valueOf(raw.get("instanceName")) : null;
@@ -50,107 +60,130 @@ public class UazapWebhookService {
 
             log.info("[WEBHOOK] EventType: {}, Instance: {}, Owner: {}, type: {}", eventType, instanceName, owner, rawType);
 
-            // Extrair o objeto event (contém os dados da mensagem)
-            Map<String, Object> eventData = null;
-            Object eventObj = raw.get("event");
-            if (eventObj instanceof Map) {
-                eventData = (Map<String, Object>) eventObj;
-            }
-
-            if (eventData == null) {
-                log.warn("[WEBHOOK] Sem event data. Keys: {}. Ignorando.", raw.keySet());
-                return;
-            }
-
             // Ignorar eventos que não são mensagens novas
-            if (eventType != null && !eventType.equalsIgnoreCase("Message")) {
+            if (eventType != null && !eventType.equalsIgnoreCase("messages")) {
                 log.debug("[WEBHOOK] Evento não é mensagem ({}). Ignorando.", eventType);
                 return;
             }
 
-            // Extrair campos do event
-            Boolean isFromMe = eventData.get("IsFromMe") instanceof Boolean ? (Boolean) eventData.get("IsFromMe") : null;
-            Boolean isGroup = eventData.get("IsGroup") instanceof Boolean ? (Boolean) eventData.get("IsGroup") : null;
-            String chat = eventData.get("Chat") != null ? String.valueOf(eventData.get("Chat")) : null;
-            String sender = eventData.get("Sender") != null ? String.valueOf(eventData.get("Sender")) : null;
-            String senderPn = eventData.get("sender_pn") != null ? String.valueOf(eventData.get("sender_pn")) : null;
-            String senderName = eventData.get("PushName") != null ? String.valueOf(eventData.get("PushName")) : null;
-            String chatId = eventData.get("chatid") != null ? String.valueOf(eventData.get("chatid")) : null;
+            // O UaZap envia dados em 'message' e 'chat' (não em 'event')
+            Map<String, Object> messageData = null;
+            if (raw.get("message") instanceof Map) {
+                messageData = (Map<String, Object>) raw.get("message");
+            }
+
+            Map<String, Object> chatData = null;
+            if (raw.get("chat") instanceof Map) {
+                chatData = (Map<String, Object>) raw.get("chat");
+            }
+
+            // Fallback: tentar 'event' se 'message' não existir
+            Map<String, Object> eventData = null;
+            if (raw.get("event") instanceof Map) {
+                eventData = (Map<String, Object>) raw.get("event");
+            }
+
+            if (messageData == null && eventData == null) {
+                log.warn("[WEBHOOK] Sem message/event data. Keys: {}. Ignorando.", raw.keySet());
+                return;
+            }
+
+            // Logar detalhes dos sub-objetos para debug
+            if (messageData != null) {
+                log.info("[WEBHOOK] message keys: {}", messageData.keySet());
+            }
+            if (chatData != null) {
+                log.info("[WEBHOOK] chat keys: {}", chatData.keySet());
+            }
+            if (eventData != null) {
+                log.info("[WEBHOOK] event keys: {}", eventData.keySet());
+            }
+            if (raw.get("chatSource") != null) {
+                log.info("[WEBHOOK] chatSource: {}", raw.get("chatSource"));
+            }
+
+            // === EXTRAIR CAMPOS - tentar de message/chat primeiro, fallback para event ===
+            // Fonte primária: message + chat (formato EventType=messages)
+            // Fonte secundária: event (formato EventType=messages_update)
+            Map<String, Object> src = messageData != null ? messageData : eventData;
+
+            Boolean isFromMe = getBoolean(src, "fromMe", getBoolean(src, "IsFromMe", null));
+            Boolean isGroup = getBoolean(src, "isGroup", getBoolean(src, "IsGroup", null));
+            String sender = getStr(src, "sender", getStr(src, "Sender", null));
+            String senderPn = getStr(src, "sender_pn", null);
+            String senderName = getStr(src, "senderName", getStr(src, "PushName", null));
+            String chat = getStr(chatData, "id", getStr(src, "Chat", getStr(src, "chatid", null)));
+            String messageId = getStr(src, "messageid", getStr(src, "id", getStr(src, "ID", null)));
+            String text = getStr(src, "text", null);
+            String type = getStr(src, "type", getStr(src, "messageType", null));
+            String mediaType = getStr(src, "mediaType", getStr(src, "mimetype", null));
+            String mediaUrl = getStr(src, "url", null);
+            String caption = getStr(src, "caption", null);
+            String status = getStr(src, "status", null);
+
+            // MessageIDs pode ser array
+            if (messageId == null) {
+                Object msgIds = src.get("MessageIDs");
+                if (msgIds instanceof java.util.List) {
+                    java.util.List<?> idList = (java.util.List<?>) msgIds;
+                    if (!idList.isEmpty()) {
+                        messageId = String.valueOf(idList.get(0));
+                    }
+                }
+            }
 
             // Timestamp
-            Long messageTimestamp = null;
-            if (eventData.get("Timestamp") instanceof Number) {
-                messageTimestamp = ((Number) eventData.get("Timestamp")).longValue();
-            }
+            Long messageTimestamp = getNumber(src, "messageTimestamp", getNumber(src, "Timestamp", null));
 
-            // MessageIDs (pode ser array)
-            String messageId = null;
-            Object msgIds = eventData.get("MessageIDs");
-            if (msgIds instanceof java.util.List) {
-                java.util.List<String> idList = (java.util.List<String>) msgIds;
-                if (!idList.isEmpty()) {
-                    messageId = idList.get(0);
-                }
-            } else if (eventData.get("ID") != null) {
-                messageId = String.valueOf(eventData.get("ID"));
-            }
-
-            // Extrair Message (objeto interno com o conteúdo real)
+            // Extrair Message (objeto interno com o conteúdo real - formato PascalCase)
             Map<String, Object> messageObj = null;
-            if (eventData.get("Message") instanceof Map) {
-                messageObj = (Map<String, Object>) eventData.get("Message");
+            if (src.get("Message") instanceof Map) {
+                messageObj = (Map<String, Object>) src.get("Message");
             }
 
-            // Extrair texto da mensagem
-            String text = null;
-            String mediaUrl = null;
-            String mediaType = null;
-            String msgType = "text";
+            // Determinar tipo e extrair texto de messageObj se necessário
+            String msgType = type != null ? normalizeMessageType(type) : "text";
 
             if (messageObj != null) {
-                // Texto simples: Message.Conversation ou Message.ExtendedTextMessage.Text
-                if (messageObj.get("Conversation") != null) {
+                log.info("[WEBHOOK] Message (inner) keys: {}", messageObj.keySet());
+                if (text == null && messageObj.get("Conversation") != null) {
                     text = String.valueOf(messageObj.get("Conversation"));
                     msgType = "text";
-                } else if (messageObj.get("ExtendedTextMessage") instanceof Map) {
+                } else if (text == null && messageObj.get("ExtendedTextMessage") instanceof Map) {
                     Map<String, Object> extMsg = (Map<String, Object>) messageObj.get("ExtendedTextMessage");
-                    text = extMsg.get("Text") != null ? String.valueOf(extMsg.get("Text")) : null;
+                    text = getStr(extMsg, "Text", null);
                     msgType = "text";
                 } else if (messageObj.get("ImageMessage") instanceof Map) {
                     Map<String, Object> imgMsg = (Map<String, Object>) messageObj.get("ImageMessage");
-                    text = imgMsg.get("Caption") != null ? String.valueOf(imgMsg.get("Caption")) : null;
-                    mediaUrl = imgMsg.get("Url") != null ? String.valueOf(imgMsg.get("Url")) : null;
-                    mediaType = imgMsg.get("Mimetype") != null ? String.valueOf(imgMsg.get("Mimetype")) : null;
+                    if (text == null) text = getStr(imgMsg, "Caption", null);
+                    if (mediaUrl == null) mediaUrl = getStr(imgMsg, "Url", null);
+                    if (mediaType == null) mediaType = getStr(imgMsg, "Mimetype", null);
                     msgType = "image";
                 } else if (messageObj.get("VideoMessage") instanceof Map) {
                     Map<String, Object> vidMsg = (Map<String, Object>) messageObj.get("VideoMessage");
-                    text = vidMsg.get("Caption") != null ? String.valueOf(vidMsg.get("Caption")) : null;
-                    mediaUrl = vidMsg.get("Url") != null ? String.valueOf(vidMsg.get("Url")) : null;
-                    mediaType = vidMsg.get("Mimetype") != null ? String.valueOf(vidMsg.get("Mimetype")) : null;
+                    if (text == null) text = getStr(vidMsg, "Caption", null);
+                    if (mediaUrl == null) mediaUrl = getStr(vidMsg, "Url", null);
+                    if (mediaType == null) mediaType = getStr(vidMsg, "Mimetype", null);
                     msgType = "video";
                 } else if (messageObj.get("AudioMessage") instanceof Map) {
                     Map<String, Object> audMsg = (Map<String, Object>) messageObj.get("AudioMessage");
-                    mediaUrl = audMsg.get("Url") != null ? String.valueOf(audMsg.get("Url")) : null;
-                    mediaType = audMsg.get("Mimetype") != null ? String.valueOf(audMsg.get("Mimetype")) : null;
+                    if (mediaUrl == null) mediaUrl = getStr(audMsg, "Url", null);
+                    if (mediaType == null) mediaType = getStr(audMsg, "Mimetype", null);
                     msgType = "audio";
                 } else if (messageObj.get("DocumentMessage") instanceof Map) {
                     Map<String, Object> docMsg = (Map<String, Object>) messageObj.get("DocumentMessage");
-                    text = docMsg.get("FileName") != null ? String.valueOf(docMsg.get("FileName")) : null;
-                    mediaUrl = docMsg.get("Url") != null ? String.valueOf(docMsg.get("Url")) : null;
-                    mediaType = docMsg.get("Mimetype") != null ? String.valueOf(docMsg.get("Mimetype")) : null;
+                    if (text == null) text = getStr(docMsg, "FileName", null);
+                    if (mediaUrl == null) mediaUrl = getStr(docMsg, "Url", null);
+                    if (mediaType == null) mediaType = getStr(docMsg, "Mimetype", null);
                     msgType = "document";
                 } else if (messageObj.get("StickerMessage") instanceof Map) {
                     msgType = "sticker";
                 } else if (messageObj.get("ContactMessage") instanceof Map) {
                     Map<String, Object> contactMsg = (Map<String, Object>) messageObj.get("ContactMessage");
-                    text = contactMsg.get("DisplayName") != null ? String.valueOf(contactMsg.get("DisplayName")) : null;
+                    if (text == null) text = getStr(contactMsg, "DisplayName", null);
                     msgType = "contact";
                 } else if (messageObj.get("LocationMessage") instanceof Map) {
                     msgType = "location";
-                } else {
-                    // Tipo desconhecido - logar as keys para debug
-                    log.info("[WEBHOOK] Message keys desconhecidas: {}", messageObj.keySet());
-                    msgType = "unknown";
                 }
             }
 
@@ -193,7 +226,7 @@ public class UazapWebhookService {
 
             // Buscar ou criar conversa
             WhatsAppConversation conversation = findOrCreateConversation(
-                    phoneNumber, company, instanceName, senderName, chatId);
+                    phoneNumber, company, instanceName, senderName, chat);
 
             // Verificar duplicata
             if (messageId != null) {
@@ -206,6 +239,9 @@ public class UazapWebhookService {
 
             // Conteúdo da mensagem
             String content = text;
+            if ((content == null || content.isEmpty()) && caption != null && !caption.isEmpty()) {
+                content = caption;
+            }
             if (content == null || content.isEmpty()) {
                 content = "📎 " + msgType;
             }
@@ -507,5 +543,37 @@ public class UazapWebhookService {
         }
 
         return null;
+    }
+
+    // === HELPERS para extração segura de Map ===
+
+    private String getStr(Map<String, Object> map, String key, String defaultValue) {
+        if (map == null) return defaultValue;
+        Object val = map.get(key);
+        if (val == null) return defaultValue;
+        String s = String.valueOf(val);
+        return s.isEmpty() ? defaultValue : s;
+    }
+
+    private Boolean getBoolean(Map<String, Object> map, String key, Boolean defaultValue) {
+        if (map == null) return defaultValue;
+        Object val = map.get(key);
+        if (val instanceof Boolean) return (Boolean) val;
+        if (val != null) {
+            String s = String.valueOf(val).toLowerCase();
+            if ("true".equals(s)) return true;
+            if ("false".equals(s)) return false;
+        }
+        return defaultValue;
+    }
+
+    private Long getNumber(Map<String, Object> map, String key, Long defaultValue) {
+        if (map == null) return defaultValue;
+        Object val = map.get(key);
+        if (val instanceof Number) return ((Number) val).longValue();
+        if (val != null) {
+            try { return Long.parseLong(String.valueOf(val)); } catch (NumberFormatException e) { /* ignore */ }
+        }
+        return defaultValue;
     }
 }
