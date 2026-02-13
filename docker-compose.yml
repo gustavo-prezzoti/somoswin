@@ -40,11 +40,11 @@ services:
       # Spring Profile for Docker
       - SPRING_PROFILES_ACTIVE=docker
 
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require&currentSchema=winai
-      - SPRING_DATASOURCE_USERNAME=postgres.wtfheobvaamelqifttjj
-      - SPRING_DATASOURCE_PASSWORD=JYAvOfrciMaY4m0j
-      - DATABASE_USERNAME=postgres.wtfheobvaamelqifttjj
-      - DATABASE_PASSWORD=JYAvOfrciMaY4m0j
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - DATABASE_USERNAME=${DATABASE_USERNAME}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
       # JPA/Hibernate
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
       - SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA=winai
@@ -83,13 +83,13 @@ services:
       - META_SYNC_ENABLED=false
 
       # Internal API Key
-      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-winai-lq-f8a9b2c7e4d1-2026-xK9mN3pL}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     depends_on:
       - redis
     networks:
       - winai-network
     healthcheck:
-      test: [ "CMD", "curl", "-f", "https://server.somosamplia.com/actuator/health" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -110,9 +110,9 @@ services:
     environment:
       - TZ=America/Sao_Paulo
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require&currentSchema=winai
-      - SPRING_DATASOURCE_USERNAME=postgres.wtfheobvaamelqifttjj
-      - SPRING_DATASOURCE_PASSWORD=JYAvOfrciMaY4m0j
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
       - META_CLIENT_ID=${META_CLIENT_ID}
       - META_CLIENT_SECRET=${META_CLIENT_SECRET}
@@ -140,9 +140,9 @@ services:
     environment:
       - TZ=America/Sao_Paulo
       - SPRING_PROFILES_ACTIVE=docker,followup-worker
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require&currentSchema=winai
-      - SPRING_DATASOURCE_USERNAME=postgres.wtfheobvaamelqifttjj
-      - SPRING_DATASOURCE_PASSWORD=JYAvOfrciMaY4m0j
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
       - FOLLOWUP_WORKER_ENABLED=true
       # UaZap (WhatsApp) - necessário para enviar follow-ups
@@ -204,7 +204,7 @@ services:
     environment:
       - TZ=America/Sao_Paulo
       - JAVA_API_URL=http://backend:8080
-      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-winai-lq-f8a9b2c7e4d1-2026-xK9mN3pL}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_HOST=redis
       - REDIS_PORT=6379

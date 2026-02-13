@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock, User, Loader2, AlertCircle, RefreshCw, Trash2, Edit2, X, Save, Users, Mail, Crown, Check, HelpCircle, XCircle, ExternalLink, MapPin } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { meetingService, MeetingData, MeetingRequest, CalendarStats, MEETING_STATUS_LABELS, MEETING_STATUS_STYLES, MeetingStatusType, parseAttendees, ATTENDEE_STATUS_LABELS, MeetingAttendee } from '../services';
 import { googleDriveService } from '../services/api/google-drive.service';
@@ -223,7 +223,7 @@ const MeetingCalendar: React.FC = () => {
   };
 
   const getMeetingsForDate = (date: Date) => {
-    return meetings.filter(m => isSameDay(new Date(m.meetingDate), date));
+    return meetings.filter(m => isSameDay(parseISO(m.meetingDate), date));
   };
 
   const selectedDateMeetings = getMeetingsForDate(selectedDate);
