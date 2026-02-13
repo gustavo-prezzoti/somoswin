@@ -4,12 +4,15 @@ Suporta análise de texto, imagens (Vision) e transcrições de áudio
 """
 import logging
 import base64
+import re
 import httpx
 from typing import List, Optional, Tuple
 from openai import AsyncOpenAI
 from config import settings
 from app.models import Lead, Message, LeadStatus
 from app.services.whisper_service import WhisperService
+
+VALID_STATUSES = {"NEW", "CONTACTED", "QUALIFIED", "MEETING_SCHEDULED", "WON", "LOST", "KEEP_CURRENT"}
 
 logger = logging.getLogger(__name__)
 
@@ -79,16 +82,11 @@ Qual deve ser o status deste lead?"""
         
         user_content.append({"type": "text", "text": text_prompt})
         
-        # Adicionar imagens para análise Vision (máximo 3)
-        for img_url in image_urls[:3]:
-            try:
-                user_content.append({
-                    "type": "image_url",
-                    "image_url": {"url": img_url, "detail": "low"}
-                })
-                logger.debug(f"Added image for Vision analysis: {img_url[:50]}...")
-            except Exception as e:
-                logger.warning(f"Could not add image: {e}")
+        # Validar e adicionar imagens para análise Vision (máximo 3)
+        # Não enviar imagens ao GPT - URLs do Supabase podem estar inacessíveis (402)
+        # e causam erro na API. Apenas descrever que havia imagens no texto.
+        if image_urls:
+            user_content[0]["text"] += f"\n\n[Nota: {len(image_urls)} imagem(ns) foram enviadas na conversa mas não puderam ser analisadas]"
 
         try:
             response = await self.client.chat.completions.create(
@@ -100,25 +98,45 @@ Qual deve ser o status deste lead?"""
                 max_completion_tokens=200
             )
             
-            result = response.choices[0].message.content.strip().upper()
+            result = response.choices[0].message.content.strip().upper() if response.choices[0].message.content else ""
             
-            if result == "KEEP_CURRENT":
+            # GPT-5 pode retornar texto verboso - extrair o status válido
+            extracted_status = self._extract_status(result)
+            
+            if extracted_status is None or extracted_status == "KEEP_CURRENT":
                 logger.debug(f"AI suggests keeping current status for lead {lead.id}")
                 return None
             
             try:
-                new_status = LeadStatus(result)
+                new_status = LeadStatus(extracted_status)
                 if new_status != lead.status:
                     logger.info(f"AI suggests changing lead {lead.id} from {lead.status.value} to {new_status.value}")
                     return new_status
                 return None
             except ValueError:
-                logger.warning(f"Invalid status returned by AI: {result}")
+                logger.warning(f"Could not parse status from AI response: {result[:100]}")
                 return None
                 
         except Exception as e:
             logger.error(f"Error calling OpenAI API: {e}")
             return None
+    
+    def _extract_status(self, text: str) -> Optional[str]:
+        """Extrai um status válido de uma resposta potencialmente verbosa do GPT-5"""
+        if not text:
+            return None
+        
+        # Tentar match exato primeiro
+        clean = text.strip()
+        if clean in VALID_STATUSES:
+            return clean
+        
+        # Procurar status válido dentro do texto
+        for status in VALID_STATUSES:
+            if status in clean:
+                return status
+        
+        return None
     
     async def _process_messages(self, messages: List[Message]) -> Tuple[List[dict], List[str]]:
         """
@@ -145,7 +163,8 @@ Qual deve ser o status deste lead?"""
             elif self._is_image_message(msg.message_type, msg.media_type):
                 if msg.media_url:
                     image_urls.append(msg.media_url)
-                    content = content or "[Imagem enviada]"
+                if not content:
+                    content = "[Imagem enviada]"
             
             processed.append({
                 "from_me": msg.from_me,
