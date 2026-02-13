@@ -102,26 +102,36 @@ public class UazapWebhookService {
                 log.info("[WEBHOOK] chatSource: {}", raw.get("chatSource"));
             }
 
-            // === EXTRAIR CAMPOS - tentar de message/chat primeiro, fallback para event ===
-            // Fonte primária: message + chat (formato EventType=messages)
-            // Fonte secundária: event (formato EventType=messages_update)
+            // === EXTRAIR CAMPOS ===
+            // Formato UaZap EventType=messages:
+            //   message: { fromMe, sender, senderName, sender_pn, text, messageid, chatid, type, ... }
+            //   chat: { wa_chatid, wa_name, name, phone, wa_isGroup, ... }
+            // Formato UaZap EventType=messages_update:
+            //   event: { IsFromMe, Sender, Chat, MessageIDs, Timestamp, ... }
+
             Map<String, Object> src = messageData != null ? messageData : eventData;
 
+            // Campos da mensagem
             Boolean isFromMe = getBoolean(src, "fromMe", getBoolean(src, "IsFromMe", null));
-            Boolean isGroup = getBoolean(src, "isGroup", getBoolean(src, "IsGroup", null));
-            String sender = getStr(src, "sender", getStr(src, "Sender", null));
-            String senderPn = getStr(src, "sender_pn", null);
-            String senderName = getStr(src, "senderName", getStr(src, "PushName", null));
-            String chat = getStr(chatData, "id", getStr(src, "Chat", getStr(src, "chatid", null)));
-            String messageId = getStr(src, "messageid", getStr(src, "id", getStr(src, "ID", null)));
-            String text = getStr(src, "text", null);
+            Boolean isGroup = getBoolean(src, "isGroup", getBoolean(chatData, "wa_isGroup", getBoolean(src, "IsGroup", null)));
+            String messageId = getStr(src, "messageid", getStr(src, "ID", null));
+            String text = getStr(src, "text", getStr(src, "content", null));
             String type = getStr(src, "type", getStr(src, "messageType", null));
             String mediaType = getStr(src, "mediaType", getStr(src, "mimetype", null));
             String mediaUrl = getStr(src, "url", null);
             String caption = getStr(src, "caption", null);
             String status = getStr(src, "status", null);
+            Boolean wasSentByApi = getBoolean(src, "wasSentByApi", false);
 
-            // MessageIDs pode ser array
+            // Telefone do contato: usar chat.wa_chatid (ex: 554791685019@s.whatsapp.net)
+            // Isso é o número do contato externo, independente de fromMe
+            String contactChatId = getStr(chatData, "wa_chatid", getStr(src, "chatid", getStr(src, "Chat", null)));
+
+            // Nome do contato: chat.name ou chat.wa_name
+            String contactName = getStr(chatData, "name", getStr(chatData, "wa_name",
+                    getStr(src, "senderName", getStr(src, "PushName", null))));
+
+            // MessageIDs pode ser array (formato messages_update)
             if (messageId == null) {
                 Object msgIds = src.get("MessageIDs");
                 if (msgIds instanceof java.util.List) {
@@ -135,81 +145,24 @@ public class UazapWebhookService {
             // Timestamp
             Long messageTimestamp = getNumber(src, "messageTimestamp", getNumber(src, "Timestamp", null));
 
-            // Extrair Message (objeto interno com o conteúdo real - formato PascalCase)
-            Map<String, Object> messageObj = null;
-            if (src.get("Message") instanceof Map) {
-                messageObj = (Map<String, Object>) src.get("Message");
-            }
-
-            // Determinar tipo e extrair texto de messageObj se necessário
+            // Determinar tipo de mensagem
             String msgType = type != null ? normalizeMessageType(type) : "text";
 
-            if (messageObj != null) {
-                log.info("[WEBHOOK] Message (inner) keys: {}", messageObj.keySet());
-                if (text == null && messageObj.get("Conversation") != null) {
-                    text = String.valueOf(messageObj.get("Conversation"));
-                    msgType = "text";
-                } else if (text == null && messageObj.get("ExtendedTextMessage") instanceof Map) {
-                    Map<String, Object> extMsg = (Map<String, Object>) messageObj.get("ExtendedTextMessage");
-                    text = getStr(extMsg, "Text", null);
-                    msgType = "text";
-                } else if (messageObj.get("ImageMessage") instanceof Map) {
-                    Map<String, Object> imgMsg = (Map<String, Object>) messageObj.get("ImageMessage");
-                    if (text == null) text = getStr(imgMsg, "Caption", null);
-                    if (mediaUrl == null) mediaUrl = getStr(imgMsg, "Url", null);
-                    if (mediaType == null) mediaType = getStr(imgMsg, "Mimetype", null);
-                    msgType = "image";
-                } else if (messageObj.get("VideoMessage") instanceof Map) {
-                    Map<String, Object> vidMsg = (Map<String, Object>) messageObj.get("VideoMessage");
-                    if (text == null) text = getStr(vidMsg, "Caption", null);
-                    if (mediaUrl == null) mediaUrl = getStr(vidMsg, "Url", null);
-                    if (mediaType == null) mediaType = getStr(vidMsg, "Mimetype", null);
-                    msgType = "video";
-                } else if (messageObj.get("AudioMessage") instanceof Map) {
-                    Map<String, Object> audMsg = (Map<String, Object>) messageObj.get("AudioMessage");
-                    if (mediaUrl == null) mediaUrl = getStr(audMsg, "Url", null);
-                    if (mediaType == null) mediaType = getStr(audMsg, "Mimetype", null);
-                    msgType = "audio";
-                } else if (messageObj.get("DocumentMessage") instanceof Map) {
-                    Map<String, Object> docMsg = (Map<String, Object>) messageObj.get("DocumentMessage");
-                    if (text == null) text = getStr(docMsg, "FileName", null);
-                    if (mediaUrl == null) mediaUrl = getStr(docMsg, "Url", null);
-                    if (mediaType == null) mediaType = getStr(docMsg, "Mimetype", null);
-                    msgType = "document";
-                } else if (messageObj.get("StickerMessage") instanceof Map) {
-                    msgType = "sticker";
-                } else if (messageObj.get("ContactMessage") instanceof Map) {
-                    Map<String, Object> contactMsg = (Map<String, Object>) messageObj.get("ContactMessage");
-                    if (text == null) text = getStr(contactMsg, "DisplayName", null);
-                    msgType = "contact";
-                } else if (messageObj.get("LocationMessage") instanceof Map) {
-                    msgType = "location";
-                }
-            }
-
-            log.info("[WEBHOOK] Parsed: fromMe={}, sender={}, pushName={}, text={}, msgId={}, type={}",
-                    isFromMe, sender, senderName,
+            log.info("[WEBHOOK] Parsed: fromMe={}, contactChatId={}, contactName={}, text={}, msgId={}, type={}, wasSentByApi={}",
+                    isFromMe, contactChatId, contactName,
                     text != null ? text.substring(0, Math.min(50, text.length())) : null,
-                    messageId, msgType);
+                    messageId, msgType, wasSentByApi);
 
-            // Ignorar mensagens enviadas por mim (fromMe)
-            if (Boolean.TRUE.equals(isFromMe)) {
-                log.debug("[WEBHOOK] Mensagem fromMe=true. Ignorando.");
+            // Ignorar mensagens enviadas por API (evitar loops)
+            if (Boolean.TRUE.equals(wasSentByApi)) {
+                log.debug("[WEBHOOK] Mensagem enviada por API. Ignorando.");
                 return;
             }
 
-            // Extrair número do telefone
-            String phoneNumber = null;
-            if (senderPn != null && !senderPn.isEmpty()) {
-                phoneNumber = cleanPhoneNumber(senderPn);
-            } else if (sender != null && !sender.isEmpty()) {
-                phoneNumber = cleanPhoneNumber(sender);
-            } else if (chat != null && !chat.isEmpty()) {
-                phoneNumber = cleanPhoneNumber(chat);
-            }
-
+            // Extrair número do telefone do contato (limpar @s.whatsapp.net)
+            String phoneNumber = cleanPhoneNumber(contactChatId);
             if (phoneNumber == null) {
-                log.warn("[WEBHOOK] Não foi possível extrair telefone. Sender: {}, Chat: {}", sender, chat);
+                log.warn("[WEBHOOK] Não foi possível extrair telefone do contato. chatId: {}", contactChatId);
                 return;
             }
 
@@ -226,7 +179,7 @@ public class UazapWebhookService {
 
             // Buscar ou criar conversa
             WhatsAppConversation conversation = findOrCreateConversation(
-                    phoneNumber, company, instanceName, senderName, chat);
+                    phoneNumber, company, instanceName, contactName, contactChatId);
 
             // Verificar duplicata
             if (messageId != null) {
@@ -246,30 +199,32 @@ public class UazapWebhookService {
                 content = "📎 " + msgType;
             }
 
-            // Criar mensagem
+            // Criar mensagem (salvar tanto fromMe quanto recebidas)
             WhatsAppMessage message = WhatsAppMessage.builder()
                     .conversation(conversation)
                     .messageId(messageId)
                     .content(content)
-                    .fromMe(false)
+                    .fromMe(Boolean.TRUE.equals(isFromMe))
                     .messageType(msgType)
                     .mediaType(mediaType)
                     .mediaUrl(mediaUrl)
                     .messageTimestamp(messageTimestamp)
-                    .status("received")
+                    .status(Boolean.TRUE.equals(isFromMe) ? "sent" : "received")
                     .isGroup(Boolean.TRUE.equals(isGroup))
                     .build();
 
             messageRepository.save(message);
 
             // Atualizar conversa
-            conversation.setUnreadCount(conversation.getUnreadCount() + 1);
+            if (!Boolean.TRUE.equals(isFromMe)) {
+                conversation.setUnreadCount(conversation.getUnreadCount() + 1);
+            }
             conversation.setLastMessageText(content);
             conversation.setLastMessageTimestamp(messageTimestamp);
             conversationRepository.save(conversation);
 
-            log.info("[WEBHOOK] ✅ Mensagem salva. From: {}, Type: {}, Content: {}",
-                    phoneNumber, msgType,
+            log.info("[WEBHOOK] ✅ Mensagem salva. Phone: {}, FromMe: {}, Type: {}, Content: {}",
+                    phoneNumber, isFromMe, msgType,
                     content.length() > 50 ? content.substring(0, 50) + "..." : content);
 
         } catch (Exception e) {
