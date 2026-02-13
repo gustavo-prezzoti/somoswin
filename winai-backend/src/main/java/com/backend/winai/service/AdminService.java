@@ -368,7 +368,27 @@ public class AdminService {
     }
 
     /**
-     * Cria uma nova empresa
+     * Cria uma nova empresa a partir do DTO
+     */
+    @Transactional
+    public Company createCompanyFromRequest(com.backend.winai.dto.request.CreateCompanyRequest request) {
+        Company company = com.backend.winai.entity.Company.builder()
+                .name(request.getName())
+                .contratante(request.getContratante())
+                .documento(request.getDocumento())
+                .emailContratante(request.getEmailContratante())
+                .plan(com.backend.winai.entity.UserPlan.STARTER) // Garante plano padrão
+                .status(com.backend.winai.entity.AccountStatus.ACTIVE)
+                .defaultSupportMode("IA")
+                .build();
+
+        Company savedCompany = companyRepository.save(company);
+        log.info("Empresa criada: {}", savedCompany.getName());
+        return savedCompany;
+    }
+
+    /**
+     * Cria uma nova empresa (método antigo, mantido para compatibilidade)
      */
     @Transactional
     public Company createCompany(Company company) {

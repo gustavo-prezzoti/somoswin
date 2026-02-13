@@ -121,8 +121,8 @@ public class AdminController {
     @Operation(summary = "Criar Empresa", description = "Cria uma nova empresa no sistema")
     @PostMapping("/companies")
     public ResponseEntity<com.backend.winai.entity.Company> createCompany(
-            @RequestBody com.backend.winai.entity.Company company) {
-        return ResponseEntity.ok(adminService.createCompany(company));
+            @RequestBody com.backend.winai.dto.request.CreateCompanyRequest request) {
+        return ResponseEntity.ok(adminService.createCompanyFromRequest(request));
     }
 
     @Operation(summary = "Atualizar Empresa", description = "Atualiza dados de uma empresa existente")
