@@ -1,6 +1,9 @@
 package com.backend.winai.controller;
 
-import com.backend.winai.service.UazapWebhookService;
+import com.backend.winai.dto.request.UazapWebhookRequest;
+import com.backend.winai.service.WhatsAppWebhookService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -18,16 +21,31 @@ import java.util.Map;
 @Tag(name = "Webhooks", description = "Endpoints para receber webhooks do UaZap")
 public class UazapWebhookController {
 
-    private final UazapWebhookService webhookService;
+    private final WhatsAppWebhookService whatsAppWebhookService;
+
+    private static final ObjectMapper mapper = new ObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     @Operation(summary = "Webhook UaZap", description = "Recebe notificações de mensagens do UaZap")
     @PostMapping("/message")
     public ResponseEntity<Void> receiveMessage(@RequestBody Map<String, Object> rawPayload, HttpServletRequest request) {
         try {
             log.info("[UAZAP-WEBHOOK] POST /message recebido de IP: {}", request.getRemoteAddr());
-            log.info("[UAZAP-WEBHOOK] Raw payload keys: {}", rawPayload.keySet());
 
-            webhookService.processRawWebhook(rawPayload);
+            String eventType = rawPayload.get("EventType") != null ? String.valueOf(rawPayload.get("EventType")) : null;
+            String instanceName = rawPayload.get("instanceName") != null ? String.valueOf(rawPayload.get("instanceName")) : null;
+
+            log.info("[UAZAP-WEBHOOK] EventType: {}, Instance: {}", eventType, instanceName);
+
+            // Ignorar eventos que não são mensagens novas
+            if (eventType != null && !eventType.equalsIgnoreCase("messages")) {
+                log.debug("[UAZAP-WEBHOOK] Evento não é mensagem ({}). Ignorando.", eventType);
+                return ResponseEntity.ok().build();
+            }
+
+            // Converter Map raw para UazapWebhookRequest e processar no serviço completo
+            UazapWebhookRequest webhookRequest = mapper.convertValue(rawPayload, UazapWebhookRequest.class);
+            whatsAppWebhookService.processWebhook(webhookRequest);
 
             return ResponseEntity.ok().build();
         } catch (Exception e) {
@@ -47,23 +65,17 @@ public class UazapWebhookController {
     @PostMapping("/{eventType}")
     public ResponseEntity<Void> receiveWebhookByEvent(@PathVariable String eventType, @RequestBody Map<String, Object> rawPayload, HttpServletRequest request) {
         log.info("[UAZAP-WEBHOOK] POST /{} recebido de IP: {}", eventType, request.getRemoteAddr());
-        // Injetar o eventType no payload se não existir
-        if (!rawPayload.containsKey("event") || rawPayload.get("event") == null) {
-            rawPayload.put("event", eventType);
-        }
         return receiveMessage(rawPayload, request);
     }
 
     @Operation(summary = "Health Check", description = "Verifica se o webhook está funcionando")
     @GetMapping("/health")
     public ResponseEntity<String> health() {
-        log.info("[UAZAP-WEBHOOK] GET /health chamado");
         return ResponseEntity.ok("Webhook UaZap está funcionando!");
     }
 
     @GetMapping
     public ResponseEntity<String> healthRoot() {
-        log.info("[UAZAP-WEBHOOK] GET / chamado");
         return ResponseEntity.ok("Webhook UaZap endpoint ativo");
     }
 }
