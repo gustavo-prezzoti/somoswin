@@ -90,7 +90,13 @@ const AdminCompanies: React.FC = () => {
 
         try {
             if (mode === 'create') {
-                const request: CreateCompanyRequest = { name: companyName };
+                const request: CreateCompanyRequest = { 
+                    name: companyName,
+                    contratante: contratante || undefined,
+                    documento: documento || undefined,
+                    emailContratante: emailContratante || undefined,
+                    plan: 'STARTER' // Default plan
+                };
                 await adminService.createCompany(request);
             } else if (selectedCompany) {
                 const request: UpdateCompanyRequest = {

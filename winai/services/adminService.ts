@@ -118,6 +118,10 @@ export interface Plan {
 
 export interface CreateCompanyRequest {
     name: string;
+    contratante?: string;
+    documento?: string;
+    emailContratante?: string;
+    plan?: 'STARTER' | 'PRO' | 'ENTERPRISE';
 }
 
 export interface UpdateCompanyRequest {

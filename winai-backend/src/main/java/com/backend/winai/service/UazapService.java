@@ -1147,7 +1147,11 @@ public class UazapService {
                     HttpMethod.GET,
                     requestEntity,
                     com.backend.winai.dto.uazap.GlobalWebhookDTO.class);
-            return response.getBody();
+            com.backend.winai.dto.uazap.GlobalWebhookDTO body = response.getBody();
+            if (body != null) {
+                log.info("Webhook global atual: enabled={}, url={}, events={}", body.isEnabled(), body.getUrl(), body.getEvents());
+            }
+            return body;
         } catch (Exception e) {
             log.warn(
                     "Webhook global não configurado ou não encontrado (isso é normal se ainda não foi configurado): {}",
@@ -1161,7 +1165,7 @@ public class UazapService {
      */
     public void setGlobalWebhook(com.backend.winai.dto.uazap.GlobalWebhookDTO request) {
         String url = defaultBaseUrl.replaceAll("/$", "") + "/globalwebhook";
-        log.info("Atualizando webhook global: {}", url);
+        log.info("Atualizando webhook global: {} | Destino URL: {} | Enabled: {} | Events: {}", url, request.getUrl(), request.isEnabled(), request.getEvents());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

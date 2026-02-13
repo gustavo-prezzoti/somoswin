@@ -372,10 +372,10 @@ public class AdminService {
      */
     @Transactional
     public Company createCompany(Company company) {
+        // Garantir que o plano seja definido (campo NOT NULL no banco)
+        company.setPlan(com.backend.winai.entity.UserPlan.STARTER);
+        
         // Definir valores padrão se não fornecidos
-        if (company.getPlan() == null) {
-            company.setPlan(com.backend.winai.entity.UserPlan.STARTER);
-        }
         if (company.getStatus() == null) {
             company.setStatus(com.backend.winai.entity.AccountStatus.ACTIVE);
         }
