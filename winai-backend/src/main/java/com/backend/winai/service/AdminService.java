@@ -693,10 +693,10 @@ public class AdminService {
     }
 
     /**
-     * Configura o Webhook Global
+     * Configura o Webhook Global e propaga para todas as instâncias em cascata
      */
     public void setGlobalWebhook(com.backend.winai.dto.uazap.GlobalWebhookDTO request) {
-        uazapService.setGlobalWebhook(request);
+        uazapService.setGlobalWebhookCascade(request);
     }
 
     /**

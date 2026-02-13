@@ -1294,4 +1294,68 @@ public class UazapService {
     public String fetchProfilePictureUrl(String phoneNumber, Company company) {
         return fetchProfilePictureUrl(phoneNumber, company, null, null);
     }
+
+    /**
+     * Configura o webhook de uma instância específica no UaZap.
+     */
+    public void configureInstanceWebhook(String instanceToken, String webhookUrl, List<String> events) {
+        String url = defaultBaseUrl.replaceAll("/$", "") + "/webhook";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("token", instanceToken);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("enabled", true);
+        body.put("url", webhookUrl);
+        body.put("events", events != null ? events : List.of("messages", "messages_update", "presence", "connection"));
+        body.put("excludeMessages", List.of("wasSentByApi"));
+
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+
+        try {
+            restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
+        } catch (Exception e) {
+            log.error("[WEBHOOK-CASCADE] Erro ao configurar webhook da instância: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Configura o webhook global E propaga para todas as instâncias em cascata.
+     * Chamado quando o admin salva o webhook global no painel.
+     */
+    public void setGlobalWebhookCascade(com.backend.winai.dto.uazap.GlobalWebhookDTO request) {
+        // 1. Configurar webhook global
+        setGlobalWebhook(request);
+
+        // 2. Propagar para todas as instâncias
+        log.info("[WEBHOOK-CASCADE] Propagando webhook para todas as instâncias...");
+        try {
+            List<UazapInstanceDTO> instances = fetchInstances();
+            if (instances == null || instances.isEmpty()) {
+                log.warn("[WEBHOOK-CASCADE] Nenhuma instância encontrada para propagar webhook");
+                return;
+            }
+
+            int ok = 0, fail = 0;
+            for (UazapInstanceDTO instance : instances) {
+                if (instance.getToken() != null && !instance.getToken().isEmpty()) {
+                    try {
+                        configureInstanceWebhook(instance.getToken(), request.getUrl(), request.getEvents());
+                        ok++;
+                        log.info("[WEBHOOK-CASCADE] Webhook configurado na instância: {}", instance.getInstanceName());
+                    } catch (Exception e) {
+                        fail++;
+                        log.error("[WEBHOOK-CASCADE] Falha na instância {}: {}", instance.getInstanceName(), e.getMessage());
+                    }
+                } else {
+                    log.warn("[WEBHOOK-CASCADE] Instância {} sem token, pulando", instance.getInstanceName());
+                    fail++;
+                }
+            }
+            log.info("[WEBHOOK-CASCADE] Concluído: {}/{} instâncias configuradas com sucesso", ok, instances.size());
+        } catch (Exception e) {
+            log.error("[WEBHOOK-CASCADE] Erro ao listar instâncias para propagação: {}", e.getMessage());
+        }
+    }
 }
