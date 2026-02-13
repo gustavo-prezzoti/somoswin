@@ -380,6 +380,9 @@ public class AdminService {
                 .plan(com.backend.winai.entity.UserPlan.STARTER) // Garante plano padrão
                 .status(com.backend.winai.entity.AccountStatus.ACTIVE)
                 .defaultSupportMode("IA")
+                .subscriptionStatus("PENDING")
+                .subscriptionStartDate(java.time.LocalDate.now())
+                .subscriptionEndDate(java.time.LocalDate.now().plusDays(30))
                 .build();
 
         Company savedCompany = companyRepository.save(company);
@@ -517,26 +520,17 @@ public class AdminService {
         Company savedCompany = companyRepository.save(company);
         log.info("Empresa atualizada via Map: {}", savedCompany.getName());
 
-        // Após salvar, atualizar assinatura no Asaas se o plano mudou
-        if (planChanged && newPlanId != null
-                && savedCompany.getContratante() != null
-                && savedCompany.getDocumento() != null
-                && savedCompany.getEmailContratante() != null) {
-            try {
-                if (hadActiveSubscription) {
-                    log.info("Plano alterado pelo admin para empresa {}, recriando assinatura no Asaas...",
-                            savedCompany.getName());
-                    asaasService.adminChangePlan(companyId, newPlanId);
-                } else {
-                    log.info("Criando primeira assinatura no Asaas para empresa {}...",
-                            savedCompany.getName());
-                    asaasService.createSubscription(companyId, newPlanId);
-                }
-            } catch (Exception e) {
-                log.error("Erro ao atualizar assinatura no Asaas para empresa {}: {}",
-                        savedCompany.getName(), e.getMessage());
-            }
+        // Garantir datas de vigência padrão se não existirem
+        if (savedCompany.getSubscriptionStartDate() == null) {
+            savedCompany.setSubscriptionStartDate(java.time.LocalDate.now());
         }
+        if (savedCompany.getSubscriptionEndDate() == null) {
+            savedCompany.setSubscriptionEndDate(java.time.LocalDate.now().plusDays(30));
+        }
+        if (savedCompany.getSubscriptionStatus() == null) {
+            savedCompany.setSubscriptionStatus("PENDING");
+        }
+        companyRepository.save(savedCompany);
 
         return savedCompany;
     }
