@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/v1/webhooks/uazap")
@@ -20,30 +21,41 @@ public class UazapWebhookController {
 
     @Operation(summary = "Webhook UaZap", description = "Recebe notificações de mensagens do UaZap")
     @PostMapping("/message")
-    public ResponseEntity<Void> receiveMessage(@RequestBody UazapWebhookPayload payload) {
+    public ResponseEntity<Void> receiveMessage(@RequestBody UazapWebhookPayload payload, HttpServletRequest request) {
         try {
-            log.info("Webhook recebido do UaZap. Event: {}, Instance: {}",
-                    payload.getEvent(), payload.getInstance());
+            log.info("[UAZAP-WEBHOOK] POST /message recebido de IP: {}, Event: {}, Instance: {}",
+                    request.getRemoteAddr(), payload.getEvent(), payload.getInstance());
+            log.info("[UAZAP-WEBHOOK] Payload data: fromMe={}, sender={}, text={}",
+                    payload.getData() != null ? payload.getData().getFromMe() : null,
+                    payload.getData() != null ? payload.getData().getSender() : null,
+                    payload.getData() != null ? (payload.getData().getText() != null ? payload.getData().getText().substring(0, Math.min(50, payload.getData().getText().length())) : null) : null);
 
             webhookService.processWebhook(payload);
 
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            log.error("Erro ao processar webhook do UaZap", e);
-            // Retornar 200 mesmo com erro para não fazer o UaZap reenviar
+            log.error("[UAZAP-WEBHOOK] Erro ao processar webhook do UaZap", e);
             return ResponseEntity.ok().build();
         }
     }
 
     @Operation(summary = "Webhook UaZap (Genérico)", description = "Endpoint genérico para todos os eventos do UaZap")
     @PostMapping
-    public ResponseEntity<Void> receiveWebhook(@RequestBody UazapWebhookPayload payload) {
-        return receiveMessage(payload);
+    public ResponseEntity<Void> receiveWebhook(@RequestBody UazapWebhookPayload payload, HttpServletRequest request) {
+        log.info("[UAZAP-WEBHOOK] POST / (genérico) recebido de IP: {}", request.getRemoteAddr());
+        return receiveMessage(payload, request);
     }
 
     @Operation(summary = "Health Check", description = "Verifica se o webhook está funcionando")
     @GetMapping("/health")
     public ResponseEntity<String> health() {
+        log.info("[UAZAP-WEBHOOK] GET /health chamado");
         return ResponseEntity.ok("Webhook UaZap está funcionando!");
+    }
+
+    @GetMapping
+    public ResponseEntity<String> healthRoot() {
+        log.info("[UAZAP-WEBHOOK] GET / chamado");
+        return ResponseEntity.ok("Webhook UaZap endpoint ativo");
     }
 }

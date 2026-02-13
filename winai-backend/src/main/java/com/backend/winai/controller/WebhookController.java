@@ -28,7 +28,7 @@ public class WebhookController {
             @RequestBody Map<String, Object> payload,
             @RequestHeader(value = "apikey", required = false) String apikey) {
         try {
-            log.info("Webhook recebido (Payload RAW): {}", payload);
+            log.info("[OLD-WEBHOOK] POST /api/v1/webhook/whatsapp recebido. Payload keys: {}", payload.keySet());
 
             // Tenta obter o tipo de evento de 'EventType', 'event' ou 'type'
             String eventType = (String) payload.get("EventType");
