@@ -849,14 +849,10 @@ public class AIAgentService {
             if (!recentMessages.isEmpty()) {
                 try {
                     UUID infoCompanyId = null;
-                    if (recentMessages.get(0).getConversation() != null
-                            && recentMessages.get(0).getConversation().getCompany() != null) {
-                        infoCompanyId = recentMessages.get(0).getConversation().getCompany().getId();
-                    } else {
-                        var conv = conversationRepository.findById(conversationId).orElse(null);
-                        if (conv != null && conv.getCompany() != null) {
-                            infoCompanyId = conv.getCompany().getId();
-                        }
+                    // Buscar conversa diretamente do repository (evita LazyInitializationException em contexto async)
+                    var conv = conversationRepository.findById(conversationId).orElse(null);
+                    if (conv != null && conv.getCompany() != null) {
+                        infoCompanyId = conv.getCompany().getId();
                     }
 
                     if (infoCompanyId != null) {
