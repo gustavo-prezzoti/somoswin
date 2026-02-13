@@ -34,9 +34,18 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+        reservations:
+          memory: 512M
     environment:
       # Timezone
       - TZ=America/Sao_Paulo
+      # JVM - otimizado para container com limite de memória
+      - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -XX:+UseG1GC -XX:+UseStringDeduplication -Djava.net.preferIPv4Stack=true
       # Spring Profile for Docker
       - SPRING_PROFILES_ACTIVE=docker
 
@@ -115,8 +124,16 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 256M
     environment:
       - TZ=America/Sao_Paulo
+      - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true
       - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
@@ -147,8 +164,16 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 256M
     environment:
       - TZ=America/Sao_Paulo
+      - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true
       - SPRING_PROFILES_ACTIVE=docker,followup-worker
       - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
@@ -190,6 +215,11 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
     environment:
       - TZ=America/Sao_Paulo
       - FLASK_ENV=production
@@ -214,6 +244,11 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
     environment:
       - TZ=America/Sao_Paulo
       - JAVA_API_URL=http://backend:8080
