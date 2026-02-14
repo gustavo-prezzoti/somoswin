@@ -64,12 +64,41 @@ public class AsaasService {
     // ========== CLIENTES ==========
 
     /**
+     * Verifica se o customer existe na conta atual do Asaas (evita usar customer de outra conta).
+     */
+    private boolean customerExistsInCurrentAccount(String customerId) {
+        try {
+            HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
+            restTemplate.exchange(
+                    asaasApiUrl + "/customers/" + customerId,
+                    HttpMethod.GET,
+                    entity,
+                    Map.class);
+            return true;
+        } catch (HttpClientErrorException e) {
+            int status = e.getStatusCode().value();
+            if (status == 404 || status == 403) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    /**
      * Cria ou recupera um cliente no Asaas para a empresa.
+     * Se o customer armazenado foi criado em outra conta Asaas, limpa e cria novo na conta atual.
      */
     public String ensureCustomer(Company company) {
         if (company.getAsaasCustomerId() != null && !company.getAsaasCustomerId().isBlank()) {
-            log.info("[ASAAS] Empresa {} já possui customer: {}", company.getName(), company.getAsaasCustomerId());
-            return company.getAsaasCustomerId();
+            if (customerExistsInCurrentAccount(company.getAsaasCustomerId())) {
+                log.info("[ASAAS] Empresa {} já possui customer: {}", company.getName(), company.getAsaasCustomerId());
+                return company.getAsaasCustomerId();
+            }
+            log.warn("[ASAAS] Customer {} não existe na conta atual (criado em outra conta). Criando novo para empresa {}",
+                    company.getAsaasCustomerId(), company.getName());
+            company.setAsaasCustomerId(null);
+            company.setAsaasSubscriptionId(null);
+            companyRepository.save(company);
         }
 
         AsaasCustomerRequest request = AsaasCustomerRequest.builder()
