@@ -32,10 +32,10 @@ public class AsaasService {
     private final PlanRepository planRepository;
     private final ObjectMapper objectMapper;
 
-    @Value("${asaas.api.url:https://sandbox.asaas.com/api/v3}")
+    @Value("${asaas.api.url:https://api.asaas.com/v3}")
     private String asaasApiUrl;
 
-    @Value("${asaas.api.token:}")
+    @Value("${asaas.api.token}")
     private String asaasApiToken;
 
     public AsaasService(RestTemplate restTemplate,
