@@ -1141,7 +1141,7 @@ const Settings: React.FC = () => {
                           className="flex-1 px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
                         />
                       </div>
-                    </div>
+                    </div> 
                   </div>
 
                   <p className="text-[10px] text-gray-400">
