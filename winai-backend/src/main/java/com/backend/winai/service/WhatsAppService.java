@@ -54,6 +54,9 @@ public class WhatsAppService {
     @Value("${uazap.default-token:}")
     private String defaultToken;
 
+    @Value("${uazap.default-base-url:}")
+    private String defaultBaseUrl;
+
     /**
      * Processa mensagem recebida via Webhook
      */
@@ -743,52 +746,57 @@ public class WhatsAppService {
     }
 
     /**
-     * Conecta o Agente SDR (Gera QR Code se necessário)
+     * Conecta o Agente SDR (Gera QR Code se necessário).
+     * Prioridade: 1) UserWhatsAppConnection (criada pelo admin), 2) conversas, 3) nome da empresa.
+     * Evita criar instância duplicada quando o admin já criou conexão para o cliente.
      */
     @Transactional
     public Map<String, Object> connectSDRAgent(User user) {
         if (user.getCompany() == null)
             throw new RuntimeException("Empresa não encontrada para o usuário");
 
-        // Recarrega a empresa do banco para evitar LazyInitializationException
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada no banco"));
 
-        // Buscar a instância configurada no banco (pela primeira conversa associada ou
-        // default)
-        String instanceName = conversationRepository.findByCompanyOrderByLastMessageTimestampDesc(company)
+        // 1. PRIORIDADE: usar instância da conexão criada pelo admin (evita duplicar no Uazap)
+        String instanceName = connectionRepository.findInstanceNamesByCompanyId(company.getId())
                 .stream()
-                .map(WhatsAppConversation::getUazapInstance)
                 .filter(inst -> inst != null && !inst.isEmpty())
                 .findFirst()
                 .orElse(null);
 
-        // Se não houver conversas, tenta usar o default do sistema se houver (quase
-        // impossível se o usuário é novo)
-        // No futuro, podemos ter uma tabela de instâncias por empresa
+        // 2. Fallback: conversas existentes
         if (instanceName == null) {
-            instanceName = company.getName().replaceAll("[^a-zA-Z0-9]", ""); // Normalizar nome para ser usado como
-                                                                             // instância
+            instanceName = conversationRepository.findByCompanyOrderByLastMessageTimestampDesc(company)
+                    .stream()
+                    .map(WhatsAppConversation::getUazapInstance)
+                    .filter(inst -> inst != null && !inst.isEmpty())
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        // 3. Fallback: nome da empresa (e criar UserWhatsAppConnection ao criar instância)
+        if (instanceName == null) {
+            instanceName = company.getName().replaceAll("[^a-zA-Z0-9]", "");
         }
 
         try {
             Map<String, Object> result = uazapService.connectInstance(instanceName);
             if (result != null && "error".equals(result.get("status"))) {
                 log.info("Instância {} retornou erro na conexão, tentando criar...", instanceName);
-                createAndConnectInstance(instanceName);
+                return createAndConnectInstance(company, instanceName);
             }
             return result;
         } catch (RuntimeException e) {
             if (e.getMessage() != null && e.getMessage().contains("Instância não encontrada")) {
                 log.info("Instância {} não encontrada, criando...", instanceName);
-                return createAndConnectInstance(instanceName);
+                return createAndConnectInstance(company, instanceName);
             }
             throw e;
         }
     }
 
-    private Map<String, Object> createAndConnectInstance(String instanceName) {
-        // Criar instância
+    private Map<String, Object> createAndConnectInstance(Company company, String instanceName) {
         com.backend.winai.dto.request.CreateUazapInstanceRequest createRequest = com.backend.winai.dto.request.CreateUazapInstanceRequest
                 .builder()
                 .instanceName(instanceName)
@@ -798,28 +806,45 @@ public class WhatsAppService {
 
         uazapService.createInstance(createRequest);
 
-        // Tentar conectar novamente
+        // Vincular empresa à nova instância para evitar duplicação futura
+        if (connectionRepository.findByCompanyIdAndInstanceName(company.getId(), instanceName).isEmpty()) {
+            com.backend.winai.entity.UserWhatsAppConnection conn = new com.backend.winai.entity.UserWhatsAppConnection();
+            conn.setCompany(company);
+            conn.setInstanceName(instanceName);
+            conn.setInstanceBaseUrl(defaultBaseUrl != null && !defaultBaseUrl.isEmpty() ? defaultBaseUrl : null);
+            conn.setIsActive(true);
+            connectionRepository.save(conn);
+        }
+
         return uazapService.connectInstance(instanceName);
     }
 
     /**
-     * Desconecta o Agente SDR
+     * Desconecta o Agente SDR.
+     * Usa a mesma prioridade de connectSDRAgent: UserWhatsAppConnection, conversas.
      */
     @Transactional
     public void disconnectSDRAgent(User user) {
         if (user.getCompany() == null)
             throw new RuntimeException("Empresa não encontrada para o usuário");
 
-        // Recarrega a empresa do banco para evitar LazyInitializationException
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada no banco"));
 
-        String instanceName = conversationRepository.findByCompanyOrderByLastMessageTimestampDesc(company)
+        String instanceName = connectionRepository.findInstanceNamesByCompanyId(company.getId())
                 .stream()
-                .map(WhatsAppConversation::getUazapInstance)
                 .filter(inst -> inst != null && !inst.isEmpty())
                 .findFirst()
                 .orElse(null);
+
+        if (instanceName == null) {
+            instanceName = conversationRepository.findByCompanyOrderByLastMessageTimestampDesc(company)
+                    .stream()
+                    .map(WhatsAppConversation::getUazapInstance)
+                    .filter(inst -> inst != null && !inst.isEmpty())
+                    .findFirst()
+                    .orElse(null);
+        }
 
         if (instanceName != null) {
             uazapService.disconnectInstance(instanceName);
