@@ -466,15 +466,15 @@ public class OpenAiService {
         if (aiContext != null && aiContext.getCompany() != null) {
             boolean agendamentoDisponivel = agendamentoService.isAgendamentoEnabledForCompany(aiContext.getCompany());
             if (agendamentoDisponivel) {
-                systemPrompt.append("\n11. AGENDAMENTO DISPONÍVEL (Google Calendar) - SINALIZE PROATIVAMENTE:\n");
+                systemPrompt.append("\n11. AGENDAMENTO DISPONÍVEL (Google Calendar):\n");
                 systemPrompt.append(
-                        "   - Você TEM capacidade de agendar. Quando o usuário demonstrar interesse em agendar, marcar horário, agendar visita ou reunião: SINALIZE que pode ajudar e use as ferramentas.\n");
+                        "   - Você TEM capacidade de agendar. SOMENTE quando o usuário perguntar ou demonstrar interesse em agendar, marcar horário, agendar visita ou reunião: ofereça ajudar e use as ferramentas.\n");
+                systemPrompt.append(
+                        "   - NÃO force nem sugira agendamento sem necessidade. Só atue quando houver interesse explícito do usuário.\n");
                 systemPrompt.append(
                         "   - Use 'buscar_horarios_disponiveis' para listar horários, depois 'criar_agendamento_google' com nome, email, telefone (NUNCA peça CPF).\n");
                 systemPrompt.append(
                         "   - Ofereça apenas 2-3 horários por vez. Peça nome, email e telefone antes de confirmar.\n");
-                systemPrompt.append(
-                        "   - Em conversas iniciais ou quando fizer sentido, mencione brevemente que pode agendar horários.\n");
             } else {
                 systemPrompt.append("\n11. AGENDAMENTO NÃO DISPONÍVEL - TRANSIÇÃO HUMANA:\n");
                 systemPrompt.append(
