@@ -63,65 +63,77 @@ class JavaApiClient:
                     return []
         return []
     
-    async def get_lead_messages(self, lead_id: str, limit: int = 20) -> List[Message]:
-        """Busca mensagens de um lead específico"""
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{self.base_url}/api/internal/leads/{lead_id}/messages",
-                    params={"limit": limit},
-                    headers=self.headers
-                )
-                response.raise_for_status()
-                
-                data = response.json()
-                messages = []
-                for item in data:
-                    msg = Message(
-                        id=item["id"],
-                        content=item.get("content", ""),
-                        from_me=item.get("fromMe", False),
-                        timestamp=item.get("timestamp", 0),
-                        message_type=item.get("messageType"),
-                        media_type=item.get("mediaType"),
-                        media_url=item.get("mediaUrl")
+    async def get_lead_messages(self, lead_id: str, limit: int = 20, retries: int = 3, delay: float = 2.0) -> List[Message]:
+        """Busca mensagens de um lead específico com retry"""
+        for attempt in range(retries):
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.get(
+                        f"{self.base_url}/api/internal/leads/{lead_id}/messages",
+                        params={"limit": limit},
+                        headers=self.headers
                     )
-                    messages.append(msg)
-                
-                logger.debug(f"Fetched {len(messages)} messages for lead {lead_id}")
-                return messages
-                
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error fetching messages: {e.response.status_code}")
-            return []
-        except Exception as e:
-            logger.error(f"Error fetching messages for lead {lead_id}: {e}")
-            return []
-    
-    async def update_lead_status(self, lead_id: str, new_status: LeadStatus) -> bool:
-        """Atualiza o status de um lead"""
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.put(
-                    f"{self.base_url}/api/internal/leads/{lead_id}/qualify",
-                    json={"status": new_status.value},
-                    headers=self.headers
-                )
-                response.raise_for_status()
-                
-                result = response.json()
-                success = result.get("success", False)
-                
-                if success:
-                    logger.info(f"Updated lead {lead_id} to status {new_status.value}")
+                    response.raise_for_status()
+                    
+                    data = response.json()
+                    messages = []
+                    for item in data:
+                        msg = Message(
+                            id=item["id"],
+                            content=item.get("content", ""),
+                            from_me=item.get("fromMe", False),
+                            timestamp=item.get("timestamp", 0),
+                            message_type=item.get("messageType"),
+                            media_type=item.get("mediaType"),
+                            media_url=item.get("mediaUrl")
+                        )
+                        messages.append(msg)
+                    
+                    logger.debug(f"Fetched {len(messages)} messages for lead {lead_id}")
+                    return messages
+                    
+            except httpx.HTTPStatusError as e:
+                logger.error(f"HTTP error fetching messages: {e.response.status_code}")
+                return []
+            except Exception as e:
+                if attempt < retries - 1:
+                    logger.warning(f"Error fetching messages for lead {lead_id} (attempt {attempt+1}/{retries}): {e}. Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
                 else:
-                    logger.info(f"Lead {lead_id} not updated: {result.get('reason', 'unknown')}")
-                
-                return success
-                
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error updating lead: {e.response.status_code}")
-            return False
-        except Exception as e:
-            logger.error(f"Error updating lead {lead_id}: {e}")
-            return False
+                    logger.error(f"Error fetching messages for lead {lead_id}: {e}")
+                    return []
+        return []
+    
+    async def update_lead_status(self, lead_id: str, new_status: LeadStatus, retries: int = 3, delay: float = 2.0) -> bool:
+        """Atualiza o status de um lead com retry"""
+        for attempt in range(retries):
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.put(
+                        f"{self.base_url}/api/internal/leads/{lead_id}/qualify",
+                        json={"status": new_status.value},
+                        headers=self.headers
+                    )
+                    response.raise_for_status()
+                    
+                    result = response.json()
+                    success = result.get("success", False)
+                    
+                    if success:
+                        logger.info(f"Updated lead {lead_id} to status {new_status.value}")
+                    else:
+                        logger.info(f"Lead {lead_id} not updated: {result.get('reason', 'unknown')}")
+                    
+                    return success
+                    
+            except httpx.HTTPStatusError as e:
+                logger.error(f"HTTP error updating lead: {e.response.status_code}")
+                return False
+            except Exception as e:
+                if attempt < retries - 1:
+                    logger.warning(f"Error updating lead {lead_id} (attempt {attempt+1}/{retries}): {e}. Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"Error updating lead {lead_id}: {e}")
+                    return False
+        return False

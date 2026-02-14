@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # Scheduler Configuration
     cron_interval_minutes: int = 30
     run_on_startup: bool = True
+    initial_delay_seconds: int = 15
     
     # Queue Configuration
     queue_name: str = "lead-qualification"

@@ -19,6 +19,8 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import jakarta.annotation.PostConstruct;
+
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,8 +37,19 @@ public class AsaasService {
     @Value("${asaas.api.url:https://api.asaas.com/v3}")
     private String asaasApiUrl;
 
-    @Value("${asaas.api.token}")
+    @Value("${asaas.api.token:}")
     private String asaasApiToken;
+
+    @PostConstruct
+    public void init() {
+        if (asaasApiToken == null || asaasApiToken.isBlank()) {
+            log.warn("[ASAAS] API token não configurado (ASAAS_API_TOKEN). Integração de pagamentos não funcionará.");
+        } else if (!asaasApiToken.startsWith("$")) {
+            log.warn("[ASAAS] Token pode estar incorreto - tokens de produção começam com $. Verifique ASAAS_API_TOKEN no .env (use $$ para escapar no Docker)");
+        } else {
+            log.info("[ASAAS] Integração configurada - API: {}", asaasApiUrl);
+        }
+    }
 
     public AsaasService(RestTemplate restTemplate,
                         CompanyRepository companyRepository,
@@ -824,7 +837,8 @@ public class AsaasService {
     private HttpHeaders buildHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("access_token", asaasApiToken);
+        headers.set("access_token", asaasApiToken != null ? asaasApiToken : "");
+        headers.set("User-Agent", "Amplia/1.0");
         return headers;
     }
 

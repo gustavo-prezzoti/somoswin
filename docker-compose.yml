@@ -9,12 +9,14 @@ services:
   # =====================================
   # =====================================
   # Redis - Cache & Message Broker
+  # Para suprimir o aviso "Memory overcommit" no host: sysctl vm.overcommit_memory=1
   # =====================================
   redis:
     image: redis:alpine
     container_name: winai-redis
     ports:
       - "16379:6379"
+    command: redis-server --save 60 1 --loglevel warning
     environment:
       - TZ=America/Sao_Paulo
     networks:
@@ -276,6 +278,7 @@ services:
       - REDIS_PORT=6379
       - CRON_INTERVAL_MINUTES=30
       - RUN_ON_STARTUP=true
+      - INITIAL_DELAY_SECONDS=30
     depends_on:
       backend:
         condition: service_healthy

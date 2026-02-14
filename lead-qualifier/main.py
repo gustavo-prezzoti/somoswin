@@ -68,6 +68,10 @@ def main():
     
     async def startup():
         """Inicialização assíncrona"""
+        # Aguardar backend estar pronto antes da primeira execução
+        if settings.initial_delay_seconds > 0:
+            logger.info(f"Waiting {settings.initial_delay_seconds}s for backend to be ready...")
+            await asyncio.sleep(settings.initial_delay_seconds)
         # Executar na inicialização se configurado
         if settings.run_on_startup:
             logger.info("Running initial qualification on startup...")
