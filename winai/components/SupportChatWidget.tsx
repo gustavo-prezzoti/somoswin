@@ -157,7 +157,7 @@ const SupportChatWidget: React.FC = () => {
                     </div>
                     <div>
                         <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                            WinAI Assistant <Sparkles size={12} className="text-emerald-400" />
+                            Amplia Assistant <Sparkles size={12} className="text-emerald-400" />
                         </h3>
                     </div>
                 </div>
@@ -195,7 +195,7 @@ const SupportChatWidget: React.FC = () => {
                                 </div>
                                 <h4 className="font-bold text-gray-800">Olá! Como posso ajudar?</h4>
                                 <p className="text-xs text-gray-500 max-w-[200px] mx-auto">
-                                    Sou o suporte da WinAI. Selecione uma opção abaixo ou digite sua dúvida.
+                                    Sou o suporte da Amplia. Selecione uma opção abaixo ou digite sua dúvida.
                                 </p>
                             </div>
                         )}
