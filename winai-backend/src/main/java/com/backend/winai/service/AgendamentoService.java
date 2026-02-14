@@ -15,12 +15,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -47,13 +51,19 @@ public class AgendamentoService {
                         .startTime(LocalTime.of(9, 0))
                         .endTime(LocalTime.of(18, 0))
                         .slotDurationMinutes(30)
+                        .attendanceDays("MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY")
+                        .excludeHolidays(true)
                         .build());
+
+        List<String> attendanceDaysList = parseAttendanceDays(config.getAttendanceDays());
 
         return AgendamentoConfigDTO.builder()
                 .enabled(config.getEnabled())
                 .startTime(config.getStartTime().format(TIME_FMT))
                 .endTime(config.getEndTime().format(TIME_FMT))
                 .slotDurationMinutes(config.getSlotDurationMinutes())
+                .attendanceDays(attendanceDaysList)
+                .excludeHolidays(config.getExcludeHolidays() != null ? config.getExcludeHolidays() : true)
                 .googleConnected(googleConnected)
                 .canEnable(googleConnected)
                 .build();
@@ -82,21 +92,32 @@ public class AgendamentoService {
             config.setEndTime(LocalTime.parse(dto.getEndTime(), TIME_FMT));
         if (dto.getSlotDurationMinutes() != null)
             config.setSlotDurationMinutes(dto.getSlotDurationMinutes());
+        if (dto.getAttendanceDays() != null && !dto.getAttendanceDays().isEmpty())
+            config.setAttendanceDays(String.join(",", dto.getAttendanceDays()));
+        else if (dto.getAttendanceDays() != null && dto.getAttendanceDays().isEmpty())
+            config.setAttendanceDays(null); // todos os dias
+        if (dto.getExcludeHolidays() != null)
+            config.setExcludeHolidays(dto.getExcludeHolidays());
 
         config = configRepository.save(config);
+
+        List<String> attendanceDaysList = parseAttendanceDays(config.getAttendanceDays());
 
         return AgendamentoConfigDTO.builder()
                 .enabled(config.getEnabled())
                 .startTime(config.getStartTime().format(TIME_FMT))
                 .endTime(config.getEndTime().format(TIME_FMT))
                 .slotDurationMinutes(config.getSlotDurationMinutes())
+                .attendanceDays(attendanceDaysList)
+                .excludeHolidays(config.getExcludeHolidays() != null ? config.getExcludeHolidays() : true)
                 .googleConnected(googleConnected)
                 .canEnable(googleConnected)
                 .build();
     }
 
     /**
-     * Get available slots for a date. Returns empty if agendamento disabled or Google not connected.
+     * Get available slots for a date. Returns empty if agendamento disabled, Google not connected,
+     * date is not an attendance day, or date is a holiday (when excludeHolidays).
      */
     public List<String> getAvailableSlots(Company company, LocalDate date) {
         Optional<AgendamentoConfig> opt = configRepository.findByCompany(company);
@@ -107,8 +128,42 @@ public class AgendamentoService {
             return List.of();
 
         AgendamentoConfig cfg = opt.get();
+
+        // Filtrar por dia de atendimento
+        Set<DayOfWeek> allowedDays = parseAttendanceDaysToSet(cfg.getAttendanceDays());
+        if (allowedDays != null && !allowedDays.contains(date.getDayOfWeek()))
+            return List.of();
+
+        // Filtrar feriados
+        if (Boolean.TRUE.equals(cfg.getExcludeHolidays()) && BrazilianHolidayCalendar.isHoliday(date))
+            return List.of();
+
         return googleDriveService.getAvailableSlots(company, date, cfg.getStartTime(), cfg.getEndTime(),
                 cfg.getSlotDurationMinutes());
+    }
+
+    private static List<String> parseAttendanceDays(String raw) {
+        if (raw == null || raw.trim().isEmpty())
+            return List.of("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY");
+        return Arrays.stream(raw.split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+    }
+
+    private static java.util.Set<DayOfWeek> parseAttendanceDaysToSet(String raw) {
+        if (raw == null || raw.trim().isEmpty())
+            return null; // todos os dias
+        List<String> days = parseAttendanceDays(raw);
+        if (days.isEmpty())
+            return null;
+        return days.stream()
+                .map(d -> {
+                    try {
+                        return DayOfWeek.valueOf(d.toUpperCase());
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(d -> d != null)
+                .collect(Collectors.toSet());
     }
 
     /**
@@ -180,5 +235,33 @@ public class AgendamentoService {
 
     public Optional<AgendamentoConfig> getConfigForCompany(Company company) {
         return configRepository.findByCompany(company);
+    }
+
+    /**
+     * Retorna resumo da config para o prompt da IA (dias de atendimento, feriados).
+     */
+    public String getConfigSummaryForPrompt(Company company) {
+        return configRepository.findByCompany(company)
+                .map(cfg -> {
+                    StringBuilder sb = new StringBuilder();
+                    List<String> days = parseAttendanceDays(cfg.getAttendanceDays());
+                    if (days != null && !days.isEmpty() && days.size() < 7) {
+                        String diasStr = days.stream()
+                                .map(d -> {
+                                    try {
+                                        return DayOfWeek.valueOf(d).getDisplayName(java.time.format.TextStyle.FULL, new java.util.Locale("pt", "BR"));
+                                    } catch (Exception e) {
+                                        return d;
+                                    }
+                                })
+                                .collect(Collectors.joining(", "));
+                        sb.append("Dias de atendimento: ").append(diasStr).append(". ");
+                    }
+                    if (Boolean.TRUE.equals(cfg.getExcludeHolidays())) {
+                        sb.append("Feriados brasileiros não estão disponíveis para agendamento.");
+                    }
+                    return sb.toString().trim();
+                })
+                .orElse("");
     }
 }

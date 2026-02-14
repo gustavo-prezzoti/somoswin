@@ -9,6 +9,7 @@ import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.util.UUID;
 
+
 @Entity
 @Table(name = "agendamento_config", schema = "winai", uniqueConstraints = {
         @UniqueConstraint(columnNames = { "company_id" })
@@ -43,6 +44,14 @@ public class AgendamentoConfig {
     @Column(name = "slot_duration_minutes", nullable = false)
     @Builder.Default
     private Integer slotDurationMinutes = 30;
+
+    /** Dias de atendimento: MONDAY,TUESDAY,...,SUNDAY. Null/vazio = todos os dias. */
+    @Column(name = "attendance_days", length = 100)
+    private String attendanceDays;
+
+    @Column(name = "exclude_holidays", nullable = false)
+    @Builder.Default
+    private Boolean excludeHolidays = true;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

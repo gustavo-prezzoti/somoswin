@@ -5,6 +5,8 @@ export interface AgendamentoConfig {
   startTime: string;
   endTime: string;
   slotDurationMinutes: number;
+  attendanceDays?: string[];
+  excludeHolidays?: boolean;
   googleConnected: boolean;
   canEnable: boolean;
 }

@@ -72,6 +72,7 @@ const Settings: React.FC = () => {
   // Agendamento
   const [agendamentoConfig, setAgendamentoConfig] = useState<AgendamentoConfig | null>(null);
   const [agendamentoSaving, setAgendamentoSaving] = useState(false);
+  const [showGoogleConnectModal, setShowGoogleConnectModal] = useState(false);
 
   // States for ConfirmModal
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -973,14 +974,14 @@ const Settings: React.FC = () => {
                     <div>
                       <h4 className="font-black text-amber-800 text-sm uppercase">Conecte o Google Calendar</h4>
                       <p className="text-sm text-amber-700 mt-1">
-                        Para ativar o agendamento automático pela IA, é necessário conectar sua conta Google em <strong>Conexões Neurais</strong>.
+                        Para ativar o agendamento automático pela IA, é necessário conectar sua conta Google.
                         A IA irá buscar horários disponíveis no seu calendário e criar eventos automaticamente.
                       </p>
                       <button
-                        onClick={() => setActiveTab('integrations')}
+                        onClick={handleGoogleConnect}
                         className="mt-4 px-4 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 transition-all"
                       >
-                        Ir para Conexões Neurais
+                        Conectar Google
                       </button>
                     </div>
                   </div>
@@ -994,11 +995,11 @@ const Settings: React.FC = () => {
                     </div>
                     <button
                       onClick={async () => {
-                        if (!agendamentoConfig?.canEnable && !agendamentoConfig?.enabled) {
-                          showToast('Conecte o Google Calendar primeiro em Conexões Neurais.', 'error');
+                        const next = !agendamentoConfig?.enabled;
+                        if (next && !agendamentoConfig?.canEnable) {
+                          setShowGoogleConnectModal(true);
                           return;
                         }
-                        const next = !agendamentoConfig?.enabled;
                         setAgendamentoSaving(true);
                         try {
                           const updated = await agendamentoService.updateConfig({ enabled: next });
@@ -1010,11 +1011,74 @@ const Settings: React.FC = () => {
                           setAgendamentoSaving(false);
                         }
                       }}
-                      disabled={!agendamentoConfig?.canEnable && !agendamentoConfig?.enabled}
-                      className={`relative w-14 h-8 rounded-full transition-all ${agendamentoConfig?.enabled ? 'bg-emerald-600' : 'bg-gray-300'} ${(!agendamentoConfig?.canEnable && !agendamentoConfig?.enabled) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                      className={`relative w-14 h-8 rounded-full transition-all cursor-pointer ${agendamentoConfig?.enabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
                     >
                       <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-all ${agendamentoConfig?.enabled ? 'left-7' : 'left-1'}`} />
                     </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 block mb-2">Dias de atendimento</label>
+                      <p className="text-[10px] text-gray-400 mb-2">Selecione os dias em que a empresa atende (ex: sem fins de semana)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'].map((day) => {
+                          const labels: Record<string, string> = { MONDAY: 'Seg', TUESDAY: 'Ter', WEDNESDAY: 'Qua', THURSDAY: 'Qui', FRIDAY: 'Sex', SATURDAY: 'Sáb', SUNDAY: 'Dom' };
+                          const selected = (agendamentoConfig?.attendanceDays || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']).includes(day);
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={async () => {
+                                const current = agendamentoConfig?.attendanceDays || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
+                                const next = selected ? current.filter(d => d !== day) : [...current, day];
+                                if (next.length === 0) return;
+                                setAgendamentoConfig(prev => prev ? { ...prev, attendanceDays: next } : null);
+                                setAgendamentoSaving(true);
+                                try {
+                                  const updated = await agendamentoService.updateConfig({ attendanceDays: next });
+                                  setAgendamentoConfig(updated);
+                                  showToast('Dias salvos!', 'success');
+                                } catch (e: any) {
+                                  showToast(e?.message || 'Erro ao salvar.', 'error');
+                                } finally {
+                                  setAgendamentoSaving(false);
+                                }
+                              }}
+                              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                            >
+                              {labels[day]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                      <div>
+                        <p className="font-black text-gray-900 text-sm uppercase">Excluir feriados</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Feriados brasileiros não aparecerão como opção de agendamento</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const next = !agendamentoConfig?.excludeHolidays;
+                          setAgendamentoConfig(prev => prev ? { ...prev, excludeHolidays: next } : null);
+                          setAgendamentoSaving(true);
+                          try {
+                            const updated = await agendamentoService.updateConfig({ excludeHolidays: next });
+                            setAgendamentoConfig(updated);
+                            showToast(next ? 'Feriados excluídos dos horários.' : 'Feriados incluídos nos horários.', 'success');
+                          } catch (e: any) {
+                            showToast(e?.message || 'Erro ao salvar.', 'error');
+                          } finally {
+                            setAgendamentoSaving(false);
+                          }
+                        }}
+                        className={`relative w-14 h-8 rounded-full transition-all ${agendamentoConfig?.excludeHolidays !== false ? 'bg-emerald-600' : 'bg-gray-300'}`}
+                      >
+                        <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-all ${agendamentoConfig?.excludeHolidays !== false ? 'left-7' : 'left-1'}`} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1245,6 +1309,20 @@ const Settings: React.FC = () => {
         message={confirmModalConfig.message}
         variant={confirmModalConfig.variant}
         confirmLabel={confirmModalConfig.confirmLabel}
+      />
+
+      <ConfirmModal
+        isOpen={showGoogleConnectModal}
+        onClose={() => setShowGoogleConnectModal(false)}
+        onConfirm={() => {
+          setShowGoogleConnectModal(false);
+          handleGoogleConnect();
+        }}
+        title="Conectar Google Calendar"
+        message="Para ativar o agendamento, é necessário conectar sua conta Google. Você será redirecionado para autorizar o acesso ao Calendar."
+        confirmLabel="Conectar Google"
+        cancelLabel="Cancelar"
+        variant="default"
       />
 
       {/* Plan Change Modal */}

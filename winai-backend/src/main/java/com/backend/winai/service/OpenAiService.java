@@ -475,6 +475,10 @@ public class OpenAiService {
                         "   - Use 'buscar_horarios_disponiveis' para listar horários, depois 'criar_agendamento_google' com nome, email, telefone (NUNCA peça CPF).\n");
                 systemPrompt.append(
                         "   - Ofereça apenas 2-3 horários por vez. Peça nome, email e telefone antes de confirmar.\n");
+                String configSummary = agendamentoService.getConfigSummaryForPrompt(aiContext.getCompany());
+                if (configSummary != null && !configSummary.isEmpty()) {
+                    systemPrompt.append("   - Regras da empresa: ").append(configSummary).append("\n");
+                }
             } else {
                 systemPrompt.append("\n11. AGENDAMENTO NÃO DISPONÍVEL - TRANSIÇÃO HUMANA:\n");
                 systemPrompt.append(

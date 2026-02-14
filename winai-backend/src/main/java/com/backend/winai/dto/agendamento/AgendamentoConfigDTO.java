@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalTime;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -17,6 +19,9 @@ public class AgendamentoConfigDTO {
     private String startTime;  // "HH:mm"
     private String endTime;    // "HH:mm"
     private Integer slotDurationMinutes;
+    /** Dias de atendimento: MONDAY, TUESDAY, etc. Vazio = todos. */
+    private List<String> attendanceDays;
+    private Boolean excludeHolidays;
     private Boolean googleConnected;
     private Boolean canEnable; // false if Google not connected
 }
