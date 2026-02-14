@@ -43,7 +43,7 @@ public class AsaasService {
     @PostConstruct
     public void init() {
         if (asaasApiToken == null || asaasApiToken.isBlank()) {
-            log.warn("[ASAAS] API token não configurado (ASAAS_API_TOKEN). Integração de pagamentos não funcionará.");
+            log.debug("[ASAAS] API token não configurado - integração de pagamentos desabilitada neste container");
         } else if (!asaasApiToken.startsWith("$")) {
             log.warn("[ASAAS] Token pode estar incorreto - tokens de produção começam com $. Verifique ASAAS_API_TOKEN no .env (use $$ para escapar no Docker)");
         } else {
@@ -346,9 +346,14 @@ public class AsaasService {
                 return result;
             }
         } catch (HttpClientErrorException e) {
-            log.error("[ASAAS] Erro ao criar cobrança avulsa para troca de plano: {} - {}",
-                    e.getStatusCode(), e.getResponseBodyAsString());
-            throw new RuntimeException("Erro ao gerar cobrança: " + e.getResponseBodyAsString());
+            String body = e.getResponseBodyAsString();
+            if (e.getStatusCode().value() == 401) {
+                log.error("[ASAAS] 401 UNAUTHORIZED - Token length: {} | Response: {} | Verifique: 1) .env com ASAAS_API_TOKEN=$$aact_prod_... 2) docker compose up -d --force-recreate backend 3) Chave válida em Integrações > Chave de API no Asaas",
+                        asaasApiToken != null ? asaasApiToken.length() : 0, body);
+            } else {
+                log.error("[ASAAS] Erro ao criar cobrança avulsa para troca de plano: {} - {}", e.getStatusCode(), body);
+            }
+            throw new RuntimeException("Erro ao gerar cobrança: " + body);
         }
 
         throw new RuntimeException("Falha ao criar cobrança para troca de plano");
@@ -835,9 +840,12 @@ public class AsaasService {
     // ========== HELPERS ==========
 
     private HttpHeaders buildHeaders() {
+        if (asaasApiToken == null || asaasApiToken.isBlank()) {
+            throw new IllegalStateException("ASAAS_API_TOKEN não configurado. Verifique o .env na raiz do projeto (use $$ para escapar o $ no token) e reinicie: docker compose up -d --force-recreate backend");
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("access_token", asaasApiToken != null ? asaasApiToken : "");
+        headers.set("access_token", asaasApiToken);
         headers.set("User-Agent", "Amplia/1.0");
         return headers;
     }
