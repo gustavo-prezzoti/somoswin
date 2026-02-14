@@ -1141,7 +1141,7 @@ const Settings: React.FC = () => {
                   </div>
 
                   <p className="text-[10px] text-gray-400">
-                    A IA buscará horários disponíveis no Google Calendar dentro deste intervalo. Ao agendar, o lead informará nome, e-mail e telefone (CPF não é solicitado).
+                    A IA buscará horários disponíveis no Google Calendar dentro deste intervalo. Ao agendar, o lead informará nome, e-mail e telefone.
                   </p>
                 </div>
               </div>
