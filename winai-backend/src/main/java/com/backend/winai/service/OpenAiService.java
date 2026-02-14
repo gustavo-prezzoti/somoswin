@@ -13,6 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import com.backend.winai.dto.ai.AIContext;
+import com.backend.winai.entity.Company;
+import com.backend.winai.entity.Lead;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -389,6 +392,12 @@ public class OpenAiService {
 
     public String generateResponseWithContext(String agentPrompt, String knowledgeBaseContent, String userMessage,
             String imageUrl, List<ChatMessage> recentMessages) {
+        return generateResponseWithContext(agentPrompt, knowledgeBaseContent, userMessage, imageUrl, recentMessages,
+                null);
+    }
+
+    public String generateResponseWithContext(String agentPrompt, String knowledgeBaseContent, String userMessage,
+            String imageUrl, List<ChatMessage> recentMessages, AIContext aiContext) {
         StringBuilder systemPrompt = new StringBuilder();
 
         // === CONTEXTO TEMPORAL (Data, Hora Brasília, Dia da Semana) ===
@@ -454,6 +463,29 @@ public class OpenAiService {
         systemPrompt.append(
                 "   - A tag [SUMMARY] avisará o sistema para salvar as informações importantes desta conversa na memória de longo prazo.\n");
 
+        if (aiContext != null && aiContext.getCompany() != null) {
+            boolean agendamentoDisponivel = agendamentoService.isAgendamentoEnabledForCompany(aiContext.getCompany());
+            if (agendamentoDisponivel) {
+                systemPrompt.append("\n11. AGENDAMENTO DISPONÍVEL (Google Calendar) - SINALIZE PROATIVAMENTE:\n");
+                systemPrompt.append(
+                        "   - Você TEM capacidade de agendar. Quando o usuário demonstrar interesse em agendar, marcar horário, agendar visita ou reunião: SINALIZE que pode ajudar e use as ferramentas.\n");
+                systemPrompt.append(
+                        "   - Use 'buscar_horarios_disponiveis' para listar horários, depois 'criar_agendamento_google' com nome, email, telefone (NUNCA peça CPF).\n");
+                systemPrompt.append(
+                        "   - Ofereça apenas 2-3 horários por vez. Peça nome, email e telefone antes de confirmar.\n");
+                systemPrompt.append(
+                        "   - Em conversas iniciais ou quando fizer sentido, mencione brevemente que pode agendar horários.\n");
+            } else {
+                systemPrompt.append("\n11. AGENDAMENTO NÃO DISPONÍVEL - TRANSIÇÃO HUMANA:\n");
+                systemPrompt.append(
+                        "   - Você NÃO tem capacidade de agendar. Quando o usuário quiser agendar, marcar horário ou agendar visita: NÃO invente horários.\n");
+                systemPrompt.append(
+                        "   - Ofereça IMEDIATAMENTE transferir para um atendente humano: use a ferramenta 'escalar_humano' OU pergunte se deseja falar com um humano para agendar.\n");
+                systemPrompt.append(
+                        "   - Seja transparente: diga que um atendente pode ajudar com o agendamento e pergunte se deseja ser transferido.\n");
+            }
+        }
+
         List<Map<String, Object>> messages = new ArrayList<>();
         Map<String, Object> sysMsg = new HashMap<>();
         sysMsg.put("role", "system");
@@ -474,7 +506,7 @@ public class OpenAiService {
         userMsg.put("content", userMessage);
         messages.add(userMsg);
 
-        List<Map<String, Object>> tools = getGlobalTools();
+        List<Map<String, Object>> tools = getGlobalTools(aiContext);
 
         // Loop for Tool calling support (Max 3 turns for general flow)
         for (int turn = 0; turn < 3; turn++) {
@@ -514,7 +546,7 @@ public class OpenAiService {
                         String arguments = (String) function.get("arguments");
                         String toolCallId = (String) toolCall.get("id");
 
-                        String result = executeGlobalTool(functionName, arguments);
+                        String result = executeGlobalTool(functionName, arguments, aiContext);
                         if ("HUMAN_HANDOFF_REQUESTED".equals(result)) {
                             return "HUMAN_HANDOFF_REQUESTED";
                         }
@@ -623,6 +655,9 @@ public class OpenAiService {
 
     @org.springframework.beans.factory.annotation.Autowired
     private ClinicorpService clinicorpService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private AgendamentoService agendamentoService;
 
     @SuppressWarnings("unchecked")
     public String generateClinicorpResponse(String userMessage, List<String> recentMessages, String contextInfo,
@@ -965,7 +1000,7 @@ public class OpenAiService {
                 }
                 return "Erro ao realizar agendamento.";
             }
-            String result = executeGlobalTool(functionName, jsonArgs);
+            String result = executeGlobalTool(functionName, jsonArgs, null);
             if (result != null) {
                 return result;
             }
@@ -1017,12 +1052,12 @@ public class OpenAiService {
                         "hora", Map.of("type", "string", "description", "Hora HH:MM."))));
 
         // Add Global Tools
-        tools.addAll(getGlobalTools());
+        tools.addAll(getGlobalTools(null));
 
         return tools;
     }
 
-    private List<Map<String, Object>> getGlobalTools() {
+    private List<Map<String, Object>> getGlobalTools(AIContext aiContext) {
         List<Map<String, Object>> tools = new ArrayList<>();
 
         // Tool: escalar_humano
@@ -1037,14 +1072,76 @@ public class OpenAiService {
         tools.add(createTool("cancelar_atendimento", "Escala para humano para cancelar um agendamento.",
                 new HashMap<>()));
 
+        if (aiContext != null && aiContext.getCompany() != null
+                && agendamentoService.isAgendamentoEnabledForCompany(aiContext.getCompany())) {
+            tools.add(createTool("buscar_horarios_disponiveis",
+                    "Busca horários disponíveis no Google Calendar para agendamento.",
+                    Map.of(
+                            "data", Map.of("type", "string", "description", "Data no formato YYYY-MM-DD (opcional, padrão: hoje)."),
+                            "dias", Map.of("type", "integer", "description", "Número de dias para buscar (padrão: 7)."))));
+            tools.add(createTool("criar_agendamento_google",
+                    "Cria agendamento no Google Calendar. Requer nome, email e telefone do lead (NUNCA peça CPF).",
+                    Map.of(
+                            "nome", Map.of("type", "string", "description", "Nome completo do lead."),
+                            "email", Map.of("type", "string", "description", "Email do lead."),
+                            "telefone", Map.of("type", "string", "description", "Telefone do lead."),
+                            "data", Map.of("type", "string", "description", "Data YYYY-MM-DD."),
+                            "hora", Map.of("type", "string", "description", "Hora HH:mm."),
+                            "titulo", Map.of("type", "string", "description", "Título do agendamento (opcional)."),
+                            "observacoes", Map.of("type", "string", "description", "Observações (opcional)."))));
+        }
+
         return tools;
     }
 
-    private String executeGlobalTool(String functionName, String jsonArgs) {
+    private String executeGlobalTool(String functionName, String jsonArgs, AIContext aiContext) {
         if ("escalar_humano".equalsIgnoreCase(functionName) ||
                 "reagendar_atendimento".equalsIgnoreCase(functionName) ||
                 "cancelar_atendimento".equalsIgnoreCase(functionName)) {
             return "HUMAN_HANDOFF_REQUESTED";
+        }
+        if (aiContext != null && aiContext.getCompany() != null) {
+            if ("buscar_horarios_disponiveis".equalsIgnoreCase(functionName)) {
+                try {
+                    JsonNode args = objectMapper.readTree(jsonArgs);
+                    java.time.LocalDate data = java.time.LocalDate.now();
+                    int dias = 7;
+                    if (args.has("data") && !args.get("data").asText().isEmpty()) {
+                        data = java.time.LocalDate.parse(args.get("data").asText());
+                    }
+                    if (args.has("dias")) {
+                        dias = args.get("dias").asInt();
+                    }
+                    List<String> slots = agendamentoService.getAvailableSlotsForDays(aiContext.getCompany(), data, dias);
+                    return slots.isEmpty()
+                            ? "Nenhum horário disponível nos próximos " + dias + " dias."
+                            : "Horários disponíveis:\n" + String.join("\n", slots);
+                } catch (Exception e) {
+                    log.error("Erro ao buscar horários", e);
+                    return "Erro ao buscar horários disponíveis.";
+                }
+            }
+            if ("criar_agendamento_google".equalsIgnoreCase(functionName)) {
+                try {
+                    JsonNode args = objectMapper.readTree(jsonArgs);
+                    String nome = args.has("nome") ? args.get("nome").asText() : "";
+                    String email = args.has("email") ? args.get("email").asText() : "";
+                    String telefone = args.has("telefone") ? args.get("telefone").asText()
+                            : (aiContext.getPhoneNumber() != null ? aiContext.getPhoneNumber() : "");
+                    String data = args.has("data") ? args.get("data").asText() : "";
+                    String hora = args.has("hora") ? args.get("hora").asText() : "";
+                    String titulo = args.has("titulo") ? args.get("titulo").asText() : "";
+                    String observacoes = args.has("observacoes") ? args.get("observacoes").asText() : "";
+                    if (nome.isEmpty() || data.isEmpty() || hora.isEmpty()) {
+                        return "Erro: nome, data e hora são obrigatórios para agendar.";
+                    }
+                    return agendamentoService.createAppointment(aiContext.getCompany(), aiContext.getLead(), nome,
+                            email, telefone, data, hora, titulo, observacoes);
+                } catch (Exception e) {
+                    log.error("Erro ao criar agendamento", e);
+                    return "Erro ao criar agendamento: " + e.getMessage();
+                }
+            }
         }
         return null;
     }

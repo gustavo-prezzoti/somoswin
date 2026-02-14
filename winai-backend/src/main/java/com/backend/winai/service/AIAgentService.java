@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.backend.winai.dto.ai.AIContext;
 import com.backend.winai.entity.KnowledgeBase;
 import com.backend.winai.entity.KnowledgeBaseConnection;
 import com.backend.winai.entity.UserWhatsAppConnection;
@@ -174,8 +175,15 @@ public class AIAgentService {
                         + contextBuilder.toString();
             }
 
+            AIContext aiContext = AIContext.builder()
+                    .company(conv.getCompany())
+                    .lead(conv.getLead())
+                    .phoneNumber(conv.getPhoneNumber())
+                    .conversationId(conv.getId() != null ? conv.getId().toString() : null)
+                    .build();
+
             String aiResponse = openAiService.generateResponseWithContext(enhancedAgentPrompt,
-                    knowledgeBase.getContent(), userMessage, imageUrl, recentMessages);
+                    knowledgeBase.getContent(), userMessage, imageUrl, recentMessages, aiContext);
 
             if (aiResponse != null && !aiResponse.isEmpty()) {
                 log.info("AI generated response for conversation {}: {} chars", conv.getId(), aiResponse.length());

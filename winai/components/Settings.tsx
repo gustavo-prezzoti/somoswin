@@ -18,9 +18,11 @@ import {
   FileText,
   Users,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Clock
 } from 'lucide-react';
 import { googleDriveService } from '../services/api/google-drive.service';
+import { agendamentoService, AgendamentoConfig } from '../services/api/agendamento.service';
 import { userService } from '../services/api/user.service';
 import { marketingService } from '../services/api/marketing.service';
 import { whatsappService } from '../services/api/whatsapp.service';
@@ -36,9 +38,10 @@ const Settings: React.FC = () => {
     const tab = params.get('tab');
     if (tab === 'subscription') return 'subscription';
     if (tab === 'integrations') return 'integrations';
+    if (tab === 'agendamento') return 'agendamento';
     return 'profile';
   })();
-  const [activeTab, setActiveTab] = useState<'profile' | 'integrations' | 'subscription'>(initialTab as any);
+  const [activeTab, setActiveTab] = useState<'profile' | 'integrations' | 'subscription' | 'agendamento'>(initialTab as any);
   const [user, setUser] = useState<any>(null);
   const [saved, setSaved] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -66,6 +69,10 @@ const Settings: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toasts, showToast, removeToast } = useToast();
 
+  // Agendamento
+  const [agendamentoConfig, setAgendamentoConfig] = useState<AgendamentoConfig | null>(null);
+  const [agendamentoSaving, setAgendamentoSaving] = useState(false);
+
   // States for ConfirmModal
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState({
@@ -76,12 +83,22 @@ const Settings: React.FC = () => {
     confirmLabel: 'Confirmar'
   });
 
+  const loadAgendamentoConfig = async () => {
+    try {
+      const cfg = await agendamentoService.getConfig();
+      setAgendamentoConfig(cfg);
+    } catch (e) {
+      console.error('Failed to load agendamento config', e);
+    }
+  };
+
   useEffect(() => {
     loadUser();
     checkGoogleConnection();
     checkMetaConnection();
     checkWhatsAppConnection();
     loadSubscription();
+    loadAgendamentoConfig();
     // Check for OAuth callback
     if (window.location.href.includes('google=connected')) {
       setGoogleConnected(true);
@@ -493,6 +510,7 @@ const Settings: React.FC = () => {
   const tabs = [
     { id: 'profile', label: 'Perfil Executivo', icon: User },
     { id: 'integrations', label: 'Conexões Neurais', icon: Globe },
+    { id: 'agendamento', label: 'Agendamento', icon: Clock },
     { id: 'subscription', label: 'Assinatura', icon: CreditCard },
   ];
 
@@ -934,6 +952,134 @@ const Settings: React.FC = () => {
                     <p className="text-sm text-gray-400 mt-2 max-w-md">Sua empresa ainda não possui uma assinatura ativa. Entre em contato com o suporte para ativar seu plano.</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'agendamento' && (
+              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                <div className="flex items-center gap-4 mb-8 pb-8 border-b border-gray-100">
+                  <div className="p-3 bg-emerald-50 rounded-2xl">
+                    <Clock size={24} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Agendamento via IA</h3>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Horário de Brasília • Google Calendar</p>
+                  </div>
+                </div>
+
+                {!agendamentoConfig?.googleConnected && (
+                  <div className="p-6 bg-amber-50 border border-amber-200 rounded-[24px] flex items-start gap-4">
+                    <AlertCircle size={24} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-black text-amber-800 text-sm uppercase">Conecte o Google Calendar</h4>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Para ativar o agendamento automático pela IA, é necessário conectar sua conta Google em <strong>Conexões Neurais</strong>.
+                        A IA irá buscar horários disponíveis no seu calendário e criar eventos automaticamente.
+                      </p>
+                      <button
+                        onClick={() => setActiveTab('integrations')}
+                        className="mt-4 px-4 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 transition-all"
+                      >
+                        Ir para Conexões Neurais
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div>
+                      <p className="font-black text-gray-900 text-sm uppercase">Ativar agendamento</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">A IA poderá buscar horários e criar agendamentos no Google Calendar</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!agendamentoConfig?.canEnable && !agendamentoConfig?.enabled) {
+                          showToast('Conecte o Google Calendar primeiro em Conexões Neurais.', 'error');
+                          return;
+                        }
+                        const next = !agendamentoConfig?.enabled;
+                        setAgendamentoSaving(true);
+                        try {
+                          const updated = await agendamentoService.updateConfig({ enabled: next });
+                          setAgendamentoConfig(updated);
+                          showToast(next ? 'Agendamento ativado!' : 'Agendamento desativado.', 'success');
+                        } catch (e: any) {
+                          showToast(e?.message || 'Erro ao salvar.', 'error');
+                        } finally {
+                          setAgendamentoSaving(false);
+                        }
+                      }}
+                      disabled={!agendamentoConfig?.canEnable && !agendamentoConfig?.enabled}
+                      className={`relative w-14 h-8 rounded-full transition-all ${agendamentoConfig?.enabled ? 'bg-emerald-600' : 'bg-gray-300'} ${(!agendamentoConfig?.canEnable && !agendamentoConfig?.enabled) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-all ${agendamentoConfig?.enabled ? 'left-7' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Horário início (Brasília)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="time"
+                          value={agendamentoConfig?.startTime || '09:00'}
+                          onChange={(e) => setAgendamentoConfig(prev => prev ? { ...prev, startTime: e.target.value } : null)}
+                          onBlur={async () => {
+                            if (agendamentoConfig && (agendamentoConfig.startTime || agendamentoConfig.endTime)) {
+                              setAgendamentoSaving(true);
+                              try {
+                                const updated = await agendamentoService.updateConfig({
+                                  startTime: agendamentoConfig.startTime,
+                                  endTime: agendamentoConfig.endTime
+                                });
+                                setAgendamentoConfig(updated);
+                                showToast('Horários salvos!', 'success');
+                              } catch (e: any) {
+                                showToast(e?.message || 'Erro ao salvar.', 'error');
+                              } finally {
+                                setAgendamentoSaving(false);
+                              }
+                            }
+                          }}
+                          className="flex-1 px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Horário fim (Brasília)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="time"
+                          value={agendamentoConfig?.endTime || '18:00'}
+                          onChange={(e) => setAgendamentoConfig(prev => prev ? { ...prev, endTime: e.target.value } : null)}
+                          onBlur={async () => {
+                            if (agendamentoConfig && (agendamentoConfig.startTime || agendamentoConfig.endTime)) {
+                              setAgendamentoSaving(true);
+                              try {
+                                const updated = await agendamentoService.updateConfig({
+                                  startTime: agendamentoConfig.startTime,
+                                  endTime: agendamentoConfig.endTime
+                                });
+                                setAgendamentoConfig(updated);
+                                showToast('Horários salvos!', 'success');
+                              } catch (e: any) {
+                                showToast(e?.message || 'Erro ao salvar.', 'error');
+                              } finally {
+                                setAgendamentoSaving(false);
+                              }
+                            }
+                          }}
+                          className="flex-1 px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-gray-400">
+                    A IA buscará horários disponíveis no Google Calendar dentro deste intervalo. Ao agendar, o lead informará nome, e-mail e telefone (CPF não é solicitado).
+                  </p>
+                </div>
               </div>
             )}
 

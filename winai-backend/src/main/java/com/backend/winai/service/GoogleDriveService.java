@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.LocalDateTime;
@@ -350,8 +351,79 @@ public class GoogleDriveService {
     }
 
     /**
-     * Delete a calendar event
+     * Get available time slots for a given date, respecting config start/end and existing events.
+     * Returns slots in format "HH:mm" (Brasília).
      */
+    public List<String> getAvailableSlots(Company company, LocalDate date, LocalTime configStart, LocalTime configEnd,
+            int slotDurationMinutes) {
+        List<String> slots = new ArrayList<>();
+        try {
+            GoogleDriveConnection connection = driveConnectionRepository.findByCompany(company)
+                    .orElseThrow(() -> new RuntimeException("Google Calendar não conectado"));
+            if (!connection.isConnected())
+                return slots;
+
+            Calendar service = getCalendarService(connection);
+            ZoneId zone = ZoneId.of("America/Sao_Paulo");
+
+            ZonedDateTime dayStart = date.atTime(configStart).atZone(zone);
+            ZonedDateTime dayEnd = date.atTime(configEnd).atZone(zone);
+            DateTime minTime = new DateTime(dayStart.toInstant().toEpochMilli());
+            DateTime maxTime = new DateTime(dayEnd.toInstant().toEpochMilli());
+
+            List<Event> events = new ArrayList<>();
+            String pageToken = null;
+            do {
+                com.google.api.services.calendar.model.Events result = service.events()
+                        .list("primary")
+                        .setTimeMin(minTime)
+                        .setTimeMax(maxTime)
+                        .setSingleEvents(true)
+                        .setPageToken(pageToken)
+                        .execute();
+                if (result.getItems() != null)
+                    events.addAll(result.getItems());
+                pageToken = result.getNextPageToken();
+            } while (pageToken != null);
+
+            // Build busy intervals (start, end in epoch ms)
+            List<long[]> busy = new ArrayList<>();
+            for (Event ev : events) {
+                if ("cancelled".equals(ev.getStatus()))
+                    continue;
+                EventDateTime start = ev.getStart();
+                EventDateTime end = ev.getEnd();
+                if (start != null && start.getDateTime() != null && end != null && end.getDateTime() != null) {
+                    busy.add(new long[] { start.getDateTime().getValue(), end.getDateTime().getValue() });
+                }
+            }
+
+            // Generate slots every slotDurationMinutes
+            long slotMs = slotDurationMinutes * 60_000L;
+            long current = dayStart.toInstant().toEpochMilli();
+            long endMs = dayEnd.toInstant().toEpochMilli();
+
+            while (current + slotMs <= endMs) {
+                long slotEnd = current + slotMs;
+                boolean overlaps = false;
+                for (long[] b : busy) {
+                    if (current < b[1] && slotEnd > b[0]) {
+                        overlaps = true;
+                        break;
+                    }
+                }
+                if (!overlaps) {
+                    LocalTime lt = Instant.ofEpochMilli(current).atZone(zone).toLocalTime();
+                    slots.add(lt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
+                }
+                current += slotMs;
+            }
+        } catch (Exception e) {
+            log.error("Error fetching available slots", e);
+        }
+        return slots;
+    }
+
     /**
      * Delete a calendar event
      */
