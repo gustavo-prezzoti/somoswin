@@ -595,16 +595,24 @@ public class WhatsAppService {
             }
         }
 
+        // Base URL: usar da conexão da empresa se houver, senão default
+        String fetchBaseUrl = null;
+        var connections = connectionRepository.findByCompanyId(company.getId());
+        if (!connections.isEmpty() && connections.get(0).getInstanceBaseUrl() != null
+                && !connections.get(0).getInstanceBaseUrl().isEmpty()) {
+            fetchBaseUrl = connections.get(0).getInstanceBaseUrl();
+        }
+
         // Verificar status real na API
         boolean isConnected = false;
         String statusText = "Desconectado";
 
         try {
-            List<com.backend.winai.dto.uazap.UazapInstanceDTO> instances = uazapService.fetchInstances();
+            List<com.backend.winai.dto.uazap.UazapInstanceDTO> instances = uazapService.fetchInstances(fetchBaseUrl);
             log.info("SDR Status Check - Empresa: {}. Procurando por: '{}'. Total instâncias: {}",
                     company.getName(), instanceName, instances.size());
 
-            final String searchName = instanceName.toLowerCase();
+            final String searchName = (instanceName != null ? instanceName.trim() : "").toLowerCase();
 
             // 1. Tentar match exato primeiro (Mais seguro)
             log.info("Instâncias disponíveis no Uazap: {}",
@@ -615,20 +623,20 @@ public class WhatsAppService {
 
             com.backend.winai.dto.uazap.UazapInstanceDTO matchingInstance = instances.stream()
                     .filter(inst -> {
-                        String name = inst.getInstanceName() != null ? inst.getInstanceName().toLowerCase() : "";
-                        String id = inst.getInstanceId() != null ? inst.getInstanceId().toLowerCase() : "";
+                        String name = inst.getInstanceName() != null ? inst.getInstanceName().trim().toLowerCase() : "";
+                        String id = inst.getInstanceId() != null ? inst.getInstanceId().trim().toLowerCase() : "";
                         return name.equals(searchName) || id.equals(searchName);
                     })
                     .findFirst()
                     .orElse(null);
 
-            // 2. Fallback para match parcial se necessário
+            // 2. Fallback: match parcial
             if (matchingInstance == null) {
                 matchingInstance = instances.stream()
                         .filter(inst -> {
-                            String name = inst.getInstanceName() != null ? inst.getInstanceName().toLowerCase() : "";
-                            String id = inst.getInstanceId() != null ? inst.getInstanceId().toLowerCase() : "";
-                            return name.contains(searchName) || id.contains(searchName);
+                            String name = inst.getInstanceName() != null ? inst.getInstanceName().trim().toLowerCase() : "";
+                            String id = inst.getInstanceId() != null ? inst.getInstanceId().trim().toLowerCase() : "";
+                            return name.contains(searchName) || id.contains(searchName) || searchName.contains(name) || searchName.contains(id);
                         })
                         .findFirst()
                         .orElse(null);

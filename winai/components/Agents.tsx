@@ -124,7 +124,6 @@ const Agents: React.FC = () => {
     let qrRefreshInterval: NodeJS.Timeout;
 
     if (showQrModal) {
-      // 1. Polling de Status (Tempo Real - 5s)
       const checkStatus = async () => {
         try {
           const status = await whatsappService.getSDRAgentStatus();
@@ -138,7 +137,13 @@ const Agents: React.FC = () => {
         }
       };
 
-      // 2. Refresh do QR Code (A cada 30s)
+      // 1. Verificação imediata ao abrir o modal
+      checkStatus();
+
+      // 2. Polling de status a cada 3s
+      statusInterval = setInterval(checkStatus, 3000);
+
+      // 3. Refresh do QR Code (A cada 30s)
       const refreshQr = async () => {
         try {
           const result = await whatsappService.connectSDRAgent();
@@ -150,8 +155,6 @@ const Agents: React.FC = () => {
           console.error("Erro ao renovar QR Code", e);
         }
       };
-
-      statusInterval = setInterval(checkStatus, 5000);
       qrRefreshInterval = setInterval(refreshQr, 30000);
     }
 

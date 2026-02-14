@@ -530,12 +530,24 @@ public class UazapService {
      * Busca as instâncias disponíveis no UaZap (Evolution API)
      */
     public List<UazapInstanceDTO> fetchInstances() {
+        return fetchInstances(defaultBaseUrl);
+    }
+
+    /**
+     * Busca instâncias de um servidor Uazap específico (para empresas com baseUrl customizado)
+     */
+    public List<UazapInstanceDTO> fetchInstances(String baseUrl) {
+        if (baseUrl == null || baseUrl.trim().isEmpty()) {
+            baseUrl = defaultBaseUrl;
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.set("admintoken", adminToken);
         headers.set("apikey", adminToken);
 
+        String base = baseUrl.replaceAll("/$", "");
+
         // 1. Tentar primeiro endpoint alternativo (/instance/all), que é mais comum
-        String url1 = defaultBaseUrl.replaceAll("/$", "") + "/instance/all";
+        String url1 = base + "/instance/all";
         try {
             return fetchAndParseInstances(url1, headers);
         } catch (Exception e) {
@@ -543,7 +555,7 @@ public class UazapService {
         }
 
         // 2. Tentar endpoint padrão Evolution (/instance/fetchInstances)
-        String url2 = defaultBaseUrl.replaceAll("/$", "") + "/instance/fetchInstances";
+        String url2 = base + "/instance/fetchInstances";
         try {
             return fetchAndParseInstances(url2, headers);
         } catch (Exception e) {
