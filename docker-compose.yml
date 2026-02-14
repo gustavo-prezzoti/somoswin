@@ -84,6 +84,10 @@ services:
       - UAZAP_DEFAULT_INSTANCE=${UAZAP_INSTANCE}
       - UAZAP_ADMIN_TOKEN=${UAZAP_ADMIN_TOKEN}
 
+      # Asaas (Pagamentos)
+      - ASAAS_API_TOKEN=${ASAAS_API_TOKEN}
+      - ASAAS_WEBHOOK_URL=${ASAAS_WEBHOOK_URL:-https://server.somosamplia.com/api/v1/asaas/webhook}
+
       # Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
