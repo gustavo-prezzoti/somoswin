@@ -1037,9 +1037,6 @@ public class UazapService {
         return null;
     }
 
-    /**
-     * Conecta uma instância ao WhatsApp (gera QR code)
-     */
     public Map<String, Object> connectInstance(String instanceName) {
         String instanceToken = fetchInstanceToken(instanceName);
         if (instanceToken == null) {
@@ -1050,56 +1047,78 @@ public class UazapService {
             return errorResponse;
         }
 
-        // Endpoint genérico /instance/connect (sem nome na URL)
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                Map<String, Object> result = doConnectInstance(instanceName, instanceToken);
+                if (result != null) {
+                    return result;
+                }
+            } catch (org.springframework.web.client.HttpClientErrorException e) {
+                int status = e.getStatusCode().value();
+                if (status == 408 || status == 409) {
+                    if (attempt < 3) {
+                        log.info("Retry {} para instância {} (status {})", attempt, instanceName, status);
+                        disconnectInstance(instanceName);
+                        try {
+                            Thread.sleep(2000);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            throw new RuntimeException("Interrompido durante retry", ie);
+                        }
+                    } else {
+                        Map<String, Object> progressResponse = new HashMap<>();
+                        progressResponse.put("status", "connecting");
+                        progressResponse.put("message", "Conexão em progresso. Aguarde o QR code.");
+                        progressResponse.put("instanceName", instanceName);
+                        return progressResponse;
+                    }
+                } else {
+                    log.error("Erro HTTP ao conectar instância no UaZap: {}", e.getMessage());
+                    throw new RuntimeException("Erro ao conectar instância no UaZap: " + e.getMessage(), e);
+                }
+            } catch (Exception e) {
+                if (attempt < 3) {
+                    log.warn("Retry {} para instância {}: {}", attempt, instanceName, e.getMessage());
+                    disconnectInstance(instanceName);
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Interrompido durante retry", ie);
+                    }
+                } else {
+                    log.error("Erro ao conectar instância no UaZap", e);
+                    throw new RuntimeException("Erro ao conectar instância no UaZap: " + e.getMessage(), e);
+                }
+            }
+        }
+
+        Map<String, Object> progressResponse = new HashMap<>();
+        progressResponse.put("status", "connecting");
+        progressResponse.put("message", "Conexão em progresso. Aguarde o QR code.");
+        progressResponse.put("instanceName", instanceName);
+        return progressResponse;
+    }
+
+    private Map<String, Object> doConnectInstance(String instanceName, String instanceToken) {
         String url = defaultBaseUrl.replaceAll("/$", "") + "/instance/connect";
-
-        log.info("Conectando instância ao WhatsApp: {}", instanceName);
-
-        // Headers
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Accept", "application/json");
-        headers.set("token", instanceToken); // Token da instância
-
-        // Body vazio para gerar QR Code
+        headers.set("token", instanceToken);
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(Collections.emptyMap(), headers);
 
-        try {
-            @SuppressWarnings("unchecked")
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.POST,
-                    requestEntity,
-                    (Class<Map<String, Object>>) (Class<?>) Map.class);
+        @SuppressWarnings("unchecked")
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url,
+                HttpMethod.POST,
+                requestEntity,
+                (Class<Map<String, Object>>) (Class<?>) Map.class);
 
-            if (response.getStatusCode().is2xxSuccessful()) {
-                Map<String, Object> responseBody = response.getBody();
-                log.info("Solicitação de conexão enviada com sucesso: {}", instanceName);
-                return responseBody;
-            } else {
-                log.error("Erro ao conectar instância. Status: {}, Body: {}",
-                        response.getStatusCode(), response.getBody());
-                throw new RuntimeException("Erro ao conectar instância no UaZap");
-            }
-        } catch (org.springframework.web.client.HttpClientErrorException e) {
-            // Tratar 408 Request Timeout como "conexão em progresso"
-            // A API UaZap demora para gerar QR code e retorna 408, mas o QR code chega via
-            // webhook
-            if (e.getStatusCode().value() == 408) {
-                log.info("Conexão em progresso para instância {}. QR code será recebido via webhook.", instanceName);
-                Map<String, Object> progressResponse = new HashMap<>();
-                progressResponse.put("status", "connecting");
-                progressResponse.put("message",
-                        "Conexão em progresso. O QR code será enviado via webhook em instantes.");
-                progressResponse.put("instanceName", instanceName);
-                return progressResponse;
-            }
-            log.error("Erro HTTP ao conectar instância no UaZap: {}", e.getMessage());
-            throw new RuntimeException("Erro ao conectar instância no UaZap: " + e.getMessage(), e);
-        } catch (Exception e) {
-            log.error("Erro ao conectar instância no UaZap", e);
-            throw new RuntimeException("Erro ao conectar instância no UaZap: " + e.getMessage(), e);
+        if (response.getStatusCode().is2xxSuccessful()) {
+            return response.getBody();
         }
+        throw new RuntimeException("Erro ao conectar instância no UaZap");
     }
 
     /**

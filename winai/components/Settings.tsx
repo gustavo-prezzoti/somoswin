@@ -178,10 +178,10 @@ const Settings: React.FC = () => {
     }
   };
 
-  // Polling para detecção de conexão e refresh do QR Code
   useEffect(() => {
     let statusInterval: NodeJS.Timeout;
-    let qrRefreshInterval: NodeJS.Timeout;
+    let qrPollInterval: NodeJS.Timeout;
+    let qrErrorCount = 0;
 
     if (showQrModal) {
       const checkStatus = async () => {
@@ -191,61 +191,81 @@ const Settings: React.FC = () => {
             setShowQrModal(false);
             setWhatsappConnected(true);
             showToast('WhatsApp conectado com sucesso!', 'success');
-            checkWhatsAppConnection(); // Atualiza dados da conexão
+            checkWhatsAppConnection();
           }
         } catch (e) {
           console.debug("Erro ao checar status no polling", e);
         }
       };
 
-      // 1. Verificação imediata ao abrir o modal (sem esperar)
-      checkStatus();
-
-      // 2. Polling de status a cada 3s
-      statusInterval = setInterval(checkStatus, 3000);
-
-      // 3. Refresh do QR Code (A cada 30s)
       const refreshQr = async () => {
         try {
+          if (qrErrorCount >= 3) {
+            qrErrorCount = 0;
+            await whatsappService.disconnectSDRAgent();
+            await new Promise(r => setTimeout(r, 2000));
+          }
           const result = await whatsappService.connectSDRAgent();
+          qrErrorCount = 0;
           const qrcode = result.qrcode || result.instance?.qrcode;
           if (qrcode && typeof qrcode === 'string' && qrcode.includes('base64')) {
             setQrCodeData(qrcode);
           }
         } catch (e) {
-          console.error("Erro ao renovar QR Code", e);
+          qrErrorCount++;
+          console.error("Erro ao buscar QR Code", e);
         }
       };
-      qrRefreshInterval = setInterval(refreshQr, 30000);
+
+      checkStatus();
+      refreshQr();
+      statusInterval = setInterval(checkStatus, 2000);
+      qrPollInterval = setInterval(refreshQr, 1000);
     }
 
     return () => {
       if (statusInterval) clearInterval(statusInterval);
-      if (qrRefreshInterval) clearInterval(qrRefreshInterval);
+      if (qrPollInterval) clearInterval(qrPollInterval);
     };
   }, [showQrModal]);
 
   const handleWhatsAppConnect = async () => {
     setIsConnectingWhatsapp(true);
-    try {
-      const result = await whatsappService.connectSDRAgent();
-      const qrcode = result.qrcode || result.instance?.qrcode;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const result = await whatsappService.connectSDRAgent();
+        const qrcode = result.qrcode || result.instance?.qrcode;
 
-      if (qrcode && typeof qrcode === 'string' && qrcode.includes('base64')) {
-        setQrCodeData(qrcode);
-        setShowQrModal(true);
-      } else if (result.status === 'open' || result.status === 'connected') {
-        setWhatsappConnected(true);
-        showToast('WhatsApp já está conectado', 'success');
-      } else {
-        showToast('Solicitação enviada. Verifique seu WhatsApp.', 'info');
+        if (qrcode && typeof qrcode === 'string' && qrcode.includes('base64')) {
+          setQrCodeData(qrcode);
+          setShowQrModal(true);
+          setIsConnectingWhatsapp(false);
+          return;
+        } else if (result.status === 'open' || result.status === 'connected') {
+          setWhatsappConnected(true);
+          showToast('WhatsApp já está conectado', 'success');
+          setIsConnectingWhatsapp(false);
+          return;
+        } else {
+          setQrCodeData(null);
+          setShowQrModal(true);
+          showToast('Aguardando QR Code. Verifique seu WhatsApp em instantes.', 'info');
+          setIsConnectingWhatsapp(false);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to connect whatsapp', error);
+        if (attempt < 3) {
+          try {
+            await whatsappService.disconnectSDRAgent();
+            await new Promise(r => setTimeout(r, 2000));
+          } catch (_) { }
+        } else {
+          showToast('Erro ao conectar WhatsApp', 'error');
+        }
       }
-    } catch (error) {
-      console.error('Failed to connect whatsapp', error);
-      showToast('Erro ao conectar WhatsApp', 'error');
-    } finally {
-      setIsConnectingWhatsapp(false);
     }
+    setIsConnectingWhatsapp(false);
   };
 
   const handleWhatsAppDisconnect = () => {
@@ -1288,7 +1308,7 @@ const Settings: React.FC = () => {
               <div className="w-full flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
                 <RefreshCw size={14} className="text-gray-400" />
                 <p className="text-[10px] font-bold text-gray-400 text-left uppercase tracking-wider leading-relaxed">
-                  O código será atualizado automaticamente a cada <span className="text-emerald-600 italic">10 segundos</span>.
+                  O código será atualizado automaticamente a cada <span className="text-emerald-600 italic">1 segundo</span>.
                 </p>
               </div>
             </div>
