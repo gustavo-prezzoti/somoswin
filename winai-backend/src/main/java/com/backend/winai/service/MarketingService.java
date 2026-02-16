@@ -995,9 +995,12 @@ public class MarketingService {
             }
         }
         if (!adAccountSet) {
+            String userIdForFallback = connection.getMetaUserId() != null ? connection.getMetaUserId() : "me";
             try {
-                String adAccountsUrl = String.format("%s/me/adaccounts?fields=id,name&access_token=%s", metaApiBaseUrl, accessToken);
-                log.info("[fetchDefaultAccounts] Buscando ad accounts via me/adaccounts (fallback)");
+                // Com token Business, "me" resolve para Business (não tem adaccounts). Usar metaUserId explicitamente.
+                String adAccountsUrl = String.format("%s/%s/adaccounts?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, userIdForFallback, accessToken);
+                log.info("[fetchDefaultAccounts] Buscando ad accounts via {}/adaccounts (fallback)", userIdForFallback);
                 ResponseEntity<String> adAccountsResponse = getWithRetry(adAccountsUrl);
                 String adAccountsBody = adAccountsResponse.getBody();
                 JsonNode adAccountsRoot = (adAccountsBody != null) ? objectMapper.readTree(adAccountsBody) : null;
@@ -1008,7 +1011,7 @@ public class MarketingService {
                     adAccountSet = true;
                 }
             } catch (Exception e) {
-                log.warn("[fetchDefaultAccounts] me/adaccounts também falhou: {}", e.getMessage());
+                log.warn("[fetchDefaultAccounts] {}/adaccounts também falhou: {}", userIdForFallback, e.getMessage());
             }
         }
 
@@ -1031,9 +1034,12 @@ public class MarketingService {
             }
         }
         if (!pageSet) {
+            String userIdForPages = connection.getMetaUserId() != null ? connection.getMetaUserId() : "me";
             try {
-                String pagesUrl = String.format("%s/me/accounts?fields=id,name&access_token=%s", metaApiBaseUrl, accessToken);
-                log.info("[fetchDefaultAccounts] Buscando pages via me/accounts (fallback)");
+                // Com token Business, "me" resolve para Business. Usar metaUserId explicitamente.
+                String pagesUrl = String.format("%s/%s/accounts?fields=id,name&access_token=%s",
+                        metaApiBaseUrl, userIdForPages, accessToken);
+                log.info("[fetchDefaultAccounts] Buscando pages via {}/accounts (fallback)", userIdForPages);
                 ResponseEntity<String> pagesResponse = getWithRetry(pagesUrl);
                 JsonNode pagesData = objectMapper.readTree(pagesResponse.getBody()).get("data");
                 if (pagesData != null && pagesData.size() > 0) {
@@ -1042,7 +1048,7 @@ public class MarketingService {
                     pageSet = true;
                 }
             } catch (Exception e) {
-                log.warn("[fetchDefaultAccounts] me/accounts também falhou: {}", e.getMessage());
+                log.warn("[fetchDefaultAccounts] {}/accounts também falhou: {}", userIdForPages, e.getMessage());
             }
         }
 
