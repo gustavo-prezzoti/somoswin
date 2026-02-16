@@ -1,9 +1,12 @@
 package com.backend.winai.controller;
 
+import com.backend.winai.dto.marketing.AiRecommendationDTO;
+import com.backend.winai.dto.marketing.CampaignsListResponse;
 import com.backend.winai.dto.marketing.CreateCampaignRequest;
 import com.backend.winai.dto.marketing.InstagramMetricsResponse;
 import com.backend.winai.dto.marketing.TrafficMetricsResponse;
 import com.backend.winai.entity.User;
+import com.backend.winai.service.MarketingAiRecommendationsService;
 import com.backend.winai.service.MarketingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +21,7 @@ import java.util.Map;
 public class MarketingController {
 
     private final MarketingService marketingService;
+    private final MarketingAiRecommendationsService aiRecommendationsService;
 
     @GetMapping("/metrics")
     public ResponseEntity<TrafficMetricsResponse> getMetrics(@AuthenticationPrincipal User user) {
@@ -30,8 +34,8 @@ public class MarketingController {
     }
 
     @PostMapping("/campaigns")
-    public ResponseEntity<Void> createCampaign(@RequestBody CreateCampaignRequest request) {
-        marketingService.createCampaign(request);
+    public ResponseEntity<Void> createCampaign(@AuthenticationPrincipal User user, @RequestBody CreateCampaignRequest request) {
+        marketingService.createCampaign(user, request);
         return ResponseEntity.ok().build();
     }
 
@@ -69,6 +73,42 @@ public class MarketingController {
     @GetMapping("/details")
     public ResponseEntity<Map<String, Object>> getMetaDetails(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(marketingService.getMetaConnectionDetails(user));
+    }
+
+    @GetMapping("/campaigns")
+    public ResponseEntity<CampaignsListResponse> getCampaigns(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(marketingService.getCampaignsForUser(user));
+    }
+
+    @PatchMapping("/campaigns/{campaignId}/status")
+    public ResponseEntity<Void> updateCampaignStatus(
+            @AuthenticationPrincipal User user,
+            @PathVariable String campaignId,
+            @RequestParam String status) {
+        marketingService.updateCampaignStatus(user, campaignId, status);
+        return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/campaigns/{campaignId}/budget")
+    public ResponseEntity<Void> increaseCampaignBudget(
+            @AuthenticationPrincipal User user,
+            @PathVariable String campaignId,
+            @RequestParam(defaultValue = "20") int percent) {
+        marketingService.increaseCampaignBudget(user, campaignId, percent);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/ai-recommendations")
+    public ResponseEntity<java.util.List<AiRecommendationDTO>> getAiRecommendations(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(aiRecommendationsService.getRecommendations(user));
+    }
+
+    @PostMapping("/ai-recommendations/apply")
+    public ResponseEntity<Void> applyAiRecommendation(
+            @AuthenticationPrincipal User user,
+            @RequestBody AiRecommendationDTO recommendation) {
+        aiRecommendationsService.applyRecommendation(user, recommendation);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/disconnect")

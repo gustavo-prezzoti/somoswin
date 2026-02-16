@@ -1,5 +1,7 @@
 package com.backend.winai.service;
 
+import com.backend.winai.dto.marketing.CampaignListItemDTO;
+import com.backend.winai.dto.marketing.CampaignsListResponse;
 import com.backend.winai.dto.marketing.CreateCampaignRequest;
 import com.backend.winai.dto.marketing.InstagramMetricsResponse;
 import com.backend.winai.dto.marketing.TrafficMetricsResponse;
@@ -13,15 +15,17 @@ import com.backend.winai.repository.MetaCampaignRepository;
 import com.backend.winai.repository.MetaConnectionRepository;
 import com.backend.winai.repository.MetaInsightRepository;
 import com.backend.winai.repository.CompanyRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -119,6 +123,210 @@ public class MarketingService {
         } catch (Exception e) {
             log.error("Error fetching RealTimeCampaigns for company {}", company.getId(), e);
             return new ArrayList<>();
+        }
+    }
+
+    public CampaignsListResponse getCampaignsForUser(User user) {
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
+        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()
+                || connectionOpt.get().getAdAccountId() == null) {
+            return CampaignsListResponse.builder()
+                    .campaigns(new ArrayList<>())
+                    .accountName(null)
+                    .build();
+        }
+
+        MetaConnection conn = connectionOpt.get();
+        String accessToken = conn.getAccessToken();
+        String accountName = "Conta de Anúncios";
+
+        try {
+            String adAccountUrl = String.format("%s/%s?fields=name&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(), accessToken);
+            ResponseEntity<String> accResponse = getWithRetry(adAccountUrl);
+            if (accResponse.getBody() != null) {
+                JsonNode accNode = objectMapper.readTree(accResponse.getBody());
+                if (accNode.has("name")) accountName = accNode.get("name").asText();
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch account name: {}", e.getMessage());
+        }
+
+        try {
+            String url = String.format(
+                    "%s/%s/campaigns?fields=id,name,status,objective,daily_budget,insights%%7Bspend,impressions,reach,clicks,ctr,actions%%7D&date_preset=last_30d&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(), accessToken);
+
+            ResponseEntity<String> response = getWithRetry(url);
+            String responseBody = response.getBody();
+            if (responseBody == null) return CampaignsListResponse.builder().campaigns(new ArrayList<>()).accountName(accountName).build();
+
+            JsonNode data = objectMapper.readTree(responseBody).get("data");
+            List<CampaignListItemDTO> result = new ArrayList<>();
+
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    String id = node.get("id").asText();
+                    String name = node.has("name") ? node.get("name").asText() : "Campanha";
+                    String status = node.has("status") ? node.get("status").asText() : "UNKNOWN";
+                    String objective = node.has("objective") ? node.get("objective").asText() : "";
+
+                    double dailyBudget = 0.0;
+                    if (node.has("daily_budget")) {
+                        dailyBudget = node.get("daily_budget").asDouble() / 100.0;
+                    }
+
+                    double spend = 0.0;
+                    long impressions = 0;
+                    long reach = 0;
+                    double ctr = 0.0;
+                    long conversions = 0;
+
+                    if (node.has("insights") && node.get("insights").has("data")) {
+                        JsonNode insights = node.get("insights").get("data");
+                        if (insights.isArray() && insights.size() > 0) {
+                            JsonNode i = insights.get(0);
+                            spend = i.has("spend") ? i.get("spend").asDouble() : 0.0;
+                            impressions = i.has("impressions") ? i.get("impressions").asLong() : 0;
+                            reach = i.has("reach") ? i.get("reach").asLong() : impressions;
+                            ctr = i.has("ctr") ? Double.parseDouble(i.get("ctr").asText().replace("%", "")) : 0.0;
+                            if (i.has("actions")) {
+                                for (JsonNode action : i.get("actions")) {
+                                    String at = action.get("action_type").asText();
+                                    if ("onsite_conversion.messaging_conversation_started_7d".equals(at) || "lead".equals(at)) {
+                                        conversions += action.get("value").asLong();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (dailyBudget <= 0) {
+                        try {
+                            String adsetsUrl = String.format("%s/%s/adsets?fields=daily_budget&access_token=%s",
+                                    metaApiBaseUrl, id, accessToken);
+                            ResponseEntity<String> asRes = getWithRetry(adsetsUrl);
+                            if (asRes.getBody() != null) {
+                                JsonNode asData = objectMapper.readTree(asRes.getBody()).get("data");
+                                if (asData != null && asData.isArray()) {
+                                    for (JsonNode as : asData) {
+                                        if (as.has("daily_budget")) {
+                                            dailyBudget += as.get("daily_budget").asDouble() / 100.0;
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                    }
+
+                    double cpl = conversions > 0 ? spend / conversions : 0;
+
+                    String objectiveLabel = mapObjective(objective);
+
+                    result.add(CampaignListItemDTO.builder()
+                            .id(id)
+                            .name(name)
+                            .status(status)
+                            .objective(objectiveLabel)
+                            .accountName(accountName)
+                            .accountId(conn.getAdAccountId())
+                            .dailyBudget(dailyBudget > 0 ? dailyBudget : null)
+                            .spend(spend)
+                            .impressions(impressions)
+                            .reach(reach)
+                            .ctr(ctr)
+                            .conversions(conversions)
+                            .cpl(cpl > 0 ? cpl : null)
+                            .build());
+                }
+            }
+
+            return CampaignsListResponse.builder()
+                    .campaigns(result)
+                    .accountName(accountName)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error fetching campaigns for user", e);
+            return CampaignsListResponse.builder()
+                    .campaigns(new ArrayList<>())
+                    .accountName(accountName)
+                    .build();
+        }
+    }
+
+    private String mapObjective(String obj) {
+        if (obj == null) return "OUTROS";
+        return switch (obj.toUpperCase()) {
+            case "OUTCOME_LEADS", "LEAD_GENERATION" -> "LEADS";
+            case "OUTCOME_SALES", "CONVERSIONS" -> "VENDAS";
+            case "OUTCOME_TRAFFIC", "LINK_CLICKS" -> "TRÁFEGO";
+            case "OUTCOME_ENGAGEMENT", "POST_ENGAGEMENT" -> "ENGAJAMENTO";
+            case "OUTCOME_AWARENESS", "BRAND_AWARENESS" -> "ALCANCE";
+            default -> "OUTROS";
+        };
+    }
+
+    public void updateCampaignStatus(User user, String campaignId, String status) {
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        MetaConnection conn = metaConnectionRepository.findByCompany(company)
+                .filter(MetaConnection::isConnected)
+                .orElseThrow(() -> new RuntimeException("Meta Ads não conectado"));
+
+        String url = metaApiBaseUrl + "/" + campaignId;
+        String body = "status=" + ( "ACTIVE".equalsIgnoreCase(status) ? "ACTIVE" : "PAUSED" );
+
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            HttpEntity<String> entity = new HttpEntity<>(body + "&access_token=" + conn.getAccessToken(), headers);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            log.info("Campaign {} status updated to {}", campaignId, status);
+        } catch (Exception e) {
+            log.error("Error updating campaign status: {}", e.getMessage());
+            throw new RuntimeException("Erro ao atualizar status da campanha: " + e.getMessage());
+        }
+    }
+
+    public void increaseCampaignBudget(User user, String campaignId, int percentIncrease) {
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        MetaConnection conn = metaConnectionRepository.findByCompany(company)
+                .filter(MetaConnection::isConnected)
+                .orElseThrow(() -> new RuntimeException("Meta Ads não conectado"));
+
+        try {
+            String adsetsUrl = String.format("%s/%s/adsets?fields=id,daily_budget&access_token=%s",
+                    metaApiBaseUrl, campaignId, conn.getAccessToken());
+            ResponseEntity<String> asRes = getWithRetry(adsetsUrl);
+            if (asRes.getBody() == null) throw new RuntimeException("Nenhum ad set encontrado");
+
+            JsonNode asData = objectMapper.readTree(asRes.getBody()).get("data");
+            if (asData == null || !asData.isArray()) throw new RuntimeException("Nenhum ad set encontrado");
+
+            double factor = 1 + (percentIncrease / 100.0);
+            for (JsonNode as : asData) {
+                String adsetId = as.get("id").asText();
+                long currentBudget = as.has("daily_budget") ? as.get("daily_budget").asLong() : 0;
+                if (currentBudget <= 0) continue;
+                long newBudget = Math.round(currentBudget * factor);
+                newBudget = Math.max(newBudget, 100);
+
+                String updateUrl = metaApiBaseUrl + "/" + adsetId;
+                String body = "daily_budget=" + newBudget + "&access_token=" + conn.getAccessToken();
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+                HttpEntity<String> entity = new HttpEntity<>(body, headers);
+                restTemplate.exchange(updateUrl, HttpMethod.POST, entity, String.class);
+            }
+            log.info("Campaign {} budget increased by {}%", campaignId, percentIncrease);
+        } catch (Exception e) {
+            log.error("Error increasing campaign budget: {}", e.getMessage());
+            throw new RuntimeException("Erro ao aumentar orçamento: " + e.getMessage());
         }
     }
 
@@ -840,9 +1048,259 @@ public class MarketingService {
 
     // Methods removed
 
-    public void createCampaign(CreateCampaignRequest request) {
-        // Implementation for campaign creation...
-        log.info("Creating campaign: {}", request.getName());
+    /**
+     * Cria campanha completa no Meta Ads API: Campaign -> Ad Set -> Ad Creative -> Ad.
+     * Documentação: https://developers.facebook.com/docs/marketing-api/get-started/basic-ad-creation/
+     */
+    public void createCampaign(User user, CreateCampaignRequest request) {
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        MetaConnection conn = metaConnectionRepository.findByCompany(company)
+                .filter(MetaConnection::isConnected)
+                .orElseThrow(() -> new RuntimeException("Conecte sua conta Meta Ads em Configurações antes de criar campanhas"));
+
+        if (conn.getAdAccountId() == null || conn.getAdAccountId().isBlank()) {
+            throw new RuntimeException("Conta de anúncios não configurada. Reconecte o Meta Ads.");
+        }
+        if (conn.getPageId() == null || conn.getPageId().isBlank()) {
+            throw new RuntimeException("Página do Facebook não vinculada. Reconecte o Meta Ads e autorize a página.");
+        }
+
+        String accessToken = conn.getAccessToken();
+        String adAccountId = conn.getAdAccountId();
+        String pageId = conn.getPageId();
+
+        validateRequest(request);
+
+        String objective = request.getObjective();
+        if (objective == null || objective.isBlank()) objective = "LINK_CLICKS";
+
+        long budgetCents = Math.round((request.getDailyBudget() != null ? request.getDailyBudget() : 50.0) * 100);
+        budgetCents = Math.max(budgetCents, 100); // Mínimo R$ 1,00
+
+        int ageMin = request.getAgeMin() != null ? request.getAgeMin() : 18;
+        int ageMax = request.getAgeMax() != null ? request.getAgeMax() : 65;
+        ageMin = Math.max(18, Math.min(65, ageMin));
+        ageMax = Math.max(18, Math.min(65, ageMax));
+        if (ageMax < ageMin) ageMax = ageMin;
+
+        String country = (request.getCountryCode() != null && !request.getCountryCode().isBlank())
+                ? request.getCountryCode().toUpperCase().substring(0, 2) : "BR";
+
+        try {
+            adaptiveThrottle();
+
+            // 1. Criar Campaign
+            String campaignId = createMetaCampaign(adAccountId, accessToken, request.getName(), objective);
+            log.info("[META] Campaign created: {}", campaignId);
+
+            // 2. Criar Ad Set
+            String optimizationGoal = mapOptimizationGoal(objective);
+            String adSetId = createMetaAdSet(adAccountId, accessToken, campaignId, pageId,
+                    budgetCents, country, ageMin, ageMax, optimizationGoal);
+            log.info("[META] Ad Set created: {}", adSetId);
+
+            // 3. Obter image_hash (upload via adimages) ou usar picture URL
+            String adImageHash = null;
+            if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
+                try {
+                    adImageHash = uploadAdImage(adAccountId, accessToken, request.getImageUrl());
+                } catch (Exception e) {
+                    log.warn("[META] Image upload failed, will try picture URL: {}", e.getMessage());
+                }
+            }
+
+            // 4. Criar Ad Creative
+            String creativeId = createMetaAdCreative(adAccountId, accessToken, pageId,
+                    request.getAdMessage(), request.getDestinationUrl(), request.getHeadline(),
+                    adImageHash, request.getImageUrl());
+            log.info("[META] Ad Creative created: {}", creativeId);
+
+            // 5. Criar Ad
+            createMetaAd(adAccountId, accessToken, adSetId, creativeId, request.getName());
+            log.info("[META] Ad created successfully for campaign: {}", request.getName());
+
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            String body = e.getResponseBodyAsString();
+            log.error("[META] API Error creating campaign: {} - {}", e.getStatusCode(), body);
+            throw new RuntimeException(com.backend.winai.util.ErrorHelper.normalizeMessage(body));
+        } catch (Exception e) {
+            log.error("[META] Error creating campaign", e);
+            throw new RuntimeException(e.getMessage() != null ? e.getMessage() : "Erro ao criar campanha no Meta Ads");
+        }
+    }
+
+    private static String serializeToJson(ObjectMapper mapper, Object obj) {
+        try {
+            return mapper.writeValueAsString(obj);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("JSON serialization failed", e);
+        }
+    }
+
+    private void validateRequest(CreateCampaignRequest r) {
+        if (r.getName() == null || r.getName().isBlank()) {
+            throw new RuntimeException("Nome da campanha é obrigatório");
+        }
+        if (r.getAdMessage() == null || r.getAdMessage().isBlank()) {
+            throw new RuntimeException("Texto do anúncio é obrigatório");
+        }
+        if (r.getDestinationUrl() == null || r.getDestinationUrl().isBlank()) {
+            throw new RuntimeException("URL de destino é obrigatória");
+        }
+        if (r.getImageUrl() == null || r.getImageUrl().isBlank()) {
+            throw new RuntimeException("Imagem do anúncio é obrigatória");
+        }
+    }
+
+    private String mapOptimizationGoal(String objective) {
+        return switch (objective != null ? objective.toUpperCase() : "") {
+            case "OUTCOME_LEADS" -> "LEAD_GENERATION";
+            case "OUTCOME_SALES" -> "OUTCOME_CONVERSIONS";
+            case "OUTCOME_ENGAGEMENT" -> "POST_ENGAGEMENT";
+            case "OUTCOME_AWARENESS" -> "REACH";
+            default -> "LINK_CLICKS";
+        };
+    }
+
+    private String createMetaCampaign(String adAccountId, String accessToken, String name, String objective) {
+        String url = metaApiBaseUrl + "/" + adAccountId + "/campaigns";
+        Map<String, Object> params = new HashMap<>();
+        params.put("name", name);
+        params.put("objective", objective);
+        params.put("status", "PAUSED");
+        params.put("special_ad_categories", "[]");
+        params.put("access_token", accessToken);
+
+        ResponseEntity<String> res = postForm(url, params);
+        String body = res.getBody();
+        if (body == null) throw new RuntimeException("Meta API: Empty response");
+        JsonNode node = objectMapper.readTree(body);
+        if (node.has("id")) return node.get("id").asText();
+        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Campaign creation failed"));
+    }
+
+    private String createMetaAdSet(String adAccountId, String accessToken, String campaignId, String pageId,
+                                   long dailyBudgetCents, String country, int ageMin, int ageMax, String optimizationGoal) {
+        String url = metaApiBaseUrl + "/" + adAccountId + "/adsets";
+
+        Map<String, Object> targeting = new HashMap<>();
+        Map<String, Object> geo = new HashMap<>();
+        geo.put("countries", List.of(country));
+        targeting.put("geo_locations", geo);
+        targeting.put("age_min", ageMin);
+        targeting.put("age_max", ageMax);
+
+        Map<String, Object> promotedObject = new HashMap<>();
+        promotedObject.put("page_id", pageId);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("name", "Ad Set - " + System.currentTimeMillis());
+        params.put("campaign_id", campaignId);
+        params.put("daily_budget", dailyBudgetCents);
+        params.put("targeting", serializeToJson(objectMapper, targeting));
+        params.put("optimization_goal", optimizationGoal);
+        params.put("billing_event", "IMPRESSIONS");
+        params.put("promoted_object", serializeToJson(objectMapper, promotedObject));
+        params.put("status", "PAUSED");
+        params.put("access_token", accessToken);
+
+        ResponseEntity<String> res = postForm(url, params);
+        JsonNode node = objectMapper.readTree(res.getBody());
+        if (node.has("id")) return node.get("id").asText();
+        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad Set creation failed"));
+    }
+
+    private String uploadAdImage(String adAccountId, String accessToken, String imageUrl) {
+        String url = metaApiBaseUrl + "/" + adAccountId + "/adimages";
+        Map<String, Object> params = new HashMap<>();
+        params.put("url", imageUrl);
+        params.put("access_token", accessToken);
+
+        ResponseEntity<String> res = postForm(url, params);
+        JsonNode node = objectMapper.readTree(res.getBody());
+        if (node.has("images")) {
+            JsonNode images = node.get("images");
+            var it = images.fields();
+            while (it.hasNext()) {
+                JsonNode imgNode = it.next().getValue();
+                if (imgNode.has("hash")) return imgNode.get("hash").asText();
+            }
+        }
+        throw new RuntimeException("Meta API: Falha ao fazer upload da imagem. Use uma URL pública de imagem.");
+    }
+
+    private String createMetaAdCreative(String adAccountId, String accessToken, String pageId,
+                                       String message, String link, String headline,
+                                       String imageHash, String imageUrl) {
+        String url = metaApiBaseUrl + "/" + adAccountId + "/adcreatives";
+
+        Map<String, Object> linkData = new HashMap<>();
+        linkData.put("message", message != null ? message : "Confira!");
+        linkData.put("link", link != null ? link : "https://www.facebook.com");
+        if (headline != null && !headline.isBlank()) linkData.put("name", headline);
+        if (imageHash != null) {
+            linkData.put("image_hash", imageHash);
+        } else if (imageUrl != null && !imageUrl.isBlank()) {
+            linkData.put("picture", imageUrl);
+        } else {
+            throw new RuntimeException("Imagem é obrigatória para o criativo");
+        }
+        Map<String, Object> cta = new HashMap<>();
+        cta.put("type", "LEARN_MORE");
+        cta.put("value", Map.of("link", link != null ? link : "https://www.facebook.com"));
+        linkData.put("call_to_action", cta);
+
+        Map<String, Object> objectStorySpec = new HashMap<>();
+        objectStorySpec.put("page_id", pageId);
+        objectStorySpec.put("link_data", linkData);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("name", "Creative - " + System.currentTimeMillis());
+        params.put("object_story_spec", serializeToJson(objectMapper, objectStorySpec));
+        params.put("access_token", accessToken);
+
+        ResponseEntity<String> res = postForm(url, params);
+        JsonNode node = objectMapper.readTree(res.getBody());
+        if (node.has("id")) return node.get("id").asText();
+        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad Creative creation failed"));
+    }
+
+    private void createMetaAd(String adAccountId, String accessToken, String adSetId, String creativeId, String name) {
+        String url = metaApiBaseUrl + "/" + adAccountId + "/ads";
+
+        Map<String, Object> creative = new HashMap<>();
+        creative.put("creative_id", creativeId);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("name", name);
+        params.put("adset_id", adSetId);
+        params.put("creative", serializeToJson(objectMapper, creative));
+        params.put("status", "PAUSED");
+        params.put("access_token", accessToken);
+
+        ResponseEntity<String> res = postForm(url, params);
+        JsonNode node = objectMapper.readTree(res.getBody());
+        if (node.has("id")) return;
+        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad creation failed"));
+    }
+
+    private ResponseEntity<String> postForm(String url, Map<String, Object> params) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        StringBuilder body = new StringBuilder();
+        params.forEach((k, v) -> {
+            if (body.length() > 0) body.append("&");
+            try {
+                body.append(java.net.URLEncoder.encode(k, "UTF-8")).append("=");
+                body.append(java.net.URLEncoder.encode(v != null ? v.toString() : "", "UTF-8"));
+            } catch (java.io.UnsupportedEncodingException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        HttpEntity<String> entity = new HttpEntity<>(body.toString(), headers);
+        return restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
     }
 
     private TrafficMetricsResponse mapToResponse(JsonNode historyData) {

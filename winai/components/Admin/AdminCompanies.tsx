@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter, CreditCard, Info, DollarSign, ExternalLink, XCircle, Calendar } from 'lucide-react';
 import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest, Plan, asaasService } from '../../services/adminService';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 
 // Função para aplicar máscara de CPF ou CNPJ
@@ -114,7 +115,7 @@ const AdminCompanies: React.FC = () => {
             showToast(mode === 'create' ? 'Empresa criada com sucesso.' : 'Empresa atualizada com sucesso.');
         } catch (error: any) {
             console.error('Failed to save company:', error);
-            showToast('Ocorreu um erro ao salvar a empresa.', 'error');
+            showToast(getErrorMessage(error, 'Ocorreu um erro ao salvar a empresa.'), 'error');
             throw error;
         }
     };
@@ -329,7 +330,7 @@ const AdminCompanies: React.FC = () => {
                     showToast('Empresa excluída com sucesso.');
                 } catch (error: any) {
                     console.error('Failed to delete company:', error);
-                    showToast('Não foi possível excluir a empresa.', 'error');
+                    showToast(getErrorMessage(error, 'Não foi possível excluir a empresa.'), 'error');
                 }
             }
         });
@@ -500,7 +501,7 @@ const AdminCompanies: React.FC = () => {
                                                     fetchCompanies();
                                                 } catch (error: any) {
                                                     console.error('Erro ao criar assinatura:', error);
-                                                    showToast('Erro ao criar assinatura no Asaas.', 'error');
+                                                    showToast(getErrorMessage(error, 'Erro ao criar assinatura no Asaas.'), 'error');
                                                 }
                                             }
                                         });
@@ -522,8 +523,8 @@ const AdminCompanies: React.FC = () => {
                                                 } else {
                                                     showToast('Nenhum link de pagamento disponível.', 'error');
                                                 }
-                                            } catch {
-                                                showToast('Erro ao buscar link de pagamento.', 'error');
+                                            } catch (error) {
+                                                showToast(getErrorMessage(error, 'Erro ao buscar link de pagamento.'), 'error');
                                             }
                                         }}
                                         className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-50 text-blue-700 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all"
@@ -542,8 +543,8 @@ const AdminCompanies: React.FC = () => {
                                                         await asaasService.cancelSubscription(company.id);
                                                         showToast('Assinatura cancelada.');
                                                         fetchCompanies();
-                                                    } catch {
-                                                        showToast('Erro ao cancelar assinatura.', 'error');
+                                                    } catch (error) {
+                                                        showToast(getErrorMessage(error, 'Erro ao cancelar assinatura.'), 'error');
                                                     }
                                                 }
                                             });

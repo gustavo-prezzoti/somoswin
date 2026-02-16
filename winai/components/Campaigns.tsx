@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { DollarSign, Eye, MousePointerClick, MessageSquare, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Link as LinkIcon, Database, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2 } from 'lucide-react';
+import { DollarSign, Eye, MousePointerClick, MessageSquare, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Link as LinkIcon, Database, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { marketingService, TrafficMetrics, CreateCampaignRequest } from '../services';
+import { marketingService, TrafficMetrics, CreateCampaignRequest, CampaignListItem, AiRecommendation } from '../services';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import DriveFileSelector from './DriveFileSelector';
 import { DriveFile } from '../services/api/google-drive.service';
@@ -55,16 +55,27 @@ const Campaigns: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
-  // Form states
+  // Campaign list & AI recommendations (Gestão tab)
+  const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [recommendations, setRecommendations] = useState<AiRecommendation[]>([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Form states - campos conforme Meta Ads API
   const [formData, setFormData] = useState<CreateCampaignRequest>({
     name: '',
-    objective: 'Vendas (Conversão Direta)',
-    dailyBudget: 0,
-    location: '',
-    ageRange: 'Todos (18 - 65+)',
+    objective: 'LINK_CLICKS',
+    dailyBudget: 50,
+    countryCode: 'BR',
+    ageMin: 18,
+    ageMax: 65,
     interests: '',
-    creativeType: 'DRIVE',
-    creativeSource: ''
+    adMessage: '',
+    destinationUrl: '',
+    imageUrl: '',
+    headline: ''
   });
 
   const steps = [
@@ -77,6 +88,70 @@ const Campaigns: React.FC = () => {
     loadMetrics();
     loadChats();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'GESTAO') {
+      if (isMetaConnected) loadCampaigns();
+      loadRecommendations();
+    }
+  }, [activeTab, isMetaConnected]);
+
+  const loadCampaigns = async () => {
+    if (!isMetaConnected) return;
+    setCampaignsLoading(true);
+    try {
+      const res = await marketingService.getCampaigns();
+      setCampaigns(res.campaigns || []);
+    } catch (e) {
+      console.error('Failed to load campaigns', e);
+      setCampaigns([]);
+    } finally {
+      setCampaignsLoading(false);
+    }
+  };
+
+  const loadRecommendations = async () => {
+    setRecommendationsLoading(true);
+    try {
+      const data = await marketingService.getAiRecommendations();
+      setRecommendations(data || []);
+    } catch (e) {
+      console.error('Failed to load recommendations', e);
+      setRecommendations([]);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  };
+
+  const handleToggleCampaign = async (c: CampaignListItem) => {
+    const newStatus = c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    setTogglingId(c.id);
+    try {
+      await marketingService.updateCampaignStatus(c.id, newStatus as 'ACTIVE' | 'PAUSED');
+      await loadCampaigns();
+      await loadRecommendations();
+    } catch (e) {
+      console.error('Failed to update status', e);
+      alert((e as Error)?.message || 'Erro ao atualizar status');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleApplyRecommendation = async (rec: AiRecommendation) => {
+    if (rec.actionType === 'CONNECT') return;
+    setApplyingId(rec.id);
+    try {
+      await marketingService.applyAiRecommendation(rec);
+      await loadCampaigns();
+      await loadRecommendations();
+    } catch (e) {
+      console.error('Failed to apply recommendation', e);
+      alert((e as Error)?.message || 'Erro ao aplicar recomendação');
+    } finally {
+      setApplyingId(null);
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'TRAFFIC_ADVISOR') {
@@ -194,11 +269,11 @@ const Campaigns: React.FC = () => {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'dailyBudget' ? parseFloat(value) || 0 : value
+      [name]: name === 'dailyBudget' ? parseFloat(value) || 0 : name === 'ageMin' || name === 'ageMax' ? parseInt(value, 10) || 18 : value
     }));
   };
 
@@ -215,13 +290,19 @@ const Campaigns: React.FC = () => {
   };
 
   const handleCreate = async () => {
+    if (!formData.adMessage?.trim() || !formData.destinationUrl?.trim() || !formData.imageUrl?.trim()) {
+      alert('Preencha texto do anúncio, URL de destino e URL da imagem.');
+      return;
+    }
     setIsSaving(true);
     try {
       await marketingService.createCampaign(formData);
       setCurrentStep(3);
+      if (isMetaConnected) loadCampaigns();
     } catch (err: any) {
       console.error('Erro ao criar campanha:', err);
-      alert(err.response?.data?.message || 'Erro ao criar campanha. Tente novamente.');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Erro ao criar campanha. Verifique se o Meta Ads está conectado e os dados estão corretos.';
+      alert(msg);
     } finally {
       setIsSaving(false);
     }
@@ -232,13 +313,16 @@ const Campaigns: React.FC = () => {
     setCurrentStep(0);
     setFormData({
       name: '',
-      objective: 'Vendas (Conversão Direta)',
-      dailyBudget: 0,
-      location: '',
-      ageRange: 'Todos (18 - 65+)',
+      objective: 'LINK_CLICKS',
+      dailyBudget: 50,
+      countryCode: 'BR',
+      ageMin: 18,
+      ageMax: 65,
       interests: '',
-      creativeType: 'DRIVE',
-      creativeSource: ''
+      adMessage: '',
+      destinationUrl: '',
+      imageUrl: '',
+      headline: ''
     });
     setSelectedDriveFile(null);
   };
@@ -360,6 +444,103 @@ const Campaigns: React.FC = () => {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
+            </div>
+
+            {/* OPERAÇÃO ATIVA • REAL-TIME CORE - Lista de Campanhas */}
+            {isMetaConnected && (
+              <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic">Operação Ativa • Real-Time Core</h2>
+                  <button onClick={loadCampaigns} disabled={campaignsLoading} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500 disabled:opacity-50">
+                    <RefreshCw size={18} className={campaignsLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+                {campaignsLoading ? (
+                  <div className="flex justify-center py-12"><Loader2 className="animate-spin text-emerald-600" size={32} /></div>
+                ) : campaigns.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500 font-medium">Nenhuma campanha encontrada. Conecte sua conta Meta Ads e crie campanhas.</div>
+                ) : (
+                  <div className="space-y-4">
+                    {campaigns.map((c) => (
+                      <div key={c.id} className="flex flex-wrap items-center gap-4 p-5 rounded-2xl border border-gray-100 hover:border-emerald-100 transition-all bg-gray-50/30">
+                        <button
+                          onClick={() => handleToggleCampaign(c)}
+                          disabled={togglingId === c.id}
+                          className={`relative w-12 h-6 rounded-full transition-colors ${c.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                        >
+                          <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${c.status === 'ACTIVE' ? 'left-7' : 'left-1'}`} />
+                        </button>
+                        <div className="flex-1 min-w-[180px]">
+                          <p className="font-bold text-gray-900 text-sm">{c.name}</p>
+                          <p className={`text-[10px] font-black uppercase ${c.status === 'ACTIVE' ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            {c.status === 'ACTIVE' ? 'VEICULANDO' : 'PAUSADA'}
+                          </p>
+                        </div>
+                        <span className="px-3 py-1 rounded-lg bg-gray-200 text-[10px] font-black uppercase text-gray-600">{c.objective || 'OUTROS'}</span>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">Orçamento diário</p>
+                          <p className="font-bold text-gray-900">{c.dailyBudget != null ? `R$ ${c.dailyBudget.toFixed(2)}` : '-'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">Gasto total</p>
+                          <p className="font-bold text-gray-900">R$ {c.spend.toFixed(2)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">Impressões / CTR</p>
+                          <p className="font-bold text-gray-900">{c.impressions?.toLocaleString() || 0} / {c.ctr != null ? `${c.ctr.toFixed(1)}%` : '-'}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                            <MessageSquare size={14} />
+                          </div>
+                          <span className="font-bold text-gray-900">{c.conversions || 0}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">CPL</p>
+                          <p className="font-bold text-gray-900">{c.cpl != null ? `R$ ${c.cpl.toFixed(2)}` : '-'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* OTIMIZAÇÕES NEURAIS */}
+            <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
+              <div className="mb-6">
+                <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic">Otimizações Neurais</h2>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Ações recomendadas pela IA AMPLIA</p>
+              </div>
+              {recommendationsLoading ? (
+                <div className="flex justify-center py-12"><Loader2 className="animate-spin text-emerald-600" size={32} /></div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {recommendations.slice(0, 3).map((rec) => {
+                    const isScale = rec.type === 'SCALE';
+                    const isPause = rec.type === 'PAUSE';
+                    const isConnect = rec.actionType === 'CONNECT';
+                    const btnBg = isScale ? 'bg-emerald-600 hover:bg-emerald-700' : isPause ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-500 hover:bg-amber-600';
+                    const Icon = isScale ? TrendingUp : isPause ? TrendingDown : AlertTriangle;
+                    return (
+                      <div key={rec.id} className="p-6 rounded-2xl border border-gray-100 bg-gray-50/50 hover:shadow-lg transition-all">
+                        <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center mb-4">
+                          <Icon size={20} className="text-gray-600" />
+                        </div>
+                        <h3 className="font-black text-gray-900 uppercase text-sm mb-2">{rec.title}</h3>
+                        <p className="text-xs text-gray-600 leading-relaxed mb-4">{rec.description}</p>
+                        <button
+                          onClick={() => handleApplyRecommendation(rec)}
+                          disabled={isConnect || applyingId === rec.id}
+                          className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-white transition-all disabled:opacity-50 ${btnBg}`}
+                        >
+                          {applyingId === rec.id ? <Loader2 size={14} className="animate-spin inline" /> : rec.actionLabel}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -559,11 +740,12 @@ const Campaigns: React.FC = () => {
             {/* Content Body */}
             <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
 
-              {/* STEP 0: DADOS */}
+              {/* STEP 0: DADOS BÁSICOS - Meta Ads API */}
               {currentStep === 0 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                  <p className="text-[10px] text-gray-500 font-bold">Campos conforme Meta Ads API. Conecte o Meta Ads em Configurações antes de criar.</p>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do Anúncio</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome da Campanha</label>
                     <input
                       name="name"
                       value={formData.name}
@@ -574,21 +756,22 @@ const Campaigns: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Objetivo do Anúncio</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Objetivo (Meta API)</label>
                     <select
                       name="objective"
                       value={formData.objective}
                       onChange={handleInputChange}
                       className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
                     >
-                      <option>Vendas (Conversão Direta)</option>
-                      <option>Leads (WhatsApp/Formulário)</option>
-                      <option>Engajamento (Social Growth)</option>
-                      <option>Tráfego para Site</option>
+                      <option value="LINK_CLICKS">Tráfego (LINK_CLICKS)</option>
+                      <option value="OUTCOME_LEADS">Leads (OUTCOME_LEADS)</option>
+                      <option value="OUTCOME_SALES">Vendas / Conversões (OUTCOME_SALES)</option>
+                      <option value="OUTCOME_ENGAGEMENT">Engajamento (OUTCOME_ENGAGEMENT)</option>
+                      <option value="OUTCOME_AWARENESS">Alcance (OUTCOME_AWARENESS)</option>
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento Diário</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento Diário (R$)</label>
                     <div className="relative">
                       <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-gray-400">R$</span>
                       <input
@@ -596,7 +779,9 @@ const Campaigns: React.FC = () => {
                         value={formData.dailyBudget || ''}
                         onChange={handleInputChange}
                         type="number"
-                        placeholder="100,00"
+                        min="1"
+                        step="0.01"
+                        placeholder="50,00"
                         className="w-full pl-14 pr-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
                       />
                     </div>
@@ -604,40 +789,57 @@ const Campaigns: React.FC = () => {
                 </div>
               )}
 
-              {/* STEP 1: SEGMENTAÇÃO */}
+              {/* STEP 1: PÚBLICO-ALVO - targeting.geo_locations, age_min, age_max */}
               {currentStep === 1 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                  <p className="text-[10px] text-gray-500 font-bold">Targeting conforme Meta Ads API (geo_locations, age_min, age_max)</p>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><MapPin size={12} /> Localização</label>
-                    <input
-                      name="location"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      type="text"
-                      placeholder="Brasil (Ou cidades específicas)"
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><CalendarIcon size={12} /> Faixa Etária</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><MapPin size={12} /> País (código ISO)</label>
                     <select
-                      name="ageRange"
-                      value={formData.ageRange}
+                      name="countryCode"
+                      value={formData.countryCode}
                       onChange={handleInputChange}
                       className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
                     >
-                      <option>Todos (18 - 65+)</option>
-                      <option>Público Jovem (18 - 24)</option>
-                      <option>Adulto Jovem (25 - 34)</option>
-                      <option>Executivo (35 - 54)</option>
-                      <option>Sênior (55+)</option>
+                      <option value="BR">Brasil (BR)</option>
+                      <option value="US">Estados Unidos (US)</option>
+                      <option value="PT">Portugal (PT)</option>
+                      <option value="AR">Argentina (AR)</option>
+                      <option value="MX">México (MX)</option>
+                      <option value="CO">Colômbia (CO)</option>
                     </select>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><CalendarIcon size={12} /> Idade Mínima</label>
+                      <input
+                        name="ageMin"
+                        value={formData.ageMin ?? 18}
+                        onChange={handleInputChange}
+                        type="number"
+                        min="18"
+                        max="65"
+                        className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2">Idade Máxima</label>
+                      <input
+                        name="ageMax"
+                        value={formData.ageMax ?? 65}
+                        onChange={handleInputChange}
+                        type="number"
+                        min="18"
+                        max="65"
+                        className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><UsersIcon size={12} /> Público Alvo / Interesses</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><UsersIcon size={12} /> Interesses (opcional)</label>
                     <input
                       name="interests"
-                      value={formData.interests}
+                      value={formData.interests || ''}
                       onChange={handleInputChange}
                       type="text"
                       placeholder="Marketing, Luxo, Imóveis..."
@@ -647,92 +849,68 @@ const Campaigns: React.FC = () => {
                 </div>
               )}
 
-              {/* STEP 2: CRIATIVOS */}
+              {/* STEP 2: CRIATIVOS - object_story_spec link_data (message, link, picture) */}
               {currentStep === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
-                  <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest italic flex items-center gap-2">
-                    Selecione a fonte do Criativo
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div
-                      onClick={() => setFormData(p => ({ ...p, creativeType: 'DRIVE' }))}
-                      className={`p-6 bg-gray-50 rounded-[24px] border cursor-pointer transition-all space-y-4 group ${formData.creativeType === 'DRIVE' ? 'bg-white border-emerald-500 shadow-xl ring-1 ring-emerald-500' : 'border-gray-100 hover:bg-white hover:border-emerald-500 hover:shadow-lg'}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${formData.creativeType === 'DRIVE' ? 'bg-emerald-100 text-emerald-600' : 'bg-white text-gray-400'}`}>
-                          <Database size={20} />
-                        </div>
-                        <label className="text-xs font-black text-gray-800 uppercase tracking-widest pointer-events-none">Google Drive</label>
-                      </div>
-
-                      {formData.creativeType === 'DRIVE' && (
-                        <div className="pl-12 space-y-3 animate-in fade-in slide-in-from-top-2" onClick={e => e.stopPropagation()}>
-                          {!selectedDriveFile ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setShowDriveSelector(true)}
-                                className="w-full px-4 py-4 bg-white border-2 border-dashed border-gray-200 rounded-xl font-bold text-xs text-gray-500 hover:border-emerald-500 hover:text-emerald-600 transition-all flex items-center justify-center gap-2"
-                              >
-                                <Plus size={14} /> Conectar / Selecionar Arquivo
-                              </button>
-                            </>
-                          ) : (
-                            <div className="bg-white p-3 rounded-xl border border-emerald-100 flex items-center justify-between group/file shadow-sm">
-                              <div className="flex items-center gap-3 overflow-hidden">
-                                <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
-                                  {selectedDriveFile.thumbnailLink ? (
-                                    <img src={selectedDriveFile.thumbnailLink} alt="" className="w-full h-full object-cover rounded-lg" />
-                                  ) : (
-                                    <FileIcon size={20} />
-                                  )}
-                                </div>
-                                <div className="overflow-hidden">
-                                  <p className="text-sm font-bold text-gray-800 truncate">{selectedDriveFile.name}</p>
-                                  <p className="text-[10px] text-gray-400 font-bold uppercase">Drive Asset • {(selectedDriveFile.size ? selectedDriveFile.size / 1024 / 1024 : 0).toFixed(1)} MB</p>
-                                </div>
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedDriveFile(null);
-                                  setFormData(p => ({ ...p, creativeSource: '' }));
-                                }}
-                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                  <p className="text-[10px] text-gray-500 font-bold">Criativo conforme Meta Ads API (link_data: message, link, picture)</p>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Texto do Anúncio (message) *</label>
+                    <textarea
+                      name="adMessage"
+                      value={formData.adMessage}
+                      onChange={handleInputChange}
+                      rows={4}
+                      placeholder="Texto principal que aparecerá no anúncio..."
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all resize-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><LinkIcon size={12} /> URL de Destino (link) *</label>
+                    <input
+                      name="destinationUrl"
+                      value={formData.destinationUrl}
+                      onChange={handleInputChange}
+                      type="url"
+                      placeholder="https://seusite.com/landing"
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">URL da Imagem (picture) *</label>
+                    <div className="flex gap-3">
+                      <input
+                        name="imageUrl"
+                        value={formData.imageUrl}
+                        onChange={handleInputChange}
+                        type="url"
+                        placeholder="https://exemplo.com/imagem.jpg"
+                        className="flex-1 px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDriveSelector(true)}
+                        className="px-4 py-4 bg-gray-100 rounded-2xl font-bold text-xs text-gray-600 hover:bg-emerald-100 hover:text-emerald-600 transition-all flex items-center gap-2"
+                      >
+                        <Database size={16} /> Drive
+                      </button>
                     </div>
-
-                    <div
-                      onClick={() => setFormData(p => ({ ...p, creativeType: 'LINK' }))}
-                      className={`p-6 bg-gray-50 rounded-[24px] border cursor-pointer transition-all space-y-4 group ${formData.creativeType === 'LINK' ? 'bg-white border-emerald-500 shadow-xl ring-1 ring-emerald-500' : 'border-gray-100 hover:bg-white hover:border-emerald-500 hover:shadow-lg'}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${formData.creativeType === 'LINK' ? 'bg-rose-100 text-rose-600' : 'bg-white text-gray-400'}`}>
-                          <LinkIcon size={20} />
-                        </div>
-                        <label className="text-xs font-black text-gray-800 uppercase tracking-widest pointer-events-none">Link Externo (URL)</label>
+                    <p className="text-[9px] text-gray-400">Use URL pública. Se usar Drive, compartilhe o arquivo e use o link direto.</p>
+                    {formData.imageUrl && (
+                      <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 max-w-[200px]">
+                        <img src={formData.imageUrl} alt="Preview" className="w-full h-24 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       </div>
-
-                      {formData.creativeType === 'LINK' && (
-                        <div className="pl-12 animate-in fade-in slide-in-from-top-2">
-                          <input
-                            name="creativeSource"
-                            value={formData.creativeSource}
-                            onChange={handleInputChange}
-                            type="text"
-                            placeholder="https://instagram.com/p/..."
-                            className="w-full px-4 py-4 bg-white border border-gray-200 rounded-xl font-medium text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
-                            onClick={e => e.stopPropagation()}
-                          />
-                        </div>
-                      )}
-                    </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Título do Link (opcional)</label>
+                    <input
+                      name="headline"
+                      value={formData.headline || ''}
+                      onChange={handleInputChange}
+                      type="text"
+                      placeholder="Confira agora!"
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    />
                   </div>
                 </div>
               )}
@@ -745,7 +923,7 @@ const Campaigns: React.FC = () => {
                   </div>
                   <h3 className="text-3xl font-black text-gray-900 tracking-tighter uppercase italic">Campanha Criada!</h3>
                   <p className="text-gray-500 max-w-md mx-auto">
-                    Sua campanha foi enviada para processamento. Nossa IA começará a otimizar os anúncios em instantes.
+                    Campanha criada no Meta Ads com sucesso! Ela foi criada em modo PAUSADO. Ative no Meta Ads Manager quando estiver pronto.
                   </p>
                   <button
                     onClick={resetForm}
@@ -797,7 +975,10 @@ const Campaigns: React.FC = () => {
             <DriveFileSelector
               onSelect={(file) => {
                 setSelectedDriveFile(file);
-                setFormData(p => ({ ...p, creativeSource: file.webViewLink || file.name }));
+                const imageUrl = file.id
+                  ? `https://drive.google.com/uc?export=view&id=${file.id}`
+                  : (file.webViewLink || '');
+                setFormData(p => ({ ...p, imageUrl }));
                 setShowDriveSelector(false);
               }}
               onCancel={() => setShowDriveSelector(false)}

@@ -1,6 +1,7 @@
 package com.backend.winai.exception;
 
 import com.backend.winai.dto.response.MessageResponse;
+import com.backend.winai.util.ErrorHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,9 +24,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<MessageResponse> handleRuntimeException(RuntimeException ex) {
         log.error("RuntimeException: {}", ex.getMessage(), ex);
+        String normalized = ErrorHelper.normalizeMessage(ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(MessageResponse.error(ex.getMessage()));
+                .body(MessageResponse.error(normalized));
     }
 
     @ExceptionHandler(BadCredentialsException.class)
@@ -81,8 +83,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<MessageResponse> handleGenericException(Exception ex) {
         log.error("Erro interno do servidor: {}", ex.getMessage(), ex);
+        String normalized = ErrorHelper.normalizeMessage(ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(MessageResponse.error("Erro interno do servidor: " + ex.getMessage()));
+                .body(MessageResponse.error("Erro interno do servidor. " + normalized));
     }
 }

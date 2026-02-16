@@ -24,11 +24,14 @@ export interface CreateCampaignRequest {
     name: string;
     objective: string;
     dailyBudget: number;
-    location: string;
-    ageRange: string;
-    interests: string;
-    creativeType: string;
-    creativeSource: string;
+    countryCode: string;
+    ageMin?: number;
+    ageMax?: number;
+    interests?: string;
+    adMessage: string;
+    destinationUrl: string;
+    imageUrl: string;
+    headline?: string;
 }
 
 export interface MetaAdAccountDetails {
@@ -82,6 +85,39 @@ export interface MetaConnectionDetails {
     insights?: MetaInsightsSummary;
 }
 
+export interface CampaignListItem {
+    id: string;
+    name: string;
+    status: string;
+    objective: string;
+    accountName?: string;
+    accountId?: string;
+    dailyBudget?: number;
+    spend: number;
+    impressions: number;
+    reach?: number;
+    ctr?: number;
+    conversions: number;
+    cpl?: number;
+}
+
+export interface CampaignsListResponse {
+    campaigns: CampaignListItem[];
+    accountName?: string;
+}
+
+export interface AiRecommendation {
+    id: string;
+    type: string;
+    title: string;
+    description: string;
+    actionLabel: string;
+    actionType: string;
+    campaignId?: string;
+    campaignName?: string;
+    payload?: Record<string, unknown>;
+}
+
 export const marketingService = {
     getMetrics: async (): Promise<TrafficMetrics> => {
         return api.get<TrafficMetrics>('/marketing/metrics');
@@ -103,6 +139,21 @@ export const marketingService = {
     },
     getInstagramMetrics: async (): Promise<InstagramMetrics> => {
         return api.get<InstagramMetrics>('/marketing/instagram-metrics');
+    },
+    getCampaigns: async (): Promise<CampaignsListResponse> => {
+        return api.get<CampaignsListResponse>('/marketing/campaigns');
+    },
+    updateCampaignStatus: async (campaignId: string, status: 'ACTIVE' | 'PAUSED'): Promise<void> => {
+        await api.patch(`/marketing/campaigns/${encodeURIComponent(campaignId)}/status?status=${status}`);
+    },
+    increaseCampaignBudget: async (campaignId: string, percent?: number): Promise<void> => {
+        await api.patch(`/marketing/campaigns/${encodeURIComponent(campaignId)}/budget?percent=${percent ?? 20}`);
+    },
+    getAiRecommendations: async (): Promise<AiRecommendation[]> => {
+        return api.get<AiRecommendation[]>('/marketing/ai-recommendations');
+    },
+    applyAiRecommendation: async (recommendation: AiRecommendation): Promise<void> => {
+        await api.post('/marketing/ai-recommendations/apply', recommendation);
     }
 };
 

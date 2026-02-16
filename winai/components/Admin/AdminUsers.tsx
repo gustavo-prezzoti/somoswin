@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Lock, Unlock, User as UserIcon, Building2, Shield, Mail, Key, Search, Copy, Check } from 'lucide-react';
 import adminService, { AdminUser, CreateUserRequest, UpdateUserRequest, Company } from '../../services/adminService';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 
 const AdminUsers: React.FC = () => {
@@ -65,7 +66,7 @@ const AdminUsers: React.FC = () => {
             const data = await adminService.getAllUsers();
             setUsers(data || []);
         } catch (err: any) {
-            showToast('Falha ao alterar o status do usuário.', 'error');
+            showToast(getErrorMessage(err, 'Falha ao alterar o status do usuário.'), 'error');
         }
     };
 
@@ -88,7 +89,7 @@ const AdminUsers: React.FC = () => {
                     const data = await adminService.getAllUsers();
                     setUsers(data || []);
                 } catch (err: any) {
-                    showToast('Não foi possível processar a exclusão.', 'error');
+                    showToast(getErrorMessage(err, 'Não foi possível processar a exclusão.'), 'error');
                 }
             }
         });
@@ -109,9 +110,9 @@ const AdminUsers: React.FC = () => {
                     } else {
                         showToast('Senha resetada, mas tempPassword veio vazio.', 'error');
                     }
-                } catch (err: any) {
-                    showToast('Erro ao resetar senha.', 'error');
-                }
+        } catch (err: any) {
+            showToast(getErrorMessage(err, 'Erro ao resetar senha.'), 'error');
+        }
             }
         });
     };
@@ -199,7 +200,7 @@ const AdminUsers: React.FC = () => {
             const data = await adminService.getAllUsers();
             setUsers(data || []);
         } catch (err: any) {
-            showToast(err.message || 'Falha ao salvar o usuário.', 'error');
+            showToast(getErrorMessage(err, 'Falha ao salvar o usuário.'), 'error');
             throw err;
         }
     };

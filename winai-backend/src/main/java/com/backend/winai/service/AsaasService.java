@@ -1,6 +1,7 @@
 package com.backend.winai.service;
 
 import com.backend.winai.dto.asaas.*;
+import com.backend.winai.util.ErrorHelper;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Plan;
 import com.backend.winai.repository.CompanyRepository;
@@ -126,7 +127,7 @@ public class AsaasService {
             }
         } catch (HttpClientErrorException e) {
             log.error("[ASAAS] Erro ao criar cliente para {}: {} - {}", company.getName(), e.getStatusCode(), e.getResponseBodyAsString());
-            throw new RuntimeException("Erro ao criar cliente no Asaas: " + e.getResponseBodyAsString());
+            throw new RuntimeException(ErrorHelper.normalizeMessage(e.getResponseBodyAsString()));
         }
 
         throw new RuntimeException("Falha ao criar cliente no Asaas");
@@ -195,7 +196,7 @@ public class AsaasService {
         } catch (HttpClientErrorException e) {
             log.error("[ASAAS] Erro ao criar assinatura para {}: {} - {}",
                     company.getName(), e.getStatusCode(), e.getResponseBodyAsString());
-            throw new RuntimeException("Erro ao criar assinatura no Asaas: " + e.getResponseBodyAsString());
+            throw new RuntimeException(ErrorHelper.normalizeMessage(e.getResponseBodyAsString()));
         }
 
         throw new RuntimeException("Falha ao criar assinatura no Asaas");
@@ -226,7 +227,7 @@ public class AsaasService {
         } catch (HttpClientErrorException e) {
             log.error("[ASAAS] Erro ao cancelar assinatura {}: {} - {}",
                     oldSubscriptionId, e.getStatusCode(), e.getResponseBodyAsString());
-            throw new RuntimeException("Erro ao cancelar assinatura: " + e.getResponseBodyAsString());
+            throw new RuntimeException(ErrorHelper.normalizeMessage(e.getResponseBodyAsString()));
         }
 
         // Limpa todos os dados de assinatura
@@ -382,7 +383,7 @@ public class AsaasService {
             } else {
                 log.error("[ASAAS] Erro ao criar cobrança avulsa para troca de plano: {} - {}", e.getStatusCode(), body);
             }
-            throw new RuntimeException("Erro ao gerar cobrança: " + body);
+            throw new RuntimeException(ErrorHelper.normalizeMessage(body));
         }
 
         throw new RuntimeException("Falha ao criar cobrança para troca de plano");

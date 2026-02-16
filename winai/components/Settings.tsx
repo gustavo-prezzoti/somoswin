@@ -27,6 +27,7 @@ import { userService } from '../services/api/user.service';
 import { marketingService } from '../services/api/marketing.service';
 import { whatsappService } from '../services/api/whatsapp.service';
 import { subscriptionService, SubscriptionDetails, PaymentRecord, PlanOption, PlanChangePreview, PaginatedPayments } from '../services/api/subscription.service';
+import { getErrorMessage } from '../services/utils/errorHelper';
 import { ConfirmModal } from './ui/Modal';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
@@ -443,7 +444,7 @@ const Settings: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Failed to preview plan change:', error);
-      showToast(error?.message || 'Erro ao calcular troca de plano.', 'error');
+      showToast(getErrorMessage(error, 'Erro ao calcular troca de plano.'), 'error');
       setPendingPlanId(null);
     } finally {
       setLoadingPreview(false);
@@ -470,7 +471,7 @@ const Settings: React.FC = () => {
       await loadSubscription();
     } catch (error: any) {
       console.error('Failed to change plan:', error);
-      showToast(error?.message || 'Erro ao gerar cobrança. Tente novamente.', 'error');
+      showToast(getErrorMessage(error, 'Erro ao gerar cobrança. Tente novamente.'), 'error');
     } finally {
       setChangingPlan(false);
     }
@@ -484,8 +485,8 @@ const Settings: React.FC = () => {
       } else {
         showToast('Nenhuma fatura disponível no momento.', 'error');
       }
-    } catch {
-      showToast('Erro ao buscar fatura.', 'error');
+    } catch (error) {
+      showToast(getErrorMessage(error, 'Erro ao buscar fatura.'), 'error');
     }
   };
 
