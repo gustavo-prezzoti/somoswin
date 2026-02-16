@@ -9,6 +9,7 @@ import com.backend.winai.entity.User;
 import com.backend.winai.service.MarketingAiRecommendationsService;
 import com.backend.winai.service.MarketingService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +22,7 @@ import java.util.Map;
 @RequestMapping("/api/v1/marketing")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
+@Slf4j
 public class MarketingController {
 
     private final MarketingService marketingService;
@@ -47,6 +49,7 @@ public class MarketingController {
     @GetMapping("/auth/meta")
     public ResponseEntity<Map<String, String>> getMetaAuthUrl(@AuthenticationPrincipal User user) {
         String url = marketingService.getMetaAuthorizationUrl(user);
+        log.info("[MetaAuth] URL gerada para company={}: {}", user.getCompany().getId(), url);
         return ResponseEntity.ok(Map.of("url", url));
     }
 
@@ -55,11 +58,17 @@ public class MarketingController {
             @RequestParam(value = "code", required = false) String code,
             @RequestParam(value = "state", required = false) String companyId,
             @RequestParam(value = "error", required = false) String error,
-            @RequestParam(value = "error_reason", required = false) String errorReason) {
+            @RequestParam(value = "error_reason", required = false) String errorReason,
+            @RequestParam(value = "error_description", required = false) String errorDescription) {
+
+        log.info("[MetaCallback] Recebido: code={} state={} error={} error_reason={} error_description={}",
+                code != null ? "present" : "null", companyId, error, errorReason, errorDescription);
 
         // Handle user cancellation or permission denial
         if (error != null || code == null) {
             String errorMessage = errorReason != null ? errorReason : (error != null ? error : "unknown_error");
+            log.warn("[MetaCallback] Falha OAuth - redirecionando com error=meta_{}. Detalhe: {}", 
+                    errorMessage, errorDescription != null ? errorDescription : error);
             String frontendUrl = marketingService.getFrontendUrl();
             return ResponseEntity.status(302)
                     .header("Location", frontendUrl + "/configuracoes?error=meta_" + errorMessage)

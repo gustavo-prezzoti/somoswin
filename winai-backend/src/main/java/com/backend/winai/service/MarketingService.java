@@ -774,9 +774,12 @@ public class MarketingService {
         // Using Facebook Login for Business with config_id
         // This ensures users select assets from a specific Business Manager
         String configId = "1792297934776856";
-        return String.format(
+        String url = String.format(
                 "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code&override_default_response_type=true",
                 clientId, redirectUri, user.getCompany().getId(), configId);
+        log.info("[MetaAuth] Montando URL: clientId={} redirectUri={} state={} config_id={}", 
+                clientId, redirectUri, user.getCompany().getId(), configId);
+        return url;
     }
 
     @Transactional
@@ -785,8 +788,15 @@ public class MarketingService {
             String tokenUrl = String.format(
                     "https://graph.facebook.com/v19.0/oauth/access_token?client_id=%s&redirect_uri=%s&client_secret=%s&code=%s",
                     clientId, redirectUri, clientSecret, code);
+            log.info("[MetaCallback] Trocando code por token: clientId={} redirectUri={} codeLen={}", 
+                    clientId, redirectUri, code != null ? code.length() : 0);
 
             ResponseEntity<String> response = getWithRetry(tokenUrl);
+            String responseBody = response.getBody();
+            if (responseBody != null && responseBody.contains("\"error\"")) {
+                log.warn("[MetaCallback] Resposta token com erro da Meta: {}", 
+                        responseBody.substring(0, Math.min(500, responseBody.length())));
+            }
             JsonNode tokenBody = objectMapper.readTree(response.getBody());
             String accessToken = tokenBody.get("access_token").asText();
 
@@ -851,10 +861,15 @@ public class MarketingService {
             }
 
             return frontendUrl + "/configuracoes?meta=connected";
-        } catch (
-
-        Exception e) {
-            log.error("Error in meta callback", e);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            log.error("[MetaCallback] Erro ao processar callback: {} - {}", e.getClass().getSimpleName(), msg, e);
+            if (e instanceof org.springframework.web.client.HttpClientErrorException hex) {
+                try {
+                    String body = hex.getResponseBodyAsString();
+                    log.error("[MetaCallback] Resposta Meta API: {}", body != null ? body : "null");
+                } catch (Exception ignored) {}
+            }
             return frontendUrl + "/configuracoes?error=meta_auth_failed";
         }
     }
