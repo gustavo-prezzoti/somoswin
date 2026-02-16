@@ -974,74 +974,110 @@ public class MarketingService {
             }
         }
 
-        // Step 2: Fetch Ad Accounts - use BM endpoint if we have a business ID
-        try {
-            String adAccountsUrl;
-            if (businessId != null) {
-                // Use the Business Manager's owned ad accounts
-                adAccountsUrl = String.format("%s/%s/owned_ad_accounts?fields=id,name&access_token=%s",
+        // Step 2: Fetch Ad Accounts - try BM first, fallback to me/adaccounts se business_management falhar
+        boolean adAccountSet = false;
+        if (businessId != null) {
+            try {
+                String adAccountsUrl = String.format("%s/%s/owned_ad_accounts?fields=id,name&access_token=%s",
                         metaApiBaseUrl, businessId, accessToken);
-            } else {
-                // Fallback to personal ad accounts
-                adAccountsUrl = String.format("%s/me/adaccounts?fields=id,name&access_token=%s",
-                        metaApiBaseUrl, accessToken);
+                log.info("[fetchDefaultAccounts] Buscando ad accounts via BM: owned_ad_accounts");
+                ResponseEntity<String> adAccountsResponse = getWithRetry(adAccountsUrl);
+                String adAccountsBody = adAccountsResponse.getBody();
+                JsonNode adAccountsRoot = (adAccountsBody != null) ? objectMapper.readTree(adAccountsBody) : null;
+                JsonNode adAccountsData = (adAccountsRoot != null && adAccountsRoot.has("data")) ? adAccountsRoot.get("data") : null;
+                if (adAccountsData != null && adAccountsData.isArray() && adAccountsData.size() > 0) {
+                    connection.setAdAccountId(adAccountsData.get(0).get("id").asText());
+                    log.info("[fetchDefaultAccounts] Ad Account encontrado (BM): {} ({})", adAccountsData.get(0).get("name").asText(), adAccountsData.get(0).get("id").asText());
+                    adAccountSet = true;
+                }
+            } catch (Exception e) {
+                log.warn("[fetchDefaultAccounts] BM owned_ad_accounts falhou: {}. Tentando me/adaccounts (fallback)...", e.getMessage());
             }
-            log.info("[fetchDefaultAccounts] Buscando ad accounts: businessId={} endpoint={}", businessId, businessId != null ? "owned_ad_accounts" : "me/adaccounts");
-            ResponseEntity<String> adAccountsResponse = getWithRetry(adAccountsUrl);
-            String adAccountsBody = adAccountsResponse.getBody();
-            JsonNode adAccountsRoot = (adAccountsBody != null) ? objectMapper.readTree(adAccountsBody) : null;
-            JsonNode adAccountsData = (adAccountsRoot != null && adAccountsRoot.has("data")) ? adAccountsRoot.get("data") : null;
-            if (adAccountsData != null && adAccountsData.isArray() && adAccountsData.size() > 0) {
-                connection.setAdAccountId(adAccountsData.get(0).get("id").asText());
-                log.info("[fetchDefaultAccounts] Ad Account encontrado: {} ({})", adAccountsData.get(0).get("name").asText(), adAccountsData.get(0).get("id").asText());
-            } else {
-                boolean hasError = adAccountsRoot != null && adAccountsRoot.has("error");
-                String bodyPreview = (adAccountsBody != null && adAccountsBody.length() > 0)
-                        ? adAccountsBody.substring(0, Math.min(300, adAccountsBody.length())) + (adAccountsBody.length() > 300 ? "..." : "")
-                        : "null";
-                log.warn("[fetchDefaultAccounts] Nenhuma conta de anúncios. hasError={} bodyPreview={}", hasError, bodyPreview);
+        }
+        if (!adAccountSet) {
+            try {
+                String adAccountsUrl = String.format("%s/me/adaccounts?fields=id,name&access_token=%s", metaApiBaseUrl, accessToken);
+                log.info("[fetchDefaultAccounts] Buscando ad accounts via me/adaccounts (fallback)");
+                ResponseEntity<String> adAccountsResponse = getWithRetry(adAccountsUrl);
+                String adAccountsBody = adAccountsResponse.getBody();
+                JsonNode adAccountsRoot = (adAccountsBody != null) ? objectMapper.readTree(adAccountsBody) : null;
+                JsonNode adAccountsData = (adAccountsRoot != null && adAccountsRoot.has("data")) ? adAccountsRoot.get("data") : null;
+                if (adAccountsData != null && adAccountsData.isArray() && adAccountsData.size() > 0) {
+                    connection.setAdAccountId(adAccountsData.get(0).get("id").asText());
+                    log.info("[fetchDefaultAccounts] Ad Account encontrado (me): {} ({})", adAccountsData.get(0).get("name").asText(), adAccountsData.get(0).get("id").asText());
+                    adAccountSet = true;
+                }
+            } catch (Exception e) {
+                log.warn("[fetchDefaultAccounts] me/adaccounts também falhou: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.warn("[fetchDefaultAccounts] Erro ao buscar Ad Accounts: {}", e.getMessage(), e);
         }
 
-        // Step 3: Fetch Pages - use BM endpoint if we have a business ID
-        try {
-            String pagesUrl;
-            if (businessId != null) {
-                // Use the Business Manager's owned pages
-                pagesUrl = String.format("%s/%s/owned_pages?fields=id,name&access_token=%s",
+        // Step 3: Fetch Pages - try BM first, fallback to me/accounts se business_management falhar
+        boolean pageSet = false;
+        if (businessId != null) {
+            try {
+                String pagesUrl = String.format("%s/%s/owned_pages?fields=id,name&access_token=%s",
                         metaApiBaseUrl, businessId, accessToken);
-            } else {
-                // Fallback to personal pages
-                pagesUrl = String.format("%s/me/accounts?fields=id,name&access_token=%s",
-                        metaApiBaseUrl, accessToken);
+                log.info("[fetchDefaultAccounts] Buscando pages via BM: owned_pages");
+                ResponseEntity<String> pagesResponse = getWithRetry(pagesUrl);
+                JsonNode pagesData = objectMapper.readTree(pagesResponse.getBody()).get("data");
+                if (pagesData != null && pagesData.size() > 0) {
+                    connection.setPageId(pagesData.get(0).get("id").asText());
+                    log.info("[fetchDefaultAccounts] Page encontrada (BM): {}", pagesData.get(0).get("name").asText());
+                    pageSet = true;
+                }
+            } catch (Exception e) {
+                log.warn("[fetchDefaultAccounts] BM owned_pages falhou: {}. Tentando me/accounts (fallback)...", e.getMessage());
             }
-            ResponseEntity<String> pagesResponse = getWithRetry(pagesUrl);
-            JsonNode pagesData = objectMapper.readTree(pagesResponse.getBody()).get("data");
-            if (pagesData != null && pagesData.size() > 0) {
-                connection.setPageId(pagesData.get(0).get("id").asText());
-                log.info("Found Page: {}", pagesData.get(0).get("name").asText());
+        }
+        if (!pageSet) {
+            try {
+                String pagesUrl = String.format("%s/me/accounts?fields=id,name&access_token=%s", metaApiBaseUrl, accessToken);
+                log.info("[fetchDefaultAccounts] Buscando pages via me/accounts (fallback)");
+                ResponseEntity<String> pagesResponse = getWithRetry(pagesUrl);
+                JsonNode pagesData = objectMapper.readTree(pagesResponse.getBody()).get("data");
+                if (pagesData != null && pagesData.size() > 0) {
+                    connection.setPageId(pagesData.get(0).get("id").asText());
+                    log.info("[fetchDefaultAccounts] Page encontrada (me): {}", pagesData.get(0).get("name").asText());
+                    pageSet = true;
+                }
+            } catch (Exception e) {
+                log.warn("[fetchDefaultAccounts] me/accounts também falhou: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.warn("Could not fetch Pages", e);
         }
 
-        // Step 4: Try to fetch Instagram account from BM if available
+        // Step 4: Try to fetch Instagram - BM instagram_accounts ou page.instagram_business_account (fallback)
+        boolean igSet = false;
         if (businessId != null) {
             try {
                 String igUrl = String.format("%s/%s/instagram_accounts?fields=id,username&access_token=%s",
                         metaApiBaseUrl, businessId, accessToken);
+                log.info("[fetchDefaultAccounts] Buscando Instagram via BM: instagram_accounts");
                 ResponseEntity<String> igResponse = getWithRetry(igUrl);
                 JsonNode igData = objectMapper.readTree(igResponse.getBody()).get("data");
                 if (igData != null && igData.size() > 0) {
                     connection.setInstagramBusinessId(igData.get(0).get("id").asText());
-                    log.info("Found Instagram account: {}",
-                            igData.get(0).has("username") ? igData.get(0).get("username").asText()
-                                    : igData.get(0).get("id").asText());
+                    log.info("[fetchDefaultAccounts] Instagram encontrado (BM): {}", igData.get(0).has("username") ? igData.get(0).get("username").asText() : igData.get(0).get("id").asText());
+                    igSet = true;
                 }
             } catch (Exception e) {
-                log.warn("Could not fetch Instagram accounts from BM", e);
+                log.warn("[fetchDefaultAccounts] BM instagram_accounts falhou: {}. Tentando page.instagram_business_account (fallback)...", e.getMessage());
+            }
+        }
+        if (!igSet && connection.getPageId() != null) {
+            try {
+                String pageIgUrl = String.format("%s/%s?fields=instagram_business_account&access_token=%s",
+                        metaApiBaseUrl, connection.getPageId(), accessToken);
+                log.info("[fetchDefaultAccounts] Buscando Instagram via page.instagram_business_account (fallback)");
+                ResponseEntity<String> pageIgResponse = getWithRetry(pageIgUrl);
+                JsonNode pageIgRoot = objectMapper.readTree(pageIgResponse.getBody());
+                JsonNode igAccount = (pageIgRoot != null && pageIgRoot.has("instagram_business_account")) ? pageIgRoot.get("instagram_business_account") : null;
+                if (igAccount != null && !igAccount.isNull() && igAccount.has("id")) {
+                    connection.setInstagramBusinessId(igAccount.get("id").asText());
+                    log.info("[fetchDefaultAccounts] Instagram encontrado (page): {}", igAccount.get("id").asText());
+                }
+            } catch (Exception e) {
+                log.debug("[fetchDefaultAccounts] page.instagram_business_account falhou: {}", e.getMessage());
             }
         }
     }
