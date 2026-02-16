@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-5"
     openai_max_tokens: int = 1024
+    # Delay em ms entre requisições OpenAI (evita rate limit)
+    openai_delay_between_requests_ms: int = 1000
     
     # Redis Configuration
     redis_host: str = "redis"

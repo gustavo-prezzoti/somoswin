@@ -63,6 +63,16 @@ public class MarketingService {
     @Value("${meta.sync.cron:0 0 */12 * * *}")
     private String syncCron;
 
+    /** Tempo de espera ao atingir rate limit. Meta: Development=300s, Standard=60s. */
+    @Value("${meta.api.rate-limit-retry-wait-ms:300000}")
+    private long rateLimitRetryWaitMs;
+
+    /** Intervalo mínimo entre requisições (evita atingir limite). Meta recomenda espalhar chamadas. */
+    @Value("${meta.api.throttle-delay-ms:2000}")
+    private long throttleDelayMs;
+
+    private volatile long lastMetaRequestTime = 0;
+
     public java.util.List<Map<String, Object>> getRealTimeCampaigns(Company company) {
         Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
         if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()
@@ -1640,29 +1650,26 @@ public class MarketingService {
     }
 
     private ResponseEntity<String> getWithRetry(String url) {
-        // Use java.net.URI to avoid RestTemplate's template expansion of curly braces
-        // {}
-        // Meta API needs {} for field expansion and doesn't like them encoded as
-        // %7B/%7D in some parameters.
+        throttleBeforeRequest();
         java.net.URI uri = java.net.URI.create(url);
         int maxAttempts = 3;
         for (int i = 0; i < maxAttempts; i++) {
             try {
                 ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
+                lastMetaRequestTime = System.currentTimeMillis();
                 updateUsageRate(response);
                 return response;
             } catch (org.springframework.web.client.HttpClientErrorException e) {
-                String body = e.getResponseBodyAsString();
-                // Code 17 is "User request limit reached", also check 429 status
-                boolean isRateLimit = e.getStatusCode().value() == 429 ||
-                        (e.getStatusCode().value() == 400
-                                && (body.contains("\"code\":17") || body.contains("\"code\": 17")));
+                String body = e.getResponseBodyAsString() != null ? e.getResponseBodyAsString() : "";
+                boolean isRateLimit = isMetaRateLimitError(e.getStatusCode().value(), body);
 
                 if (isRateLimit && i < maxAttempts - 1) {
-                    log.warn("Meta API rate limit reached. Waiting 120s (2 minutes) before retry... (Attempt {})",
-                            i + 1);
+                    long waitMs = extractEstimatedWaitFromHeaders(e.getResponseHeaders());
+                    if (waitMs <= 0) waitMs = rateLimitRetryWaitMs;
+                    log.warn("Meta API rate limit reached. Waiting {}s before retry... (Attempt {})",
+                            waitMs / 1000, i + 1);
                     try {
-                        Thread.sleep(120000); // Wait 2 minutes for recovery
+                        Thread.sleep(waitMs);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         throw e;
@@ -1672,7 +1679,61 @@ public class MarketingService {
                 throw e;
             }
         }
-        return null; // Should not be reached
+        return null;
+    }
+
+    /** Throttle: intervalo mínimo entre requisições + delay adaptativo quando uso alto. */
+    private synchronized void throttleBeforeRequest() {
+        long elapsed = System.currentTimeMillis() - lastMetaRequestTime;
+        long baseDelay = throttleDelayMs > 0 ? throttleDelayMs : 0;
+        if (baseDelay > 0 && elapsed < baseDelay) {
+            try {
+                Thread.sleep(baseDelay - elapsed);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (latestUsageRate > 30) {
+            adaptiveThrottle();
+        }
+    }
+
+    /** Códigos de rate limit da Meta: 4, 17, 32, 429, 613, 80000-80008. */
+    private boolean isMetaRateLimitError(int statusCode, String body) {
+        if (statusCode == 429) return true;
+        if (statusCode == 400 && body != null) {
+            if (body.contains("\"code\":17") || body.contains("\"code\": 17")) return true;
+            if (body.contains("\"code\":4") || body.contains("\"code\": 4")) return true;
+            if (body.contains("\"code\":32") || body.contains("\"code\": 32")) return true;
+            if (body.contains("\"code\":613") || body.contains("\"code\": 613")) return true;
+            if (body.contains("2446079")) return true; // subcode comum para Ads API
+        }
+        return false;
+    }
+
+    /** Extrai estimated_time_to_regain_access (minutos) do header X-Business-Use-Case-Usage. */
+    private long extractEstimatedWaitFromHeaders(org.springframework.http.HttpHeaders headers) {
+        if (headers == null) return 0;
+        String bizUsage = headers.getFirst("X-Business-Use-Case-Usage");
+        if (bizUsage == null) bizUsage = headers.getFirst("X-Business-Use-Case");
+        if (bizUsage == null) return 0;
+        try {
+            JsonNode root = objectMapper.readTree(bizUsage);
+            for (Iterator<String> it = root.fieldNames(); it.hasNext(); ) {
+                JsonNode arr = root.get(it.next());
+                if (arr != null && arr.isArray()) {
+                    for (JsonNode item : arr) {
+                        if (item.has("estimated_time_to_regain_access")) {
+                            int minutes = item.get("estimated_time_to_regain_access").asInt();
+                            if (minutes > 0) return minutes * 60L * 1000L;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("Could not parse estimated_time_to_regain_access: {}", ex.getMessage());
+        }
+        return 0;
     }
 
     private void updateUsageRate(ResponseEntity<?> response) {

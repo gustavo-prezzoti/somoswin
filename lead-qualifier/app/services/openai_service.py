@@ -2,10 +2,9 @@
 OpenAI Service - Integração com GPT-4o para qualificação de leads
 Suporta análise de texto, imagens (Vision) e transcrições de áudio
 """
+import asyncio
 import logging
-import base64
-import re
-import httpx
+import time
 from typing import List, Optional, Tuple
 from openai import AsyncOpenAI
 from config import settings
@@ -24,6 +23,17 @@ class OpenAIService:
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
         self.model = settings.openai_model
         self.whisper = WhisperService()
+        self._last_request_time = 0.0
+    
+    async def _throttle(self):
+        """Aguarda intervalo mínimo entre requisições para evitar rate limit."""
+        delay_ms = getattr(settings, "openai_delay_between_requests_ms", 1000)
+        if delay_ms <= 0:
+            return
+        elapsed = (time.monotonic() * 1000) - self._last_request_time
+        if elapsed < delay_ms:
+            await asyncio.sleep((delay_ms - elapsed) / 1000)
+        self._last_request_time = time.monotonic() * 1000
     
     async def analyze_lead(self, lead: Lead, messages: List[Message]) -> Optional[LeadStatus]:
         """
@@ -89,6 +99,7 @@ Qual deve ser o status deste lead?"""
             user_content[0]["text"] += f"\n\n[Nota: {len(image_urls)} imagem(ns) foram enviadas na conversa mas não puderam ser analisadas]"
 
         try:
+            await self._throttle()
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
