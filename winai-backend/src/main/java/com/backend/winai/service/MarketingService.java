@@ -54,10 +54,6 @@ public class MarketingService {
     @Value("${meta.redirect.uri:https://server.somosamplia.com/api/v1/marketing/auth/meta/callback}")
     private String redirectUri;
 
-    /** config_id do Facebook Login for Business. Se vazio, usa scope (Login padrão). */
-    @Value("${meta.config.id:}")
-    private String metaConfigId;
-
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
@@ -776,22 +772,10 @@ public class MarketingService {
 
     public String getMetaAuthorizationUrl(User user) {
         String state = user.getCompany().getId().toString();
-        String url;
-        if (metaConfigId != null && !metaConfigId.isBlank()) {
-            // Facebook Login for Business com config_id
-            url = String.format(
-                    "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code",
-                    clientId, redirectUri, state, metaConfigId.trim());
-            log.info("[MetaAuth] URL com config_id: clientId={} config_id={}", clientId, metaConfigId);
-        } else {
-            // Login padrão com scope (evita erro "supported permission" do config)
-            String scope = "ads_management,pages_show_list,pages_read_engagement,business_management,instagram_basic,instagram_manage_insights,leads_retrieval,email,public_profile";
-            url = String.format(
-                    "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s&response_type=code",
-                    clientId, redirectUri, state, scope);
-            log.info("[MetaAuth] URL com scope (Login padrão): clientId={}", clientId);
-        }
-        return url;
+        String scope = "ads_management,pages_show_list,pages_read_engagement,business_management,instagram_basic,instagram_manage_insights,leads_retrieval,email,public_profile";
+        return String.format(
+                "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s&response_type=code",
+                clientId, redirectUri, state, scope);
     }
 
     @Transactional
