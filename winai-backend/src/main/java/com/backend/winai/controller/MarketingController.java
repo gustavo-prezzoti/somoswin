@@ -48,9 +48,9 @@ public class MarketingController {
 
     @GetMapping("/auth/meta")
     public ResponseEntity<Map<String, String>> getMetaAuthUrl(@AuthenticationPrincipal User user) {
-        String url = marketingService.getMetaAuthorizationUrl(user);
-        log.info("[MetaAuth] URL gerada para company={}: {}", user.getCompany().getId(), url);
-        return ResponseEntity.ok(Map.of("url", url));
+        var result = marketingService.getMetaAuthorizationUrlWithMode(user);
+        log.info("[MetaAuth] company={} mode={} url={}", user.getCompany().getId(), result.get("mode"), result.get("url"));
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/auth/meta/callback")
