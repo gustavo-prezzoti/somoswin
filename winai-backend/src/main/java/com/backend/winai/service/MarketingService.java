@@ -777,17 +777,18 @@ public class MarketingService {
     public String getMetaAuthorizationUrl(User user) {
         String state = user.getCompany().getId().toString();
         if (metaConfigId != null && !metaConfigId.isBlank()) {
-            // Facebook Login for Business: config_id substitui scope (User Token).
-            // Não usar scope junto com config_id. response_type=code para troca server-side.
-            return String.format(
+            String url = String.format(
                     "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code",
                     clientId, redirectUri, state, metaConfigId.trim());
+            log.info("[MetaAuth] URL com config_id: clientId={} configId={}", clientId, metaConfigId);
+            return url;
         }
-        // Fallback: Login padrão com scope (apenas permissões aprovadas no App Review)
         String scope = "ads_management,pages_show_list,pages_read_engagement,business_management,leads_retrieval,email,public_profile";
-        return String.format(
+        String url = String.format(
                 "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s&response_type=code",
                 clientId, redirectUri, state, scope);
+        log.info("[MetaAuth] URL com scope: clientId={} redirectUri={}", clientId, redirectUri);
+        return url;
     }
 
     @Transactional
