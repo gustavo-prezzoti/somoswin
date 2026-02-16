@@ -296,13 +296,14 @@ public class UazapService {
                             if (matching != null && matching.getToken() != null && !matching.getToken().isEmpty()) {
                                 token = matching.getToken();
                                 config.put("token", token);
+                                final String tokenToSet = token;
                                 List<com.backend.winai.entity.UserWhatsAppConnection> conns = userWhatsAppConnectionRepository
                                         .findByCompanyId(company.getId());
                                 conns.stream()
                                         .filter(c -> instRef.equalsIgnoreCase(c.getInstanceName()))
                                         .findFirst()
-                                    .ifPresent(c -> {
-                                            c.setInstanceToken(token);
+                                        .ifPresent(c -> {
+                                            c.setInstanceToken(tokenToSet);
                                             userWhatsAppConnectionRepository.save(c);
                                         });
                                 continue;
