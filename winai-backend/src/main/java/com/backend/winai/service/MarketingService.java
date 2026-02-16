@@ -783,8 +783,8 @@ public class MarketingService {
                     "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code",
                     clientId, redirectUri, state, metaConfigId.trim());
         }
-        // Fallback: Login padrão com scope
-        String scope = "ads_management,pages_show_list,pages_read_engagement,business_management,instagram_basic,instagram_manage_insights,leads_retrieval,email,public_profile";
+        // Fallback: Login padrão com scope (apenas permissões aprovadas no App Review)
+        String scope = "ads_management,pages_show_list,pages_read_engagement,business_management,leads_retrieval,email,public_profile";
         return String.format(
                 "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s&response_type=code",
                 clientId, redirectUri, state, scope);
