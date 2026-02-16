@@ -309,8 +309,10 @@ public class MarketingService {
             return List.of();
         }
         try {
-            String url = String.format("%s/%s/targetingsearch?type=%s&q=%s&limit=25&access_token=%s",
-                    metaApiBaseUrl, conn.getAdAccountId(), type,
+            // Meta API usa limit_type (ex: interests), não type
+            String limitType = "adinterest".equalsIgnoreCase(type) ? "interests" : type;
+            String url = String.format("%s/%s/targetingsearch?limit_type=%s&q=%s&limit=25&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(), limitType,
                     java.net.URLEncoder.encode(query, StandardCharsets.UTF_8), conn.getAccessToken());
             ResponseEntity<String> res = getWithRetry(url);
             JsonNode data = objectMapper.readTree(res.getBody()).get("data");
@@ -497,7 +499,17 @@ public class MarketingService {
     public InstagramMetricsResponse getInstagramMetrics(User user) {
         Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(user.getCompany());
 
-        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected() || connectionOpt.get().getPageId() == null) {
+        if (connectionOpt.isEmpty()) {
+            log.info("[InstagramMetrics] Sem conexão Meta para empresa {}", user.getCompany().getId());
+            return buildEmptyInstagramMetrics();
+        }
+        MetaConnection connCheck = connectionOpt.get();
+        if (!connCheck.isConnected()) {
+            log.info("[InstagramMetrics] Meta desconectada para empresa {}", user.getCompany().getId());
+            return buildEmptyInstagramMetrics();
+        }
+        if (connCheck.getPageId() == null) {
+            log.info("[InstagramMetrics] PageId ausente na conexão Meta para empresa {}", user.getCompany().getId());
             return buildEmptyInstagramMetrics();
         }
 
@@ -509,43 +521,70 @@ public class MarketingService {
             // 1. Get Instagram Business Account ID
             String igAccountUrl = String.format("%s/%s?fields=instagram_business_account&access_token=%s",
                     metaApiBaseUrl, pageId, accessToken);
+            log.info("[InstagramMetrics] Buscando IG Business Account para pageId={}", pageId);
             ResponseEntity<String> igAccountRes = getWithRetry(igAccountUrl);
             String igAccountBody = igAccountRes.getBody();
-            log.info("Meta/IG Account ID Response for page {}: {}", pageId, igAccountBody);
-            JsonNode igAccountNode = objectMapper.readTree(igAccountBody).get("instagram_business_account");
+            log.info("[InstagramMetrics] Meta/IG Account response: {}", igAccountBody);
+            JsonNode igAccountRoot = objectMapper.readTree(igAccountBody);
+            if (igAccountRoot.has("error")) {
+                log.warn("[InstagramMetrics] Meta API error: {}", igAccountRoot.get("error"));
+                return buildEmptyInstagramMetrics();
+            }
+            JsonNode igAccountNode = igAccountRoot.get("instagram_business_account");
 
-            if (igAccountNode == null) {
-                log.warn("No Instagram Business Account linked to page {}", pageId);
+            if (igAccountNode == null || igAccountNode.isNull()) {
+                log.warn("[InstagramMetrics] Nenhuma conta Instagram Business vinculada à página {}", pageId);
                 return buildEmptyInstagramMetrics();
             }
 
             String igId = igAccountNode.get("id").asText();
+            log.info("[InstagramMetrics] IG Business ID encontrado: {}", igId);
 
             // 2. Fetch User basic info (followers count)
             String basicInfoUrl = String.format("%s/%s?fields=followers_count,media_count&access_token=%s",
                     metaApiBaseUrl, igId, accessToken);
-            JsonNode basicInfo = objectMapper.readTree(getWithRetry(basicInfoUrl).getBody());
+            String basicInfoBody = getWithRetry(basicInfoUrl).getBody();
+            log.info("[InstagramMetrics] Basic info response: {}", basicInfoBody);
+            JsonNode basicInfo = objectMapper.readTree(basicInfoBody);
+            if (basicInfo.has("error")) {
+                log.warn("[InstagramMetrics] Meta API error em basic info: {}", basicInfo.get("error"));
+                return buildEmptyInstagramMetrics();
+            }
             long followers = basicInfo.has("followers_count") ? basicInfo.get("followers_count").asLong() : 0;
+            log.info("[InstagramMetrics] Followers: {}", followers);
 
             // 3. Fetch Insights - current period (last 30 days)
-            // Metrics: impressions, reach, accounts_engaged (Instagram User Insights API)
-            // period=day returns daily breakdown; since/until use YYYY-MM-DD format
             LocalDate today = LocalDate.now();
             LocalDate sinceCurrent = today.minusDays(30);
             String insightsUrl = String.format(
                     "%s/%s/insights?metric=impressions,reach,accounts_engaged,follower_count&period=day&since=%s&until=%s&access_token=%s",
                     metaApiBaseUrl, igId, sinceCurrent, today, accessToken);
-            JsonNode insightsResponse = objectMapper.readTree(getWithRetry(insightsUrl).getBody());
+            log.info("[InstagramMetrics] Insights URL (30d): {}", insightsUrl.replace(accessToken, "***"));
+            String insightsBody = getWithRetry(insightsUrl).getBody();
+            log.info("[InstagramMetrics] Insights response: {}", insightsBody);
+            JsonNode insightsResponse = objectMapper.readTree(insightsBody);
+            if (insightsResponse.has("error")) {
+                log.warn("[InstagramMetrics] Meta API error em insights: {}", insightsResponse.get("error"));
+            }
             JsonNode insightsData = insightsResponse.has("data") ? insightsResponse.get("data") : null;
-            log.debug("Instagram insights response: {}", insightsResponse);
+            int insightsSize = (insightsData != null && insightsData.isArray()) ? insightsData.size() : 0;
+            log.info("[InstagramMetrics] Insights data size: {}", insightsSize);
 
             // Fallback: if empty or error, try without since/until (some API versions differ)
             if (insightsData == null || !insightsData.isArray() || insightsData.size() == 0) {
+                log.info("[InstagramMetrics] Insights vazio, tentando fallback sem since/until");
                 String fallbackUrl = String.format(
                         "%s/%s/insights?metric=impressions,reach,accounts_engaged,follower_count&period=day&access_token=%s",
                         metaApiBaseUrl, igId, accessToken);
-                JsonNode fallbackRes = objectMapper.readTree(getWithRetry(fallbackUrl).getBody());
+                String fallbackBody = getWithRetry(fallbackUrl).getBody();
+                log.info("[InstagramMetrics] Fallback insights response: {}", fallbackBody);
+                JsonNode fallbackRes = objectMapper.readTree(fallbackBody);
                 insightsData = fallbackRes.has("data") ? fallbackRes.get("data") : null;
+                if (insightsData != null && insightsData.isArray()) {
+                    log.info("[InstagramMetrics] Fallback insights data size: {}", insightsData.size());
+                } else {
+                    log.warn("[InstagramMetrics] Fallback insights também vazio");
+                }
             }
 
             // 4. Fetch Insights - previous period (30-60 days ago) for trend calculation
@@ -558,19 +597,26 @@ public class MarketingService {
                 JsonNode prevResponse = objectMapper.readTree(getWithRetry(insightsPrevUrl).getBody());
                 insightsPrevData = prevResponse.has("data") ? prevResponse.get("data") : null;
             } catch (Exception ex) {
-                log.debug("Could not fetch previous period insights for trends: {}", ex.getMessage());
+                log.info("[InstagramMetrics] Período anterior não disponível: {}", ex.getMessage());
             }
 
-            return mapToInstagramResponse(followers, insightsData, insightsPrevData);
+            InstagramMetricsResponse result = mapToInstagramResponse(followers, insightsData, insightsPrevData);
+            log.info("[InstagramMetrics] Sucesso: followers={}, impressions={}, performanceHistory size={}",
+                    result.getFollowers().getValue(), result.getImpressions().getValue(),
+                    result.getPerformanceHistory() != null ? result.getPerformanceHistory().size() : 0);
+            return result;
 
         } catch (Exception e) {
-            log.error("Error fetching Instagram data", e);
+            log.error("[InstagramMetrics] Erro ao buscar dados Instagram: {}", e.getMessage(), e);
             return buildEmptyInstagramMetrics();
         }
     }
 
     private InstagramMetricsResponse mapToInstagramResponse(long totalFollowers, JsonNode insights,
             JsonNode insightsPrevious) {
+        if (insights == null || !insights.isArray() || insights.size() == 0) {
+            log.info("[InstagramMetrics] mapToInstagramResponse: insights null ou vazio, retornando zeros");
+        }
         long impressionsTotal = 0;
         long reachTotal = 0;
         long interactionsTotal = 0; // accounts_engaged
@@ -613,6 +659,8 @@ public class MarketingService {
                 }
             }
         }
+        log.info("[InstagramMetrics] mapToInstagramResponse: impressions={}, reach={}, interactions={}, dailyReach entries={}",
+                impressionsTotal, reachTotal, interactionsTotal, dailyReach.size());
         performance = dailyReach.entrySet().stream()
                 .map(e -> InstagramMetricsResponse.DailyPerformance.builder()
                         .date(e.getKey())

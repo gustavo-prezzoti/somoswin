@@ -27,11 +27,12 @@ public class MarketingAiRecommendationsService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * Retorna recomendações do cache (leitura rápida, sem chamada à IA).
-     * Usado pela API quando o usuário acessa a tela.
+     * Retorna recomendações do cache, filtradas pelo status atual das campanhas.
+     * Não retorna PAUSE para campanhas já pausadas, nem INCREASE_BUDGET para campanhas pausadas.
      */
     public List<AiRecommendationDTO> getRecommendations(User user) {
-        return getRecommendationsForCompany(user.getCompany());
+        List<AiRecommendationDTO> cached = getRecommendationsForCompany(user.getCompany());
+        return filterByCampaignStatus(cached, user.getCompany());
     }
 
     @SuppressWarnings("unchecked")
@@ -50,6 +51,41 @@ public class MarketingAiRecommendationsService {
                     }
                 })
                 .orElse(Collections.emptyList());
+    }
+
+    /** Remove recomendações inválidas: PAUSE para campanha pausada, INCREASE_BUDGET para campanha pausada. */
+    private List<AiRecommendationDTO> filterByCampaignStatus(List<AiRecommendationDTO> recommendations, Company company) {
+        if (recommendations == null || recommendations.isEmpty()) return recommendations;
+        try {
+            CampaignsListResponse resp = marketingService.getCampaignsForCompany(company);
+            if (resp == null || resp.getCampaigns() == null) return recommendations;
+            Map<String, String> statusByCampaignId = new java.util.HashMap<>();
+            for (CampaignListItemDTO c : resp.getCampaigns()) {
+                if (c.getId() != null && c.getStatus() != null) {
+                    statusByCampaignId.put(c.getId(), c.getStatus().toUpperCase());
+                }
+            }
+            return recommendations.stream()
+                    .filter(rec -> {
+                        String campaignId = rec.getCampaignId();
+                        if (campaignId == null) return true;
+                        String status = statusByCampaignId.getOrDefault(campaignId, "");
+                        boolean isPaused = "PAUSED".equals(status);
+                        if ("PAUSE".equals(rec.getActionType()) && isPaused) {
+                            log.debug("Filtrando recomendação PAUSE para campanha já pausada: {}", campaignId);
+                            return false;
+                        }
+                        if ("INCREASE_BUDGET".equals(rec.getActionType()) && isPaused) {
+                            log.debug("Filtrando recomendação INCREASE_BUDGET para campanha pausada: {}", campaignId);
+                            return false;
+                        }
+                        return true;
+                    })
+                    .toList();
+        } catch (Exception e) {
+            log.warn("Erro ao filtrar recomendações por status: {}", e.getMessage());
+            return recommendations;
+        }
     }
 
     /**
@@ -84,6 +120,10 @@ public class MarketingAiRecommendationsService {
         String campaignsJson = buildCampaignsContext(campaigns);
         String systemPrompt = """
                 Você é um especialista em Meta Ads e otimização de campanhas. Analise os dados das campanhas e retorne EXATAMENTE 3 recomendações acionáveis.
+                REGRAS OBRIGATÓRIAS:
+                - NUNCA recomende PAUSE para campanhas com Status:PAUSED (já estão pausadas).
+                - NUNCA recomende INCREASE_BUDGET para campanhas com Status:PAUSED (só aumente orçamento de campanhas ativas).
+                - Priorize campanhas com Status:ACTIVE para todas as ações.
                 Responda APENAS com um JSON válido, sem markdown, no formato:
                 [
                   {"type":"SCALE","title":"Título","description":"Descrição detalhada","actionLabel":"Texto do botão","actionType":"INCREASE_BUDGET","campaignId":"id","campaignName":"nome","payload":{"percent":20}},
@@ -169,5 +209,18 @@ public class MarketingAiRecommendationsService {
         } else {
             throw new RuntimeException("Ação não suportada ou campanha não especificada.");
         }
+
+        // Regenera recomendações após aplicar (dados das campanhas mudaram)
+        try {
+            generateAndStoreForCompany(user.getCompany());
+            log.info("Recomendações regeneradas após aplicar ação para empresa {}", user.getCompany().getId());
+        } catch (Exception e) {
+            log.warn("Erro ao regenerar recomendações após apply: {}", e.getMessage());
+        }
+    }
+
+    /** Regenera recomendações sob demanda (ex: botão Atualizar). */
+    public void regenerateRecommendations(User user) {
+        generateAndStoreForCompany(user.getCompany());
     }
 }

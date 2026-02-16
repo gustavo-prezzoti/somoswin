@@ -67,6 +67,7 @@ const Campaigns: React.FC = () => {
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<AiRecommendation[]>([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [regeneratingRecommendations, setRegeneratingRecommendations] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -202,6 +203,21 @@ const Campaigns: React.FC = () => {
       alert((e as Error)?.message || 'Erro ao aplicar recomendação');
     } finally {
       setApplyingId(null);
+    }
+  };
+
+  const handleRegenerateRecommendations = async () => {
+    setRegeneratingRecommendations(true);
+    setRecommendationsLoading(true);
+    try {
+      await marketingService.regenerateAiRecommendations();
+      await loadRecommendations();
+    } catch (e) {
+      console.error('Failed to regenerate recommendations', e);
+      alert((e as Error)?.message || 'Erro ao atualizar recomendações');
+    } finally {
+      setRegeneratingRecommendations(false);
+      setRecommendationsLoading(false);
     }
   };
 
@@ -580,9 +596,19 @@ const Campaigns: React.FC = () => {
 
             {/* OTIMIZAÇÕES NEURAIS - Card sempre visível, carrega em background */}
             <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm min-h-[280px]">
-              <div className="mb-6">
-                <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic">Otimizações Neurais</h2>
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Ações recomendadas pela IA AMPLIA</p>
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic">Otimizações Neurais</h2>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Ações recomendadas pela IA AMPLIA</p>
+                </div>
+                <button
+                  onClick={handleRegenerateRecommendations}
+                  disabled={recommendationsLoading || regeneratingRecommendations}
+                  className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-[10px] uppercase tracking-widest transition-all disabled:opacity-50"
+                >
+                  {regeneratingRecommendations ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Atualizar
+                </button>
               </div>
               {recommendationsLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -597,8 +623,22 @@ const Campaigns: React.FC = () => {
                   ))}
                 </div>
               ) : recommendations.length === 0 ? (
-                <div className="flex items-center justify-center py-16 text-gray-500 font-medium text-sm">
-                  Nenhuma recomendação no momento. Conecte sua conta Meta Ads e tenha campanhas ativas para receber sugestões personalizadas.
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <p className="text-gray-500 font-medium text-sm mb-2">
+                    {campaigns.length > 0 && isMetaConnected
+                      ? 'Não há recomendações no momento. As campanhas estão otimizadas ou clique em Atualizar para gerar novas sugestões.'
+                      : 'Conecte sua conta Meta Ads e tenha campanhas ativas para receber sugestões personalizadas.'}
+                  </p>
+                  {campaigns.length > 0 && isMetaConnected && (
+                    <button
+                      onClick={handleRegenerateRecommendations}
+                      disabled={regeneratingRecommendations}
+                      className="mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50"
+                    >
+                      {regeneratingRecommendations ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                      Atualizar recomendações
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -928,6 +968,7 @@ const Campaigns: React.FC = () => {
                       value={interestsSearch}
                       onChange={(e) => setInterestsSearch(e.target.value)}
                       onFocus={() => interestsResults.length > 0 && setInterestsDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setInterestsDropdownOpen(false), 200)}
                       type="text"
                       placeholder="Digite para buscar (ex: futebol, marketing...)"
                       className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"

@@ -133,6 +133,12 @@ public class MarketingController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/ai-recommendations/regenerate")
+    public ResponseEntity<Void> regenerateAiRecommendations(@AuthenticationPrincipal User user) {
+        aiRecommendationsService.regenerateRecommendations(user);
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/disconnect")
     public ResponseEntity<Void> disconnectMeta(@AuthenticationPrincipal User user) {
         marketingService.disconnectMeta(user);
