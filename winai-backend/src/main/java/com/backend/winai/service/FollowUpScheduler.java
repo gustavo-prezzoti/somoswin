@@ -8,11 +8,10 @@ import org.springframework.stereotype.Service;
 
 /**
  * Scheduler responsável por disparar processamento de follow-ups.
- * Executa a cada minuto e delega processamento para threads dedicadas.
+ * Intervalo configurável para evitar sobrecarga (default: a cada 5 min).
  * 
  * Só é ativado quando:
  * - followup.worker.enabled=true (container follow-up worker)
- * - OU propriedade não definida (backwards compatibility no backend principal)
  */
 @Service
 @RequiredArgsConstructor
@@ -23,10 +22,10 @@ public class FollowUpScheduler {
     private final FollowUpService followUpService;
 
     /**
-     * Executa a cada minuto.
+     * Executa no intervalo configurado (default: a cada 5 min).
      * O processamento real é feito de forma assíncrona no FollowUpService.
      */
-    @Scheduled(cron = "0 * * * * *")
+    @Scheduled(cron = "${followup.worker.cron:0 */5 * * * *}")
     public void triggerFollowUps() {
         log.info("[FOLLOW-UP WORKER] Iniciando verificação de follow-ups pendentes...");
 

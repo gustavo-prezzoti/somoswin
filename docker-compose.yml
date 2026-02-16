@@ -152,7 +152,8 @@ services:
       - ASAAS_API_URL=${ASAAS_API_URL}
       - ASAAS_API_TOKEN=${ASAAS_API_TOKEN}
       - META_SYNC_ENABLED=true
-      - META_SYNC_CRON=0 */30 * * * *
+      # A cada 12 horas (evita sobrecarga Meta API / rate limit)
+      - META_SYNC_CRON=0 0 */12 * * *
       # UaZap
       - UAZAP_BASE_URL=${UAZAP_BASE_URL}
       - UAZAP_TOKEN=${UAZAP_TOKEN}

@@ -33,7 +33,7 @@ public class AiResponseConsumer {
     private static final String QUEUE_NAME = "ai_response_queue";
     private static final long DEBOUNCE_DELAY_MS = 3000; // Aguardar 3 segundos de silêncio
 
-    @Scheduled(fixedDelay = 500) // Verifica a cada meio segundo
+    @Scheduled(fixedDelayString = "${ai.queue.consumer-interval-ms:2000}") // Verifica a cada 2s (evita sobrecarga)
     public void processQueue() {
         try {
             // Busca todas as conversas que estão aguardando silêncio

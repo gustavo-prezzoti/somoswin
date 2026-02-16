@@ -60,7 +60,7 @@ public class MarketingService {
     @Value("${meta.sync.enabled:true}")
     private boolean metaSyncEnabled;
 
-    @Value("${meta.sync.cron:0 */30 * * * *}")
+    @Value("${meta.sync.cron:0 0 */12 * * *}")
     private String syncCron;
 
     public java.util.List<Map<String, Object>> getRealTimeCampaigns(Company company) {

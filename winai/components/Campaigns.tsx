@@ -47,6 +47,8 @@ const Campaigns: React.FC = () => {
   const [interestsDropdownOpen, setInterestsDropdownOpen] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const interestsSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interestsContainerRef = useRef<HTMLDivElement>(null);
+  const [interestsHasSearched, setInterestsHasSearched] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [hasCampaignData, setHasCampaignData] = useState(false);
   const [isMetaConnected, setIsMetaConnected] = useState(false);
@@ -115,27 +117,45 @@ const Campaigns: React.FC = () => {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  // Debounce search de interesses (Meta API)
-  useEffect(() => {
-    if (!interestsSearch.trim() || interestsSearch.length < 2) {
+  const runInterestsSearch = async () => {
+    const q = interestsSearch.trim();
+    if (!q) {
       setInterestsResults([]);
       return;
     }
+    setInterestsSearching(true);
+    setInterestsHasSearched(true);
+    try {
+      const data = await marketingService.searchTargetingInterests(q);
+      setInterestsResults(data);
+      setInterestsDropdownOpen(true);
+    } catch {
+      setInterestsResults([]);
+    } finally {
+      setInterestsSearching(false);
+    }
+  };
+
+  // Debounce search de interesses (Meta API) - dispara ao digitar (1+ chars) ou Enter
+  useEffect(() => {
+    if (!interestsSearch.trim()) {
+      setInterestsResults([]);
+      setInterestsHasSearched(false);
+      return;
+    }
     if (interestsSearchRef.current) clearTimeout(interestsSearchRef.current);
-    interestsSearchRef.current = setTimeout(async () => {
-      setInterestsSearching(true);
-      try {
-        const data = await marketingService.searchTargetingInterests(interestsSearch);
-        setInterestsResults(data);
-        setInterestsDropdownOpen(true);
-      } catch {
-        setInterestsResults([]);
-      } finally {
-        setInterestsSearching(false);
-      }
-    }, 400);
+    interestsSearchRef.current = setTimeout(runInterestsSearch, 400);
     return () => { if (interestsSearchRef.current) clearTimeout(interestsSearchRef.current); };
   }, [interestsSearch]);
+
+  // Scroll automático quando dropdown de interesses abre (facilita ver as opções)
+  useEffect(() => {
+    if (interestsDropdownOpen && interestsResults.length > 0 && interestsContainerRef.current) {
+      requestAnimationFrame(() => {
+        interestsContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+  }, [interestsDropdownOpen, interestsResults.length]);
 
   const loadCampaigns = async () => {
     if (!isMetaConnected) return;
@@ -364,6 +384,10 @@ const Campaigns: React.FC = () => {
   };
 
   const handleNext = () => {
+    if (currentStep === 1 && selectedInterests.length === 0) {
+      alert('Selecione pelo menos um interesse para continuar.');
+      return;
+    }
     if (currentStep < steps.length) {
       setCurrentStep(prev => prev + 1);
     }
@@ -376,6 +400,10 @@ const Campaigns: React.FC = () => {
   };
 
   const handleCreate = async () => {
+    if (selectedInterests.length === 0) {
+      alert('Selecione pelo menos um interesse.');
+      return;
+    }
     if (!formData.adMessage?.trim() || !formData.destinationUrl?.trim() || !formData.imageUrl?.trim()) {
       alert('Preencha texto do anúncio, URL de destino e imagem.');
       return;
@@ -416,6 +444,9 @@ const Campaigns: React.FC = () => {
     });
     setSelectedDriveFile(null);
     setSelectedInterests([]);
+    setInterestsSearch('');
+    setInterestsResults([]);
+    setInterestsHasSearched(false);
   };
 
   if (isLoading) {
@@ -902,7 +933,7 @@ const Campaigns: React.FC = () => {
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   <p className="text-[10px] text-gray-500 font-bold">Campos conforme Meta Ads API. Conecte o Meta Ads em Configurações antes de criar.</p>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome da Campanha</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome da Campanha <span className="text-rose-500">*</span></label>
                     <input
                       name="name"
                       value={formData.name}
@@ -913,7 +944,7 @@ const Campaigns: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Objetivo (Meta API)</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Objetivo (Meta API) <span className="text-rose-500">*</span></label>
                     <select
                       name="objective"
                       value={formData.objective}
@@ -928,7 +959,7 @@ const Campaigns: React.FC = () => {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento Diário (R$)</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento Diário (R$) <span className="text-rose-500">*</span></label>
                     <div className="relative">
                       <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-gray-400">R$</span>
                       <input
@@ -951,7 +982,7 @@ const Campaigns: React.FC = () => {
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   <p className="text-[10px] text-gray-500 font-bold">Targeting conforme Meta Ads API (geo_locations, age_min, age_max)</p>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><MapPin size={12} /> País (código ISO)</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><MapPin size={12} /> País (código ISO) <span className="text-rose-500">*</span></label>
                     <select
                       name="countryCode"
                       value={formData.countryCode}
@@ -992,19 +1023,34 @@ const Campaigns: React.FC = () => {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2 relative">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><UsersIcon size={12} /> Interesses (opcional)</label>
-                    <p className="text-[9px] text-gray-400 px-2">Busque e selecione interesses aceitos pela Meta Ads</p>
-                    <input
-                      value={interestsSearch}
-                      onChange={(e) => setInterestsSearch(e.target.value)}
-                      onFocus={() => interestsResults.length > 0 && setInterestsDropdownOpen(true)}
-                      onBlur={() => setTimeout(() => setInterestsDropdownOpen(false), 200)}
-                      type="text"
-                      placeholder="Digite para buscar (ex: futebol, marketing...)"
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    />
-                    {interestsSearching && <span className="absolute right-6 top-[52px] text-[10px] text-gray-400">Buscando...</span>}
+                  <div className="space-y-2 relative" ref={interestsContainerRef}>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><UsersIcon size={12} /> Interesses <span className="text-rose-500">*</span></label>
+                    <p className="text-[9px] text-gray-400 px-2">Busque e selecione interesses aceitos pela Meta Ads. Conecte o Meta Ads em Configurações.</p>
+                    <div className="relative">
+                      <input
+                        value={interestsSearch}
+                        onChange={(e) => setInterestsSearch(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), runInterestsSearch())}
+                        onFocus={() => interestsResults.length > 0 && setInterestsDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setInterestsDropdownOpen(false), 200)}
+                        type="text"
+                        placeholder="Digite para buscar (ex: futebol, marketing...) e pressione Enter"
+                        className="w-full px-6 py-4 pr-24 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => runInterestsSearch()}
+                        disabled={!interestsSearch.trim() || interestsSearching}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-emerald-600 text-white text-[10px] font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {interestsSearching ? '...' : 'Buscar'}
+                      </button>
+                    </div>
+                    {interestsHasSearched && interestsSearch.trim() && !interestsSearching && interestsResults.length === 0 && (
+                      <p className="text-[10px] text-amber-600 mt-1 px-2">
+                        {!isMetaConnected ? 'Conecte o Meta Ads em Configurações para buscar interesses.' : 'Nenhum resultado encontrado.'}
+                      </p>
+                    )}
                     {interestsDropdownOpen && interestsResults.length > 0 && (
                       <div className="absolute z-20 mt-1 w-full bg-white rounded-2xl border border-gray-200 shadow-xl max-h-48 overflow-y-auto">
                         {interestsResults.map((r) => (
@@ -1045,7 +1091,7 @@ const Campaigns: React.FC = () => {
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   <p className="text-[10px] text-gray-500 font-bold">Criativo conforme Meta Ads API (link_data: message, link, picture)</p>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Texto do Anúncio (message) *</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Texto do Anúncio (message) <span className="text-rose-500">*</span></label>
                     <textarea
                       name="adMessage"
                       value={formData.adMessage}
@@ -1056,7 +1102,7 @@ const Campaigns: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><LinkIcon size={12} /> URL de Destino (link) *</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><LinkIcon size={12} /> URL de Destino (link) <span className="text-rose-500">*</span></label>
                     <input
                       name="destinationUrl"
                       value={formData.destinationUrl}
@@ -1067,7 +1113,7 @@ const Campaigns: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Imagem do Anúncio (picture) *</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Imagem do Anúncio (picture) <span className="text-rose-500">*</span></label>
                     <div className="flex gap-3 flex-wrap">
                       <label className="flex-1 min-w-[200px] cursor-pointer">
                         <input

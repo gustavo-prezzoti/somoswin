@@ -91,29 +91,39 @@ public class MarketingAiRecommendationsService {
     /**
      * Gera recomendações via IA e persiste no cache.
      * Chamado pelo worker em background.
+     * Fetch de campanhas (Meta API) é feito fora da transação para evitar connection leak
+     * quando a Meta API retorna rate limit e espera 120s.
      */
-    @Transactional
     public void generateAndStoreForCompany(Company company) {
         try {
             CampaignsListResponse campaignsResponse = marketingService.getCampaignsForCompany(company);
             List<CampaignListItemDTO> campaigns = campaignsResponse.getCampaigns();
 
             if (campaigns == null || campaigns.isEmpty()) {
-                cacheRepository.findByCompany(company).ifPresent(cacheRepository::delete);
+                clearCacheForCompany(company);
                 return;
             }
 
             List<AiRecommendationDTO> recommendations = generateRecommendationsWithAi(campaigns);
             String json = objectMapper.writeValueAsString(recommendations);
-
-            AiRecommendationCache cache = cacheRepository.findByCompany(company)
-                    .orElse(AiRecommendationCache.builder().company(company).build());
-            cache.setRecommendationsJson(json);
-            cacheRepository.save(cache);
+            storeRecommendationsInCache(company, json);
             log.debug("Stored {} recommendations for company {}", recommendations.size(), company.getId());
         } catch (Exception e) {
             log.error("Error generating AI recommendations for company {}: {}", company.getId(), e.getMessage());
         }
+    }
+
+    @Transactional
+    void clearCacheForCompany(Company company) {
+        cacheRepository.findByCompany(company).ifPresent(cacheRepository::delete);
+    }
+
+    @Transactional
+    void storeRecommendationsInCache(Company company, String json) {
+        AiRecommendationCache cache = cacheRepository.findByCompany(company)
+                .orElse(AiRecommendationCache.builder().company(company).build());
+        cache.setRecommendationsJson(json);
+        cacheRepository.save(cache);
     }
 
     private List<AiRecommendationDTO> generateRecommendationsWithAi(List<CampaignListItemDTO> campaigns) {
