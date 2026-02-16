@@ -54,6 +54,10 @@ public class MarketingService {
     @Value("${meta.redirect.uri:https://server.somosamplia.com/api/v1/marketing/auth/meta/callback}")
     private String redirectUri;
 
+    /** config_id do Facebook Login for Business (User Token). Se vazio, usa scope (Login padrão). */
+    @Value("${meta.config.id:}")
+    private String metaConfigId;
+
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
@@ -772,6 +776,14 @@ public class MarketingService {
 
     public String getMetaAuthorizationUrl(User user) {
         String state = user.getCompany().getId().toString();
+        if (metaConfigId != null && !metaConfigId.isBlank()) {
+            // Facebook Login for Business: config_id substitui scope (User Token).
+            // Não usar scope junto com config_id. response_type=code para troca server-side.
+            return String.format(
+                    "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code",
+                    clientId, redirectUri, state, metaConfigId.trim());
+        }
+        // Fallback: Login padrão com scope
         String scope = "ads_management,pages_show_list,pages_read_engagement,business_management,instagram_basic,instagram_manage_insights,leads_retrieval,email,public_profile";
         return String.format(
                 "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s&response_type=code",
