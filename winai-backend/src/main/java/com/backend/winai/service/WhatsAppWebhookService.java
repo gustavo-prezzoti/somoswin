@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.List;
 import java.util.Optional;
@@ -131,7 +132,12 @@ public class WhatsAppWebhookService {
             // Processar mídia se houver
             processMedia(message, webhook);
 
-            message = messageRepository.save(message);
+            try {
+                message = messageRepository.save(message);
+            } catch (DataIntegrityViolationException e) {
+                log.debug("Mensagem duplicada (webhook recebido 2x): {}", messageId);
+                return;
+            }
 
             // Atualizar conversa
             // Truncar texto se for muito longo (ex: URLs de mídia)
@@ -144,7 +150,9 @@ public class WhatsAppWebhookService {
             if (conversation.getUnreadCount() == null) {
                 conversation.setUnreadCount(0);
             }
-            conversation.setUnreadCount(conversation.getUnreadCount() + 1);
+            if (!isFromMe) {
+                conversation.setUnreadCount(conversation.getUnreadCount() + 1);
+            }
             if (lead != null && conversation.getLead() == null) {
                 conversation.setLead(lead);
             }
@@ -494,7 +502,7 @@ public class WhatsAppWebhookService {
             if (id != null && !id.isEmpty())
                 return id;
         }
-        return UUID.randomUUID().toString();
+        return null;
     }
 
     private String extractContactName(UazapWebhookRequest webhook) {

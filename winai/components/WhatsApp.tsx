@@ -52,11 +52,9 @@ const WhatsApp: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Recarregar conversas quando o usuário for carregado
     if (user) {
       loadConversations();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
@@ -170,15 +168,12 @@ const WhatsApp: React.FC = () => {
   };
 
   useEffect(() => {
-    // Polling de conversas como fallback (a cada 60 segundos)
+    if (!user?.id || !user?.company?.id) return;
     const intervalId = setInterval(() => {
-      if (user?.id && user?.company?.id) {
-        loadConversations(true); // silent load
-      }
-    }, 60000);
-
+      loadConversations(true);
+    }, 1000);
     return () => clearInterval(intervalId);
-  }, [user, loadConversations]);
+  }, [user?.id, user?.company?.id, loadConversations]);
 
   useEffect(() => {
     // Polling de mensagens da conversa ativa como fallback (a cada 30 segundos)
