@@ -955,11 +955,14 @@ const WhatsApp: React.FC = () => {
                         {chat.contactName ? chat.contactName.charAt(0).toUpperCase() : chat.phoneNumber.slice(-2)}
                       </span>
                     </div>
-                    {chat.unreadCount > 0 && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
-                        <span className="text-white text-[8px] font-bold">{chat.unreadCount > 9 ? '9+' : chat.unreadCount}</span>
-                      </div>
-                    )}
+                    {(() => {
+                      const displayUnread = activeConversation?.id === chat.id ? 0 : (chat.unreadCount || 0);
+                      return displayUnread > 0 && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
+                          <span className="text-white text-[8px] font-bold">{displayUnread > 9 ? '9+' : displayUnread}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline mb-0.5">
@@ -972,7 +975,7 @@ const WhatsApp: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <p className={`text-[11px] truncate ${chat.unreadCount > 0 ? 'text-gray-900 font-bold' : 'text-gray-400'}`}>
+                    <p className={`text-[11px] truncate ${(activeConversation?.id === chat.id ? 0 : (chat.unreadCount || 0)) > 0 ? 'text-gray-900 font-bold' : 'text-gray-400'}`}>
                       {chat.lastMessageText || 'Sem mensagens'}
                     </p>
                   </div>
