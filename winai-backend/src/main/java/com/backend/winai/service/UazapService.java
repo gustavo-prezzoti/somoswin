@@ -25,6 +25,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +48,12 @@ public class UazapService {
 
     @Value("${uazap.admin-token:}")
     private String adminToken;
+
+    @Value("${uazap.webhook.url:}")
+    private String webhookUrl;
+
+    private final ConcurrentHashMap<String, Long> lastWebhookConfigured = new ConcurrentHashMap<>();
+    private static final long WEBHOOK_THROTTLE_MS = 600_000;
 
     /**
      * Envia uma mensagem de texto via Uazap
@@ -202,32 +209,34 @@ public class UazapService {
         String url = baseUrl.replaceAll("/$", "") + "/send/text";
         log.info("  [SEND] URL final: {}", url);
 
-        // Headers
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Accept", "application/json");
-        // Usar adminToken para autenticação administrativa
-        headers.set("admintoken", adminToken);
-        headers.set("apikey", adminToken);
-        headers.set("token", token);
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Accept", "application/json");
+            if (adminToken != null && !adminToken.isEmpty()) {
+                headers.set("admintoken", adminToken);
+                headers.set("apikey", adminToken);
+            }
+            headers.set("token", token != null ? token : "");
 
-        // Body
-        Map<String, String> body = new HashMap<>();
-        body.put("number", request.getPhoneNumber());
-        body.put("text", request.getMessage());
+            Map<String, String> body = new HashMap<>();
+            body.put("number", request.getPhoneNumber());
+            body.put("text", request.getMessage());
+            if (token != null && !token.isEmpty()) {
+                body.put("token", token);
+            }
 
-        HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
+            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
 
-        try {
-            // Enviar mensagem via Uazap API
-            @SuppressWarnings("unchecked")
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.POST,
-                    requestEntity,
-                    (Class<Map<String, Object>>) (Class<?>) Map.class);
+            try {
+                @SuppressWarnings("unchecked")
+                ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                        url,
+                        HttpMethod.POST,
+                        requestEntity,
+                        (Class<Map<String, Object>>) (Class<?>) Map.class);
 
-            if (response.getStatusCode().is2xxSuccessful()) {
+                if (response.getStatusCode().is2xxSuccessful()) {
                 Map<String, Object> responseBody = response.getBody();
                 String messageId = extractMessageId(responseBody);
 
@@ -256,16 +265,61 @@ public class UazapService {
 
                 log.info("Mensagem enviada com sucesso via Uazap. MessageId: {}, Phone: {}", messageId,
                         request.getPhoneNumber());
-                return message;
-            } else {
-                log.error("Erro ao enviar mensagem via Uazap. Status: {}, Body: {}", response.getStatusCode(),
-                        response.getBody());
-                throw new RuntimeException("Erro ao enviar mensagem via Uazap");
+                    return message;
+                } else {
+                    log.error("Erro ao enviar mensagem via Uazap. Status: {}, Body: {}", response.getStatusCode(),
+                            response.getBody());
+                    throw new RuntimeException("Erro ao enviar mensagem via Uazap");
+                }
+            } catch (org.springframework.web.client.HttpClientErrorException e) {
+                if (e.getStatusCode().value() == 401 && attempt == 1 && company != null) {
+                    String instanceToRefresh = instance;
+                    if (instanceToRefresh == null || instanceToRefresh.isEmpty()) {
+                        try {
+                            java.net.URL u = new java.net.URL(baseUrl);
+                            String host = u.getHost();
+                            if (host != null && host.contains(".")) {
+                                instanceToRefresh = host.substring(0, host.indexOf('.'));
+                            }
+                        } catch (Exception ignored) { }
+                    }
+                    if (instanceToRefresh != null && !instanceToRefresh.isEmpty()) {
+                        log.warn("401 Unauthorized ao enviar mensagem. Atualizando token da instância {} e tentando novamente.", instanceToRefresh);
+                        try {
+                            List<UazapInstanceDTO> instances = fetchInstances(baseUrl);
+                            if (instances.isEmpty()) instances = fetchInstances(defaultBaseUrl);
+                        final String instRef = instanceToRefresh;
+                            UazapInstanceDTO matching = instances.stream()
+                                    .filter(i -> instRef.equalsIgnoreCase(i.getInstanceName()) || (i.getInstanceName() != null && i.getInstanceName().toLowerCase().contains(instRef.toLowerCase())))
+                                    .findFirst()
+                                    .orElse(null);
+                            if (matching != null && matching.getToken() != null && !matching.getToken().isEmpty()) {
+                                token = matching.getToken();
+                                config.put("token", token);
+                                List<com.backend.winai.entity.UserWhatsAppConnection> conns = userWhatsAppConnectionRepository
+                                        .findByCompanyId(company.getId());
+                                conns.stream()
+                                        .filter(c -> instRef.equalsIgnoreCase(c.getInstanceName()))
+                                        .findFirst()
+                                    .ifPresent(c -> {
+                                            c.setInstanceToken(token);
+                                            userWhatsAppConnectionRepository.save(c);
+                                        });
+                                continue;
+                            }
+                        } catch (Exception ex) {
+                            log.error("Erro ao atualizar token: {}", ex.getMessage());
+                        }
+                    }
+                }
+                log.error("Erro ao enviar mensagem via Uazap", e);
+                throw new RuntimeException("Erro ao enviar mensagem via Uazap: " + e.getMessage(), e);
+            } catch (Exception e) {
+                log.error("Erro ao enviar mensagem via Uazap", e);
+                throw new RuntimeException("Erro ao enviar mensagem via Uazap: " + e.getMessage(), e);
             }
-        } catch (Exception e) {
-            log.error("Erro ao enviar mensagem via Uazap", e);
-            throw new RuntimeException("Erro ao enviar mensagem via Uazap: " + e.getMessage(), e);
         }
+        throw new RuntimeException("Erro ao enviar mensagem via Uazap: 401 Unauthorized");
     }
 
     /**
@@ -1349,6 +1403,24 @@ public class UazapService {
         } catch (Exception e) {
             log.error("[WEBHOOK-CASCADE] Erro ao configurar webhook da instância: {}", e.getMessage());
         }
+    }
+
+    public void ensureInstanceWebhookConfigured(String instanceName) {
+        if (webhookUrl == null || webhookUrl.isEmpty()) return;
+        Long last = lastWebhookConfigured.get(instanceName);
+        if (last != null && System.currentTimeMillis() - last < WEBHOOK_THROTTLE_MS) return;
+        String token = fetchInstanceToken(instanceName);
+        if (token == null || token.isEmpty()) return;
+        List<String> events = List.of("messages", "messages_update", "presence", "connection");
+        try {
+            com.backend.winai.dto.uazap.GlobalWebhookDTO global = getGlobalWebhook();
+            if (global.getEvents() != null && !global.getEvents().isEmpty()) {
+                events = global.getEvents();
+            }
+        } catch (Exception ignored) { }
+        configureInstanceWebhook(token, webhookUrl, events);
+        lastWebhookConfigured.put(instanceName, System.currentTimeMillis());
+        log.info("Webhook configurado para instância {} (conexão via cliente) - events: {}", instanceName, events);
     }
 
     /**

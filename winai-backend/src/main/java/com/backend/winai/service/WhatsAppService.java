@@ -57,6 +57,9 @@ public class WhatsAppService {
     @Value("${uazap.default-base-url:}")
     private String defaultBaseUrl;
 
+    @Value("${uazap.webhook.url:}")
+    private String webhookUrl;
+
     /**
      * Processa mensagem recebida via Webhook
      */
@@ -794,6 +797,9 @@ public class WhatsAppService {
                 log.info("Instância {} retornou erro na conexão, tentando criar...", instanceName);
                 return createAndConnectInstance(company, instanceName);
             }
+            if (result != null) {
+                uazapService.ensureInstanceWebhookConfigured(instanceName);
+            }
             return result;
         } catch (RuntimeException e) {
             if (e.getMessage() != null && e.getMessage().contains("Instância não encontrada")) {
@@ -810,9 +816,11 @@ public class WhatsAppService {
                 .instanceName(instanceName)
                 .qrcode(true)
                 .integration("WHATSAPP-BAILEYS")
+                .webhookUrl(webhookUrl)
                 .build();
 
         uazapService.createInstance(createRequest);
+        uazapService.ensureInstanceWebhookConfigured(instanceName);
 
         // Vincular empresa à nova instância para evitar duplicação futura
         if (connectionRepository.findByCompanyIdAndInstanceName(company.getId(), instanceName).isEmpty()) {
