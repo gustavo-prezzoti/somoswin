@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.*;
 
 @Service
 @Slf4j
@@ -26,7 +27,7 @@ public class MarketingAiRecommendationsService {
         List<CampaignListItemDTO> campaigns = campaignsResponse.getCampaigns();
 
         if (campaigns == null || campaigns.isEmpty()) {
-            return getPlaceholderRecommendations();
+            return Collections.emptyList();
         }
 
         String campaignsJson = buildCampaignsContext(campaigns);
@@ -41,12 +42,14 @@ public class MarketingAiRecommendationsService {
                 ]
                 Tipos: SCALE (escalar orçamento), AUDIENCE (refinar público), PAUSE (pausar campanha ineficiente).
                 actionType: INCREASE_BUDGET, APPLY_AUDIENCE, PAUSE.
-                Use dados reais das campanhas. Seja específico com números (CPL, CTR, etc).
+                Use dados reais das campanhas. Seja específico com números (CPL, CTR, cliques, alcance, impressões, conversões, gasto).
                 """;
 
         try {
-            String aiResponse = openAiService.generateResponse(systemPrompt, campaignsJson, Collections.emptyList());
-            if (aiResponse == null || aiResponse.trim().isEmpty()) return getPlaceholderRecommendations();
+            CompletableFuture<String> future = CompletableFuture.supplyAsync(() ->
+                    openAiService.generateResponse(systemPrompt, campaignsJson, Collections.emptyList()));
+            String aiResponse = future.get(25, TimeUnit.SECONDS);
+            if (aiResponse == null || aiResponse.trim().isEmpty()) return Collections.emptyList();
 
             String jsonStr = extractJson(aiResponse);
             JsonNode arr = objectMapper.readTree(jsonStr);
@@ -65,19 +68,24 @@ public class MarketingAiRecommendationsService {
                         .build());
             }
             return result.size() >= 3 ? result.subList(0, 3) : result;
+        } catch (TimeoutException e) {
+            log.warn("AI recommendations timed out after 25s");
+            return Collections.emptyList();
         } catch (Exception e) {
             log.error("Error generating AI recommendations: {}", e.getMessage());
-            return getPlaceholderRecommendations();
+            return Collections.emptyList();
         }
     }
 
     private String buildCampaignsContext(List<CampaignListItemDTO> campaigns) {
         StringBuilder sb = new StringBuilder();
         for (CampaignListItemDTO c : campaigns) {
-            sb.append(String.format("- %s (id:%s) | Status:%s | Objetivo:%s | Gasto:R$%.2f | Impressões:%d | CTR:%.2f%% | Conversões:%d | CPL:%s | Orçamento diário:%s\n",
+            sb.append(String.format("- %s (id:%s) | Status:%s | Objetivo:%s | Gasto:R$%.2f | Impressões:%d | Alcance:%d | Cliques:%d | CTR:%.2f%% | Conversões:%d | CPL:%s | Orçamento diário:%s\n",
                     c.getName(), c.getId(), c.getStatus(), c.getObjective(),
                     c.getSpend() != null ? c.getSpend() : 0,
                     c.getImpressions() != null ? c.getImpressions() : 0,
+                    c.getReach() != null ? c.getReach() : 0,
+                    c.getClicks() != null ? c.getClicks() : 0,
                     c.getCtr() != null ? c.getCtr() : 0,
                     c.getConversions() != null ? c.getConversions() : 0,
                     c.getCpl() != null ? String.format("R$%.2f", c.getCpl()) : "N/A",

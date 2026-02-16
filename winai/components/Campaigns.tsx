@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { DollarSign, Eye, MousePointerClick, MessageSquare, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Link as LinkIcon, Database, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Zap } from 'lucide-react';
+import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Link as LinkIcon, Database, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { marketingService, TrafficMetrics, CreateCampaignRequest, CampaignListItem, AiRecommendation } from '../services';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
@@ -119,7 +119,13 @@ const Campaigns: React.FC = () => {
   const loadRecommendations = async () => {
     setRecommendationsLoading(true);
     try {
-      const data = await marketingService.getAiRecommendations();
+      const timeoutMs = 28000;
+      const data = await Promise.race([
+        marketingService.getAiRecommendations(),
+        new Promise<AiRecommendation[]>((_, reject) =>
+          setTimeout(() => reject(new Error('Tempo limite excedido')), timeoutMs)
+        ),
+      ]);
       setRecommendations(data || []);
     } catch (e) {
       console.error('Failed to load recommendations', e);
@@ -132,12 +138,22 @@ const Campaigns: React.FC = () => {
   const handleToggleCampaign = async (c: CampaignListItem) => {
     const newStatus = c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
     setTogglingId(c.id);
+    // Atualização otimista: reflete o novo status na UI imediatamente
+    setCampaigns((prev) =>
+      prev.map((camp) =>
+        camp.id === c.id ? { ...camp, status: newStatus } : camp
+      )
+    );
     try {
       await marketingService.updateCampaignStatus(c.id, newStatus as 'ACTIVE' | 'PAUSED');
       await loadCampaigns();
       await loadRecommendations();
     } catch (e) {
       console.error('Failed to update status', e);
+      // Reverte em caso de erro
+      setCampaigns((prev) =>
+        prev.map((camp) => (camp.id === c.id ? { ...camp, status: c.status } : camp))
+      );
       alert((e as Error)?.message || 'Erro ao atualizar status');
     } finally {
       setTogglingId(null);
@@ -479,9 +495,9 @@ const Campaigns: React.FC = () => {
                             <p className="font-bold text-gray-400 uppercase">Impressões / CTR</p>
                             <p className="font-bold text-gray-900">{c.impressions?.toLocaleString() || 0} / {c.ctr != null ? `${c.ctr.toFixed(1)}%` : '-'}</p>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <MessageSquare size={12} className="text-emerald-600 shrink-0" />
-                            <span className="font-bold text-gray-900">{c.conversions || 0}</span>
+                          <div>
+                            <p className="font-bold text-gray-400 uppercase">Conversões</p>
+                            <p className="font-bold text-gray-900">{c.conversions || 0}</p>
                           </div>
                           <div>
                             <p className="font-bold text-gray-400 uppercase">CPL</p>
@@ -527,14 +543,28 @@ const Campaigns: React.FC = () => {
               </div>
             </div>
 
-            {/* OTIMIZAÇÕES NEURAIS */}
-            <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
+            {/* OTIMIZAÇÕES NEURAIS - Card sempre visível, carrega em background */}
+            <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm min-h-[280px]">
               <div className="mb-6">
                 <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic">Otimizações Neurais</h2>
                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Ações recomendadas pela IA AMPLIA</p>
               </div>
               {recommendationsLoading ? (
-                <div className="flex justify-center py-12"><Loader2 className="animate-spin text-emerald-600" size={32} /></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="p-6 rounded-2xl border border-gray-100 bg-gray-50/50 min-h-[200px] flex flex-col">
+                      <div className="w-10 h-10 rounded-xl bg-gray-200 animate-pulse mb-4" />
+                      <div className="h-4 bg-gray-200 rounded animate-pulse mb-2 w-3/4" />
+                      <div className="h-3 bg-gray-100 rounded animate-pulse mb-2 w-full" />
+                      <div className="h-3 bg-gray-100 rounded animate-pulse mb-4 w-full flex-1" />
+                      <div className="h-12 bg-gray-200 rounded-xl animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              ) : recommendations.length === 0 ? (
+                <div className="flex items-center justify-center py-16 text-gray-500 font-medium text-sm">
+                  Nenhuma recomendação no momento. Conecte sua conta Meta Ads e tenha campanhas ativas para receber sugestões personalizadas.
+                </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {recommendations.slice(0, 3).map((rec) => {
@@ -544,16 +574,16 @@ const Campaigns: React.FC = () => {
                     const btnBg = isScale ? 'bg-emerald-600 hover:bg-emerald-700' : isPause ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-500 hover:bg-amber-600';
                     const Icon = isScale ? TrendingUp : isPause ? TrendingDown : AlertTriangle;
                     return (
-                      <div key={rec.id} className="p-6 rounded-2xl border border-gray-100 bg-gray-50/50 hover:shadow-lg transition-all">
-                        <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center mb-4">
+                      <div key={rec.id} className="p-6 rounded-2xl border border-gray-100 bg-gray-50/50 hover:shadow-lg transition-all min-h-[200px] flex flex-col">
+                        <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center mb-4 shrink-0">
                           <Icon size={20} className="text-gray-600" />
                         </div>
-                        <h3 className="font-black text-gray-900 uppercase text-sm mb-2">{rec.title}</h3>
-                        <p className="text-xs text-gray-600 leading-relaxed mb-4">{rec.description}</p>
+                        <h3 className="font-black text-gray-900 uppercase text-sm mb-2 line-clamp-2">{rec.title}</h3>
+                        <p className="text-xs text-gray-600 leading-relaxed mb-4 flex-1 line-clamp-4">{rec.description}</p>
                         <button
                           onClick={() => handleApplyRecommendation(rec)}
                           disabled={isConnect || applyingId === rec.id}
-                          className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-white transition-all disabled:opacity-50 ${btnBg}`}
+                          className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-white transition-all disabled:opacity-50 shrink-0 ${btnBg}`}
                         >
                           {applyingId === rec.id ? <Loader2 size={14} className="animate-spin inline" /> : rec.actionLabel}
                         </button>

@@ -20,6 +20,7 @@ public class CampaignListItemDTO {
     private Double spend;
     private Long impressions;
     private Long reach;
+    private Long clicks;
     private Double ctr;
     private Long conversions;
     private Double cpl;

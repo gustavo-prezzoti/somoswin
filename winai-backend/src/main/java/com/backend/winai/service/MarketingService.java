@@ -182,6 +182,7 @@ public class MarketingService {
                     double spend = 0.0;
                     long impressions = 0;
                     long reach = 0;
+                    long clicks = 0;
                     double ctr = 0.0;
                     long conversions = 0;
 
@@ -192,6 +193,7 @@ public class MarketingService {
                             spend = i.has("spend") ? i.get("spend").asDouble() : 0.0;
                             impressions = i.has("impressions") ? i.get("impressions").asLong() : 0;
                             reach = i.has("reach") ? i.get("reach").asLong() : impressions;
+                            clicks = i.has("clicks") ? i.get("clicks").asLong() : 0;
                             ctr = i.has("ctr") ? Double.parseDouble(i.get("ctr").asText().replace("%", "")) : 0.0;
                             if (i.has("actions")) {
                                 for (JsonNode action : i.get("actions")) {
@@ -237,6 +239,7 @@ public class MarketingService {
                             .spend(spend)
                             .impressions(impressions)
                             .reach(reach)
+                            .clicks(clicks)
                             .ctr(ctr)
                             .conversions(conversions)
                             .cpl(cpl > 0 ? cpl : null)
