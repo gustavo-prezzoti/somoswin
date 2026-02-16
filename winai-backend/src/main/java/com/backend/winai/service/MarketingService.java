@@ -557,9 +557,9 @@ public class MarketingService {
             // 3. Fetch Insights - current period (last 30 days)
             LocalDate today = LocalDate.now();
             LocalDate sinceCurrent = today.minusDays(30);
-            // Instagram User Insights API: impressions não é permitido; usar reach, follower_count, accounts_engaged
+            // Instagram User Insights: accounts_engaged requer metric_type=total_value
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach,accounts_engaged,follower_count&period=day&since=%s&until=%s&access_token=%s",
+                    "%s/%s/insights?metric=reach,accounts_engaged,follower_count&metric_type=total_value&period=day&since=%s&until=%s&access_token=%s",
                     metaApiBaseUrl, igId, sinceCurrent, today, accessToken);
             log.info("[InstagramMetrics] Insights URL (30d): {}", insightsUrl.replace(accessToken, "***"));
             String insightsBody = getWithRetry(insightsUrl).getBody();
@@ -576,7 +576,7 @@ public class MarketingService {
             if (insightsData == null || !insightsData.isArray() || insightsData.size() == 0) {
                 log.info("[InstagramMetrics] Insights vazio, tentando fallback sem since/until");
                 String fallbackUrl = String.format(
-                        "%s/%s/insights?metric=reach,accounts_engaged,follower_count&period=day&access_token=%s",
+                        "%s/%s/insights?metric=reach,accounts_engaged,follower_count&metric_type=total_value&period=day&access_token=%s",
                         metaApiBaseUrl, igId, accessToken);
                 String fallbackBody = getWithRetry(fallbackUrl).getBody();
                 log.info("[InstagramMetrics] Fallback insights response: {}", fallbackBody);
@@ -592,7 +592,7 @@ public class MarketingService {
             // 4. Fetch Insights - previous period (30-60 days ago) for trend calculation
             LocalDate sincePrevious = today.minusDays(60);
             String insightsPrevUrl = String.format(
-                    "%s/%s/insights?metric=reach,accounts_engaged,follower_count&period=day&since=%s&until=%s&access_token=%s",
+                    "%s/%s/insights?metric=reach,accounts_engaged,follower_count&metric_type=total_value&period=day&since=%s&until=%s&access_token=%s",
                     metaApiBaseUrl, igId, sincePrevious, sinceCurrent, accessToken);
             JsonNode insightsPrevData = null;
             try {
