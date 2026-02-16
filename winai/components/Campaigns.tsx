@@ -681,6 +681,9 @@ const Campaigns: React.FC = () => {
                         <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center mb-4 shrink-0">
                           <Icon size={20} className="text-gray-600" />
                         </div>
+                        {rec.campaignName && (
+                          <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1 block">{rec.campaignName}</span>
+                        )}
                         <h3 className="font-black text-gray-900 uppercase text-sm mb-2 line-clamp-2">{rec.title}</h3>
                         <p className="text-xs text-gray-600 leading-relaxed mb-4 flex-1 line-clamp-4">{rec.description}</p>
                         <button

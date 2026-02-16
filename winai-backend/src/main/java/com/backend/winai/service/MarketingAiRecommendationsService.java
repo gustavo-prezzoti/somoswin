@@ -133,6 +133,7 @@ public class MarketingAiRecommendationsService {
                 Tipos: SCALE (escalar orçamento), AUDIENCE (refinar público), PAUSE (pausar campanha ineficiente).
                 actionType: INCREASE_BUDGET, APPLY_AUDIENCE, PAUSE.
                 Use dados reais das campanhas. Seja específico com números (CPL, CTR, cliques, alcance, impressões, conversões, gasto).
+                OBRIGATÓRIO: Em TODAS as recomendações, mencione SEMPRE o nome da campanha na descrição (ex: "A campanha 'CAMP. FEV01 - WPP'..."). Nunca use "desta campanha" ou "esta campanha" sem dizer o nome.
                 """;
 
         try {
