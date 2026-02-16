@@ -773,7 +773,7 @@ public class MarketingService {
     public String getMetaAuthorizationUrl(User user) {
         // Using Facebook Login for Business with config_id
         // This ensures users select assets from a specific Business Manager
-        String configId = "1444720510682524";
+        String configId = "1792297934776856";
         return String.format(
                 "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code&override_default_response_type=true",
                 clientId, redirectUri, user.getCompany().getId(), configId);
