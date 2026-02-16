@@ -119,8 +119,9 @@ export interface AiRecommendation {
 }
 
 export const marketingService = {
-    getMetrics: async (): Promise<TrafficMetrics> => {
-        return api.get<TrafficMetrics>('/marketing/metrics');
+    getMetrics: async (campaignId?: string): Promise<TrafficMetrics> => {
+        const params = campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : '';
+        return api.get<TrafficMetrics>('/marketing/metrics' + params);
     },
     createCampaign: async (campaign: CreateCampaignRequest): Promise<void> => {
         await api.post('/marketing/campaigns', campaign);

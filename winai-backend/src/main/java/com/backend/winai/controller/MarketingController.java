@@ -27,8 +27,10 @@ public class MarketingController {
     private final MarketingAiRecommendationsService aiRecommendationsService;
 
     @GetMapping("/metrics")
-    public ResponseEntity<TrafficMetricsResponse> getMetrics(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(marketingService.getTrafficMetrics(user));
+    public ResponseEntity<TrafficMetricsResponse> getMetrics(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) String campaignId) {
+        return ResponseEntity.ok(marketingService.getTrafficMetrics(user, campaignId));
     }
 
     @GetMapping("/instagram-metrics")

@@ -65,6 +65,7 @@ const Campaigns: React.FC = () => {
   // Campaign list & AI recommendations (Gestão tab)
   const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [metricsCampaignFilter, setMetricsCampaignFilter] = useState<string>('');
   const [recommendations, setRecommendations] = useState<AiRecommendation[]>([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [regeneratingRecommendations, setRegeneratingRecommendations] = useState(false);
@@ -93,9 +94,12 @@ const Campaigns: React.FC = () => {
   ];
 
   useEffect(() => {
-    loadMetrics();
     loadChats();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'GESTAO') loadMetrics();
+  }, [activeTab, metricsCampaignFilter]);
 
   useEffect(() => {
     if (activeTab === 'GESTAO') {
@@ -235,10 +239,11 @@ const Campaigns: React.FC = () => {
     setIsLoading(true);
     setError(null);
     const timeoutMs = 20000;
+    const campaignId = metricsCampaignFilter || undefined;
     try {
       const [data, status] = await Promise.race([
         Promise.all([
-          marketingService.getMetrics(),
+          marketingService.getMetrics(campaignId),
           marketingService.getStatus(),
         ]),
         new Promise<never>((_, reject) =>
@@ -472,6 +477,29 @@ const Campaigns: React.FC = () => {
         {/* GESTÃO TAB */}
         {activeTab === 'GESTAO' && (
           <div className="space-y-8">
+            {/* Filtro de campanha para métricas e gráfico */}
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Filtrar por campanha</label>
+              <select
+                value={metricsCampaignFilter}
+                onChange={(e) => setMetricsCampaignFilter(e.target.value)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none min-w-[200px]"
+              >
+                <option value="">Todas</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {metricsCampaignFilter && (
+                <button
+                  onClick={() => setMetricsCampaignFilter('')}
+                  className="text-[10px] font-bold text-gray-500 hover:text-emerald-600 uppercase tracking-widest"
+                >
+                  Limpar filtro
+                </button>
+              )}
+            </div>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <SummaryCard

@@ -459,7 +459,7 @@ public class MarketingService {
         return buildEmptyMetrics();
     }
 
-    public TrafficMetricsResponse getTrafficMetrics(User user) {
+    public TrafficMetricsResponse getTrafficMetrics(User user, String campaignId) {
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
         Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
@@ -477,15 +477,16 @@ public class MarketingService {
             return buildEmptyMetrics();
         }
 
+        // Quando campaignId informado, busca insights da campanha; senão, da conta de anúncios
+        String insightsResourceId = (campaignId != null && !campaignId.isBlank()) ? campaignId : adAccountId;
+
         try {
-            // Fetch daily insights for the last 14 days to calculate trends (7d vs previous
-            // 7d)
             String historyUrl = String.format(
                     "%s/%s/insights?fields=spend,impressions,clicks,actions,date_start&date_preset=last_14d&time_increment=1&access_token=%s",
-                    metaApiBaseUrl, adAccountId, accessToken);
+                    metaApiBaseUrl, insightsResourceId, accessToken);
             ResponseEntity<String> historyResponse = getWithRetry(historyUrl);
             String historyBody = historyResponse.getBody();
-            log.info("Meta Traffic Metrics Response for user {}: {}", user.getId(), historyBody);
+            log.info("Meta Traffic Metrics for {} (campaignId={}): {}", user.getId(), campaignId, historyBody != null ? "ok" : "null");
             JsonNode historyData = objectMapper.readTree(historyBody).get("data");
 
             return mapToResponse(historyData);
@@ -556,8 +557,9 @@ public class MarketingService {
             // 3. Fetch Insights - current period (last 30 days)
             LocalDate today = LocalDate.now();
             LocalDate sinceCurrent = today.minusDays(30);
+            // Instagram User Insights API: impressions não é permitido; usar reach, follower_count, accounts_engaged
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=impressions,reach,accounts_engaged,follower_count&period=day&since=%s&until=%s&access_token=%s",
+                    "%s/%s/insights?metric=reach,accounts_engaged,follower_count&period=day&since=%s&until=%s&access_token=%s",
                     metaApiBaseUrl, igId, sinceCurrent, today, accessToken);
             log.info("[InstagramMetrics] Insights URL (30d): {}", insightsUrl.replace(accessToken, "***"));
             String insightsBody = getWithRetry(insightsUrl).getBody();
@@ -574,7 +576,7 @@ public class MarketingService {
             if (insightsData == null || !insightsData.isArray() || insightsData.size() == 0) {
                 log.info("[InstagramMetrics] Insights vazio, tentando fallback sem since/until");
                 String fallbackUrl = String.format(
-                        "%s/%s/insights?metric=impressions,reach,accounts_engaged,follower_count&period=day&access_token=%s",
+                        "%s/%s/insights?metric=reach,accounts_engaged,follower_count&period=day&access_token=%s",
                         metaApiBaseUrl, igId, accessToken);
                 String fallbackBody = getWithRetry(fallbackUrl).getBody();
                 log.info("[InstagramMetrics] Fallback insights response: {}", fallbackBody);
@@ -590,7 +592,7 @@ public class MarketingService {
             // 4. Fetch Insights - previous period (30-60 days ago) for trend calculation
             LocalDate sincePrevious = today.minusDays(60);
             String insightsPrevUrl = String.format(
-                    "%s/%s/insights?metric=impressions,reach,accounts_engaged,follower_count&period=day&since=%s&until=%s&access_token=%s",
+                    "%s/%s/insights?metric=reach,accounts_engaged,follower_count&period=day&since=%s&until=%s&access_token=%s",
                     metaApiBaseUrl, igId, sincePrevious, sinceCurrent, accessToken);
             JsonNode insightsPrevData = null;
             try {
@@ -1634,6 +1636,7 @@ public class MarketingService {
                 .impressions(createDetail("0", "0%", true))
                 .clicks(createDetail("0", "0%", true))
                 .conversations(createDetail("0", "0%", true))
+                .roas(createDetail("0.0x", "0%", true))
                 .performanceHistory(new ArrayList<>())
                 .build();
     }
