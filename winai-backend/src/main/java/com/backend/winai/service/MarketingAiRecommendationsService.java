@@ -3,15 +3,18 @@ package com.backend.winai.service;
 import com.backend.winai.dto.marketing.AiRecommendationDTO;
 import com.backend.winai.dto.marketing.CampaignListItemDTO;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
+import com.backend.winai.entity.AiRecommendationCache;
+import com.backend.winai.entity.Company;
 import com.backend.winai.entity.User;
+import com.backend.winai.repository.AiRecommendationCacheRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.concurrent.*;
 
 @Service
 @Slf4j
@@ -20,18 +23,65 @@ public class MarketingAiRecommendationsService {
 
     private final MarketingService marketingService;
     private final OpenAiService openAiService;
+    private final AiRecommendationCacheRepository cacheRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * Retorna recomendações do cache (leitura rápida, sem chamada à IA).
+     * Usado pela API quando o usuário acessa a tela.
+     */
     public List<AiRecommendationDTO> getRecommendations(User user) {
-        CampaignsListResponse campaignsResponse = marketingService.getCampaignsForUser(user);
-        List<CampaignListItemDTO> campaigns = campaignsResponse.getCampaigns();
+        return getRecommendationsForCompany(user.getCompany());
+    }
 
-        if (campaigns == null || campaigns.isEmpty()) {
-            return Collections.emptyList();
+    @SuppressWarnings("unchecked")
+    public List<AiRecommendationDTO> getRecommendationsForCompany(Company company) {
+        return cacheRepository.findByCompany(company)
+                .map(cache -> {
+                    if (cache.getRecommendationsJson() == null || cache.getRecommendationsJson().isBlank()) {
+                        return Collections.<AiRecommendationDTO>emptyList();
+                    }
+                    try {
+                        return (List<AiRecommendationDTO>) objectMapper.readValue(cache.getRecommendationsJson(),
+                                objectMapper.getTypeFactory().constructCollectionType(List.class, AiRecommendationDTO.class));
+                    } catch (Exception e) {
+                        log.warn("Failed to parse cached recommendations for company {}: {}", company.getId(), e.getMessage());
+                        return Collections.<AiRecommendationDTO>emptyList();
+                    }
+                })
+                .orElse(Collections.emptyList());
+    }
+
+    /**
+     * Gera recomendações via IA e persiste no cache.
+     * Chamado pelo worker em background.
+     */
+    @Transactional
+    public void generateAndStoreForCompany(Company company) {
+        try {
+            CampaignsListResponse campaignsResponse = marketingService.getCampaignsForCompany(company);
+            List<CampaignListItemDTO> campaigns = campaignsResponse.getCampaigns();
+
+            if (campaigns == null || campaigns.isEmpty()) {
+                cacheRepository.findByCompany(company).ifPresent(cacheRepository::delete);
+                return;
+            }
+
+            List<AiRecommendationDTO> recommendations = generateRecommendationsWithAi(campaigns);
+            String json = objectMapper.writeValueAsString(recommendations);
+
+            AiRecommendationCache cache = cacheRepository.findByCompany(company)
+                    .orElse(AiRecommendationCache.builder().company(company).build());
+            cache.setRecommendationsJson(json);
+            cacheRepository.save(cache);
+            log.debug("Stored {} recommendations for company {}", recommendations.size(), company.getId());
+        } catch (Exception e) {
+            log.error("Error generating AI recommendations for company {}: {}", company.getId(), e.getMessage());
         }
+    }
 
+    private List<AiRecommendationDTO> generateRecommendationsWithAi(List<CampaignListItemDTO> campaigns) {
         String campaignsJson = buildCampaignsContext(campaigns);
-
         String systemPrompt = """
                 Você é um especialista em Meta Ads e otimização de campanhas. Analise os dados das campanhas e retorne EXATAMENTE 3 recomendações acionáveis.
                 Responda APENAS com um JSON válido, sem markdown, no formato:
@@ -46,9 +96,7 @@ public class MarketingAiRecommendationsService {
                 """;
 
         try {
-            CompletableFuture<String> future = CompletableFuture.supplyAsync(() ->
-                    openAiService.generateResponse(systemPrompt, campaignsJson, Collections.emptyList()));
-            String aiResponse = future.get(25, TimeUnit.SECONDS);
+            String aiResponse = openAiService.generateResponse(systemPrompt, campaignsJson, Collections.emptyList());
             if (aiResponse == null || aiResponse.trim().isEmpty()) return Collections.emptyList();
 
             String jsonStr = extractJson(aiResponse);
@@ -68,9 +116,6 @@ public class MarketingAiRecommendationsService {
                         .build());
             }
             return result.size() >= 3 ? result.subList(0, 3) : result;
-        } catch (TimeoutException e) {
-            log.warn("AI recommendations timed out after 25s");
-            return Collections.emptyList();
         } catch (Exception e) {
             log.error("Error generating AI recommendations: {}", e.getMessage());
             return Collections.emptyList();
@@ -99,35 +144,6 @@ public class MarketingAiRecommendationsService {
         int end = text.lastIndexOf(']');
         if (start >= 0 && end > start) return text.substring(start, end + 1);
         return "[]";
-    }
-
-    private List<AiRecommendationDTO> getPlaceholderRecommendations() {
-        return List.of(
-                AiRecommendationDTO.builder()
-                        .id(UUID.randomUUID().toString())
-                        .type("SCALE")
-                        .title("Escala de Performance")
-                        .description("Conecte sua conta Meta Ads para receber recomendações personalizadas baseadas no desempenho das suas campanhas.")
-                        .actionLabel("Conectar Meta Ads")
-                        .actionType("CONNECT")
-                        .build(),
-                AiRecommendationDTO.builder()
-                        .id(UUID.randomUUID().toString())
-                        .type("AUDIENCE")
-                        .title("Refinar Público-Alvo")
-                        .description("A IA analisará seu público e sugerirá ajustes para melhorar o CTR e reduzir o CPL.")
-                        .actionLabel("Aguardando conexão")
-                        .actionType("CONNECT")
-                        .build(),
-                AiRecommendationDTO.builder()
-                        .id(UUID.randomUUID().toString())
-                        .type("PAUSE")
-                        .title("Pausa de Eficiência")
-                        .description("Campanhas com CPL acima da meta serão identificadas para pausa e redistribuição de verba.")
-                        .actionLabel("Aguardando conexão")
-                        .actionType("CONNECT")
-                        .build()
-        );
     }
 
     public void applyRecommendation(User user, AiRecommendationDTO recommendation) {

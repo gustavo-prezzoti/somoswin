@@ -170,6 +170,50 @@ services:
     restart: unless-stopped
 
   # =====================================
+  # AI Recommendations Worker - Otimizações Neurais
+  # Popula cache de recomendações a cada 5 min para empresas com Meta Ads
+  # =====================================
+  ai-recommendations-worker:
+    build:
+      context: ./winai-backend
+      dockerfile: Dockerfile
+    container_name: winai-ai-recommendations-worker
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 256M
+    environment:
+      - TZ=America/Sao_Paulo
+      - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true
+      - SPRING_PROFILES_ACTIVE=docker,ai-recommendations-worker
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - META_CLIENT_ID=${META_CLIENT_ID}
+      - META_CLIENT_SECRET=${META_CLIENT_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ASAAS_API_URL=${ASAAS_API_URL}
+      - ASAAS_API_TOKEN=${ASAAS_API_TOKEN}
+      - APP_FRONTEND_URL=${FRONTEND_URL}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    depends_on:
+      - redis
+    networks:
+      - winai-network
+    restart: unless-stopped
+
+  # =====================================
   # Follow-up Worker - Automated Lead Reengagement
   # =====================================
   followup-worker:

@@ -40,6 +40,13 @@ const Campaigns: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [showDriveSelector, setShowDriveSelector] = useState(false);
   const [selectedDriveFile, setSelectedDriveFile] = useState<DriveFile | null>(null);
+  const [selectedInterests, setSelectedInterests] = useState<{ id: string; name: string }[]>([]);
+  const [interestsSearch, setInterestsSearch] = useState('');
+  const [interestsResults, setInterestsResults] = useState<{ id: string; name: string }[]>([]);
+  const [interestsSearching, setInterestsSearching] = useState(false);
+  const [interestsDropdownOpen, setInterestsDropdownOpen] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const interestsSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [hasCampaignData, setHasCampaignData] = useState(false);
   const [isMetaConnected, setIsMetaConnected] = useState(false);
@@ -96,6 +103,35 @@ const Campaigns: React.FC = () => {
     }
   }, [activeTab, isMetaConnected]);
 
+  // Polling de recomendações a cada 5s quando na aba Gestão (worker popula o cache em background)
+  useEffect(() => {
+    if (activeTab !== 'GESTAO') return;
+    const interval = setInterval(() => loadRecommendations(true), 5000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
+  // Debounce search de interesses (Meta API)
+  useEffect(() => {
+    if (!interestsSearch.trim() || interestsSearch.length < 2) {
+      setInterestsResults([]);
+      return;
+    }
+    if (interestsSearchRef.current) clearTimeout(interestsSearchRef.current);
+    interestsSearchRef.current = setTimeout(async () => {
+      setInterestsSearching(true);
+      try {
+        const data = await marketingService.searchTargetingInterests(interestsSearch);
+        setInterestsResults(data);
+        setInterestsDropdownOpen(true);
+      } catch {
+        setInterestsResults([]);
+      } finally {
+        setInterestsSearching(false);
+      }
+    }, 400);
+    return () => { if (interestsSearchRef.current) clearTimeout(interestsSearchRef.current); };
+  }, [interestsSearch]);
+
   const loadCampaigns = async () => {
     if (!isMetaConnected) return;
     setCampaignsLoading(true);
@@ -116,22 +152,16 @@ const Campaigns: React.FC = () => {
     }
   };
 
-  const loadRecommendations = async () => {
-    setRecommendationsLoading(true);
+  const loadRecommendations = async (silent = false) => {
+    if (!silent) setRecommendationsLoading(true);
     try {
-      const timeoutMs = 28000;
-      const data = await Promise.race([
-        marketingService.getAiRecommendations(),
-        new Promise<AiRecommendation[]>((_, reject) =>
-          setTimeout(() => reject(new Error('Tempo limite excedido')), timeoutMs)
-        ),
-      ]);
+      const data = await marketingService.getAiRecommendations();
       setRecommendations(data || []);
     } catch (e) {
-      console.error('Failed to load recommendations', e);
+      if (!silent) console.error('Failed to load recommendations', e);
       setRecommendations([]);
     } finally {
-      setRecommendationsLoading(false);
+      if (!silent) setRecommendationsLoading(false);
     }
   };
 
@@ -326,12 +356,16 @@ const Campaigns: React.FC = () => {
 
   const handleCreate = async () => {
     if (!formData.adMessage?.trim() || !formData.destinationUrl?.trim() || !formData.imageUrl?.trim()) {
-      alert('Preencha texto do anúncio, URL de destino e URL da imagem.');
+      alert('Preencha texto do anúncio, URL de destino e imagem.');
       return;
     }
     setIsSaving(true);
     try {
-      await marketingService.createCampaign(formData);
+      const payload = {
+        ...formData,
+        interests: selectedInterests.length > 0 ? JSON.stringify(selectedInterests) : ''
+      };
+      await marketingService.createCampaign(payload);
       setCurrentStep(3);
       if (isMetaConnected) loadCampaigns();
     } catch (err: any) {
@@ -360,6 +394,7 @@ const Campaigns: React.FC = () => {
       headline: ''
     });
     setSelectedDriveFile(null);
+    setSelectedInterests([]);
   };
 
   if (isLoading) {
@@ -886,16 +921,49 @@ const Campaigns: React.FC = () => {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 relative">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><UsersIcon size={12} /> Interesses (opcional)</label>
+                    <p className="text-[9px] text-gray-400 px-2">Busque e selecione interesses aceitos pela Meta Ads</p>
                     <input
-                      name="interests"
-                      value={formData.interests || ''}
-                      onChange={handleInputChange}
+                      value={interestsSearch}
+                      onChange={(e) => setInterestsSearch(e.target.value)}
+                      onFocus={() => interestsResults.length > 0 && setInterestsDropdownOpen(true)}
                       type="text"
-                      placeholder="Marketing, Luxo, Imóveis..."
+                      placeholder="Digite para buscar (ex: futebol, marketing...)"
                       className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
                     />
+                    {interestsSearching && <span className="absolute right-6 top-[52px] text-[10px] text-gray-400">Buscando...</span>}
+                    {interestsDropdownOpen && interestsResults.length > 0 && (
+                      <div className="absolute z-20 mt-1 w-full bg-white rounded-2xl border border-gray-200 shadow-xl max-h-48 overflow-y-auto">
+                        {interestsResults.map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => {
+                              if (!selectedInterests.some(s => s.id === r.id)) {
+                                setSelectedInterests(prev => [...prev, r]);
+                              }
+                              setInterestsSearch('');
+                              setInterestsResults([]);
+                              setInterestsDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-emerald-50 text-sm font-medium text-gray-800"
+                          >
+                            {r.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {selectedInterests.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {selectedInterests.map((i) => (
+                          <span key={i.id} className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold">
+                            {i.name}
+                            <button type="button" onClick={() => setSelectedInterests(prev => prev.filter(x => x.id !== i.id))} className="hover:text-rose-600"><X size={12} /></button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -927,16 +995,34 @@ const Campaigns: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">URL da Imagem (picture) *</label>
-                    <div className="flex gap-3">
-                      <input
-                        name="imageUrl"
-                        value={formData.imageUrl}
-                        onChange={handleInputChange}
-                        type="url"
-                        placeholder="https://exemplo.com/imagem.jpg"
-                        className="flex-1 px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                      />
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Imagem do Anúncio (picture) *</label>
+                    <div className="flex gap-3 flex-wrap">
+                      <label className="flex-1 min-w-[200px] cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setImageUploading(true);
+                            try {
+                              const { url } = await marketingService.uploadCampaignImage(file);
+                              setFormData(p => ({ ...p, imageUrl: url }));
+                            } catch (err: any) {
+                              alert(err?.message || 'Erro ao enviar imagem.');
+                            } finally {
+                              setImageUploading(false);
+                              e.target.value = '';
+                            }
+                          }}
+                          disabled={imageUploading}
+                        />
+                        <div className="px-6 py-4 bg-gray-50 rounded-2xl font-bold text-sm border-2 border-dashed border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all flex items-center justify-center gap-2">
+                          {imageUploading ? <Loader2 size={18} className="animate-spin" /> : <FileIcon size={18} />}
+                          {imageUploading ? 'Enviando...' : 'Enviar do computador'}
+                        </div>
+                      </label>
                       <button
                         type="button"
                         onClick={() => setShowDriveSelector(true)}
@@ -945,7 +1031,7 @@ const Campaigns: React.FC = () => {
                         <Database size={16} /> Drive
                       </button>
                     </div>
-                    <p className="text-[9px] text-gray-400">Use URL pública. Se usar Drive, compartilhe o arquivo e use o link direto.</p>
+                    <p className="text-[9px] text-gray-400">JPG, PNG, WebP ou GIF. Envie do seu computador ou selecione do Google Drive.</p>
                     {formData.imageUrl && (
                       <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 max-w-[200px]">
                         <img src={formData.imageUrl} alt="Preview" className="w-full h-24 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />

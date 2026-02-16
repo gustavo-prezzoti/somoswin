@@ -154,6 +154,16 @@ export const marketingService = {
     },
     applyAiRecommendation: async (recommendation: AiRecommendation): Promise<void> => {
         await api.post('/marketing/ai-recommendations/apply', recommendation);
+    },
+    searchTargetingInterests: async (q: string): Promise<{ id: string; name: string }[]> => {
+        if (!q?.trim()) return [];
+        const data = await api.get<{ id: string; name: string }[]>('/marketing/targeting-search?q=' + encodeURIComponent(q.trim()) + '&type=adinterest');
+        return data || [];
+    },
+    uploadCampaignImage: async (file: File): Promise<{ url: string }> => {
+        const form = new FormData();
+        form.append('file', file);
+        return api.post<{ url: string }>('/marketing/upload-image', form);
     }
 };
 

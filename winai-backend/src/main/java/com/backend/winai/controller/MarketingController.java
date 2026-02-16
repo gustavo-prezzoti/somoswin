@@ -12,6 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -101,6 +104,25 @@ public class MarketingController {
     @GetMapping("/ai-recommendations")
     public ResponseEntity<java.util.List<AiRecommendationDTO>> getAiRecommendations(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(aiRecommendationsService.getRecommendations(user));
+    }
+
+    @GetMapping("/targeting-search")
+    public ResponseEntity<List<Map<String, Object>>> searchTargeting(
+            @AuthenticationPrincipal User user,
+            @RequestParam String q,
+            @RequestParam(defaultValue = "adinterest") String type) {
+        return ResponseEntity.ok(marketingService.searchTargeting(user, q, type));
+    }
+
+    @PostMapping(value = "/upload-image", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadCampaignImage(
+            @AuthenticationPrincipal User user,
+            @RequestParam("file") MultipartFile file) {
+        try {
+            return ResponseEntity.ok(marketingService.uploadCampaignImage(user, file));
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Erro ao enviar imagem: " + e.getMessage());
+        }
     }
 
     @PostMapping("/ai-recommendations/apply")

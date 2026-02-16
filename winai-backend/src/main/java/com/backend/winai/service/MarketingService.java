@@ -27,8 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
@@ -127,9 +130,11 @@ public class MarketingService {
     }
 
     public CampaignsListResponse getCampaignsForUser(User user) {
-        Company company = companyRepository.findById(user.getCompany().getId())
-                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        return getCampaignsForCompany(companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada")));
+    }
 
+    public CampaignsListResponse getCampaignsForCompany(Company company) {
         Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
         if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()
                 || connectionOpt.get().getAdAccountId() == null) {
@@ -295,6 +300,51 @@ public class MarketingService {
         }
     }
 
+    public List<Map<String, Object>> searchTargeting(User user, String query, String type) {
+        MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
+                .filter(MetaConnection::isConnected)
+                .filter(c -> c.getAdAccountId() != null)
+                .orElse(null);
+        if (conn == null || query == null || query.isBlank()) {
+            return List.of();
+        }
+        try {
+            String url = String.format("%s/%s/targetingsearch?type=%s&q=%s&limit=25&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(), type,
+                    java.net.URLEncoder.encode(query, StandardCharsets.UTF_8), conn.getAccessToken());
+            ResponseEntity<String> res = getWithRetry(url);
+            JsonNode data = objectMapper.readTree(res.getBody()).get("data");
+            List<Map<String, Object>> result = new ArrayList<>();
+            if (data != null && data.isArray()) {
+                for (JsonNode node : data) {
+                    Map<String, Object> item = new HashMap<>();
+                    if (node.has("id")) item.put("id", node.get("id").asText());
+                    if (node.has("name")) item.put("name", node.get("name").asText());
+                    if (!item.isEmpty()) result.add(item);
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("Targeting search failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    public Map<String, String> uploadCampaignImage(User user, MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new RuntimeException("Selecione uma imagem para enviar");
+        }
+        String ext = file.getOriginalFilename() != null && file.getOriginalFilename().contains(".")
+                ? file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf(".") + 1).toLowerCase()
+                : "jpg";
+        if (!List.of("jpg", "jpeg", "png", "webp", "gif").contains(ext)) {
+            throw new RuntimeException("Formato não suportado. Use JPG, PNG, WebP ou GIF.");
+        }
+        String filename = "campaigns/" + UUID.randomUUID() + "." + ext;
+        String publicUrl = supabaseStorageService.uploadFile("social-media-uploads", filename, file);
+        return Map.of("url", publicUrl);
+    }
+
     public void increaseCampaignBudget(User user, String campaignId, int percentIncrease) {
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
@@ -392,8 +442,8 @@ public class MarketingService {
     }
 
     private final MetaConnectionRepository metaConnectionRepository;
-    // Repositories for detailed storage removed - we now fetch live
     private final CompanyRepository companyRepository;
+    private final SupabaseStorageService supabaseStorageService;
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -1188,7 +1238,7 @@ public class MarketingService {
             // 2. Criar Ad Set
             String optimizationGoal = mapOptimizationGoal(objective);
             String adSetId = createMetaAdSet(adAccountId, accessToken, campaignId, pageId,
-                    budgetCents, country, ageMin, ageMax, optimizationGoal);
+                    budgetCents, country, ageMin, ageMax, optimizationGoal, request.getInterests());
             log.info("[META] Ad Set created: {}", adSetId);
 
             // 3. Obter image_hash (upload via adimages) ou usar picture URL
@@ -1281,7 +1331,8 @@ public class MarketingService {
     }
 
     private String createMetaAdSet(String adAccountId, String accessToken, String campaignId, String pageId,
-                                   long dailyBudgetCents, String country, int ageMin, int ageMax, String optimizationGoal) {
+                                   long dailyBudgetCents, String country, int ageMin, int ageMax, String optimizationGoal,
+                                   String interestsJson) {
         String url = metaApiBaseUrl + "/" + adAccountId + "/adsets";
 
         Map<String, Object> targeting = new HashMap<>();
@@ -1290,6 +1341,28 @@ public class MarketingService {
         targeting.put("geo_locations", geo);
         targeting.put("age_min", ageMin);
         targeting.put("age_max", ageMax);
+
+        if (interestsJson != null && !interestsJson.isBlank()) {
+            try {
+                JsonNode arr = objectMapper.readTree(interestsJson);
+                if (arr.isArray() && arr.size() > 0) {
+                    List<Map<String, Object>> interestsList = new ArrayList<>();
+                    for (JsonNode node : arr) {
+                        if (node.has("id")) {
+                            Map<String, Object> spec = new HashMap<>();
+                            spec.put("id", node.get("id").asText());
+                            if (node.has("name")) spec.put("name", node.get("name").asText());
+                            interestsList.add(spec);
+                        }
+                    }
+                    if (!interestsList.isEmpty()) {
+                        targeting.put("flexible_spec", List.of(Map.of("interests", interestsList)));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not parse interests for targeting: {}", e.getMessage());
+            }
+        }
 
         Map<String, Object> promotedObject = new HashMap<>();
         promotedObject.put("page_id", pageId);

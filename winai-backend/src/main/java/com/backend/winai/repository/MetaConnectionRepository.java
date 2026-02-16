@@ -5,12 +5,15 @@ import com.backend.winai.entity.MetaConnection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface MetaConnectionRepository extends JpaRepository<MetaConnection, UUID> {
     Optional<MetaConnection> findByCompany(Company company);
+
+    List<MetaConnection> findByIsConnectedTrueAndAdAccountIdIsNotNull();
 
     Optional<MetaConnection> findByCompanyId(UUID companyId);
 
