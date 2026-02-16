@@ -100,7 +100,13 @@ const Campaigns: React.FC = () => {
     if (!isMetaConnected) return;
     setCampaignsLoading(true);
     try {
-      const res = await marketingService.getCampaigns();
+      const timeoutMs = 15000;
+      const res = await Promise.race([
+        marketingService.getCampaigns(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Tempo limite excedido. Tente novamente.')), timeoutMs)
+        ),
+      ]);
       setCampaigns(res.campaigns || []);
     } catch (e) {
       console.error('Failed to load campaigns', e);
@@ -166,20 +172,33 @@ const Campaigns: React.FC = () => {
   const loadMetrics = async () => {
     setIsLoading(true);
     setError(null);
+    const timeoutMs = 20000;
     try {
-      const data = await marketingService.getMetrics();
+      const [data, status] = await Promise.race([
+        Promise.all([
+          marketingService.getMetrics(),
+          marketingService.getStatus(),
+        ]),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Tempo limite excedido.')), timeoutMs)
+        ),
+      ]);
       setMetrics(data);
       setHasCampaignData(
         (data?.investment?.value && data.investment.value !== 'R$ 0,00') ||
         (data?.performanceHistory && data.performanceHistory.length > 0 && data.performanceHistory.some((p: any) => p.value > 0))
       );
-
-      const status = await marketingService.getStatus();
       setIsMetaConnected(status.connected);
     } catch (err: any) {
       console.error(err);
       setError('Não foi possível carregar as métricas.');
       setHasCampaignData(false);
+      try {
+        const status = await marketingService.getStatus();
+        setIsMetaConnected(status.connected);
+      } catch {
+        setIsMetaConnected(false);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -414,12 +433,74 @@ const Campaigns: React.FC = () => {
               />
             </div>
 
-            {/* Performance Chart */}
-            <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic">Análise de Performance</h2>
+            {/* OPERAÇÃO ATIVA • REAL-TIME CORE - Lista de Campanhas (acima do gráfico) */}
+            {isMetaConnected && (
+              <div className="bg-white p-6 md:p-8 rounded-[40px] border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between mb-4 md:mb-6">
+                  <h2 className="text-lg md:text-xl font-black text-gray-800 tracking-tighter uppercase italic">Operação Ativa • Real-Time Core</h2>
+                  <button onClick={loadCampaigns} disabled={campaignsLoading} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500 disabled:opacity-50">
+                    <RefreshCw size={18} className={campaignsLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+                {campaignsLoading ? (
+                  <div className="flex justify-center py-12"><Loader2 className="animate-spin text-emerald-600" size={32} /></div>
+                ) : campaigns.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500 font-medium text-sm">Nenhuma campanha encontrada. Conecte sua conta Meta Ads e crie campanhas.</div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {campaigns.map((c) => (
+                      <div key={c.id} className="p-4 rounded-2xl border border-gray-100 hover:border-emerald-100 transition-all bg-gray-50/30">
+                        <div className="flex flex-wrap items-center gap-3 mb-3">
+                          <button
+                            onClick={() => handleToggleCampaign(c)}
+                            disabled={togglingId === c.id}
+                            className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${c.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                          >
+                            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${c.status === 'ACTIVE' ? 'left-6' : 'left-0.5'}`} />
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-gray-900 text-sm truncate">{c.name}</p>
+                            <p className={`text-[10px] font-black uppercase ${c.status === 'ACTIVE' ? 'text-emerald-600' : 'text-gray-400'}`}>
+                              {c.status === 'ACTIVE' ? 'VEICULANDO' : 'PAUSADA'}
+                            </p>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-lg bg-gray-200 text-[9px] font-black uppercase text-gray-600 shrink-0">{c.objective || 'OUTROS'}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px]">
+                          <div>
+                            <p className="font-bold text-gray-400 uppercase">Orçamento diário</p>
+                            <p className="font-bold text-gray-900">{c.dailyBudget != null ? `R$ ${c.dailyBudget.toFixed(2)}` : '-'}</p>
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-400 uppercase">Gasto total</p>
+                            <p className="font-bold text-gray-900">R$ {c.spend.toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-400 uppercase">Impressões / CTR</p>
+                            <p className="font-bold text-gray-900">{c.impressions?.toLocaleString() || 0} / {c.ctr != null ? `${c.ctr.toFixed(1)}%` : '-'}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <MessageSquare size={12} className="text-emerald-600 shrink-0" />
+                            <span className="font-bold text-gray-900">{c.conversions || 0}</span>
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-400 uppercase">CPL</p>
+                            <p className="font-bold text-gray-900">{c.cpl != null ? `R$ ${c.cpl.toFixed(2)}` : '-'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="h-[350px] w-full">
+            )}
+
+            {/* Performance Chart */}
+            <div className="bg-white p-6 md:p-8 rounded-[40px] border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between mb-6 md:mb-8">
+                <h2 className="text-lg md:text-xl font-black text-gray-800 tracking-tighter uppercase italic">Análise de Performance</h2>
+              </div>
+              <div className="h-[300px] md:h-[350px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={(() => {
                     if (!metrics?.performanceHistory || metrics.performanceHistory.length === 0) {
@@ -445,66 +526,6 @@ const Campaigns: React.FC = () => {
                 </ResponsiveContainer>
               </div>
             </div>
-
-            {/* OPERAÇÃO ATIVA • REAL-TIME CORE - Lista de Campanhas */}
-            {isMetaConnected && (
-              <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic">Operação Ativa • Real-Time Core</h2>
-                  <button onClick={loadCampaigns} disabled={campaignsLoading} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500 disabled:opacity-50">
-                    <RefreshCw size={18} className={campaignsLoading ? 'animate-spin' : ''} />
-                  </button>
-                </div>
-                {campaignsLoading ? (
-                  <div className="flex justify-center py-12"><Loader2 className="animate-spin text-emerald-600" size={32} /></div>
-                ) : campaigns.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500 font-medium">Nenhuma campanha encontrada. Conecte sua conta Meta Ads e crie campanhas.</div>
-                ) : (
-                  <div className="space-y-4">
-                    {campaigns.map((c) => (
-                      <div key={c.id} className="flex flex-wrap items-center gap-4 p-5 rounded-2xl border border-gray-100 hover:border-emerald-100 transition-all bg-gray-50/30">
-                        <button
-                          onClick={() => handleToggleCampaign(c)}
-                          disabled={togglingId === c.id}
-                          className={`relative w-12 h-6 rounded-full transition-colors ${c.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-gray-300'}`}
-                        >
-                          <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${c.status === 'ACTIVE' ? 'left-7' : 'left-1'}`} />
-                        </button>
-                        <div className="flex-1 min-w-[180px]">
-                          <p className="font-bold text-gray-900 text-sm">{c.name}</p>
-                          <p className={`text-[10px] font-black uppercase ${c.status === 'ACTIVE' ? 'text-emerald-600' : 'text-gray-400'}`}>
-                            {c.status === 'ACTIVE' ? 'VEICULANDO' : 'PAUSADA'}
-                          </p>
-                        </div>
-                        <span className="px-3 py-1 rounded-lg bg-gray-200 text-[10px] font-black uppercase text-gray-600">{c.objective || 'OUTROS'}</span>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase">Orçamento diário</p>
-                          <p className="font-bold text-gray-900">{c.dailyBudget != null ? `R$ ${c.dailyBudget.toFixed(2)}` : '-'}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase">Gasto total</p>
-                          <p className="font-bold text-gray-900">R$ {c.spend.toFixed(2)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase">Impressões / CTR</p>
-                          <p className="font-bold text-gray-900">{c.impressions?.toLocaleString() || 0} / {c.ctr != null ? `${c.ctr.toFixed(1)}%` : '-'}</p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                            <MessageSquare size={14} />
-                          </div>
-                          <span className="font-bold text-gray-900">{c.conversions || 0}</span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase">CPL</p>
-                          <p className="font-bold text-gray-900">{c.cpl != null ? `R$ ${c.cpl.toFixed(2)}` : '-'}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* OTIMIZAÇÕES NEURAIS */}
             <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
