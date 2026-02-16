@@ -771,13 +771,13 @@ public class MarketingService {
     }
 
     public String getMetaAuthorizationUrl(User user) {
-        // Using Facebook Login for Business with config_id
-        // This ensures users select assets from a specific Business Manager
+        // Facebook Login for Business - Token de acesso do usuário (User Token)
+        // config_id substitui scope. Sem override_default_response_type (apenas para System User).
         String configId = "1792297934776856";
         String url = String.format(
-                "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code&override_default_response_type=true",
+                "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code",
                 clientId, redirectUri, user.getCompany().getId(), configId);
-        log.info("[MetaAuth] Montando URL: clientId={} redirectUri={} state={} config_id={}", 
+        log.info("[MetaAuth] Montando URL (User Token): clientId={} redirectUri={} state={} config_id={}", 
                 clientId, redirectUri, user.getCompany().getId(), configId);
         return url;
     }
