@@ -474,15 +474,41 @@ public class MarketingService {
             JsonNode basicInfo = objectMapper.readTree(getWithRetry(basicInfoUrl).getBody());
             long followers = basicInfo.has("followers_count") ? basicInfo.get("followers_count").asLong() : 0;
 
-            // 3. Fetch Insights (last 30 days for metrics, last 7 days for the chart
-            // requested)
+            // 3. Fetch Insights - current period (last 30 days)
+            // Metrics: impressions, reach, accounts_engaged (Instagram User Insights API)
+            // period=day returns daily breakdown; since/until use YYYY-MM-DD format
+            LocalDate today = LocalDate.now();
+            LocalDate sinceCurrent = today.minusDays(30);
             String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach,total_interactions,profile_views,website_clicks&period=day&metric_type=total_value&access_token=%s",
-                    metaApiBaseUrl, igId, accessToken);
-            JsonNode insightsData = objectMapper
-                    .readTree(getWithRetry(insightsUrl).getBody()).get("data");
+                    "%s/%s/insights?metric=impressions,reach,accounts_engaged,follower_count&period=day&since=%s&until=%s&access_token=%s",
+                    metaApiBaseUrl, igId, sinceCurrent, today, accessToken);
+            JsonNode insightsResponse = objectMapper.readTree(getWithRetry(insightsUrl).getBody());
+            JsonNode insightsData = insightsResponse.has("data") ? insightsResponse.get("data") : null;
+            log.debug("Instagram insights response: {}", insightsResponse);
 
-            return mapToInstagramResponse(followers, insightsData);
+            // Fallback: if empty or error, try without since/until (some API versions differ)
+            if (insightsData == null || !insightsData.isArray() || insightsData.size() == 0) {
+                String fallbackUrl = String.format(
+                        "%s/%s/insights?metric=impressions,reach,accounts_engaged,follower_count&period=day&access_token=%s",
+                        metaApiBaseUrl, igId, accessToken);
+                JsonNode fallbackRes = objectMapper.readTree(getWithRetry(fallbackUrl).getBody());
+                insightsData = fallbackRes.has("data") ? fallbackRes.get("data") : null;
+            }
+
+            // 4. Fetch Insights - previous period (30-60 days ago) for trend calculation
+            LocalDate sincePrevious = today.minusDays(60);
+            String insightsPrevUrl = String.format(
+                    "%s/%s/insights?metric=impressions,reach,accounts_engaged,follower_count&period=day&since=%s&until=%s&access_token=%s",
+                    metaApiBaseUrl, igId, sincePrevious, sinceCurrent, accessToken);
+            JsonNode insightsPrevData = null;
+            try {
+                JsonNode prevResponse = objectMapper.readTree(getWithRetry(insightsPrevUrl).getBody());
+                insightsPrevData = prevResponse.has("data") ? prevResponse.get("data") : null;
+            } catch (Exception ex) {
+                log.debug("Could not fetch previous period insights for trends: {}", ex.getMessage());
+            }
+
+            return mapToInstagramResponse(followers, insightsData, insightsPrevData);
 
         } catch (Exception e) {
             log.error("Error fetching Instagram data", e);
@@ -490,66 +516,127 @@ public class MarketingService {
         }
     }
 
-    private InstagramMetricsResponse mapToInstagramResponse(long totalFollowers, JsonNode insights) {
+    private InstagramMetricsResponse mapToInstagramResponse(long totalFollowers, JsonNode insights,
+            JsonNode insightsPrevious) {
         long impressionsTotal = 0;
-        long interactionsTotal = 0;
+        long reachTotal = 0;
+        long interactionsTotal = 0; // accounts_engaged
+        long followersFirst = totalFollowers;
+        long followersLast = totalFollowers;
         List<InstagramMetricsResponse.DailyPerformance> performance = new ArrayList<>();
 
+        // Parse current period metrics - sum all daily values for last 30 days
+        Map<String, Double> dailyReach = new LinkedHashMap<>();
         if (insights != null && insights.isArray()) {
             for (JsonNode metric : insights) {
+                if (!metric.has("name")) continue;
                 String name = metric.get("name").asText();
-                if ("reach".equals(name) || "total_interactions".equals(name)) {
-                    JsonNode values = metric.get("values");
-                    if (values != null && values.isArray()) {
-                        long totalForMetric = 0;
-                        int startIdx = Math.max(0, values.size() - 7);
-                        for (int i = startIdx; i < values.size(); i++) {
-                            JsonNode val = values.get(i);
-                            long v = val.get("value").asLong();
-                            totalForMetric += v;
+                JsonNode values = metric.has("values") ? metric.get("values") : null;
+                if (values == null || !values.isArray()) continue;
 
-                            if ("reach".equals(name)) {
-                                performance.add(InstagramMetricsResponse.DailyPerformance.builder()
-                                        .date(val.get("end_time").asText().substring(8, 10) + "/"
-                                                + val.get("end_time").asText().substring(5, 7))
-                                        .value((double) v)
-                                        .build());
-                            }
+                long totalForMetric = 0;
+                for (int i = 0; i < values.size(); i++) {
+                    JsonNode val = values.get(i);
+                    long v = val.has("value") ? val.get("value").asLong() : 0;
+                    totalForMetric += v;
+
+                    if ("reach".equals(name) || "impressions".equals(name)) {
+                        String endTime = val.has("end_time") ? val.get("end_time").asText() : "";
+                        if (endTime.length() >= 10) {
+                            String dateStr = endTime.substring(8, 10) + "/" + endTime.substring(5, 7);
+                            dailyReach.merge(dateStr, (double) v, (a, b) -> a + b);
                         }
-                        if ("reach".equals(name))
-                            impressionsTotal = totalForMetric;
-                        if ("total_interactions".equals(name))
-                            interactionsTotal = totalForMetric;
                     }
+                    if ("follower_count".equals(name)) {
+                        if (i == 0) followersFirst = v;
+                        followersLast = v;
+                    }
+                }
+                switch (name) {
+                    case "impressions" -> impressionsTotal = totalForMetric;
+                    case "reach" -> reachTotal = totalForMetric;
+                    case "accounts_engaged" -> interactionsTotal = totalForMetric;
+                    default -> { }
+                }
+            }
+        }
+        performance = dailyReach.entrySet().stream()
+                .map(e -> InstagramMetricsResponse.DailyPerformance.builder()
+                        .date(e.getKey())
+                        .value(e.getValue())
+                        .build())
+                .sorted(Comparator.comparing(InstagramMetricsResponse.DailyPerformance::getDate))
+                .toList();
+
+        // Previous period totals for trend calculation
+        long prevImpressions = 0, prevReach = 0, prevInteractions = 0;
+        if (insightsPrevious != null && insightsPrevious.isArray()) {
+            for (JsonNode metric : insightsPrevious) {
+                if (!metric.has("name") || !metric.has("values")) continue;
+                String name = metric.get("name").asText();
+                JsonNode values = metric.get("values");
+                long sum = 0;
+                for (JsonNode val : values) {
+                    sum += val.has("value") ? val.get("value").asLong() : 0;
+                }
+                switch (name) {
+                    case "impressions" -> prevImpressions = sum;
+                    case "reach" -> prevReach = sum;
+                    case "accounts_engaged" -> prevInteractions = sum;
+                    default -> { }
                 }
             }
         }
 
-        double engagementRate = (impressionsTotal > 0) ? (double) interactionsTotal / impressionsTotal * 100 : 0;
+        // Use impressions for display; fallback to reach if impressions is 0 (some APIs return reach only)
+        long displayImpressions = impressionsTotal > 0 ? impressionsTotal : reachTotal;
+
+        double engagementRate = (displayImpressions > 0)
+                ? (double) interactionsTotal / displayImpressions * 100
+                : (reachTotal > 0 ? (double) interactionsTotal / reachTotal * 100 : 0);
+
+        String followersTrend = formatTrend(followersLast, followersFirst);
+        String engagementTrend = formatTrend(engagementRate,
+                prevImpressions > 0 ? (double) prevInteractions / prevImpressions * 100 : 0);
+        String impressionsTrend = formatTrend(displayImpressions, prevImpressions > 0 ? prevImpressions : prevReach);
+        String interactionsTrend = formatTrend(interactionsTotal, prevInteractions);
 
         return InstagramMetricsResponse.builder()
                 .followers(InstagramMetricsResponse.MetricDetail.builder()
                         .value(formatNumber(totalFollowers))
-                        .trend("2.1%")
+                        .trend(followersTrend)
                         .isPositive(true)
                         .build())
                 .engagementRate(InstagramMetricsResponse.MetricDetail.builder()
                         .value(String.format("%.2f%%", engagementRate))
-                        .trend("0.5%")
-                        .isPositive(true)
+                        .trend(engagementTrend)
+                        .isPositive(!engagementTrend.startsWith("-"))
                         .build())
                 .impressions(InstagramMetricsResponse.MetricDetail.builder()
-                        .value(formatNumber(impressionsTotal))
-                        .trend("12.3%")
-                        .isPositive(true)
+                        .value(formatNumber(displayImpressions))
+                        .trend(impressionsTrend)
+                        .isPositive(!impressionsTrend.startsWith("-"))
                         .build())
                 .interactions(InstagramMetricsResponse.MetricDetail.builder()
                         .value(formatNumber(interactionsTotal))
-                        .trend("5.4%")
-                        .isPositive(true)
+                        .trend(interactionsTrend)
+                        .isPositive(!interactionsTrend.startsWith("-"))
                         .build())
                 .performanceHistory(performance)
                 .build();
+    }
+
+    /** Formats trend as percentage change; returns "0%" when no previous data. */
+    private String formatTrend(long current, long previous) {
+        if (previous == 0) return "0%";
+        double pct = ((double) (current - previous) / previous) * 100;
+        return String.format("%s%.1f%%", pct >= 0 ? "+" : "", pct);
+    }
+
+    private String formatTrend(double current, double previous) {
+        if (previous == 0) return "0%";
+        double pct = ((current - previous) / previous) * 100;
+        return String.format("%s%.1f%%", pct >= 0 ? "+" : "", pct);
     }
 
     private InstagramMetricsResponse buildEmptyInstagramMetrics() {
@@ -1139,6 +1226,15 @@ public class MarketingService {
         }
     }
 
+    private static JsonNode parseJson(ObjectMapper mapper, String json) {
+        if (json == null) throw new RuntimeException("JSON string is null");
+        try {
+            return mapper.readTree(json);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("JSON parse failed", e);
+        }
+    }
+
     private void validateRequest(CreateCampaignRequest r) {
         if (r.getName() == null || r.getName().isBlank()) {
             throw new RuntimeException("Nome da campanha é obrigatório");
@@ -1176,7 +1272,7 @@ public class MarketingService {
         ResponseEntity<String> res = postForm(url, params);
         String body = res.getBody();
         if (body == null) throw new RuntimeException("Meta API: Empty response");
-        JsonNode node = objectMapper.readTree(body);
+        JsonNode node = parseJson(objectMapper, body);
         if (node.has("id")) return node.get("id").asText();
         throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Campaign creation failed"));
     }
@@ -1207,7 +1303,7 @@ public class MarketingService {
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
-        JsonNode node = objectMapper.readTree(res.getBody());
+        JsonNode node = parseJson(objectMapper, res.getBody());
         if (node.has("id")) return node.get("id").asText();
         throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad Set creation failed"));
     }
@@ -1219,7 +1315,7 @@ public class MarketingService {
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
-        JsonNode node = objectMapper.readTree(res.getBody());
+        JsonNode node = parseJson(objectMapper, res.getBody());
         if (node.has("images")) {
             JsonNode images = node.get("images");
             var it = images.fields();
@@ -1262,7 +1358,7 @@ public class MarketingService {
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
-        JsonNode node = objectMapper.readTree(res.getBody());
+        JsonNode node = parseJson(objectMapper, res.getBody());
         if (node.has("id")) return node.get("id").asText();
         throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad Creative creation failed"));
     }
@@ -1281,7 +1377,7 @@ public class MarketingService {
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
-        JsonNode node = objectMapper.readTree(res.getBody());
+        JsonNode node = parseJson(objectMapper, res.getBody());
         if (node.has("id")) return;
         throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad creation failed"));
     }
