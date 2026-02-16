@@ -148,6 +148,10 @@ public class MarketingService {
         Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
         if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()
                 || connectionOpt.get().getAdAccountId() == null) {
+            log.info("[Campaigns] company={} - retornando vazio: connected={} adAccountId={}",
+                    company.getId(),
+                    connectionOpt.isPresent() && connectionOpt.get().isConnected(),
+                    connectionOpt.map(MetaConnection::getAdAccountId).orElse(null));
             return CampaignsListResponse.builder()
                     .campaigns(new ArrayList<>())
                     .accountName(null)
@@ -484,6 +488,8 @@ public class MarketingService {
         String adAccountId = connection.getAdAccountId();
 
         if (adAccountId == null || adAccountId.isEmpty() || accessToken == null || accessToken.isEmpty()) {
+            log.info("[TrafficMetrics] company={} - retornando vazio: adAccountId={} accessToken={}",
+                    company.getId(), adAccountId != null ? "present" : "null", accessToken != null ? "present" : "null");
             return buildEmptyMetrics();
         }
 
@@ -980,14 +986,23 @@ public class MarketingService {
                 adAccountsUrl = String.format("%s/me/adaccounts?fields=id,name&access_token=%s",
                         metaApiBaseUrl, accessToken);
             }
+            log.info("[fetchDefaultAccounts] Buscando ad accounts: businessId={} endpoint={}", businessId, businessId != null ? "owned_ad_accounts" : "me/adaccounts");
             ResponseEntity<String> adAccountsResponse = getWithRetry(adAccountsUrl);
-            JsonNode adAccountsData = objectMapper.readTree(adAccountsResponse.getBody()).get("data");
-            if (adAccountsData != null && adAccountsData.size() > 0) {
+            String adAccountsBody = adAccountsResponse.getBody();
+            JsonNode adAccountsRoot = (adAccountsBody != null) ? objectMapper.readTree(adAccountsBody) : null;
+            JsonNode adAccountsData = (adAccountsRoot != null && adAccountsRoot.has("data")) ? adAccountsRoot.get("data") : null;
+            if (adAccountsData != null && adAccountsData.isArray() && adAccountsData.size() > 0) {
                 connection.setAdAccountId(adAccountsData.get(0).get("id").asText());
-                log.info("Found Ad Account: {}", adAccountsData.get(0).get("name").asText());
+                log.info("[fetchDefaultAccounts] Ad Account encontrado: {} ({})", adAccountsData.get(0).get("name").asText(), adAccountsData.get(0).get("id").asText());
+            } else {
+                boolean hasError = adAccountsRoot != null && adAccountsRoot.has("error");
+                String bodyPreview = (adAccountsBody != null && adAccountsBody.length() > 0)
+                        ? adAccountsBody.substring(0, Math.min(300, adAccountsBody.length())) + (adAccountsBody.length() > 300 ? "..." : "")
+                        : "null";
+                log.warn("[fetchDefaultAccounts] Nenhuma conta de anúncios. hasError={} bodyPreview={}", hasError, bodyPreview);
             }
         } catch (Exception e) {
-            log.warn("Could not fetch Ad Accounts", e);
+            log.warn("[fetchDefaultAccounts] Erro ao buscar Ad Accounts: {}", e.getMessage(), e);
         }
 
         // Step 3: Fetch Pages - use BM endpoint if we have a business ID
@@ -1059,10 +1074,14 @@ public class MarketingService {
         Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
 
         if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()) {
+            log.info("[MetaDetails] company={} - sem conexão ou não conectada", company.getId());
             return Map.of("connected", false);
         }
 
         MetaConnection conn = connectionOpt.get();
+        log.info("[MetaDetails] company={} adAccountId={} pageId={} businessId={} instagramId={}",
+                company.getId(), conn.getAdAccountId(), conn.getPageId(), conn.getBusinessId(), conn.getInstagramBusinessId());
+
         String accessToken = conn.getAccessToken();
 
         Map<String, Object> result = new HashMap<>();
@@ -1147,7 +1166,11 @@ public class MarketingService {
             }
         }
 
-        // Fetch campaigns summary (Live)
+        // Fetch campaigns summary (Live) - only if ad account is linked
+        if (conn.getAdAccountId() == null) {
+            log.info("[MetaDetails] company={} - pulando campaigns/insights: adAccountId é null", company.getId());
+        }
+        if (conn.getAdAccountId() != null) {
         try {
             String campaignsUrl = String.format(
                     "%s/%s/campaigns?fields=status&access_token=%s",
@@ -1173,8 +1196,10 @@ public class MarketingService {
         } catch (Exception e) {
             log.warn("Failed to fetch campaigns summary: {}", e.getMessage());
         }
+        }
 
-        // Fetch insights summary (last 30 days) (Live)
+        // Fetch insights summary (last 30 days) (Live) - only if ad account is linked
+        if (conn.getAdAccountId() != null) {
         try {
             // Using date_preset=last_30d
             String insightsUrl = String.format(
@@ -1209,6 +1234,7 @@ public class MarketingService {
             }
         } catch (Exception e) {
             log.warn("Failed to fetch insights summary: {}", e.getMessage());
+        }
         }
 
         return result;
