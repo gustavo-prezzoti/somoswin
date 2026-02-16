@@ -8,6 +8,7 @@ import com.backend.winai.dto.marketing.TrafficMetricsResponse;
 import com.backend.winai.entity.User;
 import com.backend.winai.service.MarketingAiRecommendationsService;
 import com.backend.winai.service.MarketingService;
+import com.backend.winai.service.MetaSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,7 @@ public class MarketingController {
 
     private final MarketingService marketingService;
     private final MarketingAiRecommendationsService aiRecommendationsService;
+    private final MetaSyncService metaSyncService;
 
     @GetMapping("/metrics")
     public ResponseEntity<TrafficMetricsResponse> getMetrics(
@@ -92,6 +94,12 @@ public class MarketingController {
     @GetMapping("/campaigns")
     public ResponseEntity<CampaignsListResponse> getCampaigns(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(marketingService.getCampaignsForUser(user));
+    }
+
+    @PostMapping("/sync")
+    public ResponseEntity<Map<String, String>> triggerSync(@AuthenticationPrincipal User user) {
+        metaSyncService.syncForCompany(user.getCompany().getId());
+        return ResponseEntity.ok(Map.of("status", "sync_started", "message", "Sincronização iniciada em background"));
     }
 
     @PatchMapping("/campaigns/{campaignId}/status")

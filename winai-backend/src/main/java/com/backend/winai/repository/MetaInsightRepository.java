@@ -14,8 +14,13 @@ import java.util.Optional;
 public interface MetaInsightRepository extends JpaRepository<MetaInsight, UUID> {
     List<MetaInsight> findByCompanyIdAndDateBetween(UUID companyId, LocalDate startDate, LocalDate endDate);
 
+    List<MetaInsight> findByCompanyIdAndLevelAndExternalIdAndDateBetweenOrderByDateAsc(
+            UUID companyId, String level, String externalId, LocalDate startDate, LocalDate endDate);
+
     Optional<MetaInsight> findByCompanyIdAndDateAndLevelAndExternalId(UUID companyId, LocalDate date, String level,
             String externalId);
 
     void deleteByCompany(Company company);
+
+    void deleteByCompanyIdAndLevelAndExternalId(UUID companyId, String level, String externalId);
 }

@@ -15,6 +15,8 @@ public interface MetaConnectionRepository extends JpaRepository<MetaConnection, 
 
     List<MetaConnection> findByIsConnectedTrueAndAdAccountIdIsNotNull();
 
+    List<MetaConnection> findByIsConnectedTrueAndPageIdIsNotNull();
+
     Optional<MetaConnection> findByCompanyId(UUID companyId);
 
     Optional<MetaConnection> findByMetaUserId(String metaUserId);

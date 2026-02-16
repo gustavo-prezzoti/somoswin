@@ -17,4 +17,6 @@ public interface InstagramMetricRepository extends JpaRepository<InstagramMetric
     Optional<InstagramMetric> findByCompanyIdAndDate(UUID companyId, LocalDate date);
 
     void deleteByCompany(Company company);
+
+    void deleteByCompanyIdAndDateBetween(UUID companyId, LocalDate startDate, LocalDate endDate);
 }

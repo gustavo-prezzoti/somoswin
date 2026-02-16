@@ -31,6 +31,16 @@ public class MetaCampaign {
     private String status;
     private String objective;
 
+    @Column(name = "daily_budget")
+    private Double dailyBudget;
+
+    private Double spend;
+    private Long impressions;
+    private Long reach;
+    private Long clicks;
+    private Double ctr;
+    private Long conversions;
+
     @Column(name = "start_time")
     private ZonedDateTime startTime;
 

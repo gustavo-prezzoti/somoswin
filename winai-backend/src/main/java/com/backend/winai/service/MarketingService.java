@@ -6,7 +6,10 @@ import com.backend.winai.dto.marketing.CreateCampaignRequest;
 import com.backend.winai.dto.marketing.InstagramMetricsResponse;
 import com.backend.winai.dto.marketing.TrafficMetricsResponse;
 import com.backend.winai.entity.Company;
+import com.backend.winai.entity.MetaCampaign;
 import com.backend.winai.entity.MetaConnection;
+import com.backend.winai.entity.InstagramMetric;
+import com.backend.winai.entity.MetaInsight;
 import com.backend.winai.entity.User;
 import com.backend.winai.repository.InstagramMetricRepository;
 import com.backend.winai.repository.MetaAdRepository;
@@ -88,70 +91,19 @@ public class MarketingService {
             return new ArrayList<>();
         }
 
-        MetaConnection conn = connectionOpt.get();
-        String accessToken = conn.getAccessToken();
-
-        try {
-            // Fetch campaigns: ACTIVE + PAUSED (pausadas só se alteradas nos últimos 30 dias)
-            String url = String.format(
-                    "%s/%s/campaigns?effective_status=%s&fields=id,name,status,objective,updated_time,insights%%7Bspend,clicks,actions%%7D&date_preset=last_30d&access_token=%s",
-                    metaApiBaseUrl, conn.getAdAccountId(), java.net.URLEncoder.encode("[\"ACTIVE\",\"PAUSED\"]", java.nio.charset.StandardCharsets.UTF_8), accessToken);
-
-            ResponseEntity<String> response = getWithRetry(url);
-            String responseBody = response.getBody();
-            log.info("Meta Campaigns Response for company {}: {}", company.getId(), responseBody);
-            JsonNode data = objectMapper.readTree(responseBody).get("data");
-
-            long cutoffMs = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000);
-            List<Map<String, Object>> result = new ArrayList<>();
-            if (data != null && data.isArray()) {
-                for (JsonNode node : data) {
-                    String status = node.has("status") ? node.get("status").asText() : "";
-                    if ("PAUSED".equalsIgnoreCase(status) && node.has("updated_time")) {
-                        String ut = node.get("updated_time").asText();
-                        long updatedMs = java.time.Instant.parse(ut).toEpochMilli();
-                        if (updatedMs < cutoffMs) continue; // pausada há mais de 30 dias, pular
-                    }
-                    Map<String, Object> campaign = new HashMap<>();
-                    campaign.put("id", node.get("id").asText());
-                    campaign.put("name", node.get("name").asText());
-                    campaign.put("status", status.isEmpty() ? "UNKNOWN" : status);
-
-                    double spend = 0.0;
-                    long clicks = 0;
-                    long conversions = 0;
-
-                    if (node.has("insights") && node.get("insights").has("data")) {
-                        JsonNode insights = node.get("insights").get("data");
-                        if (insights.isArray() && insights.size() > 0) {
-                            JsonNode i = insights.get(0);
-                            spend = i.has("spend") ? i.get("spend").asDouble() : 0.0;
-                            clicks = i.has("clicks") ? i.get("clicks").asLong() : 0;
-
-                            if (i.has("actions")) {
-                                for (JsonNode action : i.get("actions")) {
-                                    String actionType = action.get("action_type").asText();
-                                    if ("onsite_conversion.messaging_conversation_started_7d".equals(actionType) ||
-                                            "lead".equals(actionType)) {
-                                        conversions += action.get("value").asLong();
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    campaign.put("spend", spend);
-                    campaign.put("clicks", clicks);
-                    campaign.put("conversions", conversions);
-                    result.add(campaign);
-                }
-            }
-            return result;
-
-        } catch (Exception e) {
-            log.error("Error fetching RealTimeCampaigns for company {}", company.getId(), e);
-            return new ArrayList<>();
+        List<MetaCampaign> campaigns = metaCampaignRepository.findByCompanyId(company.getId());
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (MetaCampaign c : campaigns) {
+            Map<String, Object> campaign = new HashMap<>();
+            campaign.put("id", c.getMetaId());
+            campaign.put("name", c.getName());
+            campaign.put("status", c.getStatus() != null ? c.getStatus() : "UNKNOWN");
+            campaign.put("spend", c.getSpend() != null ? c.getSpend() : 0.0);
+            campaign.put("clicks", c.getClicks() != null ? c.getClicks() : 0L);
+            campaign.put("conversions", c.getConversions() != null ? c.getConversions() : 0L);
+            result.add(campaign);
         }
+        return result;
     }
 
     public CampaignsListResponse getCampaignsForUser(User user) {
@@ -174,132 +126,38 @@ public class MarketingService {
         }
 
         MetaConnection conn = connectionOpt.get();
-        String accessToken = conn.getAccessToken();
-        String accountName = "Conta de Anúncios";
+        String accountName = conn.getAccountName() != null ? conn.getAccountName() : "Conta de Anúncios";
 
-        try {
-            String adAccountUrl = String.format("%s/%s?fields=name&access_token=%s",
-                    metaApiBaseUrl, conn.getAdAccountId(), accessToken);
-            ResponseEntity<String> accResponse = getWithRetry(adAccountUrl);
-            if (accResponse.getBody() != null) {
-                JsonNode accNode = objectMapper.readTree(accResponse.getBody());
-                if (accNode.has("name")) accountName = accNode.get("name").asText();
-            }
-        } catch (Exception e) {
-            log.warn("Could not fetch account name: {}", e.getMessage());
+        List<MetaCampaign> campaigns = metaCampaignRepository.findByCompanyId(company.getId());
+        List<CampaignListItemDTO> result = new ArrayList<>();
+
+        for (MetaCampaign c : campaigns) {
+            double spend = c.getSpend() != null ? c.getSpend() : 0.0;
+            long conversions = c.getConversions() != null ? c.getConversions() : 0L;
+            double cpl = conversions > 0 ? spend / conversions : 0;
+
+            result.add(CampaignListItemDTO.builder()
+                    .id(c.getMetaId())
+                    .name(c.getName())
+                    .status(c.getStatus() != null ? c.getStatus() : "UNKNOWN")
+                    .objective(mapObjective(c.getObjective()))
+                    .accountName(accountName)
+                    .accountId(conn.getAdAccountId())
+                    .dailyBudget(c.getDailyBudget() != null && c.getDailyBudget() > 0 ? c.getDailyBudget() : null)
+                    .spend(spend)
+                    .impressions(c.getImpressions() != null ? c.getImpressions() : 0L)
+                    .reach(c.getReach() != null ? c.getReach() : 0L)
+                    .clicks(c.getClicks() != null ? c.getClicks() : 0L)
+                    .ctr(c.getCtr() != null ? c.getCtr() : 0.0)
+                    .conversions(conversions)
+                    .cpl(cpl > 0 ? cpl : null)
+                    .build());
         }
 
-        try {
-            String url = String.format(
-                    "%s/%s/campaigns?effective_status=%s&fields=id,name,status,objective,updated_time,daily_budget,insights%%7Bspend,impressions,reach,clicks,ctr,actions%%7D&date_preset=last_30d&access_token=%s",
-                    metaApiBaseUrl, conn.getAdAccountId(), java.net.URLEncoder.encode("[\"ACTIVE\",\"PAUSED\"]", java.nio.charset.StandardCharsets.UTF_8), accessToken);
-
-            ResponseEntity<String> response = getWithRetry(url);
-            String responseBody = response.getBody();
-            if (responseBody == null) return CampaignsListResponse.builder().campaigns(new ArrayList<>()).accountName(accountName).build();
-
-            JsonNode data = objectMapper.readTree(responseBody).get("data");
-            long cutoffMs = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000);
-            List<CampaignListItemDTO> result = new ArrayList<>();
-
-            if (data != null && data.isArray()) {
-                for (JsonNode node : data) {
-                    String status = node.has("status") ? node.get("status").asText() : "";
-                    if ("PAUSED".equalsIgnoreCase(status) && node.has("updated_time")) {
-                        String ut = node.get("updated_time").asText();
-                        long updatedMs = java.time.Instant.parse(ut).toEpochMilli();
-                        if (updatedMs < cutoffMs) continue; // pausada há mais de 30 dias, pular
-                    }
-                    String id = node.get("id").asText();
-                    String name = node.has("name") ? node.get("name").asText() : "Campanha";
-                    if (status.isEmpty()) status = "UNKNOWN";
-                    String objective = node.has("objective") ? node.get("objective").asText() : "";
-
-                    double dailyBudget = 0.0;
-                    if (node.has("daily_budget")) {
-                        dailyBudget = node.get("daily_budget").asDouble() / 100.0;
-                    }
-
-                    double spend = 0.0;
-                    long impressions = 0;
-                    long reach = 0;
-                    long clicks = 0;
-                    double ctr = 0.0;
-                    long conversions = 0;
-
-                    if (node.has("insights") && node.get("insights").has("data")) {
-                        JsonNode insights = node.get("insights").get("data");
-                        if (insights.isArray() && insights.size() > 0) {
-                            JsonNode i = insights.get(0);
-                            spend = i.has("spend") ? i.get("spend").asDouble() : 0.0;
-                            impressions = i.has("impressions") ? i.get("impressions").asLong() : 0;
-                            reach = i.has("reach") ? i.get("reach").asLong() : impressions;
-                            clicks = i.has("clicks") ? i.get("clicks").asLong() : 0;
-                            ctr = i.has("ctr") ? Double.parseDouble(i.get("ctr").asText().replace("%", "")) : 0.0;
-                            if (i.has("actions")) {
-                                for (JsonNode action : i.get("actions")) {
-                                    String at = action.get("action_type").asText();
-                                    if ("onsite_conversion.messaging_conversation_started_7d".equals(at) || "lead".equals(at)) {
-                                        conversions += action.get("value").asLong();
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (dailyBudget <= 0) {
-                        try {
-                            String adsetsUrl = String.format("%s/%s/adsets?fields=daily_budget&access_token=%s",
-                                    metaApiBaseUrl, id, accessToken);
-                            ResponseEntity<String> asRes = getWithRetry(adsetsUrl);
-                            if (asRes.getBody() != null) {
-                                JsonNode asData = objectMapper.readTree(asRes.getBody()).get("data");
-                                if (asData != null && asData.isArray()) {
-                                    for (JsonNode as : asData) {
-                                        if (as.has("daily_budget")) {
-                                            dailyBudget += as.get("daily_budget").asDouble() / 100.0;
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (Exception ignored) {}
-                    }
-
-                    double cpl = conversions > 0 ? spend / conversions : 0;
-
-                    String objectiveLabel = mapObjective(objective);
-
-                    result.add(CampaignListItemDTO.builder()
-                            .id(id)
-                            .name(name)
-                            .status(status)
-                            .objective(objectiveLabel)
-                            .accountName(accountName)
-                            .accountId(conn.getAdAccountId())
-                            .dailyBudget(dailyBudget > 0 ? dailyBudget : null)
-                            .spend(spend)
-                            .impressions(impressions)
-                            .reach(reach)
-                            .clicks(clicks)
-                            .ctr(ctr)
-                            .conversions(conversions)
-                            .cpl(cpl > 0 ? cpl : null)
-                            .build());
-                }
-            }
-
-            return CampaignsListResponse.builder()
-                    .campaigns(result)
-                    .accountName(accountName)
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Error fetching campaigns for user", e);
-            return CampaignsListResponse.builder()
-                    .campaigns(new ArrayList<>())
-                    .accountName(accountName)
-                    .build();
-        }
+        return CampaignsListResponse.builder()
+                .campaigns(result)
+                .accountName(accountName)
+                .build();
     }
 
     private String mapObjective(String obj) {
@@ -480,6 +338,10 @@ public class MarketingService {
     }
 
     private final MetaConnectionRepository metaConnectionRepository;
+    private final MetaCampaignRepository metaCampaignRepository;
+    private final MetaInsightRepository metaInsightRepository;
+    private final InstagramMetricRepository instagramMetricRepository;
+    private final MetaSyncService metaSyncService;
     private final CompanyRepository companyRepository;
     private final SupabaseStorageService supabaseStorageService;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -506,33 +368,24 @@ public class MarketingService {
         }
 
         MetaConnection connection = connectionOpt.get();
-        String accessToken = connection.getAccessToken();
         String adAccountId = connection.getAdAccountId();
 
-        if (adAccountId == null || adAccountId.isEmpty() || accessToken == null || accessToken.isEmpty()) {
-            log.info("[TrafficMetrics] company={} - retornando vazio: adAccountId={} accessToken={}",
-                    company.getId(), adAccountId != null ? "present" : "null", accessToken != null ? "present" : "null");
+        if (adAccountId == null || adAccountId.isEmpty()) {
+            log.info("[TrafficMetrics] company={} - retornando vazio: adAccountId ausente", company.getId());
             return buildEmptyMetrics();
         }
 
-        // Quando campaignId informado, busca insights da campanha; senão, da conta de anúncios
-        String insightsResourceId = (campaignId != null && !campaignId.isBlank()) ? campaignId : adAccountId;
+        String level = (campaignId != null && !campaignId.isBlank()) ? "campaign" : "account";
+        String externalId = (campaignId != null && !campaignId.isBlank()) ? campaignId : adAccountId;
 
-        try {
-            String historyUrl = String.format(
-                    "%s/%s/insights?fields=spend,impressions,clicks,actions,date_start&date_preset=last_14d&time_increment=1&access_token=%s",
-                    metaApiBaseUrl, insightsResourceId, accessToken);
-            ResponseEntity<String> historyResponse = getWithRetry(historyUrl);
-            String historyBody = historyResponse.getBody();
-            log.info("Meta Traffic Metrics for {} (campaignId={}): {}", user.getId(), campaignId, historyBody != null ? "ok" : "null");
-            JsonNode historyData = objectMapper.readTree(historyBody).get("data");
+        LocalDate end = LocalDate.now();
+        LocalDate start = end.minusDays(14);
 
-            return mapToResponse(historyData);
+        List<MetaInsight> insights = metaInsightRepository
+                .findByCompanyIdAndLevelAndExternalIdAndDateBetweenOrderByDateAsc(
+                        company.getId(), level, externalId, start, end);
 
-        } catch (Exception e) {
-            log.error("Error fetching Meta Ads data", e);
-            return buildEmptyMetrics();
-        }
+        return mapInsightsToResponse(insights);
     }
 
     public InstagramMetricsResponse getInstagramMetrics(User user) {
@@ -542,200 +395,64 @@ public class MarketingService {
             log.info("[InstagramMetrics] Sem conexão Meta para empresa {}", user.getCompany().getId());
             return buildEmptyInstagramMetrics();
         }
-        MetaConnection connCheck = connectionOpt.get();
-        if (!connCheck.isConnected()) {
+        MetaConnection conn = connectionOpt.get();
+        if (!conn.isConnected()) {
             log.info("[InstagramMetrics] Meta desconectada para empresa {}", user.getCompany().getId());
             return buildEmptyInstagramMetrics();
         }
-        if (connCheck.getPageId() == null) {
+        if (conn.getPageId() == null) {
             log.info("[InstagramMetrics] PageId ausente na conexão Meta para empresa {}", user.getCompany().getId());
             return buildEmptyInstagramMetrics();
         }
 
-        MetaConnection connection = connectionOpt.get();
-        String accessToken = connection.getAccessToken();
-        String pageId = connection.getPageId();
+        long followers = conn.getInstagramFollowerCount() != null ? conn.getInstagramFollowerCount() : 0;
 
-        try {
-            // 1. Get Instagram Business Account ID
-            String igAccountUrl = String.format("%s/%s?fields=instagram_business_account&access_token=%s",
-                    metaApiBaseUrl, pageId, accessToken);
-            log.info("[InstagramMetrics] Buscando IG Business Account para pageId={}", pageId);
-            ResponseEntity<String> igAccountRes = getWithRetry(igAccountUrl);
-            String igAccountBody = igAccountRes.getBody();
-            log.info("[InstagramMetrics] Meta/IG Account response: {}", igAccountBody);
-            JsonNode igAccountRoot = objectMapper.readTree(igAccountBody);
-            if (igAccountRoot.has("error")) {
-                log.warn("[InstagramMetrics] Meta API error: {}", igAccountRoot.get("error"));
-                return buildEmptyInstagramMetrics();
-            }
-            JsonNode igAccountNode = igAccountRoot.get("instagram_business_account");
+        LocalDate today = LocalDate.now();
+        LocalDate sinceCurrent = today.minusDays(30);
+        LocalDate sincePrevious = today.minusDays(60);
 
-            if (igAccountNode == null || igAccountNode.isNull()) {
-                log.warn("[InstagramMetrics] Nenhuma conta Instagram Business vinculada à página {}", pageId);
-                return buildEmptyInstagramMetrics();
-            }
+        List<InstagramMetric> metrics = instagramMetricRepository.findByCompanyIdAndDateBetween(
+                user.getCompany().getId(), sincePrevious, today);
 
-            String igId = igAccountNode.get("id").asText();
-            log.info("[InstagramMetrics] IG Business ID encontrado: {}", igId);
-
-            // 2. Fetch User basic info (followers count)
-            String basicInfoUrl = String.format("%s/%s?fields=followers_count,media_count&access_token=%s",
-                    metaApiBaseUrl, igId, accessToken);
-            String basicInfoBody = getWithRetry(basicInfoUrl).getBody();
-            log.info("[InstagramMetrics] Basic info response: {}", basicInfoBody);
-            JsonNode basicInfo = objectMapper.readTree(basicInfoBody);
-            if (basicInfo.has("error")) {
-                log.warn("[InstagramMetrics] Meta API error em basic info: {}", basicInfo.get("error"));
-                return buildEmptyInstagramMetrics();
-            }
-            long followers = basicInfo.has("followers_count") ? basicInfo.get("followers_count").asLong() : 0;
-            log.info("[InstagramMetrics] Followers: {}", followers);
-
-            // 3. Fetch Insights - Meta doc: reach usa time_series (daily); accounts_engaged usa total_value;
-            //    follower_count incompatível com total_value. Seguidores já vêm do basic info.
-            LocalDate today = LocalDate.now();
-            LocalDate sinceCurrent = today.minusDays(30);
-            LocalDate sincePrevious = today.minusDays(60);
-
-            // 3a. Reach com time_series (retorna values[] com dados diários para gráfico)
-            String reachUrl = String.format(
-                    "%s/%s/insights?metric=reach&metric_type=time_series&period=day&since=%s&until=%s&access_token=%s",
-                    metaApiBaseUrl, igId, sinceCurrent, today, accessToken);
-            JsonNode reachData = null;
-            try {
-                String reachBody = getWithRetry(reachUrl).getBody();
-                JsonNode reachRes = objectMapper.readTree(reachBody);
-                reachData = reachRes.has("data") ? reachRes.get("data") : null;
-            } catch (Exception ex) {
-                log.warn("[InstagramMetrics] Erro ao buscar reach: {}", ex.getMessage());
-            }
-
-            // 3b. Accounts_engaged com total_value (retorna total de interações)
-            String engagedUrl = String.format(
-                    "%s/%s/insights?metric=accounts_engaged&metric_type=total_value&period=day&since=%s&until=%s&access_token=%s",
-                    metaApiBaseUrl, igId, sinceCurrent, today, accessToken);
-            JsonNode engagedData = null;
-            try {
-                String engagedBody = getWithRetry(engagedUrl).getBody();
-                JsonNode engagedRes = objectMapper.readTree(engagedBody);
-                engagedData = engagedRes.has("data") ? engagedRes.get("data") : null;
-            } catch (Exception ex) {
-                log.warn("[InstagramMetrics] Erro ao buscar accounts_engaged: {}", ex.getMessage());
-            }
-
-            // 4. Período anterior para tendência
-            JsonNode reachPrevData = null;
-            JsonNode engagedPrevData = null;
-            try {
-                String reachPrevUrl = String.format(
-                        "%s/%s/insights?metric=reach&metric_type=time_series&period=day&since=%s&until=%s&access_token=%s",
-                        metaApiBaseUrl, igId, sincePrevious, sinceCurrent, accessToken);
-                JsonNode rp = objectMapper.readTree(getWithRetry(reachPrevUrl).getBody());
-                reachPrevData = rp.has("data") ? rp.get("data") : null;
-            } catch (Exception ex) {
-                log.debug("[InstagramMetrics] Período anterior reach: {}", ex.getMessage());
-            }
-            try {
-                String engagedPrevUrl = String.format(
-                        "%s/%s/insights?metric=accounts_engaged&metric_type=total_value&period=day&since=%s&until=%s&access_token=%s",
-                        metaApiBaseUrl, igId, sincePrevious, sinceCurrent, accessToken);
-                JsonNode ep = objectMapper.readTree(getWithRetry(engagedPrevUrl).getBody());
-                engagedPrevData = ep.has("data") ? ep.get("data") : null;
-            } catch (Exception ex) {
-                log.debug("[InstagramMetrics] Período anterior accounts_engaged: {}", ex.getMessage());
-            }
-
-            InstagramMetricsResponse result = mapToInstagramResponse(followers, reachData, engagedData, reachPrevData, engagedPrevData);
-            log.info("[InstagramMetrics] Sucesso: followers={}, impressions={}, performanceHistory size={}",
-                    result.getFollowers().getValue(), result.getImpressions().getValue(),
-                    result.getPerformanceHistory() != null ? result.getPerformanceHistory().size() : 0);
-            return result;
-
-        } catch (Exception e) {
-            log.error("[InstagramMetrics] Erro ao buscar dados Instagram: {}", e.getMessage(), e);
-            return buildEmptyInstagramMetrics();
-        }
+        return mapInstagramMetricsToResponse(followers, metrics, sinceCurrent, today);
     }
 
-    private InstagramMetricsResponse mapToInstagramResponse(long totalFollowers,
-            JsonNode reachData, JsonNode engagedData, JsonNode reachPrevData, JsonNode engagedPrevData) {
+    private InstagramMetricsResponse mapInstagramMetricsToResponse(long totalFollowers,
+            List<InstagramMetric> metrics, LocalDate currentStart, LocalDate currentEnd) {
         long reachTotal = 0;
         long interactionsTotal = 0;
+        long prevReach = 0;
+        long prevInteractions = 0;
         List<InstagramMetricsResponse.DailyPerformance> performance = new ArrayList<>();
-        Map<String, Double> dailyReach = new LinkedHashMap<>();
 
-        // Parse reach (time_series: values array)
-        if (reachData != null && reachData.isArray() && reachData.size() > 0) {
-            for (JsonNode metric : reachData) {
-                if (!"reach".equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
-                JsonNode values = metric.has("values") ? metric.get("values") : null;
-                if (values == null || !values.isArray()) continue;
-                for (JsonNode val : values) {
-                    long v = val.has("value") ? val.get("value").asLong() : 0;
-                    reachTotal += v;
-                    String endTime = val.has("end_time") ? val.get("end_time").asText() : "";
-                    if (endTime.length() >= 10) {
-                        String dateStr = endTime.substring(8, 10) + "/" + endTime.substring(5, 7);
-                        dailyReach.merge(dateStr, (double) v, Double::sum);
-                    }
+        if (metrics != null) {
+            for (InstagramMetric m : metrics) {
+                long reach = m.getReach() != null ? m.getReach() : 0;
+                long engaged = m.getInteractions() != null ? m.getInteractions() : 0;
+
+                if (!m.getDate().isBefore(currentStart) && !m.getDate().isAfter(currentEnd)) {
+                    reachTotal += reach;
+                    interactionsTotal += engaged;
+                    String dateStr = m.getDate().toString();
+                    String dd = dateStr.length() >= 10 ? dateStr.substring(8, 10) : "00";
+                    String mm = dateStr.length() >= 10 ? dateStr.substring(5, 7) : "00";
+                    performance.add(InstagramMetricsResponse.DailyPerformance.builder()
+                            .date(dd + "/" + mm)
+                            .value((double) reach)
+                            .build());
+                } else {
+                    prevReach += reach;
+                    prevInteractions += engaged;
                 }
-                break;
             }
         }
 
-        // Parse accounts_engaged (total_value: total_value.value)
-        if (engagedData != null && engagedData.isArray() && engagedData.size() > 0) {
-            for (JsonNode metric : engagedData) {
-                if (!"accounts_engaged".equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
-                if (metric.has("total_value") && metric.get("total_value").has("value")) {
-                    interactionsTotal = metric.get("total_value").get("value").asLong();
-                } else if (metric.has("values") && metric.get("values").isArray() && metric.get("values").size() > 0) {
-                    for (JsonNode val : metric.get("values")) {
-                        interactionsTotal += val.has("value") ? val.get("value").asLong() : 0;
-                    }
-                }
-                break;
-            }
-        }
-
-        performance = dailyReach.entrySet().stream()
-                .map(e -> InstagramMetricsResponse.DailyPerformance.builder()
-                        .date(e.getKey())
-                        .value(e.getValue())
-                        .build())
-                .sorted(Comparator.comparing(InstagramMetricsResponse.DailyPerformance::getDate))
-                .toList();
-
-        // Previous period
-        long prevReach = 0, prevInteractions = 0;
-        if (reachPrevData != null && reachPrevData.isArray()) {
-            for (JsonNode metric : reachPrevData) {
-                if (!"reach".equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
-                JsonNode values = metric.has("values") ? metric.get("values") : null;
-                if (values != null && values.isArray()) {
-                    for (JsonNode val : values) {
-                        prevReach += val.has("value") ? val.get("value").asLong() : 0;
-                    }
-                }
-                break;
-            }
-        }
-        if (engagedPrevData != null && engagedPrevData.isArray()) {
-            for (JsonNode metric : engagedPrevData) {
-                if (!"accounts_engaged".equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
-                if (metric.has("total_value") && metric.get("total_value").has("value")) {
-                    prevInteractions = metric.get("total_value").get("value").asLong();
-                }
-                break;
-            }
-        }
+        performance.sort(Comparator.comparing(InstagramMetricsResponse.DailyPerformance::getDate));
 
         long displayImpressions = reachTotal;
         double engagementRate = (reachTotal > 0) ? (double) interactionsTotal / reachTotal * 100 : 0;
         double prevEngagementRate = (prevReach > 0) ? (double) prevInteractions / prevReach * 100 : 0;
 
-        String followersTrend = "0%";
         String engagementTrend = formatTrend(engagementRate, prevEngagementRate);
         String impressionsTrend = formatTrend(displayImpressions, prevReach);
         String interactionsTrend = formatTrend(interactionsTotal, prevInteractions);
@@ -743,7 +460,7 @@ public class MarketingService {
         return InstagramMetricsResponse.builder()
                 .followers(InstagramMetricsResponse.MetricDetail.builder()
                         .value(formatNumber(totalFollowers))
-                        .trend(followersTrend)
+                        .trend("0%")
                         .isPositive(true)
                         .build())
                 .engagementRate(InstagramMetricsResponse.MetricDetail.builder()
@@ -907,8 +624,8 @@ public class MarketingService {
                     companyId, connection.getAdAccountId(), connection.getBusinessId());
 
             if (connection.getAdAccountId() != null) {
-                log.info("Ad Account configured: {}", connection.getAdAccountId());
-                // No sync triggered
+                log.info("Ad Account configured: {} - disparando sync inicial", connection.getAdAccountId());
+                metaSyncService.syncForCompany(java.util.UUID.fromString(companyId));
             } else {
                 log.warn("No Ad Account found during OAuth.");
             }
@@ -1669,7 +1386,7 @@ public class MarketingService {
         return restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
     }
 
-    private TrafficMetricsResponse mapToResponse(JsonNode historyData) {
+    private TrafficMetricsResponse mapInsightsToResponse(List<MetaInsight> insights) {
         double currentSpend = 0;
         long currentImpressions = 0;
         long currentClicks = 0;
@@ -1682,30 +1399,16 @@ public class MarketingService {
 
         List<TrafficMetricsResponse.DailyPerformance> performance = new ArrayList<>();
 
-        if (historyData != null && historyData.isArray()) {
-            int totalDays = historyData.size();
-            // Assuming Meta returns chronologically (oldest first)
-            // Last 7 days are the "current" period
-            // Days before that are the "previous" period
+        if (insights != null && !insights.isEmpty()) {
+            int totalDays = insights.size();
             int currentStartIndex = Math.max(0, totalDays - 7);
 
             for (int i = 0; i < totalDays; i++) {
-                JsonNode node = historyData.get(i);
-                double spend = node.has("spend") ? node.get("spend").asDouble() : 0.0;
-                long imps = node.has("impressions") ? node.get("impressions").asLong() : 0;
-                long clks = node.has("clicks") ? node.get("clicks").asLong() : 0;
-                long convs = 0;
-
-                if (node.has("actions")) {
-                    for (JsonNode action : node.get("actions")) {
-                        String actionType = action.get("action_type").asText();
-                        if ("onsite_conversion.messaging_conversation_started_7d".equals(actionType) ||
-                                "lead".equals(actionType) ||
-                                "purchase".equals(actionType)) {
-                            convs += action.get("value").asLong();
-                        }
-                    }
-                }
+                MetaInsight node = insights.get(i);
+                double spend = node.getSpend() != null ? node.getSpend() : 0.0;
+                long imps = node.getImpressions() != null ? node.getImpressions() : 0;
+                long clks = node.getClicks() != null ? node.getClicks() : 0;
+                long convs = node.getConversions() != null ? node.getConversions() : 0;
 
                 if (i >= currentStartIndex) {
                     currentSpend += spend;
@@ -1713,9 +1416,11 @@ public class MarketingService {
                     currentClicks += clks;
                     currentConversions += convs;
 
+                    String dateStr = node.getDate().toString();
+                    String dd = dateStr.length() >= 10 ? dateStr.substring(8, 10) : "00";
+                    String mm = dateStr.length() >= 10 ? dateStr.substring(5, 7) : "00";
                     performance.add(TrafficMetricsResponse.DailyPerformance.builder()
-                            .date(node.get("date_start").asText().substring(8, 10) + "/"
-                                    + node.get("date_start").asText().substring(5, 7))
+                            .date(dd + "/" + mm)
                             .value(spend)
                             .build());
                 } else {

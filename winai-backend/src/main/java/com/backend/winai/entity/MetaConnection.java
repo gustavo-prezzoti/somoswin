@@ -40,11 +40,17 @@ public class MetaConnection {
     @Column(name = "ad_account_id")
     private String adAccountId;
 
+    @Column(name = "account_name")
+    private String accountName;
+
     @Column(name = "page_id")
     private String pageId;
 
     @Column(name = "instagram_business_id")
     private String instagramBusinessId;
+
+    @Column(name = "instagram_follower_count")
+    private Long instagramFollowerCount;
 
     @Column(name = "business_id")
     private String businessId;
