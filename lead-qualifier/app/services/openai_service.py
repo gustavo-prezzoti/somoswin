@@ -95,7 +95,7 @@ Qual deve ser o status deste lead?"""
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
                 ],
-                max_completion_tokens=200
+                max_completion_tokens=settings.openai_max_tokens
             )
             
             result = response.choices[0].message.content.strip().upper() if response.choices[0].message.content else ""

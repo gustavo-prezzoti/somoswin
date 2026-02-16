@@ -33,9 +33,10 @@ services:
     container_name: winai-backend
     ports:
       - "18080:8080"
+    # 127.0.0.11 = Docker embedded DNS (redis, etc). 8.8.8.8 = fallback externo.
     dns:
+      - 127.0.0.11
       - 8.8.8.8
-      - 8.8.4.4
     deploy:
       resources:
         limits:
@@ -51,7 +52,6 @@ services:
       - SPRING_PROFILES_ACTIVE=docker
       - HIKARI_MAX_POOL_SIZE=${HIKARI_MAX_POOL_SIZE:-40}
 
-      # Supabase Pooler (porta 6543): use DATABASE_POOLER_URL. Senão usa SPRING_DATASOURCE_URL.
       - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL}}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
@@ -109,7 +109,8 @@ services:
       # Internal API Key
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     depends_on:
-      - redis
+      redis:
+        condition: service_started
     networks:
       - winai-network
     healthcheck:
@@ -129,8 +130,8 @@ services:
       dockerfile: Dockerfile
     container_name: winai-meta-sync
     dns:
+      - 127.0.0.11
       - 8.8.8.8
-      - 8.8.4.4
     deploy:
       resources:
         limits:
@@ -165,7 +166,10 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      backend:
+        condition: service_healthy
     networks:
       - winai-network
     restart: unless-stopped
@@ -180,8 +184,8 @@ services:
       dockerfile: Dockerfile
     container_name: winai-ai-recommendations-worker
     dns:
+      - 127.0.0.11
       - 8.8.8.8
-      - 8.8.4.4
     deploy:
       resources:
         limits:
@@ -209,7 +213,10 @@ services:
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      backend:
+        condition: service_healthy
     networks:
       - winai-network
     restart: unless-stopped
@@ -223,8 +230,8 @@ services:
       dockerfile: Dockerfile
     container_name: winai-followup-worker
     dns:
+      - 127.0.0.11
       - 8.8.8.8
-      - 8.8.4.4
     deploy:
       resources:
         limits:
@@ -261,8 +268,10 @@ services:
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     depends_on:
-      - redis
-      - backend
+      redis:
+        condition: service_started
+      backend:
+        condition: service_healthy
     networks:
       - winai-network
     restart: unless-stopped
@@ -278,8 +287,8 @@ services:
     ports:
       - "15000:5000"
     dns:
+      - 127.0.0.11
       - 8.8.8.8
-      - 8.8.4.4
     deploy:
       resources:
         limits:
@@ -307,8 +316,8 @@ services:
       dockerfile: Dockerfile
     container_name: winai-lead-qualifier
     dns:
+      - 127.0.0.11
       - 8.8.8.8
-      - 8.8.4.4
     deploy:
       resources:
         limits:
@@ -319,6 +328,7 @@ services:
       - JAVA_API_URL=http://backend:8080
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-1024}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - CRON_INTERVAL_MINUTES=30
@@ -346,7 +356,8 @@ services:
     ports:
       - "13000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - winai-network
     healthcheck:

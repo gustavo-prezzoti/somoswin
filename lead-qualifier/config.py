@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str = ""
     openai_model: str = "gpt-5"
+    openai_max_tokens: int = 1024
     
     # Redis Configuration
     redis_host: str = "redis"
