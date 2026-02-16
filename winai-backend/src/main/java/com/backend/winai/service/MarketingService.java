@@ -554,55 +554,61 @@ public class MarketingService {
             long followers = basicInfo.has("followers_count") ? basicInfo.get("followers_count").asLong() : 0;
             log.info("[InstagramMetrics] Followers: {}", followers);
 
-            // 3. Fetch Insights - current period (last 30 days)
+            // 3. Fetch Insights - Meta doc: reach usa time_series (daily); accounts_engaged usa total_value;
+            //    follower_count incompatível com total_value. Seguidores já vêm do basic info.
             LocalDate today = LocalDate.now();
             LocalDate sinceCurrent = today.minusDays(30);
-            // Instagram User Insights: accounts_engaged requer metric_type=total_value
-            String insightsUrl = String.format(
-                    "%s/%s/insights?metric=reach,accounts_engaged,follower_count&metric_type=total_value&period=day&since=%s&until=%s&access_token=%s",
-                    metaApiBaseUrl, igId, sinceCurrent, today, accessToken);
-            log.info("[InstagramMetrics] Insights URL (30d): {}", insightsUrl.replace(accessToken, "***"));
-            String insightsBody = getWithRetry(insightsUrl).getBody();
-            log.info("[InstagramMetrics] Insights response: {}", insightsBody);
-            JsonNode insightsResponse = objectMapper.readTree(insightsBody);
-            if (insightsResponse.has("error")) {
-                log.warn("[InstagramMetrics] Meta API error em insights: {}", insightsResponse.get("error"));
-            }
-            JsonNode insightsData = insightsResponse.has("data") ? insightsResponse.get("data") : null;
-            int insightsSize = (insightsData != null && insightsData.isArray()) ? insightsData.size() : 0;
-            log.info("[InstagramMetrics] Insights data size: {}", insightsSize);
-
-            // Fallback: if empty or error, try without since/until (some API versions differ)
-            if (insightsData == null || !insightsData.isArray() || insightsData.size() == 0) {
-                log.info("[InstagramMetrics] Insights vazio, tentando fallback sem since/until");
-                String fallbackUrl = String.format(
-                        "%s/%s/insights?metric=reach,accounts_engaged,follower_count&metric_type=total_value&period=day&access_token=%s",
-                        metaApiBaseUrl, igId, accessToken);
-                String fallbackBody = getWithRetry(fallbackUrl).getBody();
-                log.info("[InstagramMetrics] Fallback insights response: {}", fallbackBody);
-                JsonNode fallbackRes = objectMapper.readTree(fallbackBody);
-                insightsData = fallbackRes.has("data") ? fallbackRes.get("data") : null;
-                if (insightsData != null && insightsData.isArray()) {
-                    log.info("[InstagramMetrics] Fallback insights data size: {}", insightsData.size());
-                } else {
-                    log.warn("[InstagramMetrics] Fallback insights também vazio");
-                }
-            }
-
-            // 4. Fetch Insights - previous period (30-60 days ago) for trend calculation
             LocalDate sincePrevious = today.minusDays(60);
-            String insightsPrevUrl = String.format(
-                    "%s/%s/insights?metric=reach,accounts_engaged,follower_count&metric_type=total_value&period=day&since=%s&until=%s&access_token=%s",
-                    metaApiBaseUrl, igId, sincePrevious, sinceCurrent, accessToken);
-            JsonNode insightsPrevData = null;
+
+            // 3a. Reach com time_series (retorna values[] com dados diários para gráfico)
+            String reachUrl = String.format(
+                    "%s/%s/insights?metric=reach&metric_type=time_series&period=day&since=%s&until=%s&access_token=%s",
+                    metaApiBaseUrl, igId, sinceCurrent, today, accessToken);
+            JsonNode reachData = null;
             try {
-                JsonNode prevResponse = objectMapper.readTree(getWithRetry(insightsPrevUrl).getBody());
-                insightsPrevData = prevResponse.has("data") ? prevResponse.get("data") : null;
+                String reachBody = getWithRetry(reachUrl).getBody();
+                JsonNode reachRes = objectMapper.readTree(reachBody);
+                reachData = reachRes.has("data") ? reachRes.get("data") : null;
             } catch (Exception ex) {
-                log.info("[InstagramMetrics] Período anterior não disponível: {}", ex.getMessage());
+                log.warn("[InstagramMetrics] Erro ao buscar reach: {}", ex.getMessage());
             }
 
-            InstagramMetricsResponse result = mapToInstagramResponse(followers, insightsData, insightsPrevData);
+            // 3b. Accounts_engaged com total_value (retorna total de interações)
+            String engagedUrl = String.format(
+                    "%s/%s/insights?metric=accounts_engaged&metric_type=total_value&period=day&since=%s&until=%s&access_token=%s",
+                    metaApiBaseUrl, igId, sinceCurrent, today, accessToken);
+            JsonNode engagedData = null;
+            try {
+                String engagedBody = getWithRetry(engagedUrl).getBody();
+                JsonNode engagedRes = objectMapper.readTree(engagedBody);
+                engagedData = engagedRes.has("data") ? engagedRes.get("data") : null;
+            } catch (Exception ex) {
+                log.warn("[InstagramMetrics] Erro ao buscar accounts_engaged: {}", ex.getMessage());
+            }
+
+            // 4. Período anterior para tendência
+            JsonNode reachPrevData = null;
+            JsonNode engagedPrevData = null;
+            try {
+                String reachPrevUrl = String.format(
+                        "%s/%s/insights?metric=reach&metric_type=time_series&period=day&since=%s&until=%s&access_token=%s",
+                        metaApiBaseUrl, igId, sincePrevious, sinceCurrent, accessToken);
+                JsonNode rp = objectMapper.readTree(getWithRetry(reachPrevUrl).getBody());
+                reachPrevData = rp.has("data") ? rp.get("data") : null;
+            } catch (Exception ex) {
+                log.debug("[InstagramMetrics] Período anterior reach: {}", ex.getMessage());
+            }
+            try {
+                String engagedPrevUrl = String.format(
+                        "%s/%s/insights?metric=accounts_engaged&metric_type=total_value&period=day&since=%s&until=%s&access_token=%s",
+                        metaApiBaseUrl, igId, sincePrevious, sinceCurrent, accessToken);
+                JsonNode ep = objectMapper.readTree(getWithRetry(engagedPrevUrl).getBody());
+                engagedPrevData = ep.has("data") ? ep.get("data") : null;
+            } catch (Exception ex) {
+                log.debug("[InstagramMetrics] Período anterior accounts_engaged: {}", ex.getMessage());
+            }
+
+            InstagramMetricsResponse result = mapToInstagramResponse(followers, reachData, engagedData, reachPrevData, engagedPrevData);
             log.info("[InstagramMetrics] Sucesso: followers={}, impressions={}, performanceHistory size={}",
                     result.getFollowers().getValue(), result.getImpressions().getValue(),
                     result.getPerformanceHistory() != null ? result.getPerformanceHistory().size() : 0);
@@ -614,55 +620,47 @@ public class MarketingService {
         }
     }
 
-    private InstagramMetricsResponse mapToInstagramResponse(long totalFollowers, JsonNode insights,
-            JsonNode insightsPrevious) {
-        if (insights == null || !insights.isArray() || insights.size() == 0) {
-            log.info("[InstagramMetrics] mapToInstagramResponse: insights null ou vazio, retornando zeros");
-        }
-        long impressionsTotal = 0;
+    private InstagramMetricsResponse mapToInstagramResponse(long totalFollowers,
+            JsonNode reachData, JsonNode engagedData, JsonNode reachPrevData, JsonNode engagedPrevData) {
         long reachTotal = 0;
-        long interactionsTotal = 0; // accounts_engaged
-        long followersFirst = totalFollowers;
-        long followersLast = totalFollowers;
+        long interactionsTotal = 0;
         List<InstagramMetricsResponse.DailyPerformance> performance = new ArrayList<>();
-
-        // Parse current period metrics - sum all daily values for last 30 days
         Map<String, Double> dailyReach = new LinkedHashMap<>();
-        if (insights != null && insights.isArray()) {
-            for (JsonNode metric : insights) {
-                if (!metric.has("name")) continue;
-                String name = metric.get("name").asText();
+
+        // Parse reach (time_series: values array)
+        if (reachData != null && reachData.isArray() && reachData.size() > 0) {
+            for (JsonNode metric : reachData) {
+                if (!"reach".equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
                 JsonNode values = metric.has("values") ? metric.get("values") : null;
                 if (values == null || !values.isArray()) continue;
-
-                long totalForMetric = 0;
-                for (int i = 0; i < values.size(); i++) {
-                    JsonNode val = values.get(i);
+                for (JsonNode val : values) {
                     long v = val.has("value") ? val.get("value").asLong() : 0;
-                    totalForMetric += v;
-
-                    if ("reach".equals(name) || "impressions".equals(name)) {
-                        String endTime = val.has("end_time") ? val.get("end_time").asText() : "";
-                        if (endTime.length() >= 10) {
-                            String dateStr = endTime.substring(8, 10) + "/" + endTime.substring(5, 7);
-                            dailyReach.merge(dateStr, (double) v, (a, b) -> a + b);
-                        }
-                    }
-                    if ("follower_count".equals(name)) {
-                        if (i == 0) followersFirst = v;
-                        followersLast = v;
+                    reachTotal += v;
+                    String endTime = val.has("end_time") ? val.get("end_time").asText() : "";
+                    if (endTime.length() >= 10) {
+                        String dateStr = endTime.substring(8, 10) + "/" + endTime.substring(5, 7);
+                        dailyReach.merge(dateStr, (double) v, Double::sum);
                     }
                 }
-                switch (name) {
-                    case "impressions" -> impressionsTotal = totalForMetric;
-                    case "reach" -> reachTotal = totalForMetric;
-                    case "accounts_engaged" -> interactionsTotal = totalForMetric;
-                    default -> { }
-                }
+                break;
             }
         }
-        log.info("[InstagramMetrics] mapToInstagramResponse: impressions={}, reach={}, interactions={}, dailyReach entries={}",
-                impressionsTotal, reachTotal, interactionsTotal, dailyReach.size());
+
+        // Parse accounts_engaged (total_value: total_value.value)
+        if (engagedData != null && engagedData.isArray() && engagedData.size() > 0) {
+            for (JsonNode metric : engagedData) {
+                if (!"accounts_engaged".equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
+                if (metric.has("total_value") && metric.get("total_value").has("value")) {
+                    interactionsTotal = metric.get("total_value").get("value").asLong();
+                } else if (metric.has("values") && metric.get("values").isArray() && metric.get("values").size() > 0) {
+                    for (JsonNode val : metric.get("values")) {
+                        interactionsTotal += val.has("value") ? val.get("value").asLong() : 0;
+                    }
+                }
+                break;
+            }
+        }
+
         performance = dailyReach.entrySet().stream()
                 .map(e -> InstagramMetricsResponse.DailyPerformance.builder()
                         .date(e.getKey())
@@ -671,37 +669,37 @@ public class MarketingService {
                 .sorted(Comparator.comparing(InstagramMetricsResponse.DailyPerformance::getDate))
                 .toList();
 
-        // Previous period totals for trend calculation
-        long prevImpressions = 0, prevReach = 0, prevInteractions = 0;
-        if (insightsPrevious != null && insightsPrevious.isArray()) {
-            for (JsonNode metric : insightsPrevious) {
-                if (!metric.has("name") || !metric.has("values")) continue;
-                String name = metric.get("name").asText();
-                JsonNode values = metric.get("values");
-                long sum = 0;
-                for (JsonNode val : values) {
-                    sum += val.has("value") ? val.get("value").asLong() : 0;
+        // Previous period
+        long prevReach = 0, prevInteractions = 0;
+        if (reachPrevData != null && reachPrevData.isArray()) {
+            for (JsonNode metric : reachPrevData) {
+                if (!"reach".equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
+                JsonNode values = metric.has("values") ? metric.get("values") : null;
+                if (values != null && values.isArray()) {
+                    for (JsonNode val : values) {
+                        prevReach += val.has("value") ? val.get("value").asLong() : 0;
+                    }
                 }
-                switch (name) {
-                    case "impressions" -> prevImpressions = sum;
-                    case "reach" -> prevReach = sum;
-                    case "accounts_engaged" -> prevInteractions = sum;
-                    default -> { }
+                break;
+            }
+        }
+        if (engagedPrevData != null && engagedPrevData.isArray()) {
+            for (JsonNode metric : engagedPrevData) {
+                if (!"accounts_engaged".equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
+                if (metric.has("total_value") && metric.get("total_value").has("value")) {
+                    prevInteractions = metric.get("total_value").get("value").asLong();
                 }
+                break;
             }
         }
 
-        // Use impressions for display; fallback to reach if impressions is 0 (some APIs return reach only)
-        long displayImpressions = impressionsTotal > 0 ? impressionsTotal : reachTotal;
+        long displayImpressions = reachTotal;
+        double engagementRate = (reachTotal > 0) ? (double) interactionsTotal / reachTotal * 100 : 0;
+        double prevEngagementRate = (prevReach > 0) ? (double) prevInteractions / prevReach * 100 : 0;
 
-        double engagementRate = (displayImpressions > 0)
-                ? (double) interactionsTotal / displayImpressions * 100
-                : (reachTotal > 0 ? (double) interactionsTotal / reachTotal * 100 : 0);
-
-        String followersTrend = formatTrend(followersLast, followersFirst);
-        String engagementTrend = formatTrend(engagementRate,
-                prevImpressions > 0 ? (double) prevInteractions / prevImpressions * 100 : 0);
-        String impressionsTrend = formatTrend(displayImpressions, prevImpressions > 0 ? prevImpressions : prevReach);
+        String followersTrend = "0%";
+        String engagementTrend = formatTrend(engagementRate, prevEngagementRate);
+        String impressionsTrend = formatTrend(displayImpressions, prevReach);
         String interactionsTrend = formatTrend(interactionsTotal, prevInteractions);
 
         return InstagramMetricsResponse.builder()
