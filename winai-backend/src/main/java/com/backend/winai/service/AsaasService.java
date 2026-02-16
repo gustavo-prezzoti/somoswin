@@ -590,6 +590,7 @@ public class AsaasService {
     /**
      * Retorna dados completos da assinatura para o painel do usuário.
      */
+    @Transactional(readOnly = true)
     public Map<String, Object> getSubscriptionDetails(UUID companyId) {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada: " + companyId));

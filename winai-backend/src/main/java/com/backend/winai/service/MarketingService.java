@@ -54,9 +54,13 @@ public class MarketingService {
     @Value("${meta.redirect.uri:https://server.somosamplia.com/api/v1/marketing/auth/meta/callback}")
     private String redirectUri;
 
-    /** config_id do Facebook Login for Business (User Token). Se vazio, usa scope (Login padrão). */
+    /** config_id do Facebook Login for Business. Se vazio, usa scope (Login padrão). */
     @Value("${meta.config.id:}")
     private String metaConfigId;
+
+    /** system_user = Business Integration System User token (cascata BM). user = User Token. */
+    @Value("${meta.token.type:system_user}")
+    private String metaTokenType;
 
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
@@ -88,23 +92,30 @@ public class MarketingService {
         String accessToken = conn.getAccessToken();
 
         try {
-            // Fetch campaigns with insights
+            // Fetch campaigns: ACTIVE + PAUSED (pausadas só se alteradas nos últimos 30 dias)
             String url = String.format(
-                    "%s/%s/campaigns?fields=id,name,status,objective,insights%%7Bspend,clicks,actions%%7D&date_preset=last_30d&access_token=%s",
-                    metaApiBaseUrl, conn.getAdAccountId(), accessToken);
+                    "%s/%s/campaigns?effective_status=%s&fields=id,name,status,objective,updated_time,insights%%7Bspend,clicks,actions%%7D&date_preset=last_30d&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(), java.net.URLEncoder.encode("[\"ACTIVE\",\"PAUSED\"]", java.nio.charset.StandardCharsets.UTF_8), accessToken);
 
             ResponseEntity<String> response = getWithRetry(url);
             String responseBody = response.getBody();
             log.info("Meta Campaigns Response for company {}: {}", company.getId(), responseBody);
             JsonNode data = objectMapper.readTree(responseBody).get("data");
 
+            long cutoffMs = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000);
             List<Map<String, Object>> result = new ArrayList<>();
             if (data != null && data.isArray()) {
                 for (JsonNode node : data) {
+                    String status = node.has("status") ? node.get("status").asText() : "";
+                    if ("PAUSED".equalsIgnoreCase(status) && node.has("updated_time")) {
+                        String ut = node.get("updated_time").asText();
+                        long updatedMs = java.time.Instant.parse(ut).toEpochMilli();
+                        if (updatedMs < cutoffMs) continue; // pausada há mais de 30 dias, pular
+                    }
                     Map<String, Object> campaign = new HashMap<>();
                     campaign.put("id", node.get("id").asText());
                     campaign.put("name", node.get("name").asText());
-                    campaign.put("status", node.get("status").asText());
+                    campaign.put("status", status.isEmpty() ? "UNKNOWN" : status);
 
                     double spend = 0.0;
                     long clicks = 0;
@@ -180,21 +191,28 @@ public class MarketingService {
 
         try {
             String url = String.format(
-                    "%s/%s/campaigns?fields=id,name,status,objective,daily_budget,insights%%7Bspend,impressions,reach,clicks,ctr,actions%%7D&date_preset=last_30d&access_token=%s",
-                    metaApiBaseUrl, conn.getAdAccountId(), accessToken);
+                    "%s/%s/campaigns?effective_status=%s&fields=id,name,status,objective,updated_time,daily_budget,insights%%7Bspend,impressions,reach,clicks,ctr,actions%%7D&date_preset=last_30d&access_token=%s",
+                    metaApiBaseUrl, conn.getAdAccountId(), java.net.URLEncoder.encode("[\"ACTIVE\",\"PAUSED\"]", java.nio.charset.StandardCharsets.UTF_8), accessToken);
 
             ResponseEntity<String> response = getWithRetry(url);
             String responseBody = response.getBody();
             if (responseBody == null) return CampaignsListResponse.builder().campaigns(new ArrayList<>()).accountName(accountName).build();
 
             JsonNode data = objectMapper.readTree(responseBody).get("data");
+            long cutoffMs = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000);
             List<CampaignListItemDTO> result = new ArrayList<>();
 
             if (data != null && data.isArray()) {
                 for (JsonNode node : data) {
+                    String status = node.has("status") ? node.get("status").asText() : "";
+                    if ("PAUSED".equalsIgnoreCase(status) && node.has("updated_time")) {
+                        String ut = node.get("updated_time").asText();
+                        long updatedMs = java.time.Instant.parse(ut).toEpochMilli();
+                        if (updatedMs < cutoffMs) continue; // pausada há mais de 30 dias, pular
+                    }
                     String id = node.get("id").asText();
                     String name = node.has("name") ? node.get("name").asText() : "Campanha";
-                    String status = node.has("status") ? node.get("status").asText() : "UNKNOWN";
+                    if (status.isEmpty()) status = "UNKNOWN";
                     String objective = node.has("objective") ? node.get("objective").asText() : "";
 
                     double dailyBudget = 0.0;
@@ -782,10 +800,19 @@ public class MarketingService {
     public Map<String, String> getMetaAuthorizationUrlWithMode(User user) {
         String state = user.getCompany().getId().toString();
         if (metaConfigId != null && !metaConfigId.isBlank()) {
-            String url = String.format(
-                    "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code",
-                    clientId, redirectUri, state, metaConfigId.trim());
-            return Map.of("url", url, "mode", "config_id", "config_id", metaConfigId.trim());
+            boolean isSystemUser = "system_user".equalsIgnoreCase(metaTokenType != null ? metaTokenType.trim() : "");
+            String url;
+            if (isSystemUser) {
+                // System User: obrigatório override_default_response_type=true e response_type=code
+                url = String.format(
+                        "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code&override_default_response_type=true",
+                        clientId, redirectUri, state, metaConfigId.trim());
+            } else {
+                url = String.format(
+                        "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code",
+                        clientId, redirectUri, state, metaConfigId.trim());
+            }
+            return Map.of("url", url, "mode", "config_id", "config_id", metaConfigId.trim(), "token_type", isSystemUser ? "system_user" : "user");
         }
         String scope = "ads_management,pages_show_list,pages_read_engagement,business_management,leads_retrieval,email,public_profile";
         String url = String.format(
@@ -812,23 +839,37 @@ public class MarketingService {
             JsonNode tokenBody = objectMapper.readTree(response.getBody());
             String accessToken = tokenBody.get("access_token").asText();
 
-            // Transform to Long Lived Token (60 days)
-            String longLivedUrl = String.format(
-                    "https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=%s&client_secret=%s&fb_exchange_token=%s",
-                    clientId, clientSecret, accessToken);
-            ResponseEntity<String> llResponse = getWithRetry(longLivedUrl);
-            JsonNode llBody = objectMapper.readTree(llResponse.getBody());
-            String longLivedToken = llBody.get("access_token").asText();
+            // Transform to Long Lived Token (60 days) - não aplica a System User (já é long-lived)
+            String longLivedToken = accessToken;
+            JsonNode llBody = tokenBody;
+            try {
+                String longLivedUrl = String.format(
+                        "https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=%s&client_secret=%s&fb_exchange_token=%s",
+                        clientId, clientSecret, accessToken);
+                ResponseEntity<String> llResponse = getWithRetry(longLivedUrl);
+                llBody = objectMapper.readTree(llResponse.getBody());
+                if (llBody.has("access_token")) {
+                    longLivedToken = llBody.get("access_token").asText();
+                }
+            } catch (Exception e) {
+                log.info("[MetaCallback] fb_exchange_token falhou (normal para System User): {}. Usando token original.", e.getMessage());
+            }
 
-            // Get user ID
-            String meUrl = String.format("https://graph.facebook.com/me?access_token=%s", longLivedToken);
+            // Get user/business ID
+            String meUrl = String.format("https://graph.facebook.com/me?fields=id,client_business_id&access_token=%s", longLivedToken);
             ResponseEntity<String> meResponse = getWithRetry(meUrl);
             JsonNode meBody = objectMapper.readTree(meResponse.getBody());
-            String metaUserId = meBody.get("id").asText();
+            String metaUserId = meBody.has("id") ? meBody.get("id").asText() : null;
+            if (metaUserId == null && meBody.has("client_business_id")) {
+                metaUserId = meBody.get("client_business_id").asText();
+            }
+            if (metaUserId == null) {
+                throw new RuntimeException("Meta /me não retornou id nem client_business_id: " + meBody);
+            }
 
-            // Get expiration if available
+            // Get expiration if available (System User pode não expirar)
             long expiresIn = llBody.has("expires_in") ? llBody.get("expires_in").asLong()
-                    : 5184000; // 60 days default
+                    : 5184000; // 60 days default para User Token
 
             MetaConnection connection = metaConnectionRepository.findByCompanyId(java.util.UUID.fromString(companyId))
                     .orElse(new MetaConnection());
