@@ -87,7 +87,7 @@ const Campaigns: React.FC = () => {
   // Form states - Campanha Meta Ads para WhatsApp
   const [formData, setFormData] = useState<CreateCampaignRequest>({
     name: '',
-    objective: 'OUTCOME_ENGAGEMENT',
+    objective: 'OUTCOME_TRAFFIC',
     dailyBudget: 50,
     startDate: '',
     endDate: '',
@@ -508,7 +508,7 @@ const Campaigns: React.FC = () => {
     setValidationAttempted(false);
     setFormData({
       name: '',
-      objective: 'OUTCOME_ENGAGEMENT',
+      objective: 'OUTCOME_TRAFFIC',
       dailyBudget: 50,
       startDate: '',
       endDate: '',
@@ -1092,7 +1092,7 @@ const Campaigns: React.FC = () => {
             {/* Content Body */}
             <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
 
-              {/* STEP 0: CAMPANHA - nome, objetivo fixo Engajamento */}
+              {/* STEP 0: CAMPANHA - nome, objetivo Tráfego (doc Meta: WHATSAPP em OUTCOME_TRAFFIC) */}
               {currentStep === 0 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   {validationAttempted && Object.keys(formErrors).length > 0 && (
@@ -1124,7 +1124,7 @@ const Campaigns: React.FC = () => {
                     {formErrors.name && <p className="text-xs text-rose-600 px-2">{formErrors.name}</p>}
                   </div>
                   <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
-                    <p className="text-xs font-bold text-emerald-800">Objetivo: Engajamento</p>
+                    <p className="text-xs font-bold text-emerald-800">Objetivo: Tráfego (Click to WhatsApp)</p>
                     <p className="text-[10px] text-emerald-700 mt-1">Orçamento será configurado no próximo passo (Conjunto de Anúncios).</p>
                   </div>
                 </div>

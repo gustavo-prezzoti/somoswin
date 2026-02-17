@@ -1311,7 +1311,9 @@ public class MarketingService {
 
         validateRequest(request);
 
-        String objective = "OUTCOME_ENGAGEMENT"; // Engajamento (passo a passo Campanha Meta Ads WhatsApp)
+        // Doc Meta "Objective Mapping": WHATSAPP está em LINK_CLICKS→OUTCOME_TRAFFIC (não OUTCOME_ENGAGEMENT)
+        // OUTCOME_TRAFFIC + WHATSAPP: optimization_goal LINK_CLICKS, REACH ou IMPRESSIONS
+        String objective = "OUTCOME_TRAFFIC";
         boolean useExistingPost = Boolean.TRUE.equals(request.getUseExistingPost());
         String existingPostId = (request.getExistingPostId() != null && !request.getExistingPostId().isBlank()) ? request.getExistingPostId() : null;
 
@@ -1333,24 +1335,41 @@ public class MarketingService {
 
         List<Integer> gendersList = parseGenders(request.getGenders());
 
-        // Doc Meta "Create Ads that Click to WhatsApp": Engajamento ou Tráfego. Para Engajamento,
-        // o Ads Manager não especifica optimization na doc - LINK_CLICKS (clique no CTA) é comum.
-        String optimizationGoal = "LINK_CLICKS";
+        // Doc Meta "Objective Mapping": OUTCOME_TRAFFIC + WHATSAPP = LINK_CLICKS, REACH, IMPRESSIONS
+        List<String> optimizationGoals = List.of("LINK_CLICKS", "REACH", "IMPRESSIONS");
         String adSetName = (request.getAdSetName() != null && !request.getAdSetName().isBlank())
                 ? request.getAdSetName() : ("Ad Set - " + System.currentTimeMillis());
         String adName = (request.getAdName() != null && !request.getAdName().isBlank())
                 ? request.getAdName() : request.getName();
 
+        String campaignId = null;
         try {
             adaptiveThrottle();
 
-            String campaignId = createMetaCampaign(adAccountId, accessToken, request.getName(), objective);
+            campaignId = createMetaCampaign(adAccountId, accessToken, request.getName(), objective);
             log.info("[META] Campaign created: {}", campaignId);
 
-            String adSetId = createMetaAdSet(adAccountId, accessToken, campaignId, pageId,
-                    dailyBudgetCents, request.getStartDate(), request.getEndDate(),
-                    country, ageMin, ageMax, gendersList, optimizationGoal, request.getInterests(), adSetName);
-            log.info("[META] Ad Set created: {}", adSetId);
+            String adSetId = null;
+            RuntimeException lastError = null;
+            for (String optGoal : optimizationGoals) {
+                try {
+                    adSetId = createMetaAdSet(adAccountId, accessToken, campaignId, pageId,
+                            dailyBudgetCents, request.getStartDate(), request.getEndDate(),
+                            country, ageMin, ageMax, gendersList, optGoal, request.getInterests(), adSetName);
+                    log.info("[META] Ad Set created with optimization_goal={}: {}", optGoal, adSetId);
+                    break;
+                } catch (RuntimeException e) {
+                    lastError = e;
+                    if (e.getMessage() != null && (e.getMessage().contains("2490408") || e.getMessage().contains("meta de desempenho"))) {
+                        log.warn("[META] optimization_goal {} falhou (2490408), tentando próxima", optGoal);
+                    } else {
+                        throw e;
+                    }
+                }
+            }
+            if (adSetId == null) {
+                throw lastError != null ? lastError : new RuntimeException("Nenhuma optimization_goal funcionou para Engajamento+WhatsApp");
+            }
 
             String creativeId;
             if (useExistingPost && existingPostId != null && !existingPostId.isBlank()) {
@@ -1376,11 +1395,35 @@ public class MarketingService {
         } catch (org.springframework.web.client.HttpClientErrorException e) {
             String body = e.getResponseBodyAsString();
             log.error("[META] API Error creating campaign: {} - {}", e.getStatusCode(), body);
+            if (campaignId != null) {
+                try {
+                    deleteMetaCampaign(campaignId, accessToken);
+                    log.info("[META] Campaign {} removida após falha no ad set", campaignId);
+                } catch (Exception ex) {
+                    log.warn("[META] Não foi remover campanha órfã {}: {}", campaignId, ex.getMessage());
+                }
+            }
             throw new RuntimeException(com.backend.winai.util.ErrorHelper.normalizeMessage(body));
         } catch (Exception e) {
             log.error("[META] Error creating campaign", e);
+            if (campaignId != null) {
+                try {
+                    deleteMetaCampaign(campaignId, accessToken);
+                    log.info("[META] Campaign {} removida após erro", campaignId);
+                } catch (Exception ex) {
+                    log.warn("[META] Não foi remover campanha órfã {}: {}", campaignId, ex.getMessage());
+                }
+            }
             throw new RuntimeException(e.getMessage() != null ? e.getMessage() : "Erro ao criar campanha no Meta Ads");
         }
+    }
+
+    private void deleteMetaCampaign(String campaignId, String accessToken) {
+        String url = metaApiBaseUrl + "/" + campaignId + "?access_token=" + accessToken;
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED);
+        restTemplate.exchange(url, org.springframework.http.HttpMethod.DELETE,
+                new org.springframework.http.HttpEntity<>(headers), String.class);
     }
 
     private String resolveEffectiveLink(CreateCampaignRequest request, String pageId, String accessToken) {
@@ -1558,8 +1601,8 @@ public class MarketingService {
         params.put("campaign_id", campaignId);
         params.put("daily_budget", dailyBudgetCents);
         params.put("targeting", serializeToJson(objectMapper, targeting));
-        // destination_type opcional (doc): omitir pode evitar erro 2490408; creative com CTA WhatsApp define destino
-        // params.put("destination_type", "WHATSAPP");
+        // Doc Meta "Objective Mapping": OUTCOME_TRAFFIC + destination_type WHATSAPP + optimization_goal
+        params.put("destination_type", "WHATSAPP");
         params.put("optimization_goal", optimizationGoal);
         params.put("billing_event", "IMPRESSIONS");
         params.put("bid_strategy", "LOWEST_COST_WITHOUT_CAP");
