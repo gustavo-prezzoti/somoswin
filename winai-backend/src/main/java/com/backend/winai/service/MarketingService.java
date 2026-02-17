@@ -1474,8 +1474,8 @@ public class MarketingService {
     }
 
     /**
-     * Lista todos os números WhatsApp Business conectados ao Business (até 50).
-     * Requer permissão whatsapp_business_management. Sem fallback da página.
+     * Lista números WhatsApp disponíveis para campanhas: primeiro o da página (conectado via Configurações da Página),
+     * depois os dos WABAs do Business (requer whatsapp_business_management).
      */
     public List<String> getPageWhatsAppNumbers(User user) {
         MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
@@ -1487,7 +1487,20 @@ public class MarketingService {
 
         Set<String> seen = new LinkedHashSet<>();
 
-        // Números dos WABAs do Business (requer whatsapp_business_management)
+        // 1. Número da página (o que aparece no Meta Ads - conectado via Configurações da Página)
+        if (conn.getPageId() != null && !conn.getPageId().isBlank()) {
+            String pageToken = conn.getPageAccessToken();
+            if (pageToken == null || pageToken.isBlank()) pageToken = accessToken;
+            String pageNum = fetchPageWhatsAppNumber(conn.getPageId(), pageToken);
+            if (pageNum == null || pageNum.isBlank()) {
+                pageNum = fetchPageWhatsAppNumber(conn.getPageId(), accessToken);
+            }
+            if (pageNum != null && !pageNum.isBlank()) {
+                seen.add(normalizePhoneForDedup(pageNum));
+            }
+        }
+
+        // 2. Números dos WABAs do Business (requer whatsapp_business_management; phone_numbers pode não suportar GET)
         String businessId = conn.getBusinessId();
         if (businessId != null && !businessId.isBlank()) {
             try {
