@@ -109,6 +109,7 @@ const Campaigns: React.FC = () => {
   const [pagePosts, setPagePosts] = useState<PagePost[]>([]);
   const [pagePostsLoading, setPagePostsLoading] = useState(false);
   const [pagePostsError, setPagePostsError] = useState<string | null>(null);
+  const [whatsappFromPageLoading, setWhatsappFromPageLoading] = useState(false);
 
   const steps = [
     { id: 0, title: 'Campanha', icon: Briefcase },
@@ -148,6 +149,23 @@ const Campaigns: React.FC = () => {
     const interval = setInterval(() => loadRecommendations(true), 5000);
     return () => clearInterval(interval);
   }, [activeTab]);
+
+  // Ao abrir o modal, buscar número WhatsApp da página e preencher automaticamente
+  useEffect(() => {
+    if (!isModalOpen || !isMetaConnected) return;
+    let cancelled = false;
+    setWhatsappFromPageLoading(true);
+    marketingService.getPageWhatsAppNumber()
+      .then((res) => {
+        if (!cancelled && res.whatsappNumber?.trim()) {
+          const masked = maskPhoneInput(res.whatsappNumber);
+          setFormData(prev => ({ ...prev, whatsappPhone: masked }));
+        }
+      })
+      .catch(() => { /* silencioso */ })
+      .finally(() => { if (!cancelled) setWhatsappFromPageLoading(false); });
+    return () => { cancelled = true; };
+  }, [isModalOpen, isMetaConnected]);
 
 
   const runInterestsSearch = async () => {
@@ -533,6 +551,24 @@ const Campaigns: React.FC = () => {
     setInterestsHasSearched(false);
     setPagePosts([]);
     setPagePostsError(null);
+  };
+
+  const fetchPageWhatsAppAndFill = async () => {
+    setWhatsappFromPageLoading(true);
+    try {
+      const res = await marketingService.getPageWhatsAppNumber();
+      if (res.whatsappNumber?.trim()) {
+        const masked = maskPhoneInput(res.whatsappNumber);
+        setFormData(prev => ({ ...prev, whatsappPhone: masked }));
+        showToast('Número da página vinculada preenchido.', 'success');
+      } else {
+        showToast('Sua página não tem WhatsApp Business vinculado. Vincule em facebook.com/pages.', 'info');
+      }
+    } catch {
+      showToast('Não foi possível buscar o número da página.', 'error');
+    } finally {
+      setWhatsappFromPageLoading(false);
+    }
   };
 
   const loadPagePosts = async () => {
@@ -1184,19 +1220,31 @@ const Campaigns: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp</label>
-                    <input
-                      name="whatsappPhone"
-                      value={formData.whatsappPhone || ''}
-                      onChange={(e) => {
-                        const masked = maskPhoneInput(e.target.value);
-                        setFormData(prev => ({ ...prev, whatsappPhone: masked }));
-                      }}
-                      type="tel"
-                      inputMode="numeric"
-                      placeholder="(11) 99999-9999 ou +55 (11) 99999-9999"
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                    <p className="text-[9px] text-gray-400">Opcional se a página tiver WhatsApp vinculado.</p>
+                    <div className="flex gap-2">
+                      <input
+                        name="whatsappPhone"
+                        value={formData.whatsappPhone || ''}
+                        onChange={(e) => {
+                          const masked = maskPhoneInput(e.target.value);
+                          setFormData(prev => ({ ...prev, whatsappPhone: masked }));
+                        }}
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder="(11) 99999-9999 ou +55 (11) 99999-9999"
+                        className="flex-1 px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={fetchPageWhatsAppAndFill}
+                        disabled={whatsappFromPageLoading}
+                        className="px-4 py-4 bg-emerald-50 text-emerald-700 rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-emerald-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
+                        title="Usar número vinculado à sua página do Facebook"
+                      >
+                        {whatsappFromPageLoading ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
+                        {whatsappFromPageLoading ? '...' : 'Usar da página'}
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-gray-400">Preenchido automaticamente se a página tiver WhatsApp Business. Edite ou clique em &quot;Usar da página&quot; para atualizar.</p>
                   </div>
                   <hr className="border-gray-200 my-6" />
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Público-alvo (localização, idade, gênero, interesses)</p>

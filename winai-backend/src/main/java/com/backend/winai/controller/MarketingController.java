@@ -137,6 +137,12 @@ public class MarketingController {
         return ResponseEntity.ok(marketingService.getPagePosts(user));
     }
 
+    @GetMapping("/page-whatsapp-number")
+    public ResponseEntity<Map<String, String>> getPageWhatsAppNumber(@AuthenticationPrincipal User user) {
+        String number = marketingService.getPageWhatsAppNumber(user);
+        return ResponseEntity.ok(Map.of("whatsappNumber", number != null ? number : ""));
+    }
+
     @GetMapping("/targeting-search")
     public ResponseEntity<List<Map<String, Object>>> searchTargeting(
             @AuthenticationPrincipal User user,

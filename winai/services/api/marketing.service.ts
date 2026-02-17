@@ -191,6 +191,9 @@ export const marketingService = {
     getPagePosts: async (): Promise<PagePost[]> => {
         return api.get<PagePost[]>('/marketing/page-posts');
     },
+    getPageWhatsAppNumber: async (): Promise<{ whatsappNumber: string }> => {
+        return api.get<{ whatsappNumber: string }>('/marketing/page-whatsapp-number');
+    },
     searchTargetingInterests: async (q: string): Promise<{ id: string; name: string }[]> => {
         if (!q?.trim()) return [];
         const data = await api.get<{ id: string; name: string }[]>('/marketing/targeting-search?q=' + encodeURIComponent(q.trim()) + '&type=adinterest');

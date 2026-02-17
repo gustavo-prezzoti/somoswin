@@ -1452,6 +1452,24 @@ public class MarketingService {
         return null;
     }
 
+    /**
+     * Obtém o número WhatsApp vinculado à página do Facebook (WhatsApp Business).
+     * Usado para preencher automaticamente o campo no modal de criação de campanha.
+     */
+    public String getPageWhatsAppNumber(User user) {
+        MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
+                .filter(MetaConnection::isConnected)
+                .orElse(null);
+        if (conn == null || conn.getPageId() == null || conn.getPageId().isBlank()) {
+            return null;
+        }
+        String accessToken = conn.getAccessToken();
+        if (accessToken == null || accessToken.isBlank()) {
+            return null;
+        }
+        return fetchPageWhatsAppNumber(conn.getPageId(), accessToken);
+    }
+
     private List<Integer> parseGenders(String genders) {
         if (genders == null || genders.isBlank()) return Collections.emptyList();
         List<Integer> list = new ArrayList<>();
