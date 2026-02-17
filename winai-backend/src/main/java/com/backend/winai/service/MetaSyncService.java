@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
 
@@ -470,14 +471,16 @@ public class MetaSyncService {
 
             LocalDate today = LocalDate.now();
             LocalDate since = today.minusDays(30);
+            long sinceUnix = since.atStartOfDay(ZoneId.of("America/Sao_Paulo")).toEpochSecond();
+            long untilUnix = today.plusDays(1).atStartOfDay(ZoneId.of("America/Sao_Paulo")).toEpochSecond();
 
             Map<LocalDate, Long> dailyReach = new HashMap<>();
             Map<LocalDate, Long> dailyEngaged = new HashMap<>();
 
             throttle();
             String reachUrl = String.format(
-                    "%s/%s/insights?metric=reach&metric_type=time_series&period=day&since=%s&until=%s&access_token=%s",
-                    metaApiBaseUrl, igId, since, today, accessToken);
+                    "%s/%s/insights?metric=reach&metric_type=time_series&period=day&since=%d&until=%d&access_token=%s",
+                    metaApiBaseUrl, igId, sinceUnix, untilUnix, accessToken);
             try {
                 ResponseEntity<String> reachRes = getWithRetry(reachUrl);
                 if (reachRes.getBody() != null) {
@@ -505,33 +508,39 @@ public class MetaSyncService {
             }
 
             throttle();
-            String engagedUrl = String.format(
-                    "%s/%s/insights?metric=accounts_engaged&metric_type=time_series&period=day&since=%s&until=%s&access_token=%s",
-                    metaApiBaseUrl, igId, since, today, accessToken);
-            try {
-                ResponseEntity<String> engagedRes = getWithRetry(engagedUrl);
-                if (engagedRes.getBody() != null) {
-                    JsonNode engagedData = objectMapper.readTree(engagedRes.getBody()).get("data");
-                    if (engagedData != null && engagedData.isArray()) {
-                        for (JsonNode metric : engagedData) {
-                            if (!"accounts_engaged".equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
-                            JsonNode values = metric.has("values") ? metric.get("values") : null;
-                            if (values != null && values.isArray()) {
-                                for (JsonNode val : values) {
-                                    long v = val.has("value") ? val.get("value").asLong() : 0;
-                                    String endTime = val.has("end_time") ? val.get("end_time").asText() : "";
-                                    if (endTime.length() >= 10) {
-                                        LocalDate d = LocalDate.parse(endTime.substring(0, 10));
-                                        dailyEngaged.merge(d, v, Long::sum);
+            // accounts_engaged e total_interactions usam total_value (não suportam time_series)
+            long totalEngaged = 0;
+            for (String metricName : List.of("accounts_engaged", "total_interactions")) {
+                try {
+                    String engagedUrl = String.format(
+                            "%s/%s/insights?metric=%s&metric_type=total_value&period=day&since=%d&until=%d&access_token=%s",
+                            metaApiBaseUrl, igId, metricName, sinceUnix, untilUnix, accessToken);
+                    ResponseEntity<String> engagedRes = getWithRetry(engagedUrl);
+                    if (engagedRes.getBody() != null) {
+                        JsonNode engagedData = objectMapper.readTree(engagedRes.getBody()).get("data");
+                        if (engagedData != null && engagedData.isArray()) {
+                            for (JsonNode metric : engagedData) {
+                                if (!metricName.equals(metric.has("name") ? metric.get("name").asText() : "")) continue;
+                                if (metric.has("total_value") && metric.get("total_value").has("value")) {
+                                    totalEngaged = metric.get("total_value").get("value").asLong();
+                                    log.debug("[MetaSync] {} = {} para empresa {}", metricName, totalEngaged, company.getId());
+                                    break;
+                                } else if (metric.has("values") && metric.get("values").isArray() && metric.get("values").size() > 0) {
+                                    for (JsonNode val : metric.get("values")) {
+                                        totalEngaged += val.has("value") ? val.get("value").asLong() : 0;
                                     }
+                                    break;
                                 }
                             }
-                            break;
                         }
                     }
+                    if (totalEngaged > 0) break;
+                } catch (Exception e) {
+                    log.debug("[MetaSync] {} não disponível: {}", metricName, e.getMessage());
                 }
-            } catch (Exception e) {
-                log.warn("[MetaSync] Erro ao buscar accounts_engaged Instagram: {}", e.getMessage());
+            }
+            if (totalEngaged > 0) {
+                dailyEngaged.put(today, totalEngaged);
             }
 
             instagramMetricRepository.deleteByCompanyIdAndDateBetween(company.getId(), since, today);
