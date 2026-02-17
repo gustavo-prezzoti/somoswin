@@ -38,6 +38,7 @@ import LandingPage from './components/LandingPage';
 import SocialMedia from './components/SocialMedia';
 import Support from './components/Support';
 import Settings from './components/Settings';
+import OAuthComplete from './components/OAuthComplete';
 import Notifications from './components/Notifications';
 import AdminLayout from './components/Admin/AdminLayout';
 import AdminLogin from './components/Admin/AdminLogin';
@@ -520,6 +521,7 @@ const App: React.FC = () => {
         <Route path="/academy" element={<ProtectedRoute><Academy /></ProtectedRoute>} />
         <Route path="/suporte" element={<ProtectedRoute><Support /></ProtectedRoute>} />
         <Route path="/configuracoes" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/oauth-complete" element={<OAuthComplete />} />
 
         <Route path="/change-password" element={
           localStorage.getItem('win_user') ? <ChangePassword /> : <Navigate to="/login" />

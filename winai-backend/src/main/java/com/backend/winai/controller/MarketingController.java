@@ -80,7 +80,7 @@ public class MarketingController {
                     errorMessage, errorDescription != null ? errorDescription : error);
             String frontendUrl = marketingService.getFrontendUrl();
             boolean isWhatsappFlow = companyId != null && companyId.endsWith("_whatsapp");
-            String target = isWhatsappFlow ? "/campanhas" : "/configuracoes";
+            String target = isWhatsappFlow ? "/oauth-complete" : "/configuracoes";
             return ResponseEntity.status(302)
                     .header("Location", frontendUrl + target + "?error=meta_" + errorMessage)
                     .build();

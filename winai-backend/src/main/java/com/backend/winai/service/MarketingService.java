@@ -763,10 +763,10 @@ public class MarketingService {
             } else {
                 log.warn("[WhatsAppAdd] Company {} sem conexão Meta - token não armazenado", companyId);
             }
-            return frontendUrl + "/campanhas?whatsapp=done";
+            return frontendUrl + "/oauth-complete?whatsapp=1";
         } catch (Exception e) {
             log.error("[WhatsAppAdd] Erro: {}", e.getMessage(), e);
-            return frontendUrl + "/campanhas?error=whatsapp_auth_failed";
+            return frontendUrl + "/oauth-complete?error=whatsapp_auth_failed";
         }
     }
 
@@ -1564,6 +1564,35 @@ public class MarketingService {
 
         Set<String> seen = new LinkedHashSet<>();
 
+        // 0. User token (whatsapp_access_token): /me/accounts retorna whatsapp_number - prioridade
+        if (conn.getWhatsappAccessToken() != null && !conn.getWhatsappAccessToken().isBlank()) {
+            try {
+                String url = metaApiBaseUrl + "/me/accounts?fields=id,name,whatsapp_number,connected_whatsapp_account&access_token=" + conn.getWhatsappAccessToken();
+                ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
+                JsonNode root = parseJson(objectMapper, res.getBody());
+                JsonNode data = root.has("data") ? root.get("data") : null;
+                if (data != null && data.isArray()) {
+                    for (JsonNode page : data) {
+                        String num = null;
+                        if (page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
+                            num = page.get("whatsapp_number").asText();
+                        }
+                        if ((num == null || num.isBlank()) && page.has("connected_whatsapp_account") && !page.get("connected_whatsapp_account").isNull()) {
+                            JsonNode cwa = page.get("connected_whatsapp_account");
+                            if (cwa.has("display_phone_number")) num = cwa.get("display_phone_number").asText();
+                            else if (cwa.has("phone_number")) num = cwa.get("phone_number").asText();
+                        }
+                        if (num != null && !num.isBlank()) seen.add(normalizePhoneForDedup(num));
+                    }
+                    if (!seen.isEmpty()) log.info("[META] WhatsApp numbers from /me/accounts (User token): {}", seen.size());
+                } else {
+                    log.debug("[META] /me/accounts returned no data for whatsapp_access_token");
+                }
+            } catch (Exception e) {
+                log.warn("[META] /me/accounts whatsapp_number failed: {}", e.getMessage());
+            }
+        }
+
         // 1. Número da página (o que aparece no Meta Ads - conectado via Configurações da Página)
         if (conn.getPageId() != null && !conn.getPageId().isBlank()) {
             String pageToken = conn.getPageAccessToken();
@@ -1584,27 +1613,6 @@ public class MarketingService {
                 log.info("[META] WhatsApp number from page: {}", pageNum);
             } else {
                 log.info("[META] No whatsapp_number from page {} (token type may not support this field)", conn.getPageId());
-            }
-        }
-
-        // 1.4. User token: /me/accounts retorna todas as páginas com whatsapp_number
-        if (conn.getWhatsappAccessToken() != null && !conn.getWhatsappAccessToken().isBlank()) {
-            try {
-                String url = metaApiBaseUrl + "/me/accounts?fields=id,name,whatsapp_number&access_token=" + conn.getWhatsappAccessToken();
-                ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
-                JsonNode root = parseJson(objectMapper, res.getBody());
-                JsonNode data = root.has("data") ? root.get("data") : null;
-                if (data != null && data.isArray()) {
-                    for (JsonNode page : data) {
-                        if (page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
-                            String num = page.get("whatsapp_number").asText();
-                            if (num != null && !num.isBlank()) seen.add(normalizePhoneForDedup(num));
-                        }
-                    }
-                    if (!seen.isEmpty()) log.info("[META] WhatsApp numbers from /me/accounts (User token): {}", seen.size());
-                }
-            } catch (Exception e) {
-                log.debug("Could not fetch /me/accounts whatsapp_number: {}", e.getMessage());
             }
         }
 

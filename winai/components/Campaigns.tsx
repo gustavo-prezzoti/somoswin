@@ -1241,36 +1241,36 @@ const Campaigns: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp</label>
                     <div className="flex flex-wrap gap-2">
-                      {whatsappNumbers.length > 0 ? (
-                        <select
-                          name="whatsappPhone"
-                          value={formData.whatsappPhone || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, whatsappPhone: e.target.value }))}
-                          disabled={whatsappNumbersLoading}
-                          className="flex-1 min-w-[180px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
-                        >
-                          <option value="">Selecione o número</option>
-                          {whatsappNumbers.map((num) => {
-                            const masked = maskPhoneInput(num);
-                            return (
-                              <option key={num} value={masked}>{masked}</option>
-                            );
-                          })}
-                        </select>
-                      ) : (
-                        <input
-                          name="whatsappPhone"
-                          value={formData.whatsappPhone || ''}
-                          onChange={(e) => {
-                            const masked = maskPhoneInput(e.target.value);
-                            setFormData(prev => ({ ...prev, whatsappPhone: masked }));
-                          }}
-                          type="tel"
-                          inputMode="numeric"
-                          placeholder="+55 47 9168-5019 (copie do Meta Ads)"
-                          className="flex-1 min-w-[180px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                        />
-                      )}
+                      <select
+                        name="whatsappPhone"
+                        value={formData.whatsappPhone || ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, whatsappPhone: e.target.value }))}
+                        disabled={whatsappNumbersLoading}
+                        className="flex-1 min-w-[180px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
+                      >
+                        <option value="">{whatsappNumbers.length > 0 ? 'Selecione o número' : 'Nenhum número - digite abaixo'}</option>
+                        {whatsappNumbers.map((num) => {
+                          const masked = maskPhoneInput(num);
+                          return (
+                            <option key={num} value={masked}>{masked}</option>
+                          );
+                        })}
+                        {formData.whatsappPhone && !whatsappNumbers.some(n => parsePhoneDigits(n) === parsePhoneDigits(formData.whatsappPhone || '')) && (
+                          <option value={formData.whatsappPhone}>{formData.whatsappPhone} (manual)</option>
+                        )}
+                      </select>
+                      <input
+                        name="whatsappPhoneManual"
+                        value={formData.whatsappPhone || ''}
+                        onChange={(e) => {
+                          const masked = maskPhoneInput(e.target.value);
+                          setFormData(prev => ({ ...prev, whatsappPhone: masked }));
+                        }}
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="Ou digite: +55 47 9168-5019"
+                        className="flex-1 min-w-[180px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
                       <button
                         type="button"
                         onClick={openWhatsAppAddPopup}
