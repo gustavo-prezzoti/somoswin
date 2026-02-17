@@ -1299,7 +1299,7 @@ public class MarketingService {
     private String mapOptimizationGoal(String objective) {
         return switch (objective != null ? objective.toUpperCase() : "") {
             case "OUTCOME_LEADS" -> "LEAD_GENERATION";
-            case "OUTCOME_SALES" -> "OUTCOME_CONVERSIONS";
+            case "OUTCOME_SALES" -> "OFFSITE_CONVERSIONS";
             case "OUTCOME_ENGAGEMENT" -> "POST_ENGAGEMENT";
             case "OUTCOME_AWARENESS" -> "REACH";
             case "OUTCOME_TRAFFIC", "LINK_CLICKS" -> "LINK_CLICKS";
