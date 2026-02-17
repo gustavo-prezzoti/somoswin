@@ -362,7 +362,37 @@ public class MarketingService {
         return buildEmptyMetrics();
     }
 
-    public TrafficMetricsResponse getTrafficMetrics(User user, String campaignId) {
+    /**
+     * Retorna o intervalo de datas disponível para métricas (dias sincronizados).
+     * Limita ao range que existe no banco (evita usuário filtrar fora do sincronizado).
+     */
+    public Map<String, String> getTrafficMetricsDateRange(User user) {
+        LocalDate today = LocalDate.now();
+        LocalDate defaultMin = today.minusDays(30);
+        LocalDate defaultMax = today;
+
+        Company company = companyRepository.findById(user.getCompany().getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
+
+        if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()) {
+            return Map.of("minDate", defaultMin.toString(), "maxDate", defaultMax.toString());
+        }
+
+        Optional<LocalDate> dbMin = metaInsightRepository.findMinDateByCompanyId(company.getId());
+        Optional<LocalDate> dbMax = metaInsightRepository.findMaxDateByCompanyId(company.getId());
+
+        LocalDate minDate = dbMin.filter(d -> !d.isAfter(defaultMax)).orElse(defaultMin);
+        LocalDate maxDate = dbMax.filter(d -> !d.isBefore(defaultMin)).orElse(defaultMax);
+        if (minDate.isAfter(maxDate)) {
+            minDate = defaultMin;
+            maxDate = defaultMax;
+        }
+
+        return Map.of("minDate", minDate.toString(), "maxDate", maxDate.toString());
+    }
+
+    public TrafficMetricsResponse getTrafficMetrics(User user, String campaignId, LocalDate startDate, LocalDate endDate) {
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
         Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
@@ -380,11 +410,24 @@ public class MarketingService {
             return buildEmptyMetrics();
         }
 
+        LocalDate today = LocalDate.now();
+        LocalDate rangeMin = today.minusDays(30);
+        LocalDate rangeMax = today;
+
+        Optional<LocalDate> dbMin = metaInsightRepository.findMinDateByCompanyId(company.getId());
+        Optional<LocalDate> dbMax = metaInsightRepository.findMaxDateByCompanyId(company.getId());
+        if (dbMin.isPresent() && !dbMin.get().isAfter(rangeMax)) rangeMin = dbMin.get();
+        if (dbMax.isPresent() && !dbMax.get().isBefore(rangeMin)) rangeMax = dbMax.get();
+
+        LocalDate start = (startDate != null && !startDate.isBefore(rangeMin)) ? startDate : rangeMin;
+        LocalDate end = (endDate != null && !endDate.isAfter(rangeMax)) ? endDate : rangeMax;
+        if (start.isAfter(end)) {
+            start = rangeMin;
+            end = rangeMax;
+        }
+
         String level = (campaignId != null && !campaignId.isBlank()) ? "campaign" : "account";
         String externalId = (campaignId != null && !campaignId.isBlank()) ? campaignId : adAccountId;
-
-        LocalDate end = LocalDate.now();
-        LocalDate start = end.minusDays(14);
 
         List<MetaInsight> insights = metaInsightRepository
                 .findByCompanyIdAndLevelAndExternalIdAndDateBetweenOrderByDateAsc(

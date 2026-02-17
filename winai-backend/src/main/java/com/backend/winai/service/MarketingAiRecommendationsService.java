@@ -91,8 +91,6 @@ public class MarketingAiRecommendationsService {
     /**
      * Gera recomendações via IA e persiste no cache.
      * Chamado pelo worker em background.
-     * Fetch de campanhas (Meta API) é feito fora da transação para evitar connection leak
-     * quando a Meta API retorna rate limit e espera 120s.
      */
     public void generateAndStoreForCompany(Company company) {
         try {

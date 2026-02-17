@@ -3,6 +3,8 @@ package com.backend.winai.repository;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.MetaInsight;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -19,6 +21,12 @@ public interface MetaInsightRepository extends JpaRepository<MetaInsight, UUID> 
 
     Optional<MetaInsight> findByCompanyIdAndDateAndLevelAndExternalId(UUID companyId, LocalDate date, String level,
             String externalId);
+
+    @Query("SELECT MIN(m.date) FROM MetaInsight m WHERE m.company.id = :companyId")
+    Optional<LocalDate> findMinDateByCompanyId(@Param("companyId") UUID companyId);
+
+    @Query("SELECT MAX(m.date) FROM MetaInsight m WHERE m.company.id = :companyId")
+    Optional<LocalDate> findMaxDateByCompanyId(@Param("companyId") UUID companyId);
 
     void deleteByCompany(Company company);
 

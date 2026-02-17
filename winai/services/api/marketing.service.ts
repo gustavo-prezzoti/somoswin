@@ -118,10 +118,22 @@ export interface AiRecommendation {
     payload?: Record<string, unknown>;
 }
 
+export interface MetricsDateRange {
+    minDate: string;
+    maxDate: string;
+}
+
 export const marketingService = {
-    getMetrics: async (campaignId?: string): Promise<TrafficMetrics> => {
-        const params = campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : '';
-        return api.get<TrafficMetrics>('/marketing/metrics' + params);
+    getMetrics: async (campaignId?: string, startDate?: string, endDate?: string): Promise<TrafficMetrics> => {
+        const params = new URLSearchParams();
+        if (campaignId) params.set('campaignId', campaignId);
+        if (startDate) params.set('startDate', startDate);
+        if (endDate) params.set('endDate', endDate);
+        const qs = params.toString() ? '?' + params.toString() : '';
+        return api.get<TrafficMetrics>('/marketing/metrics' + qs);
+    },
+    getMetricsDateRange: async (): Promise<MetricsDateRange> => {
+        return api.get<MetricsDateRange>('/marketing/metrics/date-range');
     },
     createCampaign: async (campaign: CreateCampaignRequest): Promise<void> => {
         await api.post('/marketing/campaigns', campaign);

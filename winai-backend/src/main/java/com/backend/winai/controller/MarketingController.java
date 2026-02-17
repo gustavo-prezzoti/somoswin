@@ -33,8 +33,15 @@ public class MarketingController {
     @GetMapping("/metrics")
     public ResponseEntity<TrafficMetricsResponse> getMetrics(
             @AuthenticationPrincipal User user,
-            @RequestParam(required = false) String campaignId) {
-        return ResponseEntity.ok(marketingService.getTrafficMetrics(user, campaignId));
+            @RequestParam(required = false) String campaignId,
+            @RequestParam(required = false) java.time.LocalDate startDate,
+            @RequestParam(required = false) java.time.LocalDate endDate) {
+        return ResponseEntity.ok(marketingService.getTrafficMetrics(user, campaignId, startDate, endDate));
+    }
+
+    @GetMapping("/metrics/date-range")
+    public ResponseEntity<java.util.Map<String, String>> getMetricsDateRange(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(marketingService.getTrafficMetricsDateRange(user));
     }
 
     @GetMapping("/instagram-metrics")

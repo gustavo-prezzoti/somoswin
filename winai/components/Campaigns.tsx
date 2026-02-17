@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Link as LinkIcon, Database, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { marketingService, TrafficMetrics, CreateCampaignRequest, CampaignListItem, AiRecommendation } from '../services';
+import { marketingService, TrafficMetrics, CreateCampaignRequest, CampaignListItem, AiRecommendation, MetricsDateRange } from '../services';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import DriveFileSelector from './DriveFileSelector';
 import { DriveFile } from '../services/api/google-drive.service';
@@ -68,6 +68,9 @@ const Campaigns: React.FC = () => {
   const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [metricsCampaignFilter, setMetricsCampaignFilter] = useState<string>('');
+  const [metricsDateRange, setMetricsDateRange] = useState<MetricsDateRange | null>(null);
+  const [metricsStartDate, setMetricsStartDate] = useState<string>('');
+  const [metricsEndDate, setMetricsEndDate] = useState<string>('');
   const [recommendations, setRecommendations] = useState<AiRecommendation[]>([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [regeneratingRecommendations, setRegeneratingRecommendations] = useState(false);
@@ -101,7 +104,7 @@ const Campaigns: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === 'GESTAO') loadMetrics();
-  }, [activeTab, metricsCampaignFilter]);
+  }, [activeTab, metricsCampaignFilter, metricsStartDate, metricsEndDate]);
 
   useEffect(() => {
     if (activeTab === 'GESTAO') {
@@ -260,16 +263,24 @@ const Campaigns: React.FC = () => {
     setError(null);
     const timeoutMs = 20000;
     const campaignId = metricsCampaignFilter || undefined;
+    const startDate = metricsStartDate || undefined;
+    const endDate = metricsEndDate || undefined;
     try {
-      const [data, status] = await Promise.race([
+      const [data, status, dateRange] = await Promise.race([
         Promise.all([
-          marketingService.getMetrics(campaignId),
+          marketingService.getMetrics(campaignId, startDate, endDate),
           marketingService.getStatus(),
+          metricsDateRange ? Promise.resolve(metricsDateRange) : marketingService.getMetricsDateRange(),
         ]),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Tempo limite excedido.')), timeoutMs)
         ),
       ]);
+      if (!metricsDateRange && dateRange) {
+        setMetricsDateRange(dateRange);
+        if (!metricsStartDate) setMetricsStartDate(dateRange.minDate);
+        if (!metricsEndDate) setMetricsEndDate(dateRange.maxDate);
+      }
       setMetrics(data);
       setHasCampaignData(
         (data?.investment?.value && data.investment.value !== 'R$ 0,00') ||
@@ -508,26 +519,69 @@ const Campaigns: React.FC = () => {
         {/* GESTÃO TAB */}
         {activeTab === 'GESTAO' && (
           <div className="space-y-8">
-            {/* Filtro de campanha para métricas e gráfico */}
+            {/* Filtros de campanha e data para métricas e gráfico */}
             <div className="flex flex-wrap items-center gap-4">
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Filtrar por campanha</label>
-              <select
-                value={metricsCampaignFilter}
-                onChange={(e) => setMetricsCampaignFilter(e.target.value)}
-                className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none min-w-[200px]"
-              >
-                <option value="">Todas</option>
-                {campaigns.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              {metricsCampaignFilter && (
-                <button
-                  onClick={() => setMetricsCampaignFilter('')}
-                  className="text-[10px] font-bold text-gray-500 hover:text-emerald-600 uppercase tracking-widest"
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Filtrar por campanha</label>
+                <select
+                  value={metricsCampaignFilter}
+                  onChange={(e) => setMetricsCampaignFilter(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none min-w-[200px]"
                 >
-                  Limpar filtro
-                </button>
+                  <option value="">Todas</option>
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {metricsCampaignFilter && (
+                  <button
+                    onClick={() => setMetricsCampaignFilter('')}
+                    className="text-[10px] font-bold text-gray-500 hover:text-emerald-600 uppercase tracking-widest"
+                  >
+                    Limpar filtro
+                  </button>
+                )}
+              </div>
+              {metricsDateRange && (
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Período</label>
+                  <input
+                    type="date"
+                    value={metricsStartDate}
+                    min={metricsDateRange.minDate}
+                    max={metricsDateRange.maxDate}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setMetricsStartDate(v);
+                      if (v && metricsEndDate && v > metricsEndDate) setMetricsEndDate(v);
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none"
+                  />
+                  <span className="text-gray-400 font-bold">até</span>
+                  <input
+                    type="date"
+                    value={metricsEndDate}
+                    min={metricsStartDate || metricsDateRange.minDate}
+                    max={metricsDateRange.maxDate}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setMetricsEndDate(v);
+                      if (v && metricsStartDate && v < metricsStartDate) setMetricsStartDate(v);
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none"
+                  />
+                  {(metricsStartDate !== metricsDateRange.minDate || metricsEndDate !== metricsDateRange.maxDate) && (
+                    <button
+                      onClick={() => {
+                        setMetricsStartDate(metricsDateRange.minDate);
+                        setMetricsEndDate(metricsDateRange.maxDate);
+                      }}
+                      className="text-[10px] font-bold text-gray-500 hover:text-emerald-600 uppercase tracking-widest"
+                    >
+                      Limpar período
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
