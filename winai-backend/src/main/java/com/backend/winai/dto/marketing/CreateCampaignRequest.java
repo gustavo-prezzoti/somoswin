@@ -20,14 +20,28 @@ public class CreateCampaignRequest {
 
     /**
      * Objetivo da campanha (Meta API).
-     * Valores: LINK_CLICKS, OUTCOME_LEADS, OUTCOME_SALES, OUTCOME_ENGAGEMENT, OUTCOME_AWARENESS
+     * Valores: OUTCOME_TRAFFIC, OUTCOME_LEADS, OUTCOME_SALES, OUTCOME_ENGAGEMENT, OUTCOME_AWARENESS, OUTCOME_APP_PROMOTION
      */
     private String objective;
 
-    /** Orçamento diário em reais (convertido para centavos na API) */
+    /**
+     * Tipo de orçamento: DAILY (diário) ou LIFETIME (total).
+     */
+    private String budgetType;
+
+    /** Orçamento diário em reais (quando budgetType=DAILY) */
     private Double dailyBudget;
 
-    /** Código do país (ex: BR, US) - usado em targeting.geo_locations.countries */
+    /** Orçamento total em reais (quando budgetType=LIFETIME) */
+    private Double lifetimeBudget;
+
+    /** Data de início (ISO 8601, ex: 2025-02-17) - opcional para ad set */
+    private String startDate;
+
+    /** Data de fim (ISO 8601) - opcional, usado com lifetime budget */
+    private String endDate;
+
+    /** Código do país (ex: BR, US) */
     private String countryCode;
 
     /** Idade mínima do público (18-65) */
@@ -36,21 +50,46 @@ public class CreateCampaignRequest {
     /** Idade máxima do público (18-65) */
     private Integer ageMax;
 
-    /** Interesses para targeting (opcional, formato flexível) */
+    /**
+     * Gênero do público: null/"" = todos, "1" = homens, "2" = mulheres, "1,2" = ambos explícito.
+     */
+    private String genders;
+
+    /** Interesses para targeting (opcional, formato JSON array) */
     private String interests;
 
-    /** Texto principal do anúncio (message em link_data) */
-    private String adMessage;
-
-    /** URL de destino (link em link_data) */
-    private String destinationUrl;
+    /**
+     * Destino de conversão: WEBSITE (link) ou MESSAGES (WhatsApp).
+     * MESSAGES usa WhatsApp automaticamente quando a página tem WhatsApp vinculado.
+     */
+    private String conversionDestination;
 
     /**
-     * URL da imagem do criativo.
-     * Deve ser URL pública acessível. Meta fará fetch ou usará adimages com url=.
+     * Número WhatsApp para destino MESSAGES (ex: 5511999999999).
+     * Opcional se a página Meta tiver WhatsApp vinculado.
      */
+    private String whatsappPhone;
+
+    /** Texto principal do anúncio (message) */
+    private String adMessage;
+
+    /** URL de destino (link) - usado quando conversionDestination=WEBSITE */
+    private String destinationUrl;
+
+    /** URL da imagem do criativo */
     private String imageUrl;
 
-    /** Título do link (caption em link_data, opcional) */
+    /** Título do link (headline/caption) */
     private String headline;
+
+    /**
+     * Tipo de CTA do anúncio: LEARN_MORE, SEND_MESSAGE, WHATSAPP_MESSAGE, SHOP_NOW, etc.
+     */
+    private String ctaType;
+
+    /** Nome do conjunto de anúncios (ad set) */
+    private String adSetName;
+
+    /** Nome do anúncio */
+    private String adName;
 }

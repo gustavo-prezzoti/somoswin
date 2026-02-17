@@ -23,15 +23,25 @@ export interface TrafficMetrics {
 export interface CreateCampaignRequest {
     name: string;
     objective: string;
-    dailyBudget: number;
+    budgetType?: 'DAILY' | 'LIFETIME';
+    dailyBudget?: number;
+    lifetimeBudget?: number;
+    startDate?: string;
+    endDate?: string;
     countryCode: string;
     ageMin?: number;
     ageMax?: number;
+    genders?: string;
     interests?: string;
+    conversionDestination?: 'WEBSITE' | 'MESSAGES';
+    whatsappPhone?: string;
     adMessage: string;
-    destinationUrl: string;
+    destinationUrl?: string;
     imageUrl: string;
     headline?: string;
+    ctaType?: string;
+    adSetName?: string;
+    adName?: string;
 }
 
 export interface MetaAdAccountDetails {

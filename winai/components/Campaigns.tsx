@@ -87,21 +87,31 @@ const Campaigns: React.FC = () => {
   const [formData, setFormData] = useState<CreateCampaignRequest>({
     name: '',
     objective: 'OUTCOME_TRAFFIC',
+    budgetType: 'DAILY',
     dailyBudget: 50,
+    lifetimeBudget: 500,
+    startDate: '',
+    endDate: '',
     countryCode: 'BR',
     ageMin: 18,
     ageMax: 65,
+    genders: '',
     interests: '',
+    conversionDestination: 'WEBSITE',
+    whatsappPhone: '',
     adMessage: '',
     destinationUrl: '',
     imageUrl: '',
-    headline: ''
+    headline: '',
+    ctaType: 'LEARN_MORE',
+    adSetName: '',
+    adName: ''
   });
 
   const steps = [
-    { id: 0, title: 'Dados Básicos', icon: Briefcase },
-    { id: 1, title: 'Público Alvo', icon: Target },
-    { id: 2, title: 'Criativos', icon: Play },
+    { id: 0, title: 'Campanha', icon: Briefcase },
+    { id: 1, title: 'Grupo de Anúncio', icon: Target },
+    { id: 2, title: 'Anúncio', icon: Play },
   ];
 
   // Campanhas filtradas por status e ordenadas: Ativas > Pausadas > Inativas
@@ -405,20 +415,23 @@ const Campaigns: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'dailyBudget' ? parseFloat(value) || 0 : name === 'ageMin' || name === 'ageMax' ? parseInt(value, 10) || 18 : value
-    }));
+    let parsed: string | number = value;
+    if (name === 'dailyBudget' || name === 'lifetimeBudget') parsed = parseFloat(value) || 0;
+    else if (name === 'ageMin' || name === 'ageMax') parsed = parseInt(value, 10) || 18;
+    setFormData(prev => ({ ...prev, [name]: parsed }));
   };
 
   const validateStep = (step: number): boolean => {
     const errs: Record<string, string> = {};
     if (step === 0) {
       if (!formData.name?.trim()) errs.name = 'Nome da campanha é obrigatório';
-      if (!formData.dailyBudget || formData.dailyBudget < 1) errs.dailyBudget = 'Orçamento mínimo: R$ 1,00';
     }
     if (step === 1) {
-      // Interesses são opcionais - Meta aceita targeting sem interests
+      if (formData.budgetType === 'LIFETIME') {
+        if (!formData.lifetimeBudget || formData.lifetimeBudget < 1) errs.lifetimeBudget = 'Orçamento total mínimo: R$ 1,00';
+      } else {
+        if (!formData.dailyBudget || formData.dailyBudget < 1) errs.dailyBudget = 'Orçamento diário mínimo: R$ 1,00';
+      }
     }
     if (step === 2) {
       if (!formData.adMessage?.trim()) errs.adMessage = 'Texto do anúncio é obrigatório';
@@ -452,7 +465,7 @@ const Campaigns: React.FC = () => {
   const handleCreate = async () => {
     setValidationAttempted(true);
     if (!validateStep(2)) {
-      showToast('Preencha texto do anúncio e imagem.', 'error');
+      showToast('Preencha os campos obrigatórios.', 'error');
       return;
     }
     setValidationAttempted(false);
@@ -484,15 +497,25 @@ const Campaigns: React.FC = () => {
     setFormData({
       name: '',
       objective: 'OUTCOME_TRAFFIC',
+      budgetType: 'DAILY',
       dailyBudget: 50,
+      lifetimeBudget: 500,
+      startDate: '',
+      endDate: '',
       countryCode: 'BR',
       ageMin: 18,
       ageMax: 65,
+      genders: '',
       interests: '',
+      conversionDestination: 'WEBSITE',
+      whatsappPhone: '',
       adMessage: '',
       destinationUrl: '',
       imageUrl: '',
-      headline: ''
+      headline: '',
+      ctaType: 'LEARN_MORE',
+      adSetName: '',
+      adName: ''
     });
     setSelectedInterests([]);
     setInterestsSearch('');
@@ -1014,7 +1037,7 @@ const Campaigns: React.FC = () => {
             {currentStep < 3 && (
               <div className="px-8 py-6 bg-gray-50/50 flex items-center justify-between relative overflow-hidden flex-shrink-0">
                 <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-gray-200 -z-0 -translate-y-1/2" />
-                <div className="absolute top-1/2 left-8 h-0.5 bg-emerald-500 -z-0 -translate-y-1/2 transition-all duration-500" style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }} />
+                <div className="absolute top-1/2 left-8 h-0.5 bg-emerald-500 -z-0 -translate-y-1/2 transition-all duration-500" style={{ width: `${(currentStep / Math.max(1, steps.length - 1)) * 100}%` }} />
 
                 {steps.map((step, index) => {
                   const Icon = step.icon;
@@ -1037,7 +1060,7 @@ const Campaigns: React.FC = () => {
             {/* Content Body */}
             <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
 
-              {/* STEP 0: DADOS BÁSICOS - Meta Ads API */}
+              {/* STEP 0: CAMPANHA - nome e objetivo */}
               {currentStep === 0 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   {validationAttempted && Object.keys(formErrors).length > 0 && (
@@ -1079,34 +1102,98 @@ const Campaigns: React.FC = () => {
                       <option value="OUTCOME_SALES">Vendas — conversões no site</option>
                       <option value="OUTCOME_ENGAGEMENT">Engajamento — curtidas e comentários</option>
                       <option value="OUTCOME_AWARENESS">Alcance — visibilidade da marca</option>
+                      <option value="OUTCOME_APP_PROMOTION">App — downloads e engajamento</option>
                     </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento Diário (R$) <span className="text-rose-500">*</span></label>
-                    <div className="relative">
-                      <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-gray-400">R$</span>
-                      <input
-                        name="dailyBudget"
-                        value={formData.dailyBudget || ''}
-                        onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, dailyBudget: '' })); }}
-                        type="number"
-                        min="1"
-                        step="0.01"
-                        placeholder="50,00"
-                        className={`w-full pl-14 pr-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.dailyBudget ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
-                      />
-                    </div>
-                    {formErrors.dailyBudget && <p className="text-xs text-rose-600 px-2">{formErrors.dailyBudget}</p>}
                   </div>
                 </div>
               )}
 
-              {/* STEP 1: PÚBLICO-ALVO - targeting.geo_locations, age_min, age_max */}
+              {/* STEP 1: GRUPO DE ANÚNCIO - orçamento, datas, público-alvo */}
               {currentStep === 1 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
-                  <p className="text-[10px] text-gray-500 font-bold">Targeting conforme Meta Ads API (geo_locations, age_min, age_max)</p>
+                  {validationAttempted && Object.keys(formErrors).length > 0 && (
+                    <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3">
+                      <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-rose-800">Preencha os campos obrigatórios</p>
+                        <div className="mt-2 space-y-1">
+                          {Object.values(formErrors).map((msg, i) => (
+                            <p key={i} className="text-sm text-rose-700">{msg}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Orçamento e agendamento</p>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><MapPin size={12} /> País (código ISO) <span className="text-rose-500">*</span></label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Tipo de orçamento</label>
+                    <select
+                      name="budgetType"
+                      value={formData.budgetType || 'DAILY'}
+                      onChange={handleInputChange}
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    >
+                      <option value="DAILY">Diário — gasto médio por dia</option>
+                      <option value="LIFETIME">Total — orçamento para todo o período</option>
+                    </select>
+                  </div>
+                  {formData.budgetType === 'LIFETIME' ? (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento total (R$) <span className="text-rose-500">*</span></label>
+                        <div className="relative">
+                          <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-gray-400">R$</span>
+                          <input
+                            name="lifetimeBudget"
+                            value={formData.lifetimeBudget || ''}
+                            onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, lifetimeBudget: '' })); }}
+                            type="number"
+                            min="1"
+                            step="0.01"
+                            placeholder="500,00"
+                            className={`w-full pl-14 pr-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.lifetimeBudget ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
+                          />
+                        </div>
+                        {formErrors.lifetimeBudget && <p className="text-xs text-rose-600 px-2">{formErrors.lifetimeBudget}</p>}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data início</label>
+                          <input name="startDate" value={formData.startDate || ''} onChange={handleInputChange} type="date" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data fim</label>
+                          <input name="endDate" value={formData.endDate || ''} onChange={handleInputChange} type="date" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento diário (R$) <span className="text-rose-500">*</span></label>
+                      <div className="relative">
+                        <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-gray-400">R$</span>
+                        <input
+                          name="dailyBudget"
+                          value={formData.dailyBudget || ''}
+                          onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, dailyBudget: '' })); }}
+                          type="number"
+                          min="1"
+                          step="0.01"
+                          placeholder="50,00"
+                          className={`w-full pl-14 pr-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.dailyBudget ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
+                        />
+                      </div>
+                      {formErrors.dailyBudget && <p className="text-xs text-rose-600 px-2">{formErrors.dailyBudget}</p>}
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do grupo de anúncios (opcional)</label>
+                    <input name="adSetName" value={formData.adSetName || ''} onChange={handleInputChange} type="text" placeholder="Ex: Conjunto Brasil 18-35" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                  </div>
+                  <hr className="border-gray-200 my-6" />
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Público-alvo (targeting)</p>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><MapPin size={12} /> País (código ISO)</label>
                     <select
                       name="countryCode"
                       value={formData.countryCode}
@@ -1146,6 +1233,19 @@ const Campaigns: React.FC = () => {
                         className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
                       />
                     </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2">Gênero</label>
+                    <select
+                      name="genders"
+                      value={formData.genders || ''}
+                      onChange={handleInputChange}
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    >
+                      <option value="">Todos</option>
+                      <option value="1">Homens</option>
+                      <option value="2">Mulheres</option>
+                    </select>
                   </div>
                   <div className="space-y-2 relative" ref={interestsContainerRef}>
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><UsersIcon size={12} /> Interesses <span className="text-gray-400 font-normal">(opcional)</span></label>
@@ -1210,7 +1310,7 @@ const Campaigns: React.FC = () => {
                 </div>
               )}
 
-              {/* STEP 2: CRIATIVOS - object_story_spec link_data (message, link, picture) */}
+              {/* STEP 2: ANÚNCIO - destino, texto, imagem, CTA */}
               {currentStep === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   {validationAttempted && Object.keys(formErrors).length > 0 && (
@@ -1226,7 +1326,19 @@ const Campaigns: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  <p className="text-[10px] text-gray-500 font-bold">Criativo conforme Meta Ads API (link_data: message, link, picture)</p>
+                  <p className="text-[10px] text-gray-500 font-bold">Criativo conforme Meta Ads API (link_data: message, link, picture, call_to_action)</p>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Destino de conversão</label>
+                    <select
+                      name="conversionDestination"
+                      value={formData.conversionDestination || 'WEBSITE'}
+                      onChange={handleInputChange}
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    >
+                      <option value="WEBSITE">Site — link para página web</option>
+                      <option value="MESSAGES">Mensagens — WhatsApp (automático)</option>
+                    </select>
+                  </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Texto do Anúncio (message) <span className="text-rose-500">*</span></label>
                     <textarea
@@ -1276,16 +1388,50 @@ const Campaigns: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  {formData.conversionDestination === 'MESSAGES' ? (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp <span className="text-rose-500">*</span></label>
+                      <input
+                        name="whatsappPhone"
+                        value={formData.whatsappPhone || ''}
+                        onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, whatsappPhone: '' })); }}
+                        type="tel"
+                        placeholder="5511999999999 (código país + DDD + número)"
+                        className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.whatsappPhone ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
+                      />
+                      <p className="text-[9px] text-gray-400">Opcional se sua página do Facebook tiver WhatsApp vinculado.</p>
+                      {formErrors.whatsappPhone && <p className="text-xs text-rose-600 px-2">{formErrors.whatsappPhone}</p>}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">URL de destino (opcional)</label>
+                      <input
+                        name="destinationUrl"
+                        value={formData.destinationUrl || ''}
+                        onChange={handleInputChange}
+                        type="url"
+                        placeholder="https://seusite.com (vazio = facebook.com)"
+                        className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">URL de destino (opcional)</label>
-                    <input
-                      name="destinationUrl"
-                      value={formData.destinationUrl || ''}
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Tipo de CTA (botão do anúncio)</label>
+                    <select
+                      name="ctaType"
+                      value={formData.ctaType || 'LEARN_MORE'}
                       onChange={handleInputChange}
-                      type="url"
-                      placeholder="https://seusite.com (vazio = facebook.com)"
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    />
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    >
+                      <option value="LEARN_MORE">Saiba mais</option>
+                      <option value="SHOP_NOW">Comprar agora</option>
+                      <option value="SIGN_UP">Cadastre-se</option>
+                      <option value="CONTACT_US">Fale conosco</option>
+                      <option value="DOWNLOAD">Baixar</option>
+                      <option value="GET_OFFER">Obter oferta</option>
+                      <option value="WHATSAPP_MESSAGE">Enviar mensagem (WhatsApp)</option>
+                      <option value="SEND_MESSAGE">Enviar mensagem</option>
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Título do Link (opcional)</label>
@@ -1297,6 +1443,10 @@ const Campaigns: React.FC = () => {
                       placeholder="Confira agora!"
                       className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do anúncio (opcional)</label>
+                    <input name="adName" value={formData.adName || ''} onChange={handleInputChange} type="text" placeholder="Ex: Anúncio Principal" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
                   </div>
                 </div>
               )}

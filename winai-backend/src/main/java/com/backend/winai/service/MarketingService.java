@@ -39,7 +39,9 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
@@ -1210,10 +1212,25 @@ public class MarketingService {
 
         String objective = request.getObjective();
         if (objective == null || objective.isBlank()) objective = "OUTCOME_TRAFFIC";
-        if ("LINK_CLICKS".equals(objective)) objective = "OUTCOME_TRAFFIC"; // Meta deprecou LINK_CLICKS
+        if ("LINK_CLICKS".equals(objective)) objective = "OUTCOME_TRAFFIC";
 
-        long budgetCents = Math.round((request.getDailyBudget() != null ? request.getDailyBudget() : 50.0) * 100);
-        budgetCents = Math.max(budgetCents, 100); // Mínimo R$ 1,00
+        String conversionDest = (request.getConversionDestination() != null && !request.getConversionDestination().isBlank())
+                ? request.getConversionDestination().toUpperCase() : "WEBSITE";
+        boolean isMessages = "MESSAGES".equals(conversionDest);
+
+        // Resolver link efetivo: WEBSITE=destinationUrl, MESSAGES=wa.me
+        String effectiveLink = resolveEffectiveLink(request, pageId, accessToken, isMessages);
+
+        long dailyBudgetCents = 0;
+        Long lifetimeBudgetCents = null;
+        String budgetType = (request.getBudgetType() != null && !request.getBudgetType().isBlank())
+                ? request.getBudgetType().toUpperCase() : "DAILY";
+        if ("LIFETIME".equals(budgetType) && request.getLifetimeBudget() != null && request.getLifetimeBudget() > 0) {
+            lifetimeBudgetCents = Math.max(100, Math.round(request.getLifetimeBudget() * 100));
+        } else {
+            double daily = request.getDailyBudget() != null ? request.getDailyBudget() : 50.0;
+            dailyBudgetCents = Math.max(100, Math.round(daily * 100));
+        }
 
         int ageMin = request.getAgeMin() != null ? request.getAgeMin() : 18;
         int ageMax = request.getAgeMax() != null ? request.getAgeMax() : 65;
@@ -1224,20 +1241,30 @@ public class MarketingService {
         String country = (request.getCountryCode() != null && !request.getCountryCode().isBlank())
                 ? request.getCountryCode().toUpperCase().substring(0, 2) : "BR";
 
+        List<Integer> gendersList = parseGenders(request.getGenders());
+
+        String optimizationGoal = mapOptimizationGoal(objective, isMessages);
+        String ctaType = (request.getCtaType() != null && !request.getCtaType().isBlank())
+                ? request.getCtaType() : (isMessages ? "WHATSAPP_MESSAGE" : "LEARN_MORE");
+
+        String adSetName = (request.getAdSetName() != null && !request.getAdSetName().isBlank())
+                ? request.getAdSetName() : ("Ad Set - " + System.currentTimeMillis());
+        String adName = (request.getAdName() != null && !request.getAdName().isBlank())
+                ? request.getAdName() : request.getName();
+
         try {
             adaptiveThrottle();
 
-            // 1. Criar Campaign
             String campaignId = createMetaCampaign(adAccountId, accessToken, request.getName(), objective);
             log.info("[META] Campaign created: {}", campaignId);
 
-            // 2. Criar Ad Set
-            String optimizationGoal = mapOptimizationGoal(objective);
             String adSetId = createMetaAdSet(adAccountId, accessToken, campaignId, pageId,
-                    budgetCents, country, ageMin, ageMax, optimizationGoal, request.getInterests());
+                    dailyBudgetCents, lifetimeBudgetCents, budgetType,
+                    request.getStartDate(), request.getEndDate(),
+                    country, ageMin, ageMax, gendersList, optimizationGoal, request.getInterests(),
+                    adSetName);
             log.info("[META] Ad Set created: {}", adSetId);
 
-            // 3. Obter image_hash (upload via adimages) ou usar picture URL
             String adImageHash = null;
             if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
                 try {
@@ -1247,14 +1274,12 @@ public class MarketingService {
                 }
             }
 
-            // 4. Criar Ad Creative
             String creativeId = createMetaAdCreative(adAccountId, accessToken, pageId,
-                    request.getAdMessage(), request.getDestinationUrl(), request.getHeadline(),
-                    adImageHash, request.getImageUrl());
+                    request.getAdMessage(), effectiveLink, request.getHeadline(),
+                    adImageHash, request.getImageUrl(), ctaType);
             log.info("[META] Ad Creative created: {}", creativeId);
 
-            // 5. Criar Ad
-            createMetaAd(adAccountId, accessToken, adSetId, creativeId, request.getName());
+            createMetaAd(adAccountId, accessToken, adSetId, creativeId, adName);
             log.info("[META] Ad created successfully for campaign: {}", request.getName());
 
         } catch (org.springframework.web.client.HttpClientErrorException e) {
@@ -1265,6 +1290,47 @@ public class MarketingService {
             log.error("[META] Error creating campaign", e);
             throw new RuntimeException(e.getMessage() != null ? e.getMessage() : "Erro ao criar campanha no Meta Ads");
         }
+    }
+
+    private String resolveEffectiveLink(CreateCampaignRequest request, String pageId, String accessToken, boolean isMessages) {
+        if (isMessages) {
+            String phone = request.getWhatsappPhone();
+            if (phone == null || phone.isBlank()) {
+                phone = fetchPageWhatsAppNumber(pageId, accessToken);
+            }
+            if (phone == null || phone.isBlank()) {
+                throw new RuntimeException("Para destino Mensagens (WhatsApp), informe o número WhatsApp ou vincule o WhatsApp à sua página do Facebook.");
+            }
+            String digits = phone.replaceAll("[^0-9]", "");
+            return "https://wa.me/" + digits;
+        }
+        String url = request.getDestinationUrl();
+        return (url != null && !url.isBlank()) ? url : "https://www.facebook.com";
+    }
+
+    private String fetchPageWhatsAppNumber(String pageId, String accessToken) {
+        try {
+            String url = metaApiBaseUrl + "/" + pageId + "?fields=whatsapp_number&access_token=" + accessToken;
+            ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
+            JsonNode node = parseJson(objectMapper, res.getBody());
+            if (node.has("whatsapp_number")) {
+                return node.get("whatsapp_number").asText();
+            }
+        } catch (Exception e) {
+            log.debug("Could not fetch page whatsapp_number: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private List<Integer> parseGenders(String genders) {
+        if (genders == null || genders.isBlank()) return Collections.emptyList();
+        List<Integer> list = new ArrayList<>();
+        for (String s : genders.split("[,;]")) {
+            String t = s.trim();
+            if ("1".equals(t)) list.add(1);
+            else if ("2".equals(t)) list.add(2);
+        }
+        return list;
     }
 
     private static String serializeToJson(ObjectMapper mapper, Object obj) {
@@ -1296,12 +1362,21 @@ public class MarketingService {
         }
     }
 
-    private String mapOptimizationGoal(String objective) {
+    private String mapOptimizationGoal(String objective, boolean isMessages) {
+        if (isMessages) {
+            return switch (objective != null ? objective.toUpperCase() : "") {
+                case "OUTCOME_LEADS" -> "LEAD_GENERATION";
+                case "OUTCOME_SALES" -> "OFFSITE_CONVERSIONS";
+                case "OUTCOME_ENGAGEMENT" -> "POST_ENGAGEMENT";
+                default -> "LINK_CLICKS";
+            };
+        }
         return switch (objective != null ? objective.toUpperCase() : "") {
             case "OUTCOME_LEADS" -> "LEAD_GENERATION";
             case "OUTCOME_SALES" -> "OFFSITE_CONVERSIONS";
             case "OUTCOME_ENGAGEMENT" -> "POST_ENGAGEMENT";
             case "OUTCOME_AWARENESS" -> "REACH";
+            case "OUTCOME_APP_PROMOTION" -> "APP_INSTALLS";
             case "OUTCOME_TRAFFIC", "LINK_CLICKS" -> "LINK_CLICKS";
             default -> "LINK_CLICKS";
         };
@@ -1326,8 +1401,11 @@ public class MarketingService {
     }
 
     private String createMetaAdSet(String adAccountId, String accessToken, String campaignId, String pageId,
-                                   long dailyBudgetCents, String country, int ageMin, int ageMax, String optimizationGoal,
-                                   String interestsJson) {
+                                   long dailyBudgetCents, Long lifetimeBudgetCents, String budgetType,
+                                   String startDate, String endDate,
+                                   String country, int ageMin, int ageMax, List<Integer> genders,
+                                   String optimizationGoal, String interestsJson,
+                                   String adSetName) {
         String url = metaApiBaseUrl + "/" + adAccountId + "/adsets";
 
         Map<String, Object> targeting = new HashMap<>();
@@ -1336,6 +1414,9 @@ public class MarketingService {
         targeting.put("geo_locations", geo);
         targeting.put("age_min", ageMin);
         targeting.put("age_max", ageMax);
+        if (genders != null && !genders.isEmpty()) {
+            targeting.put("genders", genders);
+        }
 
         if (interestsJson != null && !interestsJson.isBlank()) {
             try {
@@ -1363,9 +1444,13 @@ public class MarketingService {
         promotedObject.put("page_id", pageId);
 
         Map<String, Object> params = new HashMap<>();
-        params.put("name", "Ad Set - " + System.currentTimeMillis());
+        params.put("name", adSetName);
         params.put("campaign_id", campaignId);
-        params.put("daily_budget", dailyBudgetCents);
+        if ("LIFETIME".equals(budgetType) && lifetimeBudgetCents != null && lifetimeBudgetCents > 0) {
+            params.put("lifetime_budget", lifetimeBudgetCents);
+        } else {
+            params.put("daily_budget", dailyBudgetCents);
+        }
         params.put("targeting", serializeToJson(objectMapper, targeting));
         params.put("optimization_goal", optimizationGoal);
         params.put("billing_event", "IMPRESSIONS");
@@ -1373,6 +1458,19 @@ public class MarketingService {
         params.put("promoted_object", serializeToJson(objectMapper, promotedObject));
         params.put("status", "PAUSED");
         params.put("access_token", accessToken);
+
+        if (startDate != null && !startDate.isBlank()) {
+            String start = startDate.trim();
+            if (start.length() == 10) start += "T00:00:00-0300";
+            params.put("start_time", start);
+        } else if ("LIFETIME".equals(budgetType) && lifetimeBudgetCents != null) {
+            params.put("start_time", java.time.ZonedDateTime.now(ZoneId.of("America/Sao_Paulo")).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        }
+        if (endDate != null && !endDate.isBlank()) {
+            String end = endDate.trim();
+            if (end.length() == 10) end += "T23:59:59-0300";
+            params.put("end_time", end);
+        }
 
         ResponseEntity<String> res = postForm(url, params);
         JsonNode node = parseJson(objectMapper, res.getBody());
@@ -1401,10 +1499,12 @@ public class MarketingService {
 
     private String createMetaAdCreative(String adAccountId, String accessToken, String pageId,
                                        String message, String link, String headline,
-                                       String imageHash, String imageUrl) {
+                                       String imageHash, String imageUrl, String ctaType) {
         String url = metaApiBaseUrl + "/" + adAccountId + "/adcreatives";
 
         String effectiveLink = (link != null && !link.isBlank()) ? link : "https://www.facebook.com";
+        String effectiveCta = (ctaType != null && !ctaType.isBlank()) ? ctaType : "LEARN_MORE";
+
         Map<String, Object> linkData = new HashMap<>();
         linkData.put("message", message != null ? message : "Confira!");
         linkData.put("link", effectiveLink);
@@ -1417,7 +1517,7 @@ public class MarketingService {
             throw new RuntimeException("Imagem é obrigatória para o criativo");
         }
         Map<String, Object> cta = new HashMap<>();
-        cta.put("type", "LEARN_MORE");
+        cta.put("type", effectiveCta);
         cta.put("value", Map.of("link", effectiveLink));
         linkData.put("call_to_action", cta);
 
