@@ -1311,7 +1311,7 @@ public class MarketingService {
 
         validateRequest(request);
 
-        String objective = "OUTCOME_ENGAGEMENT"; // Fixo para Campanha WhatsApp
+        String objective = "OUTCOME_ENGAGEMENT"; // Engajamento (passo a passo Campanha Meta Ads WhatsApp)
         boolean useExistingPost = Boolean.TRUE.equals(request.getUseExistingPost());
         String existingPostId = (request.getExistingPostId() != null && !request.getExistingPostId().isBlank()) ? request.getExistingPostId() : null;
 
@@ -1333,7 +1333,8 @@ public class MarketingService {
 
         List<Integer> gendersList = parseGenders(request.getGenders());
 
-        // LINK_CLICKS para campanha WhatsApp (POST_ENGAGEMENT pode não estar disponível - erro 2490408)
+        // Doc Meta "Create Ads that Click to WhatsApp": Engajamento ou Tráfego. Para Engajamento,
+        // o Ads Manager não especifica optimization na doc - LINK_CLICKS (clique no CTA) é comum.
         String optimizationGoal = "LINK_CLICKS";
         String adSetName = (request.getAdSetName() != null && !request.getAdSetName().isBlank())
                 ? request.getAdSetName() : ("Ad Set - " + System.currentTimeMillis());
@@ -1557,6 +1558,8 @@ public class MarketingService {
         params.put("campaign_id", campaignId);
         params.put("daily_budget", dailyBudgetCents);
         params.put("targeting", serializeToJson(objectMapper, targeting));
+        // destination_type opcional (doc): omitir pode evitar erro 2490408; creative com CTA WhatsApp define destino
+        // params.put("destination_type", "WHATSAPP");
         params.put("optimization_goal", optimizationGoal);
         params.put("billing_event", "IMPRESSIONS");
         params.put("bid_strategy", "LOWEST_COST_WITHOUT_CAP");
