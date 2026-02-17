@@ -1224,29 +1224,14 @@ const Campaigns: React.FC = () => {
                         disabled={whatsappNumbersLoading}
                         className="flex-1 min-w-[180px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
                       >
-                        <option value="">{whatsappNumbers.length > 0 ? 'Selecione o número' : 'Nenhum número - digite abaixo'}</option>
+                        <option value="">Selecione o telefone</option>
                         {whatsappNumbers.map((num) => {
                           const masked = maskPhoneInput(num);
                           return (
                             <option key={num} value={masked}>{masked}</option>
                           );
                         })}
-                        {formData.whatsappPhone && !whatsappNumbers.some(n => parsePhoneDigits(n) === parsePhoneDigits(formData.whatsappPhone || '')) && (
-                          <option value={formData.whatsappPhone}>{formData.whatsappPhone} (manual)</option>
-                        )}
                       </select>
-                      <input
-                        name="whatsappPhoneManual"
-                        value={formData.whatsappPhone || ''}
-                        onChange={(e) => {
-                          const masked = maskPhoneInput(e.target.value);
-                          setFormData(prev => ({ ...prev, whatsappPhone: masked }));
-                        }}
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="Ou digite: +55 47 9168-5019"
-                        className="flex-1 min-w-[180px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                      />
                       <button
                         type="button"
                         onClick={refreshWhatsAppNumbers}
@@ -1260,7 +1245,7 @@ const Campaigns: React.FC = () => {
                     </div>
                     <p className="text-[9px] text-gray-400">
                       {whatsappNumbers.length === 0
-                        ? 'A API não retornou números. Digite o número que aparece no Meta Ads.'
+                        ? 'Nenhum número disponível. Clique em Atualizar para recarregar.'
                         : 'Números carregados do Meta (página e WABAs). Clique em Atualizar para recarregar.'}
                     </p>
                   </div>
