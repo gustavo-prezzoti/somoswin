@@ -343,6 +343,8 @@ public class MarketingService {
     private final MetaCampaignRepository metaCampaignRepository;
     private final MetaInsightRepository metaInsightRepository;
     private final InstagramMetricRepository instagramMetricRepository;
+    private final MetaAdRepository metaAdRepository;
+    private final MetaAdSetRepository metaAdSetRepository;
     private final MetaSyncService metaSyncService;
     private final ApplicationEventPublisher eventPublisher;
     private final CompanyRepository companyRepository;
@@ -1092,9 +1094,14 @@ public class MarketingService {
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         metaConnectionRepository.findByCompany(company).ifPresent(conn -> {
-
-            // Delete the connection itself
+            // Remover todos os dados vinculados à Meta para não misturar ao reconectar com outra conta
+            metaInsightRepository.deleteByCompany(company);
+            instagramMetricRepository.deleteByCompany(company);
+            metaAdRepository.deleteByCompany(company);
+            metaAdSetRepository.deleteByCompany(company);
+            metaCampaignRepository.deleteByCompany(company);
             metaConnectionRepository.delete(conn);
+            log.info("[Meta] Desconectado e dados removidos para empresa {}", company.getId());
         });
     }
 
