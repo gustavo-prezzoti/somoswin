@@ -470,7 +470,8 @@ public class MetaSyncService {
             }
 
             LocalDate today = LocalDate.now();
-            LocalDate since = today.minusDays(30);
+            // API Meta: max 30 dias entre since e until (2592000 s)
+            LocalDate since = today.minusDays(29);
             long sinceUnix = since.atStartOfDay(ZoneId.of("America/Sao_Paulo")).toEpochSecond();
             long untilUnix = today.plusDays(1).atStartOfDay(ZoneId.of("America/Sao_Paulo")).toEpochSecond();
 
