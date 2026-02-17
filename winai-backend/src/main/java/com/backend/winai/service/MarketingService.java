@@ -1439,15 +1439,37 @@ public class MarketingService {
     }
 
     private String fetchPageWhatsAppNumber(String pageId, String accessToken) {
+        // 1. Tentar GET direto na página
         try {
             String url = metaApiBaseUrl + "/" + pageId + "?fields=whatsapp_number&access_token=" + accessToken;
             ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
-            JsonNode node = parseJson(objectMapper, res.getBody());
-            if (node.has("whatsapp_number")) {
-                return node.get("whatsapp_number").asText();
+            String body = res.getBody();
+            if (body != null && body.contains("\"error\"")) {
+                log.debug("[META] Page whatsapp_number direct GET error, trying /me/accounts");
+            } else {
+                JsonNode node = parseJson(objectMapper, body);
+                if (node.has("whatsapp_number")) {
+                    return node.get("whatsapp_number").asText();
+                }
             }
         } catch (Exception e) {
-            log.debug("Could not fetch page whatsapp_number: {}", e.getMessage());
+            log.debug("[META] Page whatsapp_number direct GET failed: {}", e.getMessage());
+        }
+        // 2. Fallback: /me/accounts com fields incluindo whatsapp_number (alguns tokens retornam)
+        try {
+            String url = metaApiBaseUrl + "/me/accounts?fields=id,name,access_token,whatsapp_number&access_token=" + accessToken;
+            ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
+            JsonNode root = parseJson(objectMapper, res.getBody());
+            JsonNode data = root.has("data") ? root.get("data") : null;
+            if (data != null && data.isArray()) {
+                for (JsonNode page : data) {
+                    if (page.has("id") && pageId.equals(page.get("id").asText()) && page.has("whatsapp_number")) {
+                        return page.get("whatsapp_number").asText();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[META] /me/accounts whatsapp_number fallback failed: {}", e.getMessage());
         }
         return null;
     }
@@ -1490,6 +1512,9 @@ public class MarketingService {
         // 1. Número da página (o que aparece no Meta Ads - conectado via Configurações da Página)
         if (conn.getPageId() != null && !conn.getPageId().isBlank()) {
             String pageToken = conn.getPageAccessToken();
+            if (pageToken == null || pageToken.isBlank()) {
+                pageToken = fetchAndStorePageAccessToken(conn);
+            }
             if (pageToken == null || pageToken.isBlank()) pageToken = accessToken;
             String pageNum = fetchPageWhatsAppNumber(conn.getPageId(), pageToken);
             if (pageNum == null || pageNum.isBlank()) {
@@ -1497,6 +1522,9 @@ public class MarketingService {
             }
             if (pageNum != null && !pageNum.isBlank()) {
                 seen.add(normalizePhoneForDedup(pageNum));
+                log.info("[META] WhatsApp number from page: {}", pageNum);
+            } else {
+                log.info("[META] No whatsapp_number from page {} (token type may not support this field)", conn.getPageId());
             }
         }
 
