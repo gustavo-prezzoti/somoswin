@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Link as LinkIcon, Database, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { marketingService, TrafficMetrics, CreateCampaignRequest, CampaignListItem, AiRecommendation, MetricsDateRange } from '../services';
+import { marketingService, TrafficMetrics, CreateCampaignRequest, CampaignListItem, AiRecommendation } from '../services';
+import type { MetricsDateRange } from '../services/api/marketing.service';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import DriveFileSelector from './DriveFileSelector';
 import { DriveFile } from '../services/api/google-drive.service';
@@ -68,6 +69,7 @@ const Campaigns: React.FC = () => {
   const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [metricsCampaignFilter, setMetricsCampaignFilter] = useState<string>('');
+  const [campaignStatusFilter, setCampaignStatusFilter] = useState<string>(''); // '' | ACTIVE | PAUSED | INACTIVE
   const [metricsDateRange, setMetricsDateRange] = useState<MetricsDateRange | null>(null);
   const [metricsStartDate, setMetricsStartDate] = useState<string>('');
   const [metricsEndDate, setMetricsEndDate] = useState<string>('');
@@ -97,6 +99,17 @@ const Campaigns: React.FC = () => {
     { id: 1, title: 'Público Alvo', icon: Target },
     { id: 2, title: 'Criativos', icon: Play },
   ];
+
+  // Campanhas filtradas por status e ordenadas: Ativas > Pausadas > Inativas
+  const filteredAndSortedCampaigns = useMemo(() => {
+    const isInactive = (s: string) => s !== 'ACTIVE' && s !== 'PAUSED';
+    const statusOrder = (s: string) => (s === 'ACTIVE' ? 0 : s === 'PAUSED' ? 1 : 2);
+    let list = campaigns;
+    if (campaignStatusFilter === 'ACTIVE') list = list.filter((c) => c.status === 'ACTIVE');
+    else if (campaignStatusFilter === 'PAUSED') list = list.filter((c) => c.status === 'PAUSED');
+    else if (campaignStatusFilter === 'INACTIVE') list = list.filter((c) => isInactive(c.status || ''));
+    return [...list].sort((a, b) => statusOrder(a.status || '') - statusOrder(b.status || ''));
+  }, [campaigns, campaignStatusFilter]);
 
   useEffect(() => {
     loadChats();
@@ -616,32 +629,47 @@ const Campaigns: React.FC = () => {
             {/* OPERAÇÃO ATIVA • REAL-TIME CORE - Lista de Campanhas (acima do gráfico) */}
             {isMetaConnected && (
               <div className="bg-white p-6 md:p-8 rounded-[40px] border border-gray-100 shadow-sm">
-                <div className="flex items-center justify-between mb-4 md:mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-4 md:mb-6">
                   <h2 className="text-lg md:text-xl font-black text-gray-800 tracking-tighter uppercase italic">Operação Ativa • Real-Time Core</h2>
-                  <button onClick={loadCampaigns} disabled={campaignsLoading} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500 disabled:opacity-50">
-                    <RefreshCw size={18} className={campaignsLoading ? 'animate-spin' : ''} />
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</label>
+                    <select
+                      value={campaignStatusFilter}
+                      onChange={(e) => setCampaignStatusFilter(e.target.value)}
+                      className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none"
+                    >
+                      <option value="">Todas</option>
+                      <option value="ACTIVE">Ativas</option>
+                      <option value="PAUSED">Pausadas</option>
+                      <option value="INACTIVE">Inativas</option>
+                    </select>
+                    <button onClick={loadCampaigns} disabled={campaignsLoading} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500 disabled:opacity-50">
+                      <RefreshCw size={18} className={campaignsLoading ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
                 </div>
                 {campaignsLoading ? (
                   <div className="flex justify-center py-12"><Loader2 className="animate-spin text-emerald-600" size={32} /></div>
                 ) : campaigns.length === 0 ? (
                   <div className="text-center py-12 text-gray-500 font-medium text-sm">Nenhuma campanha encontrada. Conecte sua conta Meta Ads e crie campanhas.</div>
+                ) : filteredAndSortedCampaigns.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500 font-medium text-sm">Nenhuma campanha corresponde ao filtro selecionado.</div>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {campaigns.map((c) => (
+                    {filteredAndSortedCampaigns.map((c) => (
                       <div key={c.id} className="p-4 rounded-2xl border border-gray-100 hover:border-emerald-100 transition-all bg-gray-50/30">
                         <div className="flex flex-wrap items-center gap-3 mb-3">
                           <button
                             onClick={() => handleToggleCampaign(c)}
-                            disabled={togglingId === c.id}
-                            className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${c.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                            disabled={togglingId === c.id || (c.status !== 'ACTIVE' && c.status !== 'PAUSED')}
+                            className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${c.status === 'ACTIVE' ? 'bg-emerald-500' : c.status === 'PAUSED' ? 'bg-amber-400' : 'bg-gray-300'}`}
                           >
                             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${c.status === 'ACTIVE' ? 'left-6' : 'left-0.5'}`} />
                           </button>
                           <div className="flex-1 min-w-0">
                             <p className="font-bold text-gray-900 text-sm truncate">{c.name}</p>
-                            <p className={`text-[10px] font-black uppercase ${c.status === 'ACTIVE' ? 'text-emerald-600' : 'text-gray-400'}`}>
-                              {c.status === 'ACTIVE' ? 'VEICULANDO' : 'PAUSADA'}
+                            <p className={`text-[10px] font-black uppercase ${c.status === 'ACTIVE' ? 'text-emerald-600' : c.status === 'PAUSED' ? 'text-amber-600' : 'text-gray-400'}`}>
+                              {c.status === 'ACTIVE' ? 'VEICULANDO' : c.status === 'PAUSED' ? 'PAUSADA' : 'INATIVA'}
                             </p>
                           </div>
                           <span className="px-2 py-0.5 rounded-lg bg-gray-200 text-[9px] font-black uppercase text-gray-600 shrink-0">{c.objective || 'OUTROS'}</span>
