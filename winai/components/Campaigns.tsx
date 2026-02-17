@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Zap } from 'lucide-react';
+import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { marketingService, TrafficMetrics, CreateCampaignRequest, PagePost, CampaignListItem, AiRecommendation } from '../services';
 import type { MetricsDateRange } from '../services/api/marketing.service';
@@ -565,30 +565,6 @@ const Campaigns: React.FC = () => {
   const refreshWhatsAppNumbers = async () => {
     await loadWhatsAppNumbers();
     showToast('Lista de números atualizada.', 'success');
-  };
-
-  const openWhatsAppAddPopup = async () => {
-    try {
-      const { url } = await marketingService.getWhatsAppAddUrl();
-      const w = 700;
-      const h = 650;
-      const left = window.screenX + (window.outerWidth - w) / 2;
-      const top = window.screenY + (window.outerHeight - h) / 2;
-      const popup = window.open(url, 'whatsapp-add', `width=${w},height=${h},left=${left},top=${top},scrollbars=yes`);
-      if (popup) {
-        showToast('Conclua o fluxo na janela e clique em Atualizar.', 'info');
-        const checkClosed = setInterval(() => {
-          if (popup.closed) {
-            clearInterval(checkClosed);
-            loadWhatsAppNumbers();
-          }
-        }, 500);
-      } else {
-        showToast('Popup bloqueado. Permita popups e tente novamente.', 'error');
-      }
-    } catch {
-      showToast('Erro ao abrir fluxo de adicionar número.', 'error');
-    }
   };
 
   const loadPagePosts = async () => {
@@ -1273,15 +1249,6 @@ const Campaigns: React.FC = () => {
                       />
                       <button
                         type="button"
-                        onClick={openWhatsAppAddPopup}
-                        className="px-4 py-4 bg-emerald-600 text-white rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-emerald-700 transition-colors flex items-center gap-2 shrink-0"
-                        title="Adicionar número WhatsApp via Meta"
-                      >
-                        <Zap size={16} />
-                        Adicionar número
-                      </button>
-                      <button
-                        type="button"
                         onClick={refreshWhatsAppNumbers}
                         disabled={whatsappNumbersLoading}
                         className="px-4 py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-gray-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
@@ -1293,8 +1260,8 @@ const Campaigns: React.FC = () => {
                     </div>
                     <p className="text-[9px] text-gray-400">
                       {whatsappNumbers.length === 0
-                        ? 'A API não retornou números. Digite o número que aparece no Meta Ads ou adicione via popup.'
-                        : 'Adicione mais números via popup e clique em Atualizar. Conecte até 50 por página.'}
+                        ? 'A API não retornou números. Digite o número que aparece no Meta Ads.'
+                        : 'Números carregados do Meta (página e WABAs). Clique em Atualizar para recarregar.'}
                     </p>
                   </div>
                   <hr className="border-gray-200 my-6" />

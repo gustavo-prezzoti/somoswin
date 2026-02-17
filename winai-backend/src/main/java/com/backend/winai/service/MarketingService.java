@@ -65,10 +65,6 @@ public class MarketingService {
     @Value("${meta.config.id:}")
     private String metaConfigId;
 
-    /** config_id User Token (SomosAmplia) - /me/accounts retorna whatsapp_number. Para "Adicionar número". */
-    @Value("${meta.whatsapp.config.id:}")
-    private String metaWhatsappConfigId;
-
     /** system_user = Business Integration System User token (cascata BM). user = User Token. */
     @Value("${meta.token.type:system_user}")
     private String metaTokenType;
@@ -625,9 +621,6 @@ public class MarketingService {
 
     @Transactional
     public String handleMetaCallback(String code, String companyId) {
-        if (companyId != null && companyId.endsWith("_whatsapp")) {
-            return handleWhatsAppAddCallback(code, companyId);
-        }
         try {
             String tokenUrl = String.format(
                     "https://graph.facebook.com/v19.0/oauth/access_token?client_id=%s&redirect_uri=%s&client_secret=%s&code=%s",
@@ -729,44 +722,6 @@ public class MarketingService {
                 } catch (Exception ignored) {}
             }
             return frontendUrl + "/configuracoes?error=meta_auth_failed";
-        }
-    }
-
-    /** Callback do fluxo "Adicionar número" - armazena User token para /me/accounts (whatsapp_number). */
-    private String handleWhatsAppAddCallback(String code, String state) {
-        String companyId = state.substring(0, state.length() - "_whatsapp".length());
-        try {
-            String tokenUrl = String.format(
-                    "https://graph.facebook.com/v19.0/oauth/access_token?client_id=%s&redirect_uri=%s&client_secret=%s&code=%s",
-                    clientId, redirectUri, clientSecret, code);
-            ResponseEntity<String> response = getWithRetry(tokenUrl);
-            JsonNode tokenBody = objectMapper.readTree(response.getBody());
-            String accessToken = tokenBody.get("access_token").asText();
-            String longLivedToken = accessToken;
-            try {
-                String llUrl = String.format(
-                        "https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=%s&client_secret=%s&fb_exchange_token=%s",
-                        clientId, clientSecret, accessToken);
-                ResponseEntity<String> llRes = getWithRetry(llUrl);
-                JsonNode llBody = objectMapper.readTree(llRes.getBody());
-                if (llBody.has("access_token")) {
-                    longLivedToken = llBody.get("access_token").asText();
-                }
-            } catch (Exception e) {
-                log.debug("[WhatsAppAdd] fb_exchange_token falhou: {}", e.getMessage());
-            }
-            MetaConnection conn = metaConnectionRepository.findByCompanyId(java.util.UUID.fromString(companyId)).orElse(null);
-            if (conn != null) {
-                conn.setWhatsappAccessToken(longLivedToken);
-                metaConnectionRepository.save(conn);
-                log.info("[WhatsAppAdd] User token armazenado para company {}", companyId);
-            } else {
-                log.warn("[WhatsAppAdd] Company {} sem conexão Meta - token não armazenado", companyId);
-            }
-            return frontendUrl + "/oauth-complete?whatsapp=1";
-        } catch (Exception e) {
-            log.error("[WhatsAppAdd] Erro: {}", e.getMessage(), e);
-            return frontendUrl + "/oauth-complete?error=whatsapp_auth_failed";
         }
     }
 
@@ -1536,21 +1491,6 @@ public class MarketingService {
     }
 
     /**
-     * URL do OAuth2 para gerenciar números WhatsApp.
-     * Se meta.whatsapp.config.id (User Token) estiver configurado, usa esse - /me/accounts retorna whatsapp_number.
-     * Senão usa o OAuth principal.
-     */
-    public String getWhatsAppAddUrl(User user) {
-        if (metaWhatsappConfigId != null && !metaWhatsappConfigId.isBlank()) {
-            String state = user.getCompany().getId().toString() + "_whatsapp";
-            return String.format(
-                    "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&config_id=%s&response_type=code",
-                    clientId, redirectUri, state, metaWhatsappConfigId.trim());
-        }
-        return getMetaAuthorizationUrl(user);
-    }
-
-    /**
      * Lista números WhatsApp disponíveis para campanhas: primeiro o da página (conectado via Configurações da Página),
      * depois os dos WABAs do Business (requer whatsapp_business_management).
      */
@@ -1564,49 +1504,6 @@ public class MarketingService {
 
         Set<String> seen = new LinkedHashSet<>();
 
-        // 0. User token (whatsapp_access_token): /me/accounts + GET por página (whatsapp_number)
-        if (conn.getWhatsappAccessToken() != null && !conn.getWhatsappAccessToken().isBlank()) {
-            try {
-                String url = metaApiBaseUrl + "/me/accounts?fields=id,name,whatsapp_number,connected_whatsapp_account&access_token=" + conn.getWhatsappAccessToken();
-                ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
-                JsonNode root = parseJson(objectMapper, res.getBody());
-                JsonNode data = root.has("data") ? root.get("data") : null;
-                if (data != null && data.isArray()) {
-                    for (JsonNode page : data) {
-                        String num = null;
-                        if (page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
-                            num = page.get("whatsapp_number").asText();
-                        }
-                        if ((num == null || num.isBlank()) && page.has("connected_whatsapp_account") && !page.get("connected_whatsapp_account").isNull()) {
-                            JsonNode cwa = page.get("connected_whatsapp_account");
-                            if (cwa.has("display_phone_number")) num = cwa.get("display_phone_number").asText();
-                            else if (cwa.has("phone_number")) num = cwa.get("phone_number").asText();
-                        }
-                        // Fallback: GET /{page-id}?fields=whatsapp_number (User token pode retornar por página)
-                        if ((num == null || num.isBlank()) && page.has("id")) {
-                            String pageId = page.get("id").asText();
-                            try {
-                                String pageUrl = metaApiBaseUrl + "/" + pageId + "?fields=whatsapp_number&access_token=" + conn.getWhatsappAccessToken();
-                                ResponseEntity<String> pageRes = restTemplate.getForEntity(pageUrl, String.class);
-                                JsonNode pageNode = parseJson(objectMapper, pageRes.getBody());
-                                if (pageNode != null && pageNode.has("whatsapp_number") && !pageNode.get("whatsapp_number").isNull()) {
-                                    num = pageNode.get("whatsapp_number").asText();
-                                }
-                            } catch (Exception e) {
-                                log.debug("[META] GET /{}/whatsapp_number failed: {}", pageId, e.getMessage());
-                            }
-                        }
-                        if (num != null && !num.isBlank()) seen.add(normalizePhoneForDedup(num));
-                    }
-                    if (!seen.isEmpty()) {
-                        log.info("[META] WhatsApp numbers from User token: {}", seen.size());
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[META] /me/accounts failed: {}", e.getMessage());
-            }
-        }
-
         // 1. Número da página (o que aparece no Meta Ads - conectado via Configurações da Página)
         if (conn.getPageId() != null && !conn.getPageId().isBlank()) {
             String pageToken = conn.getPageAccessToken();
@@ -1617,10 +1514,6 @@ public class MarketingService {
             String pageNum = fetchPageWhatsAppNumber(conn.getPageId(), pageToken);
             if (pageNum == null || pageNum.isBlank()) {
                 pageNum = fetchPageWhatsAppNumber(conn.getPageId(), accessToken);
-            }
-            // User token (whatsappAccessToken) - /me/accounts retorna whatsapp_number
-            if (pageNum == null && conn.getWhatsappAccessToken() != null && !conn.getWhatsappAccessToken().isBlank()) {
-                pageNum = fetchPageWhatsAppNumber(conn.getPageId(), conn.getWhatsappAccessToken());
             }
             if (pageNum != null && !pageNum.isBlank()) {
                 seen.add(normalizePhoneForDedup(pageNum));

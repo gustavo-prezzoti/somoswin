@@ -197,9 +197,6 @@ export const marketingService = {
     getPageWhatsAppNumbers: async (): Promise<{ whatsappNumbers: string[] }> => {
         return api.get<{ whatsappNumbers: string[] }>('/marketing/page-whatsapp-numbers');
     },
-    getWhatsAppAddUrl: async (): Promise<{ url: string }> => {
-        return api.get<{ url: string }>('/marketing/whatsapp-add-url');
-    },
     searchTargetingInterests: async (q: string): Promise<{ id: string; name: string }[]> => {
         if (!q?.trim()) return [];
         const data = await api.get<{ id: string; name: string }[]>('/marketing/targeting-search?q=' + encodeURIComponent(q.trim()) + '&type=adinterest');
