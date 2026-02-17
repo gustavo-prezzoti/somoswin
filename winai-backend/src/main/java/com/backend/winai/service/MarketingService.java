@@ -1333,7 +1333,8 @@ public class MarketingService {
 
         List<Integer> gendersList = parseGenders(request.getGenders());
 
-        String optimizationGoal = "POST_ENGAGEMENT";
+        // LINK_CLICKS para campanha WhatsApp (POST_ENGAGEMENT pode não estar disponível - erro 2490408)
+        String optimizationGoal = "LINK_CLICKS";
         String adSetName = (request.getAdSetName() != null && !request.getAdSetName().isBlank())
                 ? request.getAdSetName() : ("Ad Set - " + System.currentTimeMillis());
         String adName = (request.getAdName() != null && !request.getAdName().isBlank())
