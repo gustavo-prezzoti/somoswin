@@ -1369,6 +1369,7 @@ public class MarketingService {
         params.put("targeting", serializeToJson(objectMapper, targeting));
         params.put("optimization_goal", optimizationGoal);
         params.put("billing_event", "IMPRESSIONS");
+        params.put("bid_strategy", "LOWEST_COST_WITHOUT_CAP");
         params.put("promoted_object", serializeToJson(objectMapper, promotedObject));
         params.put("status", "PAUSED");
         params.put("access_token", accessToken);

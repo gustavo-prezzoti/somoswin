@@ -1067,18 +1067,18 @@ const Campaigns: React.FC = () => {
                     {formErrors.name && <p className="text-xs text-rose-600 px-2">{formErrors.name}</p>}
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Objetivo (Meta API) <span className="text-rose-500">*</span></label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Objetivo da campanha <span className="text-rose-500">*</span></label>
                     <select
                       name="objective"
                       value={formData.objective}
                       onChange={handleInputChange}
                       className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
                     >
-                      <option value="OUTCOME_TRAFFIC">Tráfego (OUTCOME_TRAFFIC)</option>
-                      <option value="OUTCOME_LEADS">Leads (OUTCOME_LEADS)</option>
-                      <option value="OUTCOME_SALES">Vendas / Conversões (OUTCOME_SALES)</option>
-                      <option value="OUTCOME_ENGAGEMENT">Engajamento (OUTCOME_ENGAGEMENT)</option>
-                      <option value="OUTCOME_AWARENESS">Alcance (OUTCOME_AWARENESS)</option>
+                      <option value="OUTCOME_TRAFFIC">Tráfego — cliques no link</option>
+                      <option value="OUTCOME_LEADS">Leads — captura de contatos</option>
+                      <option value="OUTCOME_SALES">Vendas — conversões no site</option>
+                      <option value="OUTCOME_ENGAGEMENT">Engajamento — curtidas e comentários</option>
+                      <option value="OUTCOME_AWARENESS">Alcance — visibilidade da marca</option>
                     </select>
                   </div>
                   <div className="space-y-2">
