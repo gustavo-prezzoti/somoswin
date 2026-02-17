@@ -1528,8 +1528,33 @@ public class MarketingService {
             }
         }
 
-        // 2. Números dos WABAs do Business (requer whatsapp_business_management; phone_numbers pode não suportar GET)
+        // 1.5. Fallback para System User: owned_pages retorna Page com whatsapp_number (BM)
         String businessId = conn.getBusinessId();
+        if (seen.isEmpty() && businessId != null && !businessId.isBlank() && conn.getPageId() != null) {
+            try {
+                String ownedUrl = metaApiBaseUrl + "/" + businessId + "/owned_pages?fields=id,name,whatsapp_number&access_token=" + accessToken;
+                ResponseEntity<String> ownedRes = restTemplate.getForEntity(ownedUrl, String.class);
+                JsonNode ownedRoot = parseJson(objectMapper, ownedRes.getBody());
+                JsonNode ownedData = ownedRoot.has("data") ? ownedRoot.get("data") : null;
+                if (ownedData != null && ownedData.isArray()) {
+                    String targetPageId = conn.getPageId();
+                    for (JsonNode page : ownedData) {
+                        if (page.has("id") && targetPageId.equals(page.get("id").asText()) && page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
+                            String num = page.get("whatsapp_number").asText();
+                            if (num != null && !num.isBlank()) {
+                                seen.add(normalizePhoneForDedup(num));
+                                log.info("[META] WhatsApp number from owned_pages (System User): {}", num);
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Could not fetch whatsapp_number via owned_pages: {}", e.getMessage());
+            }
+        }
+
+        // 2. Números dos WABAs do Business (requer whatsapp_business_management; phone_numbers pode não suportar GET)
         if (businessId != null && !businessId.isBlank()) {
             try {
                 String wabaUrl = metaApiBaseUrl + "/" + businessId + "/owned_whatsapp_business_accounts?fields=id&access_token=" + accessToken;
