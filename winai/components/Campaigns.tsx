@@ -7,6 +7,8 @@ import type { MetricsDateRange } from '../services/api/marketing.service';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import DriveFileSelector from './DriveFileSelector';
 import { DriveFile } from '../services/api/google-drive.service';
+import { useToast } from '../hooks/useToast';
+import ToastComponent from './ui/Toast';
 
 const SummaryCard = ({ icon: Icon, label, metric, color }: { icon: any, label: string, metric?: any, color: string }) => {
   const value = metric?.value || '0';
@@ -78,6 +80,11 @@ const Campaigns: React.FC = () => {
   const [regeneratingRecommendations, setRegeneratingRecommendations] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const { toasts, showToast, removeToast } = useToast();
+
+  // Form validation errors (campo -> mensagem)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // Form states - campos conforme Meta Ads API
   const [formData, setFormData] = useState<CreateCampaignRequest>({
@@ -225,7 +232,7 @@ const Campaigns: React.FC = () => {
       setCampaigns((prev) =>
         prev.map((camp) => (camp.id === c.id ? { ...camp, status: c.status } : camp))
       );
-      alert((e as Error)?.message || 'Erro ao atualizar status');
+      showToast((e as Error)?.message || 'Erro ao atualizar status', 'error');
     } finally {
       setTogglingId(null);
     }
@@ -240,7 +247,7 @@ const Campaigns: React.FC = () => {
       await loadRecommendations();
     } catch (e) {
       console.error('Failed to apply recommendation', e);
-      alert((e as Error)?.message || 'Erro ao aplicar recomendação');
+      showToast((e as Error)?.message || 'Erro ao aplicar recomendação', 'error');
     } finally {
       setApplyingId(null);
     }
@@ -254,7 +261,7 @@ const Campaigns: React.FC = () => {
       await loadRecommendations();
     } catch (e) {
       console.error('Failed to regenerate recommendations', e);
-      alert((e as Error)?.message || 'Erro ao atualizar recomendações');
+      showToast((e as Error)?.message || 'Erro ao atualizar recomendações', 'error');
     } finally {
       setRegeneratingRecommendations(false);
       setRecommendationsLoading(false);
@@ -407,32 +414,50 @@ const Campaigns: React.FC = () => {
     }));
   };
 
+  const validateStep = (step: number): boolean => {
+    const errs: Record<string, string> = {};
+    if (step === 0) {
+      if (!formData.name?.trim()) errs.name = 'Nome da campanha é obrigatório';
+      if (!formData.dailyBudget || formData.dailyBudget < 1) errs.dailyBudget = 'Orçamento mínimo: R$ 1,00';
+    }
+    if (step === 1) {
+      // Interesses são opcionais - Meta aceita targeting sem interests
+    }
+    if (step === 2) {
+      if (!formData.adMessage?.trim()) errs.adMessage = 'Texto do anúncio é obrigatório';
+      if (!formData.destinationUrl?.trim()) errs.destinationUrl = 'URL de destino é obrigatória';
+      else if (!/^https?:\/\/.+/.test(formData.destinationUrl.trim())) errs.destinationUrl = 'Informe uma URL válida (ex: https://...)';
+      if (!formData.imageUrl?.trim()) errs.imageUrl = 'Imagem do anúncio é obrigatória';
+    }
+    setFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   const handleNext = () => {
-    if (currentStep === 1 && selectedInterests.length === 0) {
-      alert('Selecione pelo menos um interesse para continuar.');
+    if (!validateStep(currentStep)) {
+      showToast('Preencha os campos obrigatórios.', 'error');
       return;
     }
     if (currentStep < steps.length) {
       setCurrentStep(prev => prev + 1);
+      setFormErrors({});
     }
   };
 
   const handleBack = () => {
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
+      setFormErrors({});
     }
   };
 
   const handleCreate = async () => {
-    if (selectedInterests.length === 0) {
-      alert('Selecione pelo menos um interesse.');
-      return;
-    }
-    if (!formData.adMessage?.trim() || !formData.destinationUrl?.trim() || !formData.imageUrl?.trim()) {
-      alert('Preencha texto do anúncio, URL de destino e imagem.');
+    if (!validateStep(2)) {
+      showToast('Preencha texto do anúncio, URL de destino e imagem.', 'error');
       return;
     }
     setIsSaving(true);
+    setFormErrors({});
     try {
       const payload = {
         ...formData,
@@ -440,11 +465,12 @@ const Campaigns: React.FC = () => {
       };
       await marketingService.createCampaign(payload);
       setCurrentStep(3);
+      showToast('Campanha criada com sucesso! Ela foi criada em modo PAUSADO.', 'success');
       if (isMetaConnected) loadCampaigns();
     } catch (err: any) {
       console.error('Erro ao criar campanha:', err);
       const msg = err?.response?.data?.message ?? err?.message ?? 'Erro ao criar campanha. Verifique se o Meta Ads está conectado e os dados estão corretos.';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -453,6 +479,7 @@ const Campaigns: React.FC = () => {
   const resetForm = () => {
     setIsModalOpen(false);
     setCurrentStep(0);
+    setFormErrors({});
     setFormData({
       name: '',
       objective: 'LINK_CLICKS',
@@ -1013,17 +1040,31 @@ const Campaigns: React.FC = () => {
               {/* STEP 0: DADOS BÁSICOS - Meta Ads API */}
               {currentStep === 0 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                  {Object.keys(formErrors).length > 0 && (
+                    <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3">
+                      <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-rose-800">Preencha os campos obrigatórios</p>
+                        <ul className="mt-1 text-xs text-rose-700 list-disc list-inside">
+                          {Object.values(formErrors).map((msg, i) => (
+                            <li key={i}>{msg}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-[10px] text-gray-500 font-bold">Campos conforme Meta Ads API. Conecte o Meta Ads em Configurações antes de criar.</p>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome da Campanha <span className="text-rose-500">*</span></label>
                     <input
                       name="name"
                       value={formData.name}
-                      onChange={handleInputChange}
+                      onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, name: '' })); }}
                       type="text"
                       placeholder="Ex: Lançamento Março 2025"
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.name ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
                     />
+                    {formErrors.name && <p className="text-xs text-rose-600 px-2">{formErrors.name}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Objetivo (Meta API) <span className="text-rose-500">*</span></label>
@@ -1047,14 +1088,15 @@ const Campaigns: React.FC = () => {
                       <input
                         name="dailyBudget"
                         value={formData.dailyBudget || ''}
-                        onChange={handleInputChange}
+                        onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, dailyBudget: '' })); }}
                         type="number"
                         min="1"
                         step="0.01"
                         placeholder="50,00"
-                        className="w-full pl-14 pr-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                        className={`w-full pl-14 pr-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.dailyBudget ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
                       />
                     </div>
+                    {formErrors.dailyBudget && <p className="text-xs text-rose-600 px-2">{formErrors.dailyBudget}</p>}
                   </div>
                 </div>
               )}
@@ -1106,7 +1148,7 @@ const Campaigns: React.FC = () => {
                     </div>
                   </div>
                   <div className="space-y-2 relative" ref={interestsContainerRef}>
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><UsersIcon size={12} /> Interesses <span className="text-rose-500">*</span></label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><UsersIcon size={12} /> Interesses <span className="text-gray-400 font-normal">(opcional)</span></label>
                     <p className="text-[9px] text-gray-400 px-2">Busque e selecione interesses aceitos pela Meta Ads. Conecte o Meta Ads em Configurações.</p>
                     <div className="relative">
                       <input
@@ -1171,32 +1213,47 @@ const Campaigns: React.FC = () => {
               {/* STEP 2: CRIATIVOS - object_story_spec link_data (message, link, picture) */}
               {currentStep === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                  {Object.keys(formErrors).length > 0 && (
+                    <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3">
+                      <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-rose-800">Preencha os campos obrigatórios</p>
+                        <ul className="mt-1 text-xs text-rose-700 list-disc list-inside">
+                          {Object.values(formErrors).map((msg, i) => (
+                            <li key={i}>{msg}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-[10px] text-gray-500 font-bold">Criativo conforme Meta Ads API (link_data: message, link, picture)</p>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Texto do Anúncio (message) <span className="text-rose-500">*</span></label>
                     <textarea
                       name="adMessage"
                       value={formData.adMessage}
-                      onChange={handleInputChange}
+                      onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, adMessage: '' })); }}
                       rows={4}
                       placeholder="Texto principal que aparecerá no anúncio..."
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all resize-none"
+                      className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all resize-none ${formErrors.adMessage ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
                     />
+                    {formErrors.adMessage && <p className="text-xs text-rose-600 px-2">{formErrors.adMessage}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><LinkIcon size={12} /> URL de Destino (link) <span className="text-rose-500">*</span></label>
                     <input
                       name="destinationUrl"
                       value={formData.destinationUrl}
-                      onChange={handleInputChange}
+                      onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, destinationUrl: '' })); }}
                       type="url"
                       placeholder="https://seusite.com/landing"
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.destinationUrl ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
                     />
+                    {formErrors.destinationUrl && <p className="text-xs text-rose-600 px-2">{formErrors.destinationUrl}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Imagem do Anúncio (picture) <span className="text-rose-500">*</span></label>
-                    <div className="flex gap-3 flex-wrap">
+                    <div className={`flex gap-3 flex-wrap p-4 rounded-2xl transition-all ${formErrors.imageUrl ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50'}`}>
                       <label className="flex-1 min-w-[200px] cursor-pointer">
                         <input
                           type="file"
@@ -1206,11 +1263,12 @@ const Campaigns: React.FC = () => {
                             const file = e.target.files?.[0];
                             if (!file) return;
                             setImageUploading(true);
+                            setFormErrors(prev => ({ ...prev, imageUrl: '' }));
                             try {
                               const { url } = await marketingService.uploadCampaignImage(file);
                               setFormData(p => ({ ...p, imageUrl: url }));
                             } catch (err: any) {
-                              alert(err?.message || 'Erro ao enviar imagem.');
+                              showToast(err?.message || 'Erro ao enviar imagem.', 'error');
                             } finally {
                               setImageUploading(false);
                               e.target.value = '';
@@ -1232,6 +1290,7 @@ const Campaigns: React.FC = () => {
                       </button>
                     </div>
                     <p className="text-[9px] text-gray-400">JPG, PNG, WebP ou GIF. Envie do seu computador ou selecione do Google Drive.</p>
+                    {formErrors.imageUrl && <p className="text-xs text-rose-600 px-2">{formErrors.imageUrl}</p>}
                     {formData.imageUrl && (
                       <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 max-w-[200px]">
                         <img src={formData.imageUrl} alt="Preview" className="w-full h-24 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -1316,6 +1375,7 @@ const Campaigns: React.FC = () => {
                   ? `https://drive.google.com/uc?export=view&id=${file.id}`
                   : (file.webViewLink || '');
                 setFormData(p => ({ ...p, imageUrl }));
+                setFormErrors(prev => ({ ...prev, imageUrl: '' }));
                 setShowDriveSelector(false);
               }}
               onCancel={() => setShowDriveSelector(false)}
@@ -1358,6 +1418,12 @@ const Campaigns: React.FC = () => {
         </div>
       )}
 
+      {/* Toast Container */}
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
+        {toasts.map((toast) => (
+          <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
+        ))}
+      </div>
     </>
   );
 };
