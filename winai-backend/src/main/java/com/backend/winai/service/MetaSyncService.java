@@ -83,7 +83,6 @@ public class MetaSyncService {
         for (MetaConnection conn : adsConnections) {
             try {
                 syncForConnection(conn);
-                processed.add(conn.getCompany().getId());
             } catch (Exception e) {
                 log.error("[MetaSync] Erro ao sincronizar Ads empresa {}: {}", conn.getCompany().getId(), e.getMessage(), e);
             }
