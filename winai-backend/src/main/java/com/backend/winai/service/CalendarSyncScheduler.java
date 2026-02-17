@@ -3,6 +3,7 @@ package com.backend.winai.service;
 import com.backend.winai.repository.GoogleDriveConnectionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Slf4j
 @RequiredArgsConstructor
+@Profile("!meta-sync & !ai-recommendations-worker")
 public class CalendarSyncScheduler {
 
     private final GoogleDriveConnectionRepository connectionRepository;
