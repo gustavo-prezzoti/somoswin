@@ -1389,7 +1389,17 @@ const Campaigns: React.FC = () => {
                               {post.fullPicture && <img src={post.fullPicture} alt="" className="w-20 h-20 rounded-lg object-cover shrink-0" />}
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-gray-800 line-clamp-2">{post.message || '(sem texto)'}</p>
-                                <p className="text-xs text-gray-500 mt-1">{post.createdTime}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {post.createdTime
+                                    ? new Date(post.createdTime).toLocaleString('pt-BR', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })
+                                    : ''}
+                                </p>
                                 {!post.isEligibleForPromotion && <span className="text-xs text-amber-600 font-bold">Pode não ser elegível</span>}
                               </div>
                             </button>
