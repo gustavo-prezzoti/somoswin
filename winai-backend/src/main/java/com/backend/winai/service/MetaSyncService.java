@@ -565,8 +565,8 @@ public class MetaSyncService {
             }
 
             long totalReach = dailyReach.values().stream().mapToLong(Long::longValue).sum();
-            long totalEngaged = dailyEngaged.values().stream().mapToLong(Long::longValue).sum();
-            log.info("[MetaSync] Instagram sincronizado - empresa {} | {} dias | reach={} interactions={}", company.getId(), igMetricsCount, totalReach, totalEngaged);
+            long totalInteractions = dailyEngaged.values().stream().mapToLong(Long::longValue).sum();
+            log.info("[MetaSync] Instagram sincronizado - empresa {} | {} dias | reach={} interactions={}", company.getId(), igMetricsCount, totalReach, totalInteractions);
 
         } catch (Exception e) {
             log.warn("[MetaSync] Erro ao sincronizar Instagram empresa {}: {}", company.getId(), e.getMessage());
