@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Slf4j
 @RequiredArgsConstructor
-@Profile("!meta-sync & !ai-recommendations-worker")
+@Profile("!meta-sync & !ai-recommendations-worker & !followup-worker")
 public class CalendarSyncScheduler {
 
     private final GoogleDriveConnectionRepository connectionRepository;
