@@ -1277,6 +1277,17 @@ const Campaigns: React.FC = () => {
                     )}
                   </div>
                   <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">URL de destino (opcional)</label>
+                    <input
+                      name="destinationUrl"
+                      value={formData.destinationUrl || ''}
+                      onChange={handleInputChange}
+                      type="url"
+                      placeholder="https://seusite.com (vazio = facebook.com)"
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Título do Link (opcional)</label>
                     <input
                       name="headline"

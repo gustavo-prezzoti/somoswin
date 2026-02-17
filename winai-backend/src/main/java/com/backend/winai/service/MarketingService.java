@@ -1404,9 +1404,10 @@ public class MarketingService {
                                        String imageHash, String imageUrl) {
         String url = metaApiBaseUrl + "/" + adAccountId + "/adcreatives";
 
+        String effectiveLink = (link != null && !link.isBlank()) ? link : "https://www.facebook.com";
         Map<String, Object> linkData = new HashMap<>();
         linkData.put("message", message != null ? message : "Confira!");
-        linkData.put("link", link != null ? link : "https://www.facebook.com");
+        linkData.put("link", effectiveLink);
         if (headline != null && !headline.isBlank()) linkData.put("name", headline);
         if (imageHash != null) {
             linkData.put("image_hash", imageHash);
@@ -1417,7 +1418,7 @@ public class MarketingService {
         }
         Map<String, Object> cta = new HashMap<>();
         cta.put("type", "LEARN_MORE");
-        cta.put("value", Map.of("link", link != null ? link : "https://www.facebook.com"));
+        cta.put("value", Map.of("link", effectiveLink));
         linkData.put("call_to_action", cta);
 
         Map<String, Object> objectStorySpec = new HashMap<>();
