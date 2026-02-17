@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { marketingService, TrafficMetrics, CreateCampaignRequest, CampaignListItem, AiRecommendation } from '../services';
+import { marketingService, TrafficMetrics, CreateCampaignRequest, PagePost, CampaignListItem, AiRecommendation } from '../services';
 import type { MetricsDateRange } from '../services/api/marketing.service';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import { useToast } from '../hooks/useToast';
@@ -84,13 +84,11 @@ const Campaigns: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [validationAttempted, setValidationAttempted] = useState(false);
 
-  // Form states - campos conforme Meta Ads API
+  // Form states - Campanha Meta Ads para WhatsApp
   const [formData, setFormData] = useState<CreateCampaignRequest>({
     name: '',
-    objective: 'OUTCOME_TRAFFIC',
-    budgetType: 'DAILY',
+    objective: 'OUTCOME_ENGAGEMENT',
     dailyBudget: 50,
-    lifetimeBudget: 500,
     startDate: '',
     endDate: '',
     countryCode: 'BR',
@@ -98,16 +96,18 @@ const Campaigns: React.FC = () => {
     ageMax: 65,
     genders: '',
     interests: '',
-    conversionDestination: 'WEBSITE',
     whatsappPhone: '',
+    useExistingPost: false,
+    existingPostId: '',
     adMessage: '',
-    destinationUrl: '',
-    imageUrl: '',
     headline: '',
-    ctaType: 'LEARN_MORE',
+    adDescription: '',
+    imageUrl: '',
     adSetName: '',
     adName: ''
   });
+  const [pagePosts, setPagePosts] = useState<PagePost[]>([]);
+  const [pagePostsLoading, setPagePostsLoading] = useState(false);
 
   const steps = [
     { id: 0, title: 'Campanha', icon: Briefcase },
@@ -147,6 +147,7 @@ const Campaigns: React.FC = () => {
     const interval = setInterval(() => loadRecommendations(true), 5000);
     return () => clearInterval(interval);
   }, [activeTab]);
+
 
   const runInterestsSearch = async () => {
     const q = interestsSearch.trim();
@@ -427,28 +428,23 @@ const Campaigns: React.FC = () => {
     if (step === 0) {
       const n = formData.name?.trim() || '';
       if (!n) errs.name = 'Nome da campanha é obrigatório';
-      else if (n.length < META_LIMITS.campaignName.min) errs.name = `Mínimo ${META_LIMITS.campaignName.min} caractere`;
       else if (n.length > META_LIMITS.campaignName.max) errs.name = `Máximo ${META_LIMITS.campaignName.max} caracteres`;
     }
     if (step === 1) {
-      if (formData.budgetType === 'LIFETIME') {
-        if (!formData.lifetimeBudget || formData.lifetimeBudget < 1) errs.lifetimeBudget = 'Orçamento total mínimo: R$ 1,00';
-      } else {
-        if (!formData.dailyBudget || formData.dailyBudget < 1) errs.dailyBudget = 'Orçamento diário mínimo: R$ 1,00';
-      }
+      if (!formData.dailyBudget || formData.dailyBudget < 1) errs.dailyBudget = 'Orçamento diário mínimo: R$ 1,00';
     }
     if (step === 2) {
-      const msg = formData.adMessage?.trim() || '';
-      if (!msg) errs.adMessage = 'Texto do anúncio é obrigatório';
-      else if (msg.length > META_LIMITS.primaryText.max) errs.adMessage = `Máximo ${META_LIMITS.primaryText.max} caracteres (Meta)`;
-      if (!formData.imageUrl?.trim()) errs.imageUrl = 'Imagem do anúncio é obrigatória';
-      const headline = formData.headline?.trim() || '';
-      if (headline && headline.length > META_LIMITS.headline.max) errs.headline = `Máximo ${META_LIMITS.headline.max} caracteres`;
-      if (formData.conversionDestination === 'MESSAGES') {
-        const digits = parsePhoneDigits(formData.whatsappPhone || '');
-        if (digits.length > 0 && (digits.length < META_LIMITS.whatsappPhone.min || digits.length > META_LIMITS.whatsappPhone.max)) {
-          errs.whatsappPhone = `WhatsApp: ${META_LIMITS.whatsappPhone.min}-${META_LIMITS.whatsappPhone.max} dígitos`;
-        }
+      if (formData.useExistingPost) {
+        if (!formData.existingPostId?.trim()) errs.existingPostId = 'Selecione um post existente';
+      } else {
+        const msg = formData.adMessage?.trim() || '';
+        if (!msg) errs.adMessage = 'Texto do anúncio é obrigatório';
+        else if (msg.length > META_LIMITS.primaryText.max) errs.adMessage = `Máximo ${META_LIMITS.primaryText.max} caracteres`;
+        if (!formData.imageUrl?.trim()) errs.imageUrl = 'Imagem do anúncio é obrigatória';
+        const headline = formData.headline?.trim() || '';
+        if (headline && headline.length > META_LIMITS.headline.max) errs.headline = `Máximo ${META_LIMITS.headline.max} caracteres`;
+        const desc = formData.adDescription?.trim() || '';
+        if (desc && desc.length > META_LIMITS.linkDescription.max) errs.adDescription = `Máximo ${META_LIMITS.linkDescription.max} caracteres`;
       }
     }
     setFormErrors(errs);
@@ -488,7 +484,7 @@ const Campaigns: React.FC = () => {
     try {
       const payload = {
         ...formData,
-        whatsappPhone: formData.conversionDestination === 'MESSAGES' ? parsePhoneDigits(formData.whatsappPhone || '') : formData.whatsappPhone,
+        whatsappPhone: parsePhoneDigits(formData.whatsappPhone || '') || formData.whatsappPhone,
         interests: selectedInterests.length > 0 ? JSON.stringify(selectedInterests) : ''
       };
       await marketingService.createCampaign(payload);
@@ -511,10 +507,8 @@ const Campaigns: React.FC = () => {
     setValidationAttempted(false);
     setFormData({
       name: '',
-      objective: 'OUTCOME_TRAFFIC',
-      budgetType: 'DAILY',
+      objective: 'OUTCOME_ENGAGEMENT',
       dailyBudget: 50,
-      lifetimeBudget: 500,
       startDate: '',
       endDate: '',
       countryCode: 'BR',
@@ -522,13 +516,13 @@ const Campaigns: React.FC = () => {
       ageMax: 65,
       genders: '',
       interests: '',
-      conversionDestination: 'WEBSITE',
       whatsappPhone: '',
+      useExistingPost: false,
+      existingPostId: '',
       adMessage: '',
-      destinationUrl: '',
-      imageUrl: '',
       headline: '',
-      ctaType: 'LEARN_MORE',
+      adDescription: '',
+      imageUrl: '',
       adSetName: '',
       adName: ''
     });
@@ -536,6 +530,20 @@ const Campaigns: React.FC = () => {
     setInterestsSearch('');
     setInterestsResults([]);
     setInterestsHasSearched(false);
+    setPagePosts([]);
+  };
+
+  const loadPagePosts = async () => {
+    setPagePostsLoading(true);
+    try {
+      const posts = await marketingService.getPagePosts();
+      setPagePosts(posts);
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao buscar posts da página.', 'error');
+      setPagePosts([]);
+    } finally {
+      setPagePostsLoading(false);
+    }
   };
 
   if (isLoading) {
@@ -1075,7 +1083,7 @@ const Campaigns: React.FC = () => {
             {/* Content Body */}
             <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
 
-              {/* STEP 0: CAMPANHA - nome e objetivo */}
+              {/* STEP 0: CAMPANHA - nome, objetivo fixo Engajamento */}
               {currentStep === 0 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   {validationAttempted && Object.keys(formErrors).length > 0 && (
@@ -1091,7 +1099,7 @@ const Campaigns: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  <p className="text-[10px] text-gray-500 font-bold">Campos conforme Meta Ads API. Conecte o Meta Ads em Configurações antes de criar.</p>
+                  <p className="text-[10px] text-gray-500 font-bold">Passo a passo — Campanha Meta Ads para WhatsApp</p>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome da Campanha <span className="text-rose-500">*</span></label>
                     <input
@@ -1106,26 +1114,14 @@ const Campaigns: React.FC = () => {
                     <p className="text-[9px] text-gray-400 px-2">{formData.name?.length || 0}/{META_LIMITS.campaignName.max}</p>
                     {formErrors.name && <p className="text-xs text-rose-600 px-2">{formErrors.name}</p>}
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Objetivo da campanha <span className="text-rose-500">*</span></label>
-                    <select
-                      name="objective"
-                      value={formData.objective}
-                      onChange={handleInputChange}
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    >
-                      <option value="OUTCOME_TRAFFIC">Tráfego — cliques no link</option>
-                      <option value="OUTCOME_LEADS">Leads — captura de contatos</option>
-                      <option value="OUTCOME_SALES">Vendas — conversões no site</option>
-                      <option value="OUTCOME_ENGAGEMENT">Engajamento — curtidas e comentários</option>
-                      <option value="OUTCOME_AWARENESS">Alcance — visibilidade da marca</option>
-                      <option value="OUTCOME_APP_PROMOTION">App — downloads e engajamento</option>
-                    </select>
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
+                    <p className="text-xs font-bold text-emerald-800">Objetivo: Engajamento</p>
+                    <p className="text-[10px] text-emerald-700 mt-1">Orçamento será configurado no próximo passo (Conjunto de Anúncios).</p>
                   </div>
                 </div>
               )}
 
-              {/* STEP 1: GRUPO DE ANÚNCIO - orçamento, datas, público-alvo */}
+              {/* STEP 1: CONJUNTO DE ANÚNCIOS - WhatsApp, orçamento, programação, público */}
               {currentStep === 1 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   {validationAttempted && Object.keys(formErrors).length > 0 && (
@@ -1141,75 +1137,60 @@ const Campaigns: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Orçamento e agendamento</p>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Tipo de orçamento</label>
-                    <select
-                      name="budgetType"
-                      value={formData.budgetType || 'DAILY'}
-                      onChange={handleInputChange}
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    >
-                      <option value="DAILY">Diário — gasto médio por dia</option>
-                      <option value="LIFETIME">Total — orçamento para todo o período</option>
-                    </select>
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
+                    <p className="text-xs font-bold text-emerald-800">Destino: WhatsApp</p>
+                    <p className="text-[10px] text-emerald-700 mt-1">Anúncios direcionarão cliques para o WhatsApp.</p>
                   </div>
-                  {formData.budgetType === 'LIFETIME' ? (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento total (R$) <span className="text-rose-500">*</span></label>
-                        <div className="relative">
-                          <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-gray-400">R$</span>
-                          <input
-                            name="lifetimeBudget"
-                            value={formData.lifetimeBudget || ''}
-                            onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, lifetimeBudget: '' })); }}
-                            type="number"
-                            min="1"
-                            step="0.01"
-                            placeholder="500,00"
-                            className={`w-full pl-14 pr-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.lifetimeBudget ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
-                          />
-                        </div>
-                        {formErrors.lifetimeBudget && <p className="text-xs text-rose-600 px-2">{formErrors.lifetimeBudget}</p>}
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data início</label>
-                          <input name="startDate" value={formData.startDate || ''} onChange={handleInputChange} type="date" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data fim</label>
-                          <input name="endDate" value={formData.endDate || ''} onChange={handleInputChange} type="date" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento diário (R$) <span className="text-rose-500">*</span></label>
-                      <div className="relative">
-                        <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-gray-400">R$</span>
-                        <input
-                          name="dailyBudget"
-                          value={formData.dailyBudget || ''}
-                          onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, dailyBudget: '' })); }}
-                          type="number"
-                          min="1"
-                          step="0.01"
-                          placeholder="50,00"
-                          className={`w-full pl-14 pr-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.dailyBudget ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
-                        />
-                      </div>
-                      {formErrors.dailyBudget && <p className="text-xs text-rose-600 px-2">{formErrors.dailyBudget}</p>}
-                    </div>
-                  )}
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do grupo de anúncios (opcional)</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento diário (R$) <span className="text-rose-500">*</span></label>
+                    <div className="relative">
+                      <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-gray-400">R$</span>
+                      <input
+                        name="dailyBudget"
+                        value={formData.dailyBudget || ''}
+                        onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, dailyBudget: '' })); }}
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        placeholder="50,00"
+                        className={`w-full pl-14 pr-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.dailyBudget ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
+                      />
+                    </div>
+                    {formErrors.dailyBudget && <p className="text-xs text-rose-600 px-2">{formErrors.dailyBudget}</p>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data início</label>
+                      <input name="startDate" value={formData.startDate || ''} onChange={handleInputChange} type="date" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data fim</label>
+                      <input name="endDate" value={formData.endDate || ''} onChange={handleInputChange} type="date" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-gray-400">Opcional: somente início ou início e fim.</p>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do grupo (opcional)</label>
                     <input name="adSetName" value={formData.adSetName || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.adSetName.max} placeholder="Ex: Conjunto Brasil 18-35" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                    <p className="text-[9px] text-gray-400 px-2">{formData.adSetName?.length || 0}/{META_LIMITS.adSetName.max}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp</label>
+                    <input
+                      name="whatsappPhone"
+                      value={formData.whatsappPhone || ''}
+                      onChange={(e) => {
+                        const masked = maskPhoneInput(e.target.value);
+                        setFormData(prev => ({ ...prev, whatsappPhone: masked }));
+                      }}
+                      type="tel"
+                      inputMode="numeric"
+                      placeholder="(11) 99999-9999 ou +55 (11) 99999-9999"
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                    <p className="text-[9px] text-gray-400">Opcional se a página tiver WhatsApp vinculado.</p>
                   </div>
                   <hr className="border-gray-200 my-6" />
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Público-alvo (targeting)</p>
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Público-alvo (localização, idade, gênero, interesses)</p>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><MapPin size={12} /> País (código ISO)</label>
                     <select
@@ -1328,7 +1309,7 @@ const Campaigns: React.FC = () => {
                 </div>
               )}
 
-              {/* STEP 2: ANÚNCIO - destino, texto, imagem, CTA */}
+              {/* STEP 2: ANÚNCIO - novo ou post existente */}
               {currentStep === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   {validationAttempted && Object.keys(formErrors).length > 0 && (
@@ -1344,142 +1325,120 @@ const Campaigns: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  <p className="text-[10px] text-gray-500 font-bold">Criativo conforme Meta Ads API (link_data: message, link, picture, call_to_action)</p>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Destino de conversão</label>
-                    <select
-                      name="conversionDestination"
-                      value={formData.conversionDestination || 'WEBSITE'}
-                      onChange={handleInputChange}
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    >
-                      <option value="WEBSITE">Site — link para página web</option>
-                      <option value="MESSAGES">Mensagens — WhatsApp (automático)</option>
-                    </select>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Tipo de anúncio</label>
+                    <div className="flex gap-4">
+                      <label className={`flex-1 p-4 rounded-2xl border-2 cursor-pointer transition-all ${!formData.useExistingPost ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50 hover:border-emerald-300'}`}>
+                        <input type="radio" name="useExistingPost" checked={!formData.useExistingPost} onChange={() => setFormData(p => ({ ...p, useExistingPost: false, existingPostId: '' }))} className="sr-only" />
+                        <p className="font-bold text-sm">Criar novo anúncio</p>
+                        <p className="text-[10px] text-gray-500 mt-1">Texto, título, descrição e imagem</p>
+                      </label>
+                      <label className={`flex-1 p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.useExistingPost ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50 hover:border-emerald-300'}`}>
+                        <input type="radio" name="useExistingPost" checked={!!formData.useExistingPost} onChange={() => setFormData(p => ({ ...p, useExistingPost: true, adMessage: '', headline: '', adDescription: '', imageUrl: '' }))} className="sr-only" />
+                        <p className="font-bold text-sm">Usar post existente</p>
+                        <p className="text-[10px] text-gray-500 mt-1">Promover um post da sua página</p>
+                      </label>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Texto do Anúncio (message) <span className="text-rose-500">*</span></label>
-                    <textarea
-                      name="adMessage"
-                      value={formData.adMessage}
-                      onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, adMessage: '' })); }}
-                      rows={4}
-                      maxLength={META_LIMITS.primaryText.max}
-                      placeholder="Texto principal (125 chars visíveis no mobile, máx 2200)"
-                      className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all resize-none ${formErrors.adMessage ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
-                    />
-                    <p className={`text-[9px] px-2 ${(formData.adMessage?.length || 0) > 125 ? 'text-amber-600' : 'text-gray-400'}`}>
-                      {formData.adMessage?.length || 0}/{META_LIMITS.primaryText.max} {((formData.adMessage?.length || 0) > 125) && '(125 visíveis no mobile)'}
-                    </p>
-                    {formErrors.adMessage && <p className="text-xs text-rose-600 px-2">{formErrors.adMessage}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Imagem do Anúncio (picture) <span className="text-rose-500">*</span></label>
-                    <label className={`block p-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formErrors.imageUrl ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-300' : 'bg-gray-50 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50'}`}>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setImageUploading(true);
-                          setFormErrors(prev => ({ ...prev, imageUrl: '' }));
-                          try {
-                            const { url } = await marketingService.uploadCampaignImage(file);
-                            setFormData(p => ({ ...p, imageUrl: url }));
-                          } catch (err: any) {
-                            showToast(err?.message || 'Erro ao enviar imagem.', 'error');
-                          } finally {
-                            setImageUploading(false);
-                            e.target.value = '';
-                          }
-                        }}
-                        disabled={imageUploading}
-                      />
-                      <div className="flex items-center justify-center gap-2">
-                        {imageUploading ? <Loader2 size={18} className="animate-spin" /> : <FileIcon size={18} />}
-                        <span className="font-bold text-sm">{imageUploading ? 'Enviando...' : 'Enviar imagem do computador'}</span>
-                      </div>
-                    </label>
-                    <p className="text-[9px] text-gray-400">JPG, PNG, WebP ou GIF.</p>
-                    {formErrors.imageUrl && <p className="text-xs text-rose-600 px-2">{formErrors.imageUrl}</p>}
-                    {formData.imageUrl && (
-                      <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 max-w-[200px]">
-                        <img src={formData.imageUrl} alt="Preview" className="w-full h-24 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      </div>
-                    )}
-                  </div>
-                  {formData.conversionDestination === 'MESSAGES' ? (
+
+                  {formData.useExistingPost ? (
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp</label>
-                      <input
-                        name="whatsappPhone"
-                        value={formData.whatsappPhone || ''}
-                        onChange={(e) => {
-                          const masked = maskPhoneInput(e.target.value);
-                          setFormData(prev => ({ ...prev, whatsappPhone: masked }));
-                          setFormErrors(prev => ({ ...prev, whatsappPhone: '' }));
-                        }}
-                        type="tel"
-                        inputMode="numeric"
-                        placeholder="(11) 99999-9999 ou +55 (11) 99999-9999"
-                        className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.whatsappPhone ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
-                      />
-                      <p className="text-[9px] text-gray-400">{parsePhoneDigits(formData.whatsappPhone || '').length} dígitos (10-15). Opcional se a página tiver WhatsApp vinculado.</p>
-                      {formErrors.whatsappPhone && <p className="text-xs text-rose-600 px-2">{formErrors.whatsappPhone}</p>}
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Selecione um post da sua página <span className="text-rose-500">*</span></label>
+                        <button type="button" onClick={loadPagePosts} disabled={pagePostsLoading} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
+                          {pagePostsLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          {pagePostsLoading ? 'Carregando...' : 'Buscar posts'}
+                        </button>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto rounded-2xl border border-gray-200 divide-y divide-gray-100">
+                        {pagePosts.length === 0 && !pagePostsLoading && (
+                          <p className="p-4 text-sm text-gray-500 text-center">Clique em &quot;Buscar posts&quot; para carregar os posts da sua página.</p>
+                        )}
+                        {pagePosts.map((post) => (
+                          <button
+                            key={post.id}
+                            type="button"
+                            onClick={() => setFormData(p => ({ ...p, existingPostId: post.promotableId }))}
+                            className={`w-full text-left p-4 flex gap-3 transition-all ${formData.existingPostId === post.promotableId ? 'bg-emerald-50 border-l-4 border-emerald-500' : 'hover:bg-gray-50'}`}
+                          >
+                            {post.fullPicture && <img src={post.fullPicture} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-gray-800 line-clamp-2">{post.message || '(sem texto)'}</p>
+                              <p className="text-[10px] text-gray-500 mt-1">{post.createdTime}</p>
+                              {!post.isEligibleForPromotion && <span className="text-[9px] text-amber-600 font-bold">Pode não ser elegível</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      {formErrors.existingPostId && <p className="text-xs text-rose-600 px-2">{formErrors.existingPostId}</p>}
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">URL de destino (opcional)</label>
-                      <input
-                        name="destinationUrl"
-                        value={formData.destinationUrl || ''}
-                        onChange={handleInputChange}
-                        type="url"
-                        maxLength={META_LIMITS.destinationUrl.max}
-                        placeholder="https://seusite.com (vazio = facebook.com)"
-                        className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                      />
-                      <p className="text-[9px] text-gray-400 px-2">{formData.destinationUrl?.length || 0}/{META_LIMITS.destinationUrl.max}</p>
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Texto principal <span className="text-rose-500">*</span></label>
+                        <textarea
+                          name="adMessage"
+                          value={formData.adMessage}
+                          onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, adMessage: '' })); }}
+                          rows={4}
+                          maxLength={META_LIMITS.primaryText.max}
+                          placeholder="Texto principal (125 chars visíveis no mobile)"
+                          className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all resize-none ${formErrors.adMessage ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
+                        />
+                        <p className="text-[9px] text-gray-400 px-2">{formData.adMessage?.length || 0}/{META_LIMITS.primaryText.max}</p>
+                        {formErrors.adMessage && <p className="text-xs text-rose-600 px-2">{formErrors.adMessage}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Título (máx 40 caracteres)</label>
+                        <input name="headline" value={formData.headline || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.headline.max} placeholder="Confira agora!" className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none ${formErrors.headline ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`} />
+                        <p className="text-[9px] text-gray-400 px-2">{formData.headline?.length || 0}/{META_LIMITS.headline.max}</p>
+                        {formErrors.headline && <p className="text-xs text-rose-600 px-2">{formErrors.headline}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Descrição (máx 30 caracteres)</label>
+                        <input name="adDescription" value={formData.adDescription || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.linkDescription.max} placeholder="Oferta especial" className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none ${formErrors.adDescription ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`} />
+                        <p className="text-[9px] text-gray-400 px-2">{formData.adDescription?.length || 0}/{META_LIMITS.linkDescription.max}</p>
+                        {formErrors.adDescription && <p className="text-xs text-rose-600 px-2">{formErrors.adDescription}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Imagem do anúncio <span className="text-rose-500">*</span></label>
+                        <label className={`block p-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formErrors.imageUrl ? 'bg-rose-50 border-rose-300' : 'bg-gray-50 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50'}`}>
+                          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setImageUploading(true);
+                              setFormErrors(prev => ({ ...prev, imageUrl: '' }));
+                              try {
+                                const { url } = await marketingService.uploadCampaignImage(file);
+                                setFormData(p => ({ ...p, imageUrl: url }));
+                              } catch (err: any) {
+                                showToast(err?.message || 'Erro ao enviar imagem.', 'error');
+                              } finally {
+                                setImageUploading(false);
+                                e.target.value = '';
+                              }
+                            }}
+                            disabled={imageUploading}
+                          />
+                          <div className="flex items-center justify-center gap-2">
+                            {imageUploading ? <Loader2 size={18} className="animate-spin" /> : <FileIcon size={18} />}
+                            <span className="font-bold text-sm">{imageUploading ? 'Enviando...' : 'Enviar imagem'}</span>
+                          </div>
+                        </label>
+                        {formErrors.imageUrl && <p className="text-xs text-rose-600 px-2">{formErrors.imageUrl}</p>}
+                        {formData.imageUrl && (
+                          <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 max-w-[200px]">
+                            <img src={formData.imageUrl} alt="Preview" className="w-full h-24 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Tipo de CTA (botão do anúncio)</label>
-                    <select
-                      name="ctaType"
-                      value={formData.ctaType || 'LEARN_MORE'}
-                      onChange={handleInputChange}
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    >
-                      <option value="LEARN_MORE">Saiba mais</option>
-                      <option value="SHOP_NOW">Comprar agora</option>
-                      <option value="SIGN_UP">Cadastre-se</option>
-                      <option value="CONTACT_US">Fale conosco</option>
-                      <option value="DOWNLOAD">Baixar</option>
-                      <option value="GET_OFFER">Obter oferta</option>
-                      <option value="WHATSAPP_MESSAGE">Enviar mensagem (WhatsApp)</option>
-                      <option value="SEND_MESSAGE">Enviar mensagem</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Título do Link / Headline (opcional)</label>
-                    <input
-                      name="headline"
-                      value={formData.headline || ''}
-                      onChange={handleInputChange}
-                      type="text"
-                      maxLength={META_LIMITS.headline.max}
-                      placeholder="Confira agora! (máx 40 caracteres)"
-                      className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.headline ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
-                    />
-                    <p className="text-[9px] text-gray-400 px-2">{formData.headline?.length || 0}/{META_LIMITS.headline.max}</p>
-                    {formErrors.headline && <p className="text-xs text-rose-600 px-2">{formErrors.headline}</p>}
-                  </div>
+
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do anúncio (opcional)</label>
                     <input name="adName" value={formData.adName || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.adName.max} placeholder="Ex: Anúncio Principal" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                    <p className="text-[9px] text-gray-400 px-2">{formData.adName?.length || 0}/{META_LIMITS.adName.max}</p>
                   </div>
                 </div>
               )}

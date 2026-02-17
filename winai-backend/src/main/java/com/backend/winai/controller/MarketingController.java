@@ -132,6 +132,11 @@ public class MarketingController {
         return ResponseEntity.ok(aiRecommendationsService.getRecommendations(user));
     }
 
+    @GetMapping("/page-posts")
+    public ResponseEntity<List<Map<String, Object>>> getPagePosts(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(marketingService.getPagePosts(user));
+    }
+
     @GetMapping("/targeting-search")
     public ResponseEntity<List<Map<String, Object>>> searchTargeting(
             @AuthenticationPrincipal User user,

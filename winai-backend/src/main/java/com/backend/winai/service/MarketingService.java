@@ -1186,8 +1186,45 @@ public class MarketingService {
     // Methods removed
 
     /**
-     * Cria campanha completa no Meta Ads API: Campaign -> Ad Set -> Ad Creative -> Ad.
-     * Documentação: https://developers.facebook.com/docs/marketing-api/get-started/basic-ad-creation/
+     * Lista posts da página Meta elegíveis para promoção (boost).
+     * GET /{page-id}/feed?fields=id,message,created_time,full_picture,is_eligible_for_promotion,promotable_id
+     */
+    public List<Map<String, Object>> getPagePosts(User user) {
+        MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
+                .filter(MetaConnection::isConnected)
+                .orElseThrow(() -> new RuntimeException("Conecte sua conta Meta Ads em Configurações"));
+        if (conn.getPageId() == null || conn.getPageId().isBlank()) {
+            throw new RuntimeException("Página do Facebook não vinculada.");
+        }
+        try {
+            adaptiveThrottle();
+            String url = metaApiBaseUrl + "/" + conn.getPageId() + "/feed?fields=id,message,created_time,full_picture,is_eligible_for_promotion,promotable_id&limit=25&access_token=" + conn.getAccessToken();
+            ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
+            JsonNode node = parseJson(objectMapper, res.getBody());
+            List<Map<String, Object>> list = new ArrayList<>();
+            if (node.has("data") && node.get("data").isArray()) {
+                for (JsonNode item : node.get("data")) {
+                    boolean eligible = item.has("is_eligible_for_promotion") && item.get("is_eligible_for_promotion").asBoolean();
+                    String promotableId = item.has("promotable_id") ? item.get("promotable_id").asText() : item.get("id").asText();
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", item.get("id").asText());
+                    m.put("promotableId", promotableId);
+                    m.put("message", item.has("message") ? item.get("message").asText() : "");
+                    m.put("createdTime", item.has("created_time") ? item.get("created_time").asText() : "");
+                    m.put("fullPicture", item.has("full_picture") ? item.get("full_picture").asText() : null);
+                    m.put("isEligibleForPromotion", eligible);
+                    list.add(m);
+                }
+            }
+            return list;
+        } catch (Exception e) {
+            log.error("[META] Error fetching page posts", e);
+            throw new RuntimeException("Erro ao buscar posts da página: " + (e.getMessage() != null ? e.getMessage() : "Verifique a conexão Meta."));
+        }
+    }
+
+    /**
+     * Cria campanha Meta Ads para WhatsApp: Campanha (Engajamento) -> Conjunto (WhatsApp, orçamento, público) -> Anúncio (novo ou post existente).
      */
     public void createCampaign(User user, CreateCampaignRequest request) {
         Company company = companyRepository.findById(user.getCompany().getId())
@@ -1210,27 +1247,16 @@ public class MarketingService {
 
         validateRequest(request);
 
-        String objective = request.getObjective();
-        if (objective == null || objective.isBlank()) objective = "OUTCOME_TRAFFIC";
-        if ("LINK_CLICKS".equals(objective)) objective = "OUTCOME_TRAFFIC";
+        String objective = "OUTCOME_ENGAGEMENT"; // Fixo para Campanha WhatsApp
+        boolean useExistingPost = Boolean.TRUE.equals(request.getUseExistingPost());
+        String existingPostId = (request.getExistingPostId() != null && !request.getExistingPostId().isBlank()) ? request.getExistingPostId() : null;
 
-        String conversionDest = (request.getConversionDestination() != null && !request.getConversionDestination().isBlank())
-                ? request.getConversionDestination().toUpperCase() : "WEBSITE";
-        boolean isMessages = "MESSAGES".equals(conversionDest);
-
-        // Resolver link efetivo: WEBSITE=destinationUrl, MESSAGES=wa.me
-        String effectiveLink = resolveEffectiveLink(request, pageId, accessToken, isMessages);
-
-        long dailyBudgetCents = 0;
-        Long lifetimeBudgetCents = null;
-        String budgetType = (request.getBudgetType() != null && !request.getBudgetType().isBlank())
-                ? request.getBudgetType().toUpperCase() : "DAILY";
-        if ("LIFETIME".equals(budgetType) && request.getLifetimeBudget() != null && request.getLifetimeBudget() > 0) {
-            lifetimeBudgetCents = Math.max(100, Math.round(request.getLifetimeBudget() * 100));
-        } else {
-            double daily = request.getDailyBudget() != null ? request.getDailyBudget() : 50.0;
-            dailyBudgetCents = Math.max(100, Math.round(daily * 100));
+        String effectiveLink = null;
+        if (!useExistingPost) {
+            effectiveLink = resolveEffectiveLink(request, pageId, accessToken);
         }
+
+        long dailyBudgetCents = Math.max(100, Math.round((request.getDailyBudget() != null ? request.getDailyBudget() : 50.0) * 100));
 
         int ageMin = request.getAgeMin() != null ? request.getAgeMin() : 18;
         int ageMax = request.getAgeMax() != null ? request.getAgeMax() : 65;
@@ -1243,10 +1269,7 @@ public class MarketingService {
 
         List<Integer> gendersList = parseGenders(request.getGenders());
 
-        String optimizationGoal = mapOptimizationGoal(objective, isMessages);
-        String ctaType = (request.getCtaType() != null && !request.getCtaType().isBlank())
-                ? request.getCtaType() : (isMessages ? "WHATSAPP_MESSAGE" : "LEARN_MORE");
-
+        String optimizationGoal = "POST_ENGAGEMENT";
         String adSetName = (request.getAdSetName() != null && !request.getAdSetName().isBlank())
                 ? request.getAdSetName() : ("Ad Set - " + System.currentTimeMillis());
         String adName = (request.getAdName() != null && !request.getAdName().isBlank())
@@ -1259,24 +1282,26 @@ public class MarketingService {
             log.info("[META] Campaign created: {}", campaignId);
 
             String adSetId = createMetaAdSet(adAccountId, accessToken, campaignId, pageId,
-                    dailyBudgetCents, lifetimeBudgetCents, budgetType,
-                    request.getStartDate(), request.getEndDate(),
-                    country, ageMin, ageMax, gendersList, optimizationGoal, request.getInterests(),
-                    adSetName);
+                    dailyBudgetCents, request.getStartDate(), request.getEndDate(),
+                    country, ageMin, ageMax, gendersList, optimizationGoal, request.getInterests(), adSetName);
             log.info("[META] Ad Set created: {}", adSetId);
 
-            String adImageHash = null;
-            if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
-                try {
-                    adImageHash = uploadAdImage(adAccountId, accessToken, request.getImageUrl());
-                } catch (Exception e) {
-                    log.warn("[META] Image upload failed, will try picture URL: {}", e.getMessage());
+            String creativeId;
+            if (useExistingPost && existingPostId != null && !existingPostId.isBlank()) {
+                creativeId = createMetaAdCreativeFromExistingPost(adAccountId, accessToken, existingPostId);
+            } else {
+                String adImageHash = null;
+                if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
+                    try {
+                        adImageHash = uploadAdImage(adAccountId, accessToken, request.getImageUrl());
+                    } catch (Exception e) {
+                        log.warn("[META] Image upload failed: {}", e.getMessage());
+                    }
                 }
+                creativeId = createMetaAdCreative(adAccountId, accessToken, pageId,
+                        request.getAdMessage(), effectiveLink, request.getHeadline(), request.getAdDescription(),
+                        adImageHash, request.getImageUrl(), "WHATSAPP_MESSAGE");
             }
-
-            String creativeId = createMetaAdCreative(adAccountId, accessToken, pageId,
-                    request.getAdMessage(), effectiveLink, request.getHeadline(),
-                    adImageHash, request.getImageUrl(), ctaType);
             log.info("[META] Ad Creative created: {}", creativeId);
 
             createMetaAd(adAccountId, accessToken, adSetId, creativeId, adName);
@@ -1292,20 +1317,16 @@ public class MarketingService {
         }
     }
 
-    private String resolveEffectiveLink(CreateCampaignRequest request, String pageId, String accessToken, boolean isMessages) {
-        if (isMessages) {
-            String phone = request.getWhatsappPhone();
-            if (phone == null || phone.isBlank()) {
-                phone = fetchPageWhatsAppNumber(pageId, accessToken);
-            }
-            if (phone == null || phone.isBlank()) {
-                throw new RuntimeException("Para destino Mensagens (WhatsApp), informe o número WhatsApp ou vincule o WhatsApp à sua página do Facebook.");
-            }
-            String digits = phone.replaceAll("[^0-9]", "");
-            return "https://wa.me/" + digits;
+    private String resolveEffectiveLink(CreateCampaignRequest request, String pageId, String accessToken) {
+        String phone = request.getWhatsappPhone();
+        if (phone == null || phone.isBlank()) {
+            phone = fetchPageWhatsAppNumber(pageId, accessToken);
         }
-        String url = request.getDestinationUrl();
-        return (url != null && !url.isBlank()) ? url : "https://www.facebook.com";
+        if (phone == null || phone.isBlank()) {
+            throw new RuntimeException("Informe o número WhatsApp ou vincule o WhatsApp à sua página do Facebook.");
+        }
+        String digits = phone.replaceAll("[^0-9]", "");
+        return "https://wa.me/" + digits;
     }
 
     private String fetchPageWhatsAppNumber(String pageId, String accessToken) {
@@ -1357,19 +1378,29 @@ public class MarketingService {
         if (r.getName().length() > 256) {
             throw new RuntimeException("Nome da campanha: máximo 256 caracteres (Meta)");
         }
-        if (r.getAdMessage() == null || r.getAdMessage().isBlank()) {
-            throw new RuntimeException("Texto do anúncio é obrigatório");
+        boolean useExisting = Boolean.TRUE.equals(r.getUseExistingPost());
+        if (useExisting) {
+            if (r.getExistingPostId() == null || r.getExistingPostId().isBlank()) {
+                throw new RuntimeException("Selecione um post existente da sua página.");
+            }
+        } else {
+            if (r.getAdMessage() == null || r.getAdMessage().isBlank()) {
+                throw new RuntimeException("Texto do anúncio é obrigatório");
+            }
+            if (r.getAdMessage().length() > 2200) {
+                throw new RuntimeException("Texto do anúncio: máximo 2200 caracteres (Meta)");
+            }
+            if (r.getHeadline() != null && !r.getHeadline().isBlank() && r.getHeadline().length() > 40) {
+                throw new RuntimeException("Headline: máximo 40 caracteres (Meta)");
+            }
+            if (r.getAdDescription() != null && !r.getAdDescription().isBlank() && r.getAdDescription().length() > 30) {
+                throw new RuntimeException("Descrição: máximo 30 caracteres (Meta)");
+            }
+            if (r.getImageUrl() == null || r.getImageUrl().isBlank()) {
+                throw new RuntimeException("Imagem do anúncio é obrigatória");
+            }
         }
-        if (r.getAdMessage().length() > 2200) {
-            throw new RuntimeException("Texto do anúncio: máximo 2200 caracteres (Meta)");
-        }
-        if (r.getHeadline() != null && !r.getHeadline().isBlank() && r.getHeadline().length() > 40) {
-            throw new RuntimeException("Headline: máximo 40 caracteres (Meta)");
-        }
-        if (r.getImageUrl() == null || r.getImageUrl().isBlank()) {
-            throw new RuntimeException("Imagem do anúncio é obrigatória");
-        }
-        if ("MESSAGES".equals(r.getConversionDestination()) && r.getWhatsappPhone() != null && !r.getWhatsappPhone().isBlank()) {
+        if (!Boolean.TRUE.equals(r.getUseExistingPost()) && r.getWhatsappPhone() != null && !r.getWhatsappPhone().isBlank()) {
             String digits = r.getWhatsappPhone().replaceAll("\\D", "");
             if (digits.length() < 10 || digits.length() > 15) {
                 throw new RuntimeException("WhatsApp: informe 10 a 15 dígitos (código país + número)");
@@ -1416,11 +1447,9 @@ public class MarketingService {
     }
 
     private String createMetaAdSet(String adAccountId, String accessToken, String campaignId, String pageId,
-                                   long dailyBudgetCents, Long lifetimeBudgetCents, String budgetType,
-                                   String startDate, String endDate,
+                                   long dailyBudgetCents, String startDate, String endDate,
                                    String country, int ageMin, int ageMax, List<Integer> genders,
-                                   String optimizationGoal, String interestsJson,
-                                   String adSetName) {
+                                   String optimizationGoal, String interestsJson, String adSetName) {
         String url = metaApiBaseUrl + "/" + adAccountId + "/adsets";
 
         Map<String, Object> targeting = new HashMap<>();
@@ -1461,11 +1490,7 @@ public class MarketingService {
         Map<String, Object> params = new HashMap<>();
         params.put("name", adSetName);
         params.put("campaign_id", campaignId);
-        if ("LIFETIME".equals(budgetType) && lifetimeBudgetCents != null && lifetimeBudgetCents > 0) {
-            params.put("lifetime_budget", lifetimeBudgetCents);
-        } else {
-            params.put("daily_budget", dailyBudgetCents);
-        }
+        params.put("daily_budget", dailyBudgetCents);
         params.put("targeting", serializeToJson(objectMapper, targeting));
         params.put("optimization_goal", optimizationGoal);
         params.put("billing_event", "IMPRESSIONS");
@@ -1478,8 +1503,6 @@ public class MarketingService {
             String start = startDate.trim();
             if (start.length() == 10) start += "T00:00:00-0300";
             params.put("start_time", start);
-        } else if ("LIFETIME".equals(budgetType) && lifetimeBudgetCents != null) {
-            params.put("start_time", java.time.ZonedDateTime.now(ZoneId.of("America/Sao_Paulo")).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         }
         if (endDate != null && !endDate.isBlank()) {
             String end = endDate.trim();
@@ -1512,18 +1535,32 @@ public class MarketingService {
         throw new RuntimeException("Meta API: Falha ao fazer upload da imagem. Use uma URL pública de imagem.");
     }
 
+    private String createMetaAdCreativeFromExistingPost(String adAccountId, String accessToken, String existingPostId) {
+        String url = metaApiBaseUrl + "/" + adAccountId + "/adcreatives";
+        Map<String, Object> params = new HashMap<>();
+        params.put("name", "Creative - " + System.currentTimeMillis());
+        params.put("object_story_id", existingPostId);
+        params.put("access_token", accessToken);
+
+        ResponseEntity<String> res = postForm(url, params);
+        JsonNode node = parseJson(objectMapper, res.getBody());
+        if (node.has("id")) return node.get("id").asText();
+        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad Creative (post existente) creation failed"));
+    }
+
     private String createMetaAdCreative(String adAccountId, String accessToken, String pageId,
-                                       String message, String link, String headline,
+                                       String message, String link, String headline, String description,
                                        String imageHash, String imageUrl, String ctaType) {
         String url = metaApiBaseUrl + "/" + adAccountId + "/adcreatives";
 
         String effectiveLink = (link != null && !link.isBlank()) ? link : "https://www.facebook.com";
-        String effectiveCta = (ctaType != null && !ctaType.isBlank()) ? ctaType : "LEARN_MORE";
+        String effectiveCta = (ctaType != null && !ctaType.isBlank()) ? ctaType : "WHATSAPP_MESSAGE";
 
         Map<String, Object> linkData = new HashMap<>();
         linkData.put("message", message != null ? message : "Confira!");
         linkData.put("link", effectiveLink);
         if (headline != null && !headline.isBlank()) linkData.put("name", headline);
+        if (description != null && !description.isBlank()) linkData.put("description", description);
         if (imageHash != null) {
             linkData.put("image_hash", imageHash);
         } else if (imageUrl != null && !imageUrl.isBlank()) {

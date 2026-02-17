@@ -22,10 +22,8 @@ export interface TrafficMetrics {
 
 export interface CreateCampaignRequest {
     name: string;
-    objective: string;
-    budgetType?: 'DAILY' | 'LIFETIME';
-    dailyBudget?: number;
-    lifetimeBudget?: number;
+    objective?: string;
+    dailyBudget: number;
     startDate?: string;
     endDate?: string;
     countryCode: string;
@@ -33,15 +31,24 @@ export interface CreateCampaignRequest {
     ageMax?: number;
     genders?: string;
     interests?: string;
-    conversionDestination?: 'WEBSITE' | 'MESSAGES';
     whatsappPhone?: string;
-    adMessage: string;
-    destinationUrl?: string;
-    imageUrl: string;
+    useExistingPost?: boolean;
+    existingPostId?: string;
+    adMessage?: string;
     headline?: string;
-    ctaType?: string;
+    adDescription?: string;
+    imageUrl?: string;
     adSetName?: string;
     adName?: string;
+}
+
+export interface PagePost {
+    id: string;
+    promotableId: string;
+    message: string;
+    createdTime: string;
+    fullPicture?: string;
+    isEligibleForPromotion: boolean;
 }
 
 export interface MetaAdAccountDetails {
@@ -180,6 +187,9 @@ export const marketingService = {
     },
     regenerateAiRecommendations: async (): Promise<void> => {
         await api.post('/marketing/ai-recommendations/regenerate');
+    },
+    getPagePosts: async (): Promise<PagePost[]> => {
+        return api.get<PagePost[]>('/marketing/page-posts');
     },
     searchTargetingInterests: async (q: string): Promise<{ id: string; name: string }[]> => {
         if (!q?.trim()) return [];
