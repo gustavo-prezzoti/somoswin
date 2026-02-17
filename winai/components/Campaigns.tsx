@@ -83,8 +83,9 @@ const Campaigns: React.FC = () => {
 
   const { toasts, showToast, removeToast } = useToast();
 
-  // Form validation errors (campo -> mensagem)
+  // Form validation errors (campo -> mensagem). Só preenchido após clicar em Next/Criar sem preencher.
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [validationAttempted, setValidationAttempted] = useState(false);
 
   // Form states - campos conforme Meta Ads API
   const [formData, setFormData] = useState<CreateCampaignRequest>({
@@ -434,10 +435,12 @@ const Campaigns: React.FC = () => {
   };
 
   const handleNext = () => {
+    setValidationAttempted(true);
     if (!validateStep(currentStep)) {
       showToast('Preencha os campos obrigatórios.', 'error');
       return;
     }
+    setValidationAttempted(false);
     if (currentStep < steps.length) {
       setCurrentStep(prev => prev + 1);
       setFormErrors({});
@@ -448,14 +451,17 @@ const Campaigns: React.FC = () => {
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
       setFormErrors({});
+      setValidationAttempted(false);
     }
   };
 
   const handleCreate = async () => {
+    setValidationAttempted(true);
     if (!validateStep(2)) {
       showToast('Preencha texto do anúncio, URL de destino e imagem.', 'error');
       return;
     }
+    setValidationAttempted(false);
     setIsSaving(true);
     setFormErrors({});
     try {
@@ -480,6 +486,7 @@ const Campaigns: React.FC = () => {
     setIsModalOpen(false);
     setCurrentStep(0);
     setFormErrors({});
+    setValidationAttempted(false);
     setFormData({
       name: '',
       objective: 'LINK_CLICKS',
@@ -1040,16 +1047,16 @@ const Campaigns: React.FC = () => {
               {/* STEP 0: DADOS BÁSICOS - Meta Ads API */}
               {currentStep === 0 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
-                  {Object.keys(formErrors).length > 0 && (
+                  {validationAttempted && Object.keys(formErrors).length > 0 && (
                     <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3">
                       <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="text-sm font-bold text-rose-800">Preencha os campos obrigatórios</p>
-                        <ul className="mt-1 text-xs text-rose-700 list-disc list-inside">
+                        <div className="mt-2 space-y-1">
                           {Object.values(formErrors).map((msg, i) => (
-                            <li key={i}>{msg}</li>
+                            <p key={i} className="text-sm text-rose-700">{msg}</p>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1213,16 +1220,16 @@ const Campaigns: React.FC = () => {
               {/* STEP 2: CRIATIVOS - object_story_spec link_data (message, link, picture) */}
               {currentStep === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
-                  {Object.keys(formErrors).length > 0 && (
+                  {validationAttempted && Object.keys(formErrors).length > 0 && (
                     <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3">
                       <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="text-sm font-bold text-rose-800">Preencha os campos obrigatórios</p>
-                        <ul className="mt-1 text-xs text-rose-700 list-disc list-inside">
+                        <div className="mt-2 space-y-1">
                           {Object.values(formErrors).map((msg, i) => (
-                            <li key={i}>{msg}</li>
+                            <p key={i} className="text-sm text-rose-700">{msg}</p>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     </div>
                   )}
