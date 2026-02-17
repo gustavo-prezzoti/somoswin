@@ -1368,6 +1368,7 @@ public class MarketingService {
         params.put("billing_event", "IMPRESSIONS");
         params.put("promoted_object", serializeToJson(objectMapper, promotedObject));
         params.put("status", "PAUSED");
+        params.put("is_adset_budget_sharing_enabled", "false"); // Meta exige: orçamento próprio por ad set
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
