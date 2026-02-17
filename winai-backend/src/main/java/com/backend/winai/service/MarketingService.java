@@ -10,6 +10,7 @@ import com.backend.winai.entity.MetaCampaign;
 import com.backend.winai.entity.MetaConnection;
 import com.backend.winai.entity.InstagramMetric;
 import com.backend.winai.entity.MetaInsight;
+import com.backend.winai.event.MetaConnectedEvent;
 import com.backend.winai.entity.User;
 import com.backend.winai.repository.InstagramMetricRepository;
 import com.backend.winai.repository.MetaAdRepository;
@@ -24,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -342,6 +344,7 @@ public class MarketingService {
     private final MetaInsightRepository metaInsightRepository;
     private final InstagramMetricRepository instagramMetricRepository;
     private final MetaSyncService metaSyncService;
+    private final ApplicationEventPublisher eventPublisher;
     private final CompanyRepository companyRepository;
     private final SupabaseStorageService supabaseStorageService;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -624,8 +627,8 @@ public class MarketingService {
                     companyId, connection.getAdAccountId(), connection.getBusinessId());
 
             if (connection.getAdAccountId() != null) {
-                log.info("Ad Account configured: {} - disparando sync inicial", connection.getAdAccountId());
-                metaSyncService.syncForCompany(java.util.UUID.fromString(companyId));
+                log.info("Ad Account configured: {} - disparando sync inicial após commit", connection.getAdAccountId());
+                eventPublisher.publishEvent(new MetaConnectedEvent(java.util.UUID.fromString(companyId)));
             } else {
                 log.warn("No Ad Account found during OAuth.");
             }

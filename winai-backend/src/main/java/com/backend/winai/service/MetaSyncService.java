@@ -58,16 +58,33 @@ public class MetaSyncService {
     @Async
     @Transactional
     public void syncForCompany(UUID companyId) {
-        metaConnectionRepository.findByCompanyId(companyId)
-                .filter(MetaConnection::isConnected)
-                .ifPresent(conn -> {
-                    if (conn.getAdAccountId() != null) {
-                        syncForConnection(conn);
-                    }
-                    if (conn.getPageId() != null) {
-                        syncInstagramForConnection(conn);
-                    }
-                });
+        log.info("[MetaSync] syncForCompany iniciado - companyId={}", companyId);
+        Optional<MetaConnection> connOpt = metaConnectionRepository.findByCompanyId(companyId)
+                .filter(MetaConnection::isConnected);
+        if (connOpt.isEmpty()) {
+            log.warn("[MetaSync] syncForCompany - empresa {} sem conexão Meta ativa, ignorando", companyId);
+            return;
+        }
+        MetaConnection conn = connOpt.get();
+        long start = System.currentTimeMillis();
+        try {
+            if (conn.getAdAccountId() != null) {
+                log.info("[MetaSync] syncForCompany - sincronizando Ads para empresa {} (adAccount={})", companyId, conn.getAdAccountId());
+                syncForConnection(conn);
+            } else {
+                log.info("[MetaSync] syncForCompany - empresa {} sem adAccountId, pulando Ads", companyId);
+            }
+            if (conn.getPageId() != null) {
+                log.info("[MetaSync] syncForCompany - sincronizando Instagram para empresa {} (pageId={})", companyId, conn.getPageId());
+                syncInstagramForConnection(conn);
+            } else {
+                log.info("[MetaSync] syncForCompany - empresa {} sem pageId, pulando Instagram", companyId);
+            }
+            log.info("[MetaSync] syncForCompany concluído - companyId={} em {}ms", companyId, System.currentTimeMillis() - start);
+        } catch (Exception e) {
+            log.error("[MetaSync] syncForCompany FALHOU - companyId={} em {}ms: {}", companyId, System.currentTimeMillis() - start, e.getMessage(), e);
+            throw e;
+        }
     }
 
     /**
@@ -76,27 +93,38 @@ public class MetaSyncService {
     @Async
     @Transactional
     public void syncAll() {
+        long syncStart = System.currentTimeMillis();
         List<MetaConnection> adsConnections = metaConnectionRepository.findByIsConnectedTrueAndAdAccountIdIsNotNull();
         List<MetaConnection> igConnections = metaConnectionRepository.findByIsConnectedTrueAndPageIdIsNotNull();
-        log.info("[MetaSync] Iniciando sync - Ads: {} empresas, Instagram: {} empresas", adsConnections.size(), igConnections.size());
+        log.info("[MetaSync] ========== SYNC INICIADO ==========");
+        log.info("[MetaSync] Empresas com Ads: {} | Empresas com Instagram: {}", adsConnections.size(), igConnections.size());
+        adsConnections.forEach(c -> log.info("[MetaSync] Ads - company={} adAccount={}", c.getCompany().getId(), c.getAdAccountId()));
+        igConnections.forEach(c -> log.info("[MetaSync] IG  - company={} pageId={}", c.getCompany().getId(), c.getPageId()));
 
+        int adsOk = 0, adsFail = 0, igOk = 0, igFail = 0;
         for (MetaConnection conn : adsConnections) {
             try {
                 syncForConnection(conn);
+                adsOk++;
             } catch (Exception e) {
-                log.error("[MetaSync] Erro ao sincronizar Ads empresa {}: {}", conn.getCompany().getId(), e.getMessage(), e);
+                adsFail++;
+                log.error("[MetaSync] ERRO Ads empresa {} ({}): {}", conn.getCompany().getId(), conn.getAdAccountId(), e.getMessage(), e);
             }
         }
 
         for (MetaConnection conn : igConnections) {
             try {
                 syncInstagramForConnection(conn);
+                igOk++;
             } catch (Exception e) {
-                log.error("[MetaSync] Erro ao sincronizar Instagram empresa {}: {}", conn.getCompany().getId(), e.getMessage(), e);
+                igFail++;
+                log.error("[MetaSync] ERRO Instagram empresa {} ({}): {}", conn.getCompany().getId(), conn.getPageId(), e.getMessage(), e);
             }
         }
 
-        log.info("[MetaSync] Sync concluído");
+        long duration = System.currentTimeMillis() - syncStart;
+        log.info("[MetaSync] ========== SYNC CONCLUÍDO em {}ms ==========", duration);
+        log.info("[MetaSync] Ads: {} ok, {} falhas | Instagram: {} ok, {} falhas", adsOk, adsFail, igOk, igFail);
     }
 
     @Transactional
@@ -106,9 +134,11 @@ public class MetaSyncService {
         String adAccountId = conn.getAdAccountId();
 
         if (accessToken == null || accessToken.isEmpty() || adAccountId == null || adAccountId.isEmpty()) {
+            log.warn("[MetaSync] syncForConnection - empresa {} sem token ou adAccountId, abortando", company.getId());
             return;
         }
 
+        log.info("[MetaSync] syncForConnection - empresa {} adAccount={} - iniciando", company.getId(), adAccountId);
         throttle();
 
         // 0. Buscar nome da conta
@@ -119,12 +149,14 @@ public class MetaSyncService {
             if (accRes.getBody() != null) {
                 JsonNode accNode = objectMapper.readTree(accRes.getBody());
                 if (accNode.has("name")) {
-                    conn.setAccountName(accNode.get("name").asText());
+                    String accountName = accNode.get("name").asText();
+                    conn.setAccountName(accountName);
                     metaConnectionRepository.save(conn);
+                    log.info("[MetaSync] Nome da conta: {}", accountName);
                 }
             }
         } catch (Exception e) {
-            log.debug("Could not fetch account name: {}", e.getMessage());
+            log.warn("[MetaSync] Não foi possível buscar nome da conta: {}", e.getMessage());
         }
 
         throttle();
@@ -141,12 +173,13 @@ public class MetaSyncService {
 
             JsonNode root = objectMapper.readTree(body);
             if (root.has("error")) {
-                log.warn("[MetaSync] Meta API error para empresa {}: {}", company.getId(), root.get("error"));
+                log.error("[MetaSync] Meta API error para empresa {}: {}", company.getId(), root.get("error"));
                 return;
             }
 
             JsonNode data = root.get("data");
             Set<String> metaIdsFromApi = new HashSet<>();
+            int campaignCount = 0;
 
             if (data != null && data.isArray()) {
                 for (JsonNode node : data) {
@@ -210,17 +243,28 @@ public class MetaSyncService {
                     campaign.setStopTime(parseZonedDateTime(node, "stop_time"));
 
                     metaCampaignRepository.save(campaign);
+                    campaignCount++;
+                    log.debug("[MetaSync] Campanha: {} | {} | spend={} clicks={} conversions={}", metaId,
+                            node.has("name") ? node.get("name").asText() : "?", spend, clicks, conversions);
                 }
+                log.info("[MetaSync] Campanhas sincronizadas: {} para empresa {}", campaignCount, company.getId());
+            } else {
+                log.info("[MetaSync] Nenhuma campanha retornada pela Meta para empresa {}", company.getId());
             }
 
             // Remover campanhas que não existem mais na Meta
             List<MetaCampaign> existing = metaCampaignRepository.findByCompanyId(company.getId());
+            int removed = 0;
             for (MetaCampaign c : existing) {
                 if (!metaIdsFromApi.contains(c.getMetaId())) {
                     metaCampaignRepository.delete(c);
                     metaInsightRepository.deleteByCompanyIdAndLevelAndExternalId(
                             company.getId(), "campaign", c.getMetaId());
+                    removed++;
                 }
+            }
+            if (removed > 0) {
+                log.info("[MetaSync] Campanhas removidas (não existem mais na Meta): {}", removed);
             }
 
             // 2. Sincronizar insights da conta (account-level)
@@ -278,6 +322,7 @@ public class MetaSyncService {
 
             metaInsightRepository.deleteByCompanyIdAndLevelAndExternalId(company.getId(), "account", adAccountId);
 
+            int accountInsightsCount = 0;
             for (JsonNode node : data) {
                 String dateStr = node.has("date_start") ? node.get("date_start").asText() : null;
                 if (dateStr == null) continue;
@@ -310,7 +355,9 @@ public class MetaSyncService {
                         .conversions(conversions)
                         .build();
                 metaInsightRepository.save(insight);
+                accountInsightsCount++;
             }
+            log.info("[MetaSync] Insights da conta (account-level): {} dias para empresa {}", accountInsightsCount, company.getId());
         } catch (Exception e) {
             log.warn("[MetaSync] Erro ao sincronizar insights da conta {}: {}", company.getId(), e.getMessage());
         }
@@ -334,6 +381,7 @@ public class MetaSyncService {
 
             metaInsightRepository.deleteByCompanyIdAndLevelAndExternalId(company.getId(), "campaign", campaignMetaId);
 
+            int campaignInsightsCount = 0;
             for (JsonNode node : data) {
                 String dateStr = node.has("date_start") ? node.get("date_start").asText() : null;
                 if (dateStr == null) continue;
@@ -366,7 +414,9 @@ public class MetaSyncService {
                         .conversions(conversions)
                         .build();
                 metaInsightRepository.save(insight);
+                campaignInsightsCount++;
             }
+            log.debug("[MetaSync] Insights campanha {}: {} dias", campaignMetaId, campaignInsightsCount);
         } catch (Exception e) {
             log.warn("[MetaSync] Erro ao sincronizar insights da campanha {}: {}", campaignMetaId, e.getMessage());
         }
@@ -378,9 +428,11 @@ public class MetaSyncService {
         String pageId = conn.getPageId();
 
         if (accessToken == null || accessToken.isEmpty() || pageId == null || pageId.isEmpty()) {
+            log.warn("[MetaSync] syncInstagramForConnection - empresa {} sem token ou pageId, abortando", company.getId());
             return;
         }
 
+        log.info("[MetaSync] syncInstagramForConnection - empresa {} pageId={} - iniciando", company.getId(), pageId);
         try {
             throttle();
             String igAccountUrl = String.format("%s/%s?fields=instagram_business_account&access_token=%s",
@@ -393,10 +445,14 @@ public class MetaSyncService {
                 return;
             }
             JsonNode igAccountNode = igRoot.get("instagram_business_account");
-            if (igAccountNode == null || igAccountNode.isNull()) return;
+            if (igAccountNode == null || igAccountNode.isNull()) {
+                log.warn("[MetaSync] Empresa {} - página {} sem Instagram Business vinculado", company.getId(), pageId);
+                return;
+            }
 
             String igId = igAccountNode.get("id").asText();
             conn.setInstagramBusinessId(igId);
+            log.info("[MetaSync] Instagram Business ID: {}", igId);
 
             throttle();
             String basicUrl = String.format("%s/%s?fields=followers_count,media_count&access_token=%s",
@@ -408,6 +464,7 @@ public class MetaSyncService {
                     long followers = basic.get("followers_count").asLong();
                     conn.setInstagramFollowerCount(followers);
                     metaConnectionRepository.save(conn);
+                    log.info("[MetaSync] Instagram followers: {} para empresa {}", followers, company.getId());
                 }
             }
 
@@ -479,6 +536,7 @@ public class MetaSyncService {
 
             instagramMetricRepository.deleteByCompanyIdAndDateBetween(company.getId(), since, today);
 
+            int igMetricsCount = 0;
             Set<LocalDate> allDates = new HashSet<>(dailyReach.keySet());
             allDates.addAll(dailyEngaged.keySet());
             for (LocalDate date : allDates) {
@@ -494,7 +552,12 @@ public class MetaSyncService {
                         .followerCount(conn.getInstagramFollowerCount())
                         .build();
                 instagramMetricRepository.save(m);
+                igMetricsCount++;
             }
+
+            long totalReach = dailyReach.values().stream().mapToLong(Long::longValue).sum();
+            long totalEngaged = dailyEngaged.values().stream().mapToLong(Long::longValue).sum();
+            log.info("[MetaSync] Instagram sincronizado - empresa {} | {} dias | reach={} interactions={}", company.getId(), igMetricsCount, totalReach, totalEngaged);
 
         } catch (Exception e) {
             log.warn("[MetaSync] Erro ao sincronizar Instagram empresa {}: {}", company.getId(), e.getMessage());
