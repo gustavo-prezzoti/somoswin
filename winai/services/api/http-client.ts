@@ -165,7 +165,20 @@ class HttpClient {
         const data = await response.json().catch(() => null);
 
         if (!response.ok) {
-            const message = data?.message || data?.error || 'Erro na requisição';
+            let message: string = typeof data?.message === 'string' ? data.message
+                : typeof data?.error === 'string' ? data.error
+                : 'Erro na requisição';
+            // Se a mensagem parecer JSON bruto (ex: erro da Meta), tentar extrair texto amigável
+            if (message.startsWith('{') && message.includes('"error"')) {
+                try {
+                    const obj = JSON.parse(message);
+                    const err = obj?.error;
+                    if (err && typeof err === 'object') {
+                        const friendly = err.error_user_msg || err.error_user_title || err.message;
+                        if (typeof friendly === 'string' && friendly.trim()) message = friendly;
+                    }
+                } catch { /* manter message original */ }
+            }
             throw new ApiError(message, response.status, data);
         }
 

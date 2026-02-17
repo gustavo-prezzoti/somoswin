@@ -37,3 +37,31 @@ export function maskPhoneInput(value: string, maxDigits = 15): string {
   const suf = digits.slice(9);
   return `+${cc} (${ddd}) ${num}-${suf}`;
 }
+
+/**
+ * Extrai mensagem amigável de erros da API (evita mostrar JSON bruto da Meta).
+ * Prioridade: error_user_msg > error_user_title > message.
+ */
+export function parseApiErrorMessage(raw: unknown): string {
+  if (raw == null) return 'Erro desconhecido';
+  if (typeof raw === 'object' && raw !== null && 'message' in raw) {
+    const m = (raw as { message?: unknown }).message;
+    if (typeof m === 'string' && m.trim()) return parseApiErrorMessage(m);
+  }
+  const str = typeof raw === 'string' ? raw : String(raw);
+  if (!str || str === '[object Object]') return 'Erro desconhecido';
+  if (str.length > 500) return str.slice(0, 200) + '...';
+  try {
+    if (str.trim().startsWith('{')) {
+      const obj = JSON.parse(str);
+      const err = obj?.error;
+      if (err && typeof err === 'object') {
+        const msg = err.error_user_msg || err.error_user_title || err.message;
+        if (typeof msg === 'string' && msg.trim()) return msg;
+      }
+    }
+  } catch {
+    /* não é JSON válido */
+  }
+  return str;
+}

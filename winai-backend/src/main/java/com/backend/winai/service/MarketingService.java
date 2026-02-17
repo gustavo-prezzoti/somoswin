@@ -1567,10 +1567,10 @@ public class MarketingService {
 
         ResponseEntity<String> res = postForm(url, params);
         String body = res.getBody();
-        if (body == null) throw new RuntimeException("Meta API: Empty response");
+        if (body == null) throw new RuntimeException("Resposta vazia da Meta. Tente novamente.");
         JsonNode node = parseJson(objectMapper, body);
         if (node.has("id")) return node.get("id").asText();
-        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Campaign creation failed"));
+        throw new RuntimeException(com.backend.winai.util.ErrorHelper.normalizeMessage(body));
     }
 
     private String createMetaAdSet(String adAccountId, String accessToken, String campaignId, String pageId,
@@ -1640,9 +1640,10 @@ public class MarketingService {
         }
 
         ResponseEntity<String> res = postForm(url, params);
-        JsonNode node = parseJson(objectMapper, res.getBody());
+        String body = res.getBody();
+        JsonNode node = parseJson(objectMapper, body);
         if (node.has("id")) return node.get("id").asText();
-        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad Set creation failed"));
+        throw new RuntimeException(com.backend.winai.util.ErrorHelper.normalizeMessage(body != null ? body : "Erro ao criar conjunto de anúncios."));
     }
 
     private String uploadAdImage(String adAccountId, String accessToken, String imageUrl) {
@@ -1672,9 +1673,10 @@ public class MarketingService {
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
-        JsonNode node = parseJson(objectMapper, res.getBody());
+        String body = res.getBody();
+        JsonNode node = parseJson(objectMapper, body);
         if (node.has("id")) return node.get("id").asText();
-        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad Creative (post existente) creation failed"));
+        throw new RuntimeException(com.backend.winai.util.ErrorHelper.normalizeMessage(body != null ? body : "Erro ao criar criativo do anúncio."));
     }
 
     private String createMetaAdCreative(String adAccountId, String accessToken, String pageId,
@@ -1712,9 +1714,10 @@ public class MarketingService {
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
-        JsonNode node = parseJson(objectMapper, res.getBody());
+        String body = res.getBody();
+        JsonNode node = parseJson(objectMapper, body);
         if (node.has("id")) return node.get("id").asText();
-        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad Creative creation failed"));
+        throw new RuntimeException(com.backend.winai.util.ErrorHelper.normalizeMessage(body != null ? body : "Erro ao criar criativo do anúncio."));
     }
 
     private void createMetaAd(String adAccountId, String accessToken, String adSetId, String creativeId, String name) {
@@ -1731,9 +1734,10 @@ public class MarketingService {
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
-        JsonNode node = parseJson(objectMapper, res.getBody());
+        String body = res.getBody();
+        JsonNode node = parseJson(objectMapper, body);
         if (node.has("id")) return;
-        throw new RuntimeException("Meta API: " + (node.has("error") ? node.get("error").get("message").asText() : "Ad creation failed"));
+        throw new RuntimeException(com.backend.winai.util.ErrorHelper.normalizeMessage(body != null ? body : "Erro ao criar anúncio."));
     }
 
     private ResponseEntity<String> postForm(String url, Map<String, Object> params) {

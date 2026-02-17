@@ -7,7 +7,7 @@ import type { MetricsDateRange } from '../services/api/marketing.service';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
-import { META_LIMITS, maskPhoneInput, parsePhoneDigits } from '../utils/metaAdsLimits';
+import { META_LIMITS, maskPhoneInput, parsePhoneDigits, parseApiErrorMessage } from '../utils/metaAdsLimits';
 
 const SummaryCard = ({ icon: Icon, label, metric, color }: { icon: any, label: string, metric?: any, color: string }) => {
   const value = metric?.value || '0';
@@ -512,7 +512,8 @@ const Campaigns: React.FC = () => {
       if (isMetaConnected) loadCampaigns();
     } catch (err: any) {
       console.error('Erro ao criar campanha:', err);
-      const msg = err?.response?.data?.message ?? err?.message ?? 'Erro ao criar campanha. Verifique se o Meta Ads está conectado e os dados estão corretos.';
+      const raw = err?.response?.data?.message ?? err?.data?.message ?? err?.message;
+      const msg = parseApiErrorMessage(raw) || 'Erro ao criar campanha. Verifique se o Meta Ads está conectado e os dados estão corretos.';
       showToast(msg, 'error');
     } finally {
       setIsSaving(false);
