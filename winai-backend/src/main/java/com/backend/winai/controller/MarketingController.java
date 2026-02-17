@@ -143,6 +143,17 @@ public class MarketingController {
         return ResponseEntity.ok(Map.of("whatsappNumber", number != null ? number : ""));
     }
 
+    @GetMapping("/page-whatsapp-numbers")
+    public ResponseEntity<Map<String, Object>> getPageWhatsAppNumbers(@AuthenticationPrincipal User user) {
+        java.util.List<String> numbers = marketingService.getPageWhatsAppNumbers(user);
+        return ResponseEntity.ok(Map.of("whatsappNumbers", numbers != null ? numbers : java.util.Collections.emptyList()));
+    }
+
+    @GetMapping("/whatsapp-add-url")
+    public ResponseEntity<Map<String, String>> getWhatsAppAddUrl(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(Map.of("url", marketingService.getWhatsAppAddUrl()));
+    }
+
     @GetMapping("/targeting-search")
     public ResponseEntity<List<Map<String, Object>>> searchTargeting(
             @AuthenticationPrincipal User user,

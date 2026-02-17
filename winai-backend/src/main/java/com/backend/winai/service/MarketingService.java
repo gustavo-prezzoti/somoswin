@@ -612,7 +612,7 @@ public class MarketingService {
             }
             return Map.of("url", url, "mode", "config_id", "config_id", metaConfigId.trim(), "token_type", isSystemUser ? "system_user" : "user");
         }
-        String scope = "ads_management,pages_show_list,pages_read_engagement,business_management,leads_retrieval,email,public_profile";
+        String scope = "ads_management,pages_show_list,pages_read_engagement,pages_read_user_content,business_management,whatsapp_business_management,leads_retrieval,email,public_profile";
         String url = String.format(
                 "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s&response_type=code",
                 clientId, redirectUri, state, scope);
@@ -1454,20 +1454,109 @@ public class MarketingService {
 
     /**
      * Obtém o número WhatsApp vinculado à página do Facebook (WhatsApp Business).
-     * Usado para preencher automaticamente o campo no modal de criação de campanha.
+     * Usado como fallback na criação de campanha quando o usuário não seleciona.
      */
     public String getPageWhatsAppNumber(User user) {
+        List<String> numbers = getPageWhatsAppNumbers(user);
+        if (!numbers.isEmpty()) return numbers.get(0);
         MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
                 .filter(MetaConnection::isConnected)
                 .orElse(null);
-        if (conn == null || conn.getPageId() == null || conn.getPageId().isBlank()) {
-            return null;
+        if (conn != null && conn.getPageId() != null && conn.getAccessToken() != null) {
+            return fetchPageWhatsAppNumber(conn.getPageId(), conn.getAccessToken());
         }
+        return null;
+    }
+
+    /** URL para adicionar números WhatsApp no Business Manager (abre em popup). */
+    public String getWhatsAppAddUrl() {
+        return "https://business.facebook.com/settings/whatsapp-accounts";
+    }
+
+    /**
+     * Lista todos os números WhatsApp Business conectados ao Business (até 50).
+     * Requer permissão whatsapp_business_management. Sem fallback da página.
+     */
+    public List<String> getPageWhatsAppNumbers(User user) {
+        MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
+                .filter(MetaConnection::isConnected)
+                .orElse(null);
+        if (conn == null) return Collections.emptyList();
         String accessToken = conn.getAccessToken();
-        if (accessToken == null || accessToken.isBlank()) {
-            return null;
+        if (accessToken == null || accessToken.isBlank()) return Collections.emptyList();
+
+        Set<String> seen = new LinkedHashSet<>();
+
+        // Números dos WABAs do Business (requer whatsapp_business_management)
+        String businessId = conn.getBusinessId();
+        if (businessId != null && !businessId.isBlank()) {
+            try {
+                String wabaUrl = metaApiBaseUrl + "/" + businessId + "/owned_whatsapp_business_accounts?fields=id&access_token=" + accessToken;
+                ResponseEntity<String> wabaRes = restTemplate.getForEntity(wabaUrl, String.class);
+                JsonNode wabaRoot = parseJson(objectMapper, wabaRes.getBody());
+                JsonNode wabaData = wabaRoot.has("data") ? wabaRoot.get("data") : null;
+                if (wabaData != null && wabaData.isArray()) {
+                    for (JsonNode waba : wabaData) {
+                        if (!waba.has("id")) continue;
+                        String wabaId = waba.get("id").asText();
+                        try {
+                            String pnUrl = metaApiBaseUrl + "/" + wabaId + "/phone_numbers?fields=display_phone_number,verified_name&access_token=" + accessToken;
+                            ResponseEntity<String> pnRes = restTemplate.getForEntity(pnUrl, String.class);
+                            JsonNode pnRoot = parseJson(objectMapper, pnRes.getBody());
+                            JsonNode pnData = pnRoot.has("data") ? pnRoot.get("data") : null;
+                            if (pnData != null && pnData.isArray()) {
+                                for (JsonNode pn : pnData) {
+                                    if (pn.has("display_phone_number")) {
+                                        String num = pn.get("display_phone_number").asText();
+                                        if (num != null && !num.isBlank()) seen.add(normalizePhoneForDedup(num));
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.debug("Could not fetch phone_numbers for WABA {}: {}", wabaId, e.getMessage());
+                        }
+                    }
+                }
+                // Fallback: client_whatsapp_business_accounts (WABAs compartilhados)
+                if (seen.isEmpty()) {
+                    String clientUrl = metaApiBaseUrl + "/" + businessId + "/client_whatsapp_business_accounts?fields=id&access_token=" + accessToken;
+                    ResponseEntity<String> clientRes = restTemplate.getForEntity(clientUrl, String.class);
+                    JsonNode clientRoot = parseJson(objectMapper, clientRes.getBody());
+                    JsonNode clientData = clientRoot.has("data") ? clientRoot.get("data") : null;
+                    if (clientData != null && clientData.isArray()) {
+                        for (JsonNode waba : clientData) {
+                            if (!waba.has("id")) continue;
+                            String wabaId = waba.get("id").asText();
+                            try {
+                                String pnUrl = metaApiBaseUrl + "/" + wabaId + "/phone_numbers?fields=display_phone_number&access_token=" + accessToken;
+                                ResponseEntity<String> pnRes = restTemplate.getForEntity(pnUrl, String.class);
+                                JsonNode pnRoot = parseJson(objectMapper, pnRes.getBody());
+                                JsonNode pnData = pnRoot.has("data") ? pnRoot.get("data") : null;
+                                if (pnData != null && pnData.isArray()) {
+                                    for (JsonNode pn : pnData) {
+                                        if (pn.has("display_phone_number")) {
+                                            String num = pn.get("display_phone_number").asText();
+                                            if (num != null && !num.isBlank()) seen.add(normalizePhoneForDedup(num));
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                log.debug("Could not fetch phone_numbers for client WABA {}: {}", wabaId, e.getMessage());
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Could not fetch WABAs for business {}: {}", businessId, e.getMessage());
+            }
         }
-        return fetchPageWhatsAppNumber(conn.getPageId(), accessToken);
+
+        return new ArrayList<>(seen);
+    }
+
+    private static String normalizePhoneForDedup(String phone) {
+        if (phone == null) return "";
+        return phone.replaceAll("[^0-9]", "");
     }
 
     private List<Integer> parseGenders(String genders) {

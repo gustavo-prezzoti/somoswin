@@ -109,7 +109,8 @@ const Campaigns: React.FC = () => {
   const [pagePosts, setPagePosts] = useState<PagePost[]>([]);
   const [pagePostsLoading, setPagePostsLoading] = useState(false);
   const [pagePostsError, setPagePostsError] = useState<string | null>(null);
-  const [whatsappFromPageLoading, setWhatsappFromPageLoading] = useState(false);
+  const [whatsappNumbers, setWhatsappNumbers] = useState<string[]>([]);
+  const [whatsappNumbersLoading, setWhatsappNumbersLoading] = useState(false);
 
   const steps = [
     { id: 0, title: 'Campanha', icon: Briefcase },
@@ -150,21 +151,28 @@ const Campaigns: React.FC = () => {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  // Ao abrir o modal, buscar número WhatsApp da página e preencher automaticamente
+  // Ao abrir o modal, buscar números WhatsApp conectados (página + Business Manager)
+  const loadWhatsAppNumbers = async () => {
+    if (!isMetaConnected) return;
+    setWhatsappNumbersLoading(true);
+    try {
+      const res = await marketingService.getPageWhatsAppNumbers();
+      const list = res.whatsappNumbers || [];
+      setWhatsappNumbers(list);
+      if (list.length > 0 && !formData.whatsappPhone) {
+        const masked = maskPhoneInput(list[0]);
+        setFormData(prev => ({ ...prev, whatsappPhone: masked }));
+      }
+    } catch {
+      setWhatsappNumbers([]);
+    } finally {
+      setWhatsappNumbersLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isModalOpen || !isMetaConnected) return;
-    let cancelled = false;
-    setWhatsappFromPageLoading(true);
-    marketingService.getPageWhatsAppNumber()
-      .then((res) => {
-        if (!cancelled && res.whatsappNumber?.trim()) {
-          const masked = maskPhoneInput(res.whatsappNumber);
-          setFormData(prev => ({ ...prev, whatsappPhone: masked }));
-        }
-      })
-      .catch(() => { /* silencioso */ })
-      .finally(() => { if (!cancelled) setWhatsappFromPageLoading(false); });
-    return () => { cancelled = true; };
+    loadWhatsAppNumbers();
   }, [isModalOpen, isMetaConnected]);
 
 
@@ -554,21 +562,32 @@ const Campaigns: React.FC = () => {
     setPagePostsError(null);
   };
 
-  const fetchPageWhatsAppAndFill = async () => {
-    setWhatsappFromPageLoading(true);
+  const refreshWhatsAppNumbers = async () => {
+    await loadWhatsAppNumbers();
+    showToast('Lista de números atualizada.', 'success');
+  };
+
+  const openWhatsAppAddPopup = async () => {
     try {
-      const res = await marketingService.getPageWhatsAppNumber();
-      if (res.whatsappNumber?.trim()) {
-        const masked = maskPhoneInput(res.whatsappNumber);
-        setFormData(prev => ({ ...prev, whatsappPhone: masked }));
-        showToast('Número da página vinculada preenchido.', 'success');
+      const { url } = await marketingService.getWhatsAppAddUrl();
+      const w = 700;
+      const h = 650;
+      const left = window.screenX + (window.outerWidth - w) / 2;
+      const top = window.screenY + (window.outerHeight - h) / 2;
+      const popup = window.open(url, 'whatsapp-add', `width=${w},height=${h},left=${left},top=${top},scrollbars=yes`);
+      if (popup) {
+        showToast('Conclua o fluxo na janela e clique em Atualizar.', 'info');
+        const checkClosed = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkClosed);
+            loadWhatsAppNumbers();
+          }
+        }, 500);
       } else {
-        showToast('Sua página não tem WhatsApp Business vinculado. Vincule em facebook.com/pages.', 'info');
+        showToast('Popup bloqueado. Permita popups e tente novamente.', 'error');
       }
     } catch {
-      showToast('Não foi possível buscar o número da página.', 'error');
-    } finally {
-      setWhatsappFromPageLoading(false);
+      showToast('Erro ao abrir fluxo de adicionar número.', 'error');
     }
   };
 
@@ -1221,31 +1240,47 @@ const Campaigns: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp</label>
-                    <div className="flex gap-2">
-                      <input
+                    <div className="flex flex-wrap gap-2">
+                      <select
                         name="whatsappPhone"
                         value={formData.whatsappPhone || ''}
-                        onChange={(e) => {
-                          const masked = maskPhoneInput(e.target.value);
-                          setFormData(prev => ({ ...prev, whatsappPhone: masked }));
-                        }}
-                        type="tel"
-                        inputMode="numeric"
-                        placeholder="(11) 99999-9999 ou +55 (11) 99999-9999"
-                        className="flex-1 px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                      />
+                        onChange={(e) => setFormData(prev => ({ ...prev, whatsappPhone: e.target.value }))}
+                        disabled={whatsappNumbersLoading}
+                        className="flex-1 min-w-[180px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
+                      >
+                        <option value="">
+                          {whatsappNumbersLoading ? 'Carregando...' : whatsappNumbers.length === 0 ? 'Nenhum número conectado' : 'Selecione o número'}
+                        </option>
+                        {whatsappNumbers.map((num) => {
+                          const masked = maskPhoneInput(num);
+                          return (
+                            <option key={num} value={masked}>{masked}</option>
+                          );
+                        })}
+                      </select>
                       <button
                         type="button"
-                        onClick={fetchPageWhatsAppAndFill}
-                        disabled={whatsappFromPageLoading}
-                        className="px-4 py-4 bg-emerald-50 text-emerald-700 rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-emerald-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
-                        title="Usar número vinculado à sua página do Facebook"
+                        onClick={openWhatsAppAddPopup}
+                        className="px-4 py-4 bg-emerald-600 text-white rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-emerald-700 transition-colors flex items-center gap-2 shrink-0"
+                        title="Adicionar número WhatsApp via Meta"
                       >
-                        {whatsappFromPageLoading ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
-                        {whatsappFromPageLoading ? '...' : 'Usar da página'}
+                        <Zap size={16} />
+                        Adicionar número
+                      </button>
+                      <button
+                        type="button"
+                        onClick={refreshWhatsAppNumbers}
+                        disabled={whatsappNumbersLoading}
+                        className="px-4 py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-gray-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
+                        title="Atualizar lista de números"
+                      >
+                        {whatsappNumbersLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                        Atualizar
                       </button>
                     </div>
-                    <p className="text-[9px] text-gray-400">Preenchido automaticamente se a página tiver WhatsApp Business. Edite ou clique em &quot;Usar da página&quot; para atualizar.</p>
+                    <p className="text-[9px] text-gray-400">
+                      Adicione números via OAuth da Meta (popup) e atualize a lista. Conecte até 50 números por página no Business Manager.
+                    </p>
                   </div>
                   <hr className="border-gray-200 my-6" />
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Público-alvo (localização, idade, gênero, interesses)</p>

@@ -35,6 +35,7 @@ O endpoint de posts da página exige **`pages_read_engagement`** e, em alguns ca
 3. Em **Permissions**, adicione:
    - **`pages_read_engagement`** (obrigatório)
    - **`pages_read_user_content`** (recomendado para ler posts)
+   - **`whatsapp_business_management`** (para listar números WhatsApp nas campanhas)
 4. Salve e peça aos usuários para **reconectar** a conta Meta em Configurações
 
-Se o app usa OAuth com `scope` (sem config_id), inclua ambas as permissões no scope. Usuários que conectaram antes precisam reconectar para conceder as novas permissões.
+Se o app usa OAuth com `scope` (sem config_id), inclua todas as permissões no scope. Usuários que conectaram antes precisam reconectar para conceder as novas permissões.
