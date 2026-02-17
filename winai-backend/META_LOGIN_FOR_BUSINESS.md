@@ -21,3 +21,18 @@ Segundo a [documentação da Meta](https://developers.facebook.com/docs/developm
 ### Alternativa temporária
 
 Para testar com outros usuários sem Business Verification: adicione-os como **Testadores** em Funções → Funções no App Dashboard.
+
+---
+
+## Erro "pages_read_engagement" ao buscar posts da página
+
+O endpoint `/feed` da página exige a permissão **`pages_read_engagement`** ou o recurso **Page Public Content Access**.
+
+### Como resolver (Facebook Login for Business)
+
+1. **Meta for Developers** → seu app → **Use cases** → **Facebook Login for Business**
+2. Edite a configuração (config_id) usada pelo app
+3. Em **Permissions**, adicione **`pages_read_engagement`**
+4. Salve e peça aos usuários para **reconectar** a conta Meta em Configurações
+
+Se o app usa OAuth com `scope` (sem config_id), a permissão já está no scope. Usuários que conectaram antes precisam reconectar para conceder a nova permissão.

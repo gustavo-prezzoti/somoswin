@@ -46,6 +46,10 @@ public class MetaConnection {
     @Column(name = "page_id")
     private String pageId;
 
+    /** Page access token para /feed e outras chamadas que exigem Page token (não System User). */
+    @Column(name = "page_access_token", columnDefinition = "TEXT")
+    private String pageAccessToken;
+
     @Column(name = "instagram_business_id")
     private String instagramBusinessId;
 

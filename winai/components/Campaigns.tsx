@@ -108,6 +108,7 @@ const Campaigns: React.FC = () => {
   });
   const [pagePosts, setPagePosts] = useState<PagePost[]>([]);
   const [pagePostsLoading, setPagePostsLoading] = useState(false);
+  const [pagePostsError, setPagePostsError] = useState<string | null>(null);
 
   const steps = [
     { id: 0, title: 'Campanha', icon: Briefcase },
@@ -531,16 +532,24 @@ const Campaigns: React.FC = () => {
     setInterestsResults([]);
     setInterestsHasSearched(false);
     setPagePosts([]);
+    setPagePostsError(null);
   };
 
   const loadPagePosts = async () => {
     setPagePostsLoading(true);
+    setPagePostsError(null);
     try {
       const posts = await marketingService.getPagePosts();
       setPagePosts(posts);
     } catch (err: any) {
-      showToast(err?.message || 'Erro ao buscar posts da página.', 'error');
+      const msg = err?.message || 'Erro ao buscar posts da página.';
+      setPagePostsError(msg);
       setPagePosts([]);
+      if (msg.includes('pages_read_engagement') || msg.includes('Page Public Content Access')) {
+        showToast('Permissão necessária: reconecte sua conta Meta em Configurações para liberar o acesso aos posts da página.', 'error');
+      } else {
+        showToast(msg, 'error');
+      }
     } finally {
       setPagePostsLoading(false);
     }
@@ -1342,33 +1351,50 @@ const Campaigns: React.FC = () => {
                   </div>
 
                   {formData.useExistingPost ? (
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Selecione um post da sua página <span className="text-rose-500">*</span></label>
-                        <button type="button" onClick={loadPagePosts} disabled={pagePostsLoading} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
-                          {pagePostsLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                          {pagePostsLoading ? 'Carregando...' : 'Buscar posts'}
+                    <div className="space-y-4">
+                      <label className="text-xs font-black text-gray-600 uppercase tracking-widest px-2 block">Selecione um post da sua página <span className="text-rose-500">*</span></label>
+                      <div className="p-6 rounded-2xl border-2 border-gray-200 bg-gray-50/50">
+                        <button
+                          type="button"
+                          onClick={loadPagePosts}
+                          disabled={pagePostsLoading}
+                          className="w-full py-4 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+                        >
+                          {pagePostsLoading ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
+                          {pagePostsLoading ? 'Carregando posts...' : 'Buscar posts da página'}
                         </button>
-                      </div>
-                      <div className="max-h-64 overflow-y-auto rounded-2xl border border-gray-200 divide-y divide-gray-100">
-                        {pagePosts.length === 0 && !pagePostsLoading && (
-                          <p className="p-4 text-sm text-gray-500 text-center">Clique em &quot;Buscar posts&quot; para carregar os posts da sua página.</p>
-                        )}
-                        {pagePosts.map((post) => (
-                          <button
-                            key={post.id}
-                            type="button"
-                            onClick={() => setFormData(p => ({ ...p, existingPostId: post.promotableId }))}
-                            className={`w-full text-left p-4 flex gap-3 transition-all ${formData.existingPostId === post.promotableId ? 'bg-emerald-50 border-l-4 border-emerald-500' : 'hover:bg-gray-50'}`}
-                          >
-                            {post.fullPicture && <img src={post.fullPicture} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-bold text-gray-800 line-clamp-2">{post.message || '(sem texto)'}</p>
-                              <p className="text-[10px] text-gray-500 mt-1">{post.createdTime}</p>
-                              {!post.isEligibleForPromotion && <span className="text-[9px] text-amber-600 font-bold">Pode não ser elegível</span>}
+                        {pagePostsError && (
+                          <div className="mt-4 p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-3">
+                            <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-bold text-rose-800">Erro ao buscar posts</p>
+                              <p className="text-xs text-rose-700 mt-1">{pagePostsError}</p>
+                              {(pagePostsError.includes('pages_read_engagement') || pagePostsError.includes('Page Public Content Access')) && (
+                                <p className="text-xs text-rose-600 mt-2">Reconecte sua conta Meta em Configurações para liberar a permissão de leitura dos posts da página.</p>
+                              )}
                             </div>
-                          </button>
-                        ))}
+                          </div>
+                        )}
+                        <div className="mt-4 max-h-80 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100 bg-white">
+                          {pagePosts.length === 0 && !pagePostsLoading && !pagePostsError && (
+                            <p className="p-6 text-sm text-gray-500 text-center">Clique em &quot;Buscar posts da página&quot; para carregar os posts.</p>
+                          )}
+                          {pagePosts.map((post) => (
+                            <button
+                              key={post.id}
+                              type="button"
+                              onClick={() => setFormData(p => ({ ...p, existingPostId: post.promotableId }))}
+                              className={`w-full text-left p-4 flex gap-4 transition-all ${formData.existingPostId === post.promotableId ? 'bg-emerald-50 border-l-4 border-emerald-500' : 'hover:bg-gray-50'}`}
+                            >
+                              {post.fullPicture && <img src={post.fullPicture} alt="" className="w-20 h-20 rounded-lg object-cover shrink-0" />}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-gray-800 line-clamp-2">{post.message || '(sem texto)'}</p>
+                                <p className="text-xs text-gray-500 mt-1">{post.createdTime}</p>
+                                {!post.isEligibleForPromotion && <span className="text-xs text-amber-600 font-bold">Pode não ser elegível</span>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       {formErrors.existingPostId && <p className="text-xs text-rose-600 px-2">{formErrors.existingPostId}</p>}
                     </div>

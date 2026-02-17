@@ -881,9 +881,29 @@ public class MarketingService {
             }
         }
 
-        // Step 3: Fetch Pages - try BM first, fallback to me/accounts se business_management falhar
+        // Step 3: Fetch Pages - priorizar /me/accounts com access_token (Page token para /feed exige pages_read_engagement)
         boolean pageSet = false;
-        if (businessId != null) {
+        try {
+            String meAccountsUrl = String.format("%s/me/accounts?fields=id,name,access_token&access_token=%s",
+                    metaApiBaseUrl, accessToken);
+            log.info("[fetchDefaultAccounts] Buscando pages via me/accounts (com access_token para /feed)");
+            ResponseEntity<String> meAccountsResponse = getWithRetry(meAccountsUrl);
+            JsonNode meAccountsData = objectMapper.readTree(meAccountsResponse.getBody()).get("data");
+            if (meAccountsData != null && meAccountsData.isArray() && meAccountsData.size() > 0) {
+                JsonNode firstPage = meAccountsData.get(0);
+                connection.setPageId(firstPage.get("id").asText());
+                if (firstPage.has("access_token") && !firstPage.get("access_token").isNull()) {
+                    connection.setPageAccessToken(firstPage.get("access_token").asText());
+                    log.info("[fetchDefaultAccounts] Page encontrada com token (me/accounts): {}", firstPage.get("name").asText());
+                } else {
+                    log.info("[fetchDefaultAccounts] Page encontrada sem token (me/accounts): {}", firstPage.get("name").asText());
+                }
+                pageSet = true;
+            }
+        } catch (Exception e) {
+            log.warn("[fetchDefaultAccounts] me/accounts falhou: {}. Tentando owned_pages...", e.getMessage());
+        }
+        if (!pageSet && businessId != null) {
             try {
                 String pagesUrl = String.format("%s/%s/owned_pages?fields=id,name&access_token=%s",
                         metaApiBaseUrl, businessId, accessToken);
@@ -896,21 +916,24 @@ public class MarketingService {
                     pageSet = true;
                 }
             } catch (Exception e) {
-                log.warn("[fetchDefaultAccounts] BM owned_pages falhou: {}. Tentando me/accounts (fallback)...", e.getMessage());
+                log.warn("[fetchDefaultAccounts] BM owned_pages falhou: {}", e.getMessage());
             }
         }
         if (!pageSet) {
             String userIdForPages = connection.getMetaUserId() != null ? connection.getMetaUserId() : "me";
             try {
-                // Com token Business, "me" resolve para Business. Usar metaUserId explicitamente.
-                String pagesUrl = String.format("%s/%s/accounts?fields=id,name&access_token=%s",
+                String pagesUrl = String.format("%s/%s/accounts?fields=id,name,access_token&access_token=%s",
                         metaApiBaseUrl, userIdForPages, accessToken);
                 log.info("[fetchDefaultAccounts] Buscando pages via {}/accounts (fallback)", userIdForPages);
                 ResponseEntity<String> pagesResponse = getWithRetry(pagesUrl);
                 JsonNode pagesData = objectMapper.readTree(pagesResponse.getBody()).get("data");
                 if (pagesData != null && pagesData.size() > 0) {
-                    connection.setPageId(pagesData.get(0).get("id").asText());
-                    log.info("[fetchDefaultAccounts] Page encontrada (me): {}", pagesData.get(0).get("name").asText());
+                    JsonNode firstPage = pagesData.get(0);
+                    connection.setPageId(firstPage.get("id").asText());
+                    if (firstPage.has("access_token") && !firstPage.get("access_token").isNull()) {
+                        connection.setPageAccessToken(firstPage.get("access_token").asText());
+                    }
+                    log.info("[fetchDefaultAccounts] Page encontrada (fallback): {}", firstPage.get("name").asText());
                     pageSet = true;
                 }
             } catch (Exception e) {
@@ -1186,6 +1209,39 @@ public class MarketingService {
     // Methods removed
 
     /**
+     * Obtém Page access token via /me/accounts (exige pages_read_engagement).
+     * O /feed exige Page token, não System User token.
+     */
+    @Transactional
+    protected String fetchAndStorePageAccessToken(MetaConnection conn) {
+        String accessToken = conn.getAccessToken();
+        if (accessToken == null || accessToken.isBlank()) return null;
+        String pageId = conn.getPageId();
+        if (pageId == null || pageId.isBlank()) return null;
+        try {
+            String url = String.format("%s/me/accounts?fields=id,name,access_token&access_token=%s", metaApiBaseUrl, accessToken);
+            ResponseEntity<String> res = getWithRetry(url);
+            JsonNode root = objectMapper.readTree(res.getBody());
+            JsonNode data = root != null && root.has("data") ? root.get("data") : null;
+            if (data != null && data.isArray()) {
+                for (JsonNode page : data) {
+                    if (page.has("id") && pageId.equals(page.get("id").asText())
+                            && page.has("access_token") && !page.get("access_token").isNull()) {
+                        String token = page.get("access_token").asText();
+                        conn.setPageAccessToken(token);
+                        metaConnectionRepository.save(conn);
+                        log.info("[META] Page access token obtido e armazenado para page {}", pageId);
+                        return token;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[META] Falha ao obter page access token: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
      * Lista posts da página Meta elegíveis para promoção (boost).
      * GET /{page-id}/feed?fields=id,message,created_time,full_picture,is_eligible_for_promotion,promotable_id
      */
@@ -1196,9 +1252,16 @@ public class MarketingService {
         if (conn.getPageId() == null || conn.getPageId().isBlank()) {
             throw new RuntimeException("Página do Facebook não vinculada.");
         }
+        String feedToken = conn.getPageAccessToken();
+        if (feedToken == null || feedToken.isBlank()) {
+            feedToken = fetchAndStorePageAccessToken(conn);
+        }
+        if (feedToken == null || feedToken.isBlank()) {
+            throw new RuntimeException("Não foi possível obter o token da página. Reconecte o Meta Ads em Configurações.");
+        }
         try {
             adaptiveThrottle();
-            String url = metaApiBaseUrl + "/" + conn.getPageId() + "/feed?fields=id,message,created_time,full_picture,is_eligible_for_promotion,promotable_id&limit=25&access_token=" + conn.getAccessToken();
+            String url = metaApiBaseUrl + "/" + conn.getPageId() + "/feed?fields=id,message,created_time,full_picture,is_eligible_for_promotion,promotable_id&limit=25&access_token=" + feedToken;
             ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
             JsonNode node = parseJson(objectMapper, res.getBody());
             List<Map<String, Object>> list = new ArrayList<>();
