@@ -1261,7 +1261,8 @@ public class MarketingService {
         }
         try {
             adaptiveThrottle();
-            String url = metaApiBaseUrl + "/" + conn.getPageId() + "/feed?fields=id,message,created_time,full_picture,is_eligible_for_promotion,promotable_id&limit=25&access_token=" + feedToken;
+            // /published_posts pode funcionar com pages_read_engagement; /feed exige pages_read_user_content também
+            String url = metaApiBaseUrl + "/" + conn.getPageId() + "/published_posts?fields=id,message,created_time,full_picture,is_eligible_for_promotion,promotable_id&limit=25&access_token=" + feedToken;
             ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
             JsonNode node = parseJson(objectMapper, res.getBody());
             List<Map<String, Object>> list = new ArrayList<>();
