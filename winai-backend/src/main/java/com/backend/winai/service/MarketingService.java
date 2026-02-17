@@ -1564,7 +1564,7 @@ public class MarketingService {
 
         Set<String> seen = new LinkedHashSet<>();
 
-        // 0. User token (whatsapp_access_token): /me/accounts retorna whatsapp_number - prioridade
+        // 0. User token (whatsapp_access_token): /me/accounts + GET por página (whatsapp_number)
         if (conn.getWhatsappAccessToken() != null && !conn.getWhatsappAccessToken().isBlank()) {
             try {
                 String url = metaApiBaseUrl + "/me/accounts?fields=id,name,whatsapp_number,connected_whatsapp_account&access_token=" + conn.getWhatsappAccessToken();
@@ -1572,7 +1572,6 @@ public class MarketingService {
                 JsonNode root = parseJson(objectMapper, res.getBody());
                 JsonNode data = root.has("data") ? root.get("data") : null;
                 if (data != null && data.isArray()) {
-                    int pagesCount = data.size();
                     for (JsonNode page : data) {
                         String num = null;
                         if (page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
@@ -1583,25 +1582,29 @@ public class MarketingService {
                             if (cwa.has("display_phone_number")) num = cwa.get("display_phone_number").asText();
                             else if (cwa.has("phone_number")) num = cwa.get("phone_number").asText();
                         }
+                        // Fallback: GET /{page-id}?fields=whatsapp_number (User token pode retornar por página)
+                        if ((num == null || num.isBlank()) && page.has("id")) {
+                            String pageId = page.get("id").asText();
+                            try {
+                                String pageUrl = metaApiBaseUrl + "/" + pageId + "?fields=whatsapp_number&access_token=" + conn.getWhatsappAccessToken();
+                                ResponseEntity<String> pageRes = restTemplate.getForEntity(pageUrl, String.class);
+                                JsonNode pageNode = parseJson(objectMapper, pageRes.getBody());
+                                if (pageNode != null && pageNode.has("whatsapp_number") && !pageNode.get("whatsapp_number").isNull()) {
+                                    num = pageNode.get("whatsapp_number").asText();
+                                }
+                            } catch (Exception e) {
+                                log.debug("[META] GET /{}/whatsapp_number failed: {}", pageId, e.getMessage());
+                            }
+                        }
                         if (num != null && !num.isBlank()) seen.add(normalizePhoneForDedup(num));
                     }
                     if (!seen.isEmpty()) {
-                        log.info("[META] WhatsApp numbers from /me/accounts (User token): {}", seen.size());
-                    } else {
-                        log.info("[META] /me/accounts returned {} pages but none had whatsapp_number/connected_whatsapp_account", pagesCount);
-                    }
-                } else {
-                    if (root.has("error")) {
-                        log.warn("[META] /me/accounts error: {}", root.get("error").has("message") ? root.get("error").get("message").asText() : root.get("error"));
-                    } else {
-                        log.info("[META] /me/accounts returned no data array");
+                        log.info("[META] WhatsApp numbers from User token: {}", seen.size());
                     }
                 }
             } catch (Exception e) {
-                log.warn("[META] /me/accounts whatsapp_number failed: {}", e.getMessage());
+                log.warn("[META] /me/accounts failed: {}", e.getMessage());
             }
-        } else {
-            log.debug("[META] No whatsapp_access_token - run 'Adicionar número' OAuth first");
         }
 
         // 1. Número da página (o que aparece no Meta Ads - conectado via Configurações da Página)
