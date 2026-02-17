@@ -1354,11 +1354,26 @@ public class MarketingService {
         if (r.getName() == null || r.getName().isBlank()) {
             throw new RuntimeException("Nome da campanha é obrigatório");
         }
+        if (r.getName().length() > 256) {
+            throw new RuntimeException("Nome da campanha: máximo 256 caracteres (Meta)");
+        }
         if (r.getAdMessage() == null || r.getAdMessage().isBlank()) {
             throw new RuntimeException("Texto do anúncio é obrigatório");
         }
+        if (r.getAdMessage().length() > 2200) {
+            throw new RuntimeException("Texto do anúncio: máximo 2200 caracteres (Meta)");
+        }
+        if (r.getHeadline() != null && !r.getHeadline().isBlank() && r.getHeadline().length() > 40) {
+            throw new RuntimeException("Headline: máximo 40 caracteres (Meta)");
+        }
         if (r.getImageUrl() == null || r.getImageUrl().isBlank()) {
             throw new RuntimeException("Imagem do anúncio é obrigatória");
+        }
+        if ("MESSAGES".equals(r.getConversionDestination()) && r.getWhatsappPhone() != null && !r.getWhatsappPhone().isBlank()) {
+            String digits = r.getWhatsappPhone().replaceAll("\\D", "");
+            if (digits.length() < 10 || digits.length() > 15) {
+                throw new RuntimeException("WhatsApp: informe 10 a 15 dígitos (código país + número)");
+            }
         }
     }
 

@@ -7,6 +7,7 @@ import type { MetricsDateRange } from '../services/api/marketing.service';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
+import { META_LIMITS, maskPhoneInput, parsePhoneDigits } from '../utils/metaAdsLimits';
 
 const SummaryCard = ({ icon: Icon, label, metric, color }: { icon: any, label: string, metric?: any, color: string }) => {
   const value = metric?.value || '0';
@@ -424,7 +425,10 @@ const Campaigns: React.FC = () => {
   const validateStep = (step: number): boolean => {
     const errs: Record<string, string> = {};
     if (step === 0) {
-      if (!formData.name?.trim()) errs.name = 'Nome da campanha é obrigatório';
+      const n = formData.name?.trim() || '';
+      if (!n) errs.name = 'Nome da campanha é obrigatório';
+      else if (n.length < META_LIMITS.campaignName.min) errs.name = `Mínimo ${META_LIMITS.campaignName.min} caractere`;
+      else if (n.length > META_LIMITS.campaignName.max) errs.name = `Máximo ${META_LIMITS.campaignName.max} caracteres`;
     }
     if (step === 1) {
       if (formData.budgetType === 'LIFETIME') {
@@ -434,8 +438,18 @@ const Campaigns: React.FC = () => {
       }
     }
     if (step === 2) {
-      if (!formData.adMessage?.trim()) errs.adMessage = 'Texto do anúncio é obrigatório';
+      const msg = formData.adMessage?.trim() || '';
+      if (!msg) errs.adMessage = 'Texto do anúncio é obrigatório';
+      else if (msg.length > META_LIMITS.primaryText.max) errs.adMessage = `Máximo ${META_LIMITS.primaryText.max} caracteres (Meta)`;
       if (!formData.imageUrl?.trim()) errs.imageUrl = 'Imagem do anúncio é obrigatória';
+      const headline = formData.headline?.trim() || '';
+      if (headline && headline.length > META_LIMITS.headline.max) errs.headline = `Máximo ${META_LIMITS.headline.max} caracteres`;
+      if (formData.conversionDestination === 'MESSAGES') {
+        const digits = parsePhoneDigits(formData.whatsappPhone || '');
+        if (digits.length > 0 && (digits.length < META_LIMITS.whatsappPhone.min || digits.length > META_LIMITS.whatsappPhone.max)) {
+          errs.whatsappPhone = `WhatsApp: ${META_LIMITS.whatsappPhone.min}-${META_LIMITS.whatsappPhone.max} dígitos`;
+        }
+      }
     }
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
@@ -474,6 +488,7 @@ const Campaigns: React.FC = () => {
     try {
       const payload = {
         ...formData,
+        whatsappPhone: formData.conversionDestination === 'MESSAGES' ? parsePhoneDigits(formData.whatsappPhone || '') : formData.whatsappPhone,
         interests: selectedInterests.length > 0 ? JSON.stringify(selectedInterests) : ''
       };
       await marketingService.createCampaign(payload);
@@ -1084,9 +1099,11 @@ const Campaigns: React.FC = () => {
                       value={formData.name}
                       onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, name: '' })); }}
                       type="text"
+                      maxLength={META_LIMITS.campaignName.max}
                       placeholder="Ex: Lançamento Março 2025"
                       className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.name ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
                     />
+                    <p className="text-[9px] text-gray-400 px-2">{formData.name?.length || 0}/{META_LIMITS.campaignName.max}</p>
                     {formErrors.name && <p className="text-xs text-rose-600 px-2">{formErrors.name}</p>}
                   </div>
                   <div className="space-y-2">
@@ -1188,7 +1205,8 @@ const Campaigns: React.FC = () => {
                   )}
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do grupo de anúncios (opcional)</label>
-                    <input name="adSetName" value={formData.adSetName || ''} onChange={handleInputChange} type="text" placeholder="Ex: Conjunto Brasil 18-35" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                    <input name="adSetName" value={formData.adSetName || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.adSetName.max} placeholder="Ex: Conjunto Brasil 18-35" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                    <p className="text-[9px] text-gray-400 px-2">{formData.adSetName?.length || 0}/{META_LIMITS.adSetName.max}</p>
                   </div>
                   <hr className="border-gray-200 my-6" />
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Público-alvo (targeting)</p>
@@ -1346,9 +1364,13 @@ const Campaigns: React.FC = () => {
                       value={formData.adMessage}
                       onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, adMessage: '' })); }}
                       rows={4}
-                      placeholder="Texto principal que aparecerá no anúncio..."
+                      maxLength={META_LIMITS.primaryText.max}
+                      placeholder="Texto principal (125 chars visíveis no mobile, máx 2200)"
                       className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all resize-none ${formErrors.adMessage ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
                     />
+                    <p className={`text-[9px] px-2 ${(formData.adMessage?.length || 0) > 125 ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {formData.adMessage?.length || 0}/{META_LIMITS.primaryText.max} {((formData.adMessage?.length || 0) > 125) && '(125 visíveis no mobile)'}
+                    </p>
                     {formErrors.adMessage && <p className="text-xs text-rose-600 px-2">{formErrors.adMessage}</p>}
                   </div>
                   <div className="space-y-2">
@@ -1390,16 +1412,21 @@ const Campaigns: React.FC = () => {
                   </div>
                   {formData.conversionDestination === 'MESSAGES' ? (
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp <span className="text-rose-500">*</span></label>
+                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp</label>
                       <input
                         name="whatsappPhone"
                         value={formData.whatsappPhone || ''}
-                        onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, whatsappPhone: '' })); }}
+                        onChange={(e) => {
+                          const masked = maskPhoneInput(e.target.value);
+                          setFormData(prev => ({ ...prev, whatsappPhone: masked }));
+                          setFormErrors(prev => ({ ...prev, whatsappPhone: '' }));
+                        }}
                         type="tel"
-                        placeholder="5511999999999 (código país + DDD + número)"
+                        inputMode="numeric"
+                        placeholder="(11) 99999-9999 ou +55 (11) 99999-9999"
                         className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.whatsappPhone ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
                       />
-                      <p className="text-[9px] text-gray-400">Opcional se sua página do Facebook tiver WhatsApp vinculado.</p>
+                      <p className="text-[9px] text-gray-400">{parsePhoneDigits(formData.whatsappPhone || '').length} dígitos (10-15). Opcional se a página tiver WhatsApp vinculado.</p>
                       {formErrors.whatsappPhone && <p className="text-xs text-rose-600 px-2">{formErrors.whatsappPhone}</p>}
                     </div>
                   ) : (
@@ -1410,9 +1437,11 @@ const Campaigns: React.FC = () => {
                         value={formData.destinationUrl || ''}
                         onChange={handleInputChange}
                         type="url"
+                        maxLength={META_LIMITS.destinationUrl.max}
                         placeholder="https://seusite.com (vazio = facebook.com)"
                         className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
                       />
+                      <p className="text-[9px] text-gray-400 px-2">{formData.destinationUrl?.length || 0}/{META_LIMITS.destinationUrl.max}</p>
                     </div>
                   )}
                   <div className="space-y-2">
@@ -1434,19 +1463,23 @@ const Campaigns: React.FC = () => {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Título do Link (opcional)</label>
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Título do Link / Headline (opcional)</label>
                     <input
                       name="headline"
                       value={formData.headline || ''}
                       onChange={handleInputChange}
                       type="text"
-                      placeholder="Confira agora!"
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      maxLength={META_LIMITS.headline.max}
+                      placeholder="Confira agora! (máx 40 caracteres)"
+                      className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.headline ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
                     />
+                    <p className="text-[9px] text-gray-400 px-2">{formData.headline?.length || 0}/{META_LIMITS.headline.max}</p>
+                    {formErrors.headline && <p className="text-xs text-rose-600 px-2">{formErrors.headline}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do anúncio (opcional)</label>
-                    <input name="adName" value={formData.adName || ''} onChange={handleInputChange} type="text" placeholder="Ex: Anúncio Principal" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                    <input name="adName" value={formData.adName || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.adName.max} placeholder="Ex: Anúncio Principal" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                    <p className="text-[9px] text-gray-400 px-2">{formData.adName?.length || 0}/{META_LIMITS.adName.max}</p>
                   </div>
                 </div>
               )}
