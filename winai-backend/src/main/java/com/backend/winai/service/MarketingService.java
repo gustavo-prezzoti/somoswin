@@ -1572,6 +1572,7 @@ public class MarketingService {
                 JsonNode root = parseJson(objectMapper, res.getBody());
                 JsonNode data = root.has("data") ? root.get("data") : null;
                 if (data != null && data.isArray()) {
+                    int pagesCount = data.size();
                     for (JsonNode page : data) {
                         String num = null;
                         if (page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
@@ -1584,13 +1585,23 @@ public class MarketingService {
                         }
                         if (num != null && !num.isBlank()) seen.add(normalizePhoneForDedup(num));
                     }
-                    if (!seen.isEmpty()) log.info("[META] WhatsApp numbers from /me/accounts (User token): {}", seen.size());
+                    if (!seen.isEmpty()) {
+                        log.info("[META] WhatsApp numbers from /me/accounts (User token): {}", seen.size());
+                    } else {
+                        log.info("[META] /me/accounts returned {} pages but none had whatsapp_number/connected_whatsapp_account", pagesCount);
+                    }
                 } else {
-                    log.debug("[META] /me/accounts returned no data for whatsapp_access_token");
+                    if (root.has("error")) {
+                        log.warn("[META] /me/accounts error: {}", root.get("error").has("message") ? root.get("error").get("message").asText() : root.get("error"));
+                    } else {
+                        log.info("[META] /me/accounts returned no data array");
+                    }
                 }
             } catch (Exception e) {
                 log.warn("[META] /me/accounts whatsapp_number failed: {}", e.getMessage());
             }
+        } else {
+            log.debug("[META] No whatsapp_access_token - run 'Adicionar número' OAuth first");
         }
 
         // 1. Número da página (o que aparece no Meta Ads - conectado via Configurações da Página)
