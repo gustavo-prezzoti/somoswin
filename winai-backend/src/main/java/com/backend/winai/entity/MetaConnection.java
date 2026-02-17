@@ -50,6 +50,10 @@ public class MetaConnection {
     @Column(name = "page_access_token", columnDefinition = "TEXT")
     private String pageAccessToken;
 
+    /** User token do config WhatsApp (SomosAmplia) - /me/accounts retorna whatsapp_number. */
+    @Column(name = "whatsapp_access_token", columnDefinition = "TEXT")
+    private String whatsappAccessToken;
+
     @Column(name = "instagram_business_id")
     private String instagramBusinessId;
 

@@ -79,8 +79,10 @@ public class MarketingController {
             log.warn("[MetaCallback] Falha OAuth - redirecionando com error=meta_{}. Detalhe: {}", 
                     errorMessage, errorDescription != null ? errorDescription : error);
             String frontendUrl = marketingService.getFrontendUrl();
+            boolean isWhatsappFlow = companyId != null && companyId.endsWith("_whatsapp");
+            String target = isWhatsappFlow ? "/campanhas" : "/configuracoes";
             return ResponseEntity.status(302)
-                    .header("Location", frontendUrl + "/configuracoes?error=meta_" + errorMessage)
+                    .header("Location", frontendUrl + target + "?error=meta_" + errorMessage)
                     .build();
         }
 

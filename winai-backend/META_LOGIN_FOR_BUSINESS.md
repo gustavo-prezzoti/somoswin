@@ -39,3 +39,12 @@ O endpoint de posts da página exige **`pages_read_engagement`** e, em alguns ca
 4. Salve e peça aos usuários para **reconectar** a conta Meta em Configurações
 
 Se o app usa OAuth com `scope` (sem config_id), inclua todas as permissões no scope. Usuários que conectaram antes precisam reconectar para conceder as novas permissões.
+
+---
+
+## Dois config_id: Enterprise + SomosAmplia
+
+- **Enterprise (1749892883082238)** – System User token, ads, páginas, WABAs. Usado no connect principal.
+- **SomosAmplia (1792297934776856)** – User token, `whatsapp_business_management`. Usado no botão "Adicionar número".
+
+O User token permite `/me/accounts?fields=whatsapp_number`, que retorna os números vinculados às páginas. Configure `META_WHATSAPP_CONFIG_ID=1792297934776856`.
