@@ -181,19 +181,50 @@ public class MarketingService {
                 .filter(MetaConnection::isConnected)
                 .orElseThrow(() -> new RuntimeException("Meta Ads não conectado"));
 
-        String url = metaApiBaseUrl + "/" + campaignId;
-        String body = "status=" + ( "ACTIVE".equalsIgnoreCase(status) ? "ACTIVE" : "PAUSED" );
+        String normalizedStatus = "ACTIVE".equalsIgnoreCase(status) ? "ACTIVE" : "PAUSED";
+        String campaignIdForApi = extractCampaignIdForApi(campaignId);
+        String url = metaApiBaseUrl + "/" + campaignIdForApi;
+        String body = "status=" + normalizedStatus;
 
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
             HttpEntity<String> entity = new HttpEntity<>(body + "&access_token=" + conn.getAccessToken(), headers);
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-            log.info("Campaign {} status updated to {}", campaignId, status);
+            String responseBody = response.getBody();
+            if (responseBody != null && responseBody.contains("\"error\"")) {
+                JsonNode root = objectMapper.readTree(responseBody);
+                if (root.has("error")) {
+                    String msg = root.get("error").has("message") ? root.get("error").get("message").asText() : "Erro da Meta API";
+                    throw new RuntimeException(msg);
+                }
+            }
+            log.info("Campaign {} status updated to {} via Meta API", campaignId, normalizedStatus);
+
+            // Atualiza o banco local para refletir imediatamente (evita reverter ao recarregar)
+            metaCampaignRepository.findByMetaId(campaignId)
+                    .filter(c -> c.getCompany().getId().equals(company.getId()))
+                    .ifPresent(c -> {
+                        c.setStatus(normalizedStatus);
+                        metaCampaignRepository.save(c);
+                        log.debug("MetaCampaign local atualizado: {} -> {}", c.getMetaId(), normalizedStatus);
+                    });
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error updating campaign status: {}", e.getMessage());
             throw new RuntimeException("Erro ao atualizar status da campanha: " + e.getMessage());
         }
+    }
+
+    /** Extrai o ID numérico da campanha para a API Meta (aceita act_XXX/campaigns/123 ou 123). */
+    private String extractCampaignIdForApi(String campaignId) {
+        if (campaignId == null || campaignId.isBlank()) return campaignId;
+        if (campaignId.contains("/")) {
+            String[] parts = campaignId.split("/");
+            return parts[parts.length - 1];
+        }
+        return campaignId;
     }
 
     public List<Map<String, Object>> searchTargeting(User user, String query, String type) {

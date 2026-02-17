@@ -164,7 +164,7 @@ public class MetaSyncService {
 
         // 1. Sincronizar campanhas
         String campaignsUrl = String.format(
-                "%s/%s/campaigns?fields=id,name,status,objective,daily_budget,start_time,stop_time,insights%%7Bspend,impressions,reach,clicks,ctr,actions%%7D&date_preset=last_30d&access_token=%s",
+                "%s/%s/campaigns?fields=id,name,status,effective_status,objective,daily_budget,start_time,stop_time,insights%%7Bspend,impressions,reach,clicks,ctr,actions%%7D&date_preset=last_30d&access_token=%s",
                 metaApiBaseUrl, adAccountId, accessToken);
 
         try {
@@ -231,7 +231,10 @@ public class MetaSyncService {
                                     .build());
 
                     campaign.setName(node.has("name") ? node.get("name").asText() : "Campanha");
-                    campaign.setStatus(node.has("status") ? node.get("status").asText() : "UNKNOWN");
+                    // effective_status reflete o estado real de entrega (PAUSED mesmo com status=ACTIVE se houver problemas)
+                    String effectiveStatus = node.has("effective_status") ? node.get("effective_status").asText() : null;
+                    String configuredStatus = node.has("status") ? node.get("status").asText() : null;
+                    campaign.setStatus(effectiveStatus != null ? effectiveStatus : (configuredStatus != null ? configuredStatus : "UNKNOWN"));
                     campaign.setObjective(node.has("objective") ? node.get("objective").asText() : "");
                     campaign.setDailyBudget(dailyBudget > 0 ? dailyBudget : null);
                     campaign.setSpend(spend);

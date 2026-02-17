@@ -163,6 +163,8 @@ services:
       - META_SYNC_ENABLED=true
       # A cada hora (Spring cron: seg min hora dia mês dia-semana)
       - META_SYNC_CRON=0 0 * * * *
+      # Sync inicial 15s após restart (garante DB pronto)
+      - META_SYNC_INITIAL_DELAY_MS=15000
       # UaZap
       - UAZAP_BASE_URL=${UAZAP_BASE_URL}
       - UAZAP_TOKEN=${UAZAP_TOKEN}
