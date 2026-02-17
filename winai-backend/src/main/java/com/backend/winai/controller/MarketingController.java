@@ -151,7 +151,7 @@ public class MarketingController {
 
     @GetMapping("/whatsapp-add-url")
     public ResponseEntity<Map<String, String>> getWhatsAppAddUrl(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(Map.of("url", marketingService.getWhatsAppAddUrl()));
+        return ResponseEntity.ok(Map.of("url", marketingService.getWhatsAppAddUrl(user)));
     }
 
     @GetMapping("/targeting-search")

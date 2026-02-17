@@ -1490,9 +1490,11 @@ public class MarketingService {
         return null;
     }
 
-    /** URL para adicionar números WhatsApp no Business Manager (abre em popup). */
-    public String getWhatsAppAddUrl() {
-        return "https://business.facebook.com/settings/whatsapp-accounts";
+    /**
+     * URL do OAuth2 da Meta para gerenciar números WhatsApp (mesmo config_id do connect principal).
+     */
+    public String getWhatsAppAddUrl(User user) {
+        return getMetaAuthorizationUrl(user);
     }
 
     /**
