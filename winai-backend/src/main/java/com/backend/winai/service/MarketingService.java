@@ -1290,9 +1290,6 @@ public class MarketingService {
         if (r.getAdMessage() == null || r.getAdMessage().isBlank()) {
             throw new RuntimeException("Texto do anúncio é obrigatório");
         }
-        if (r.getDestinationUrl() == null || r.getDestinationUrl().isBlank()) {
-            throw new RuntimeException("URL de destino é obrigatória");
-        }
         if (r.getImageUrl() == null || r.getImageUrl().isBlank()) {
             throw new RuntimeException("Imagem do anúncio é obrigatória");
         }

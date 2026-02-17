@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Link as LinkIcon, Database, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Zap } from 'lucide-react';
+import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { marketingService, TrafficMetrics, CreateCampaignRequest, CampaignListItem, AiRecommendation } from '../services';
 import type { MetricsDateRange } from '../services/api/marketing.service';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
-import DriveFileSelector from './DriveFileSelector';
-import { DriveFile } from '../services/api/google-drive.service';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
 
@@ -41,8 +39,6 @@ const Campaigns: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [showDriveSelector, setShowDriveSelector] = useState(false);
-  const [selectedDriveFile, setSelectedDriveFile] = useState<DriveFile | null>(null);
   const [selectedInterests, setSelectedInterests] = useState<{ id: string; name: string }[]>([]);
   const [interestsSearch, setInterestsSearch] = useState('');
   const [interestsResults, setInterestsResults] = useState<{ id: string; name: string }[]>([]);
@@ -426,8 +422,6 @@ const Campaigns: React.FC = () => {
     }
     if (step === 2) {
       if (!formData.adMessage?.trim()) errs.adMessage = 'Texto do anúncio é obrigatório';
-      if (!formData.destinationUrl?.trim()) errs.destinationUrl = 'URL de destino é obrigatória';
-      else if (!/^https?:\/\/.+/.test(formData.destinationUrl.trim())) errs.destinationUrl = 'Informe uma URL válida (ex: https://...)';
       if (!formData.imageUrl?.trim()) errs.imageUrl = 'Imagem do anúncio é obrigatória';
     }
     setFormErrors(errs);
@@ -458,7 +452,7 @@ const Campaigns: React.FC = () => {
   const handleCreate = async () => {
     setValidationAttempted(true);
     if (!validateStep(2)) {
-      showToast('Preencha texto do anúncio, URL de destino e imagem.', 'error');
+      showToast('Preencha texto do anúncio e imagem.', 'error');
       return;
     }
     setValidationAttempted(false);
@@ -500,7 +494,6 @@ const Campaigns: React.FC = () => {
       imageUrl: '',
       headline: ''
     });
-    setSelectedDriveFile(null);
     setSelectedInterests([]);
     setInterestsSearch('');
     setInterestsResults([]);
@@ -1247,56 +1240,35 @@ const Campaigns: React.FC = () => {
                     {formErrors.adMessage && <p className="text-xs text-rose-600 px-2">{formErrors.adMessage}</p>}
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><LinkIcon size={12} /> URL de Destino (link) <span className="text-rose-500">*</span></label>
-                    <input
-                      name="destinationUrl"
-                      value={formData.destinationUrl}
-                      onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, destinationUrl: '' })); }}
-                      type="url"
-                      placeholder="https://seusite.com/landing"
-                      className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.destinationUrl ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
-                    />
-                    {formErrors.destinationUrl && <p className="text-xs text-rose-600 px-2">{formErrors.destinationUrl}</p>}
-                  </div>
-                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Imagem do Anúncio (picture) <span className="text-rose-500">*</span></label>
-                    <div className={`flex gap-3 flex-wrap p-4 rounded-2xl transition-all ${formErrors.imageUrl ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50'}`}>
-                      <label className="flex-1 min-w-[200px] cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/gif"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setImageUploading(true);
-                            setFormErrors(prev => ({ ...prev, imageUrl: '' }));
-                            try {
-                              const { url } = await marketingService.uploadCampaignImage(file);
-                              setFormData(p => ({ ...p, imageUrl: url }));
-                            } catch (err: any) {
-                              showToast(err?.message || 'Erro ao enviar imagem.', 'error');
-                            } finally {
-                              setImageUploading(false);
-                              e.target.value = '';
-                            }
-                          }}
-                          disabled={imageUploading}
-                        />
-                        <div className="px-6 py-4 bg-gray-50 rounded-2xl font-bold text-sm border-2 border-dashed border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all flex items-center justify-center gap-2">
-                          {imageUploading ? <Loader2 size={18} className="animate-spin" /> : <FileIcon size={18} />}
-                          {imageUploading ? 'Enviando...' : 'Enviar do computador'}
-                        </div>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setShowDriveSelector(true)}
-                        className="px-4 py-4 bg-gray-100 rounded-2xl font-bold text-xs text-gray-600 hover:bg-emerald-100 hover:text-emerald-600 transition-all flex items-center gap-2"
-                      >
-                        <Database size={16} /> Drive
-                      </button>
-                    </div>
-                    <p className="text-[9px] text-gray-400">JPG, PNG, WebP ou GIF. Envie do seu computador ou selecione do Google Drive.</p>
+                    <label className={`block p-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formErrors.imageUrl ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-300' : 'bg-gray-50 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50'}`}>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setImageUploading(true);
+                          setFormErrors(prev => ({ ...prev, imageUrl: '' }));
+                          try {
+                            const { url } = await marketingService.uploadCampaignImage(file);
+                            setFormData(p => ({ ...p, imageUrl: url }));
+                          } catch (err: any) {
+                            showToast(err?.message || 'Erro ao enviar imagem.', 'error');
+                          } finally {
+                            setImageUploading(false);
+                            e.target.value = '';
+                          }
+                        }}
+                        disabled={imageUploading}
+                      />
+                      <div className="flex items-center justify-center gap-2">
+                        {imageUploading ? <Loader2 size={18} className="animate-spin" /> : <FileIcon size={18} />}
+                        <span className="font-bold text-sm">{imageUploading ? 'Enviando...' : 'Enviar imagem do computador'}</span>
+                      </div>
+                    </label>
+                    <p className="text-[9px] text-gray-400">JPG, PNG, WebP ou GIF.</p>
                     {formErrors.imageUrl && <p className="text-xs text-rose-600 px-2">{formErrors.imageUrl}</p>}
                     {formData.imageUrl && (
                       <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 max-w-[200px]">
@@ -1367,26 +1339,6 @@ const Campaigns: React.FC = () => {
               </div>
             )}
 
-          </div>
-        </div>
-      )}
-
-      {/* Modal Drive Selector */}
-      {showDriveSelector && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50">
-          <div className="bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden border border-emerald-900/10">
-            <DriveFileSelector
-              onSelect={(file) => {
-                setSelectedDriveFile(file);
-                const imageUrl = file.id
-                  ? `https://drive.google.com/uc?export=view&id=${file.id}`
-                  : (file.webViewLink || '');
-                setFormData(p => ({ ...p, imageUrl }));
-                setFormErrors(prev => ({ ...prev, imageUrl: '' }));
-                setShowDriveSelector(false);
-              }}
-              onCancel={() => setShowDriveSelector(false)}
-            />
           </div>
         </div>
       )}
