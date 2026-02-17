@@ -86,7 +86,7 @@ const Campaigns: React.FC = () => {
   // Form states - campos conforme Meta Ads API
   const [formData, setFormData] = useState<CreateCampaignRequest>({
     name: '',
-    objective: 'LINK_CLICKS',
+    objective: 'OUTCOME_TRAFFIC',
     dailyBudget: 50,
     countryCode: 'BR',
     ageMin: 18,
@@ -483,7 +483,7 @@ const Campaigns: React.FC = () => {
     setValidationAttempted(false);
     setFormData({
       name: '',
-      objective: 'LINK_CLICKS',
+      objective: 'OUTCOME_TRAFFIC',
       dailyBudget: 50,
       countryCode: 'BR',
       ageMin: 18,
@@ -1074,7 +1074,7 @@ const Campaigns: React.FC = () => {
                       onChange={handleInputChange}
                       className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
                     >
-                      <option value="LINK_CLICKS">Tráfego (LINK_CLICKS)</option>
+                      <option value="OUTCOME_TRAFFIC">Tráfego (OUTCOME_TRAFFIC)</option>
                       <option value="OUTCOME_LEADS">Leads (OUTCOME_LEADS)</option>
                       <option value="OUTCOME_SALES">Vendas / Conversões (OUTCOME_SALES)</option>
                       <option value="OUTCOME_ENGAGEMENT">Engajamento (OUTCOME_ENGAGEMENT)</option>

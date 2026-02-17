@@ -1209,7 +1209,8 @@ public class MarketingService {
         validateRequest(request);
 
         String objective = request.getObjective();
-        if (objective == null || objective.isBlank()) objective = "LINK_CLICKS";
+        if (objective == null || objective.isBlank()) objective = "OUTCOME_TRAFFIC";
+        if ("LINK_CLICKS".equals(objective)) objective = "OUTCOME_TRAFFIC"; // Meta deprecou LINK_CLICKS
 
         long budgetCents = Math.round((request.getDailyBudget() != null ? request.getDailyBudget() : 50.0) * 100);
         budgetCents = Math.max(budgetCents, 100); // Mínimo R$ 1,00
@@ -1301,6 +1302,7 @@ public class MarketingService {
             case "OUTCOME_SALES" -> "OUTCOME_CONVERSIONS";
             case "OUTCOME_ENGAGEMENT" -> "POST_ENGAGEMENT";
             case "OUTCOME_AWARENESS" -> "REACH";
+            case "OUTCOME_TRAFFIC", "LINK_CLICKS" -> "LINK_CLICKS";
             default -> "LINK_CLICKS";
         };
     }
@@ -1312,6 +1314,7 @@ public class MarketingService {
         params.put("objective", objective);
         params.put("status", "PAUSED");
         params.put("special_ad_categories", "[]");
+        params.put("is_adset_budget_sharing_enabled", "0"); // Meta exige: 0 ou 1 na criação da campanha
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
@@ -1368,7 +1371,6 @@ public class MarketingService {
         params.put("billing_event", "IMPRESSIONS");
         params.put("promoted_object", serializeToJson(objectMapper, promotedObject));
         params.put("status", "PAUSED");
-        params.put("is_adset_budget_sharing_enabled", 0); // 0=desativado, 1=ativado (Meta exige 0 ou 1)
         params.put("access_token", accessToken);
 
         ResponseEntity<String> res = postForm(url, params);
