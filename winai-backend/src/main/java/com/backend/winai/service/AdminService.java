@@ -318,6 +318,7 @@ public class AdminService {
     /**
      * Lista todas as empresas do sistema
      */
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> getAllCompanies() {
         return companyRepository.findAll().stream()
                 .map(company -> {
