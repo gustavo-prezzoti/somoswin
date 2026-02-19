@@ -807,7 +807,7 @@ public class AdminService {
                     }
 
                     // Verificar se já tem agente vinculado
-                    knowledgeBaseConnectionRepository.findByConnection(conn).ifPresent(kbConn -> {
+                    knowledgeBaseConnectionRepository.findByConnectionIdWithKnowledgeBase(conn.getId()).ifPresent(kbConn -> {
                         map.put("agentId", kbConn.getKnowledgeBase().getId());
                         map.put("agentName", kbConn.getKnowledgeBase().getName());
                     });
