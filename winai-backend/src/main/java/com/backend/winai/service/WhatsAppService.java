@@ -39,6 +39,7 @@ import org.springframework.web.client.RestTemplate;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class WhatsAppService {
 
     private final UazapService uazapService;

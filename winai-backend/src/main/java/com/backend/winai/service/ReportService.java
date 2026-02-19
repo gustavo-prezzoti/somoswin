@@ -26,6 +26,7 @@ import java.util.Map;
 
 @Service
 @Slf4j
+@Transactional(readOnly = true)
 public class ReportService {
     
     @PersistenceContext

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Slf4j
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 @Profile("!meta-sync & !ai-recommendations-worker & !followup-worker")
 public class CalendarSyncScheduler {
 

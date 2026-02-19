@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class MeetingService {
 
     private final MeetingRepository meetingRepository;

@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class UazapService {
 
     private final WhatsAppConversationRepository conversationRepository;

@@ -19,6 +19,7 @@ import java.util.*;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class MarketingAiRecommendationsService {
 
     private final MarketingService marketingService;

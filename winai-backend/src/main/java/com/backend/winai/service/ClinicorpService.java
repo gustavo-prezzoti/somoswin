@@ -2,6 +2,7 @@ package com.backend.winai.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpEntity;
@@ -18,6 +19,7 @@ import java.util.Map;
 
 @Service
 @Slf4j
+@Transactional(readOnly = true)
 public class ClinicorpService {
 
     private final RestTemplate restTemplate = new RestTemplate();

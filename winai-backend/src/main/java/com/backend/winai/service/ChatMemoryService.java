@@ -3,11 +3,13 @@ package com.backend.winai.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ChatMemoryService {
 
     private final StringRedisTemplate redisTemplate;

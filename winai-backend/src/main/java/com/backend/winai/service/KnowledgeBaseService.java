@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class KnowledgeBaseService {
     private final KnowledgeBaseRepository repository;
     private final KnowledgeBaseChunkRepository chunkRepository;

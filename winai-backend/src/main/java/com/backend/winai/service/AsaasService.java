@@ -28,6 +28,7 @@ import java.util.UUID;
 
 @Service
 @Slf4j
+@Transactional(readOnly = true)
 public class AsaasService {
 
     private final RestTemplate restTemplate;

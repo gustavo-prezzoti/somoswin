@@ -50,6 +50,7 @@ import java.util.List;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class GoogleDriveService {
 
     private final GoogleDriveConnectionRepository driveConnectionRepository;

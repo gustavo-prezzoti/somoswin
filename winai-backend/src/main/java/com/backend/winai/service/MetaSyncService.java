@@ -32,6 +32,7 @@ import java.util.*;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class MetaSyncService {
 
     @Value("${meta.api.base-url:https://graph.facebook.com/v19.0}")

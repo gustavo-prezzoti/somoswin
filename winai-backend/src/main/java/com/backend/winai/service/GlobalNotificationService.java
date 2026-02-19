@@ -15,6 +15,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class GlobalNotificationService {
 
     private final GlobalNotificationConfigRepository repository;
