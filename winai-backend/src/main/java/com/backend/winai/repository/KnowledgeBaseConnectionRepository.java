@@ -16,6 +16,9 @@ import java.util.UUID;
 public interface KnowledgeBaseConnectionRepository extends JpaRepository<KnowledgeBaseConnection, UUID> {
     List<KnowledgeBaseConnection> findByKnowledgeBase(KnowledgeBase knowledgeBase);
 
+    @Query("SELECT kbc FROM KnowledgeBaseConnection kbc LEFT JOIN FETCH kbc.connection c LEFT JOIN FETCH c.company LEFT JOIN FETCH c.createdBy WHERE kbc.knowledgeBase = :kb")
+    List<KnowledgeBaseConnection> findByKnowledgeBaseWithConnectionAndCompany(@Param("kb") KnowledgeBase kb);
+
     Optional<KnowledgeBaseConnection> findByConnection(UserWhatsAppConnection connection);
 
     @Query("SELECT kbc FROM KnowledgeBaseConnection kbc LEFT JOIN FETCH kbc.knowledgeBase WHERE kbc.connection.id = :connectionId")

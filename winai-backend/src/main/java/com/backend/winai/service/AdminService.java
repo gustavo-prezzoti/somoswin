@@ -822,7 +822,7 @@ public class AdminService {
      * Cria uma nova conexão WhatsApp para uma empresa
      */
     @Transactional
-    public UserWhatsAppConnection createUserWhatsAppConnection(CreateUserWhatsAppConnectionRequest request) {
+    public Map<String, Object> createUserWhatsAppConnection(CreateUserWhatsAppConnectionRequest request) {
         Company company = companyRepository.findById(request.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
@@ -844,7 +844,22 @@ public class AdminService {
             userRepository.findById(request.getCreatedByUserId()).ifPresent(connection::setCreatedBy);
         }
 
-        return connectionRepository.save(connection);
+        connection = connectionRepository.save(connection);
+        UserWhatsAppConnection loaded = connectionRepository.findByIdWithCompanyAndCreatedBy(connection.getId())
+                .orElse(connection);
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", loaded.getId());
+        map.put("companyId", loaded.getCompany().getId());
+        map.put("companyName", loaded.getCompany().getName());
+        map.put("instanceName", loaded.getInstanceName());
+        map.put("isActive", loaded.getIsActive());
+        map.put("createdAt", loaded.getCreatedAt());
+        map.put("updatedAt", loaded.getUpdatedAt());
+        if (loaded.getCreatedBy() != null) {
+            map.put("createdByUserId", loaded.getCreatedBy().getId());
+            map.put("createdByUserName", loaded.getCreatedBy().getName());
+        }
+        return map;
     }
 
     /**

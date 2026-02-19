@@ -98,7 +98,7 @@ public class KnowledgeBaseService {
         KnowledgeBase kb = repository.findById(kbId).orElseThrow(() -> new RuntimeException("Base não encontrada"));
         checkPermission(user, kb.getCompany());
 
-        return connectionRepository.findByKnowledgeBase(kb).stream()
+        return connectionRepository.findByKnowledgeBaseWithConnectionAndCompany(kb).stream()
                 .map(KnowledgeBaseConnection::getConnection)
                 .collect(Collectors.toList());
     }

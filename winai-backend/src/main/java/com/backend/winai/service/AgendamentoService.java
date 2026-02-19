@@ -196,8 +196,18 @@ public class AgendamentoService {
         if (!driveConnectionRepository.findByCompany(company).filter(c -> c.isConnected()).isPresent())
             throw new IllegalStateException("Google Calendar não conectado.");
 
-        LocalDate date = LocalDate.parse(dataStr);
-        LocalTime time = LocalTime.parse(horaStr, TIME_FMT);
+        LocalDate date;
+        LocalTime time;
+        try {
+            date = LocalDate.parse(dataStr);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Data inválida. Use o formato YYYY-MM-DD (ex: 2025-02-19). Recebido: " + dataStr);
+        }
+        try {
+            time = LocalTime.parse(horaStr, TIME_FMT);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Hora inválida. Use o formato HH:mm (ex: 09:00 ou 14:30). Recebido: " + horaStr);
+        }
         int duration = opt.get().getSlotDurationMinutes();
 
         Meeting meeting = Meeting.builder()

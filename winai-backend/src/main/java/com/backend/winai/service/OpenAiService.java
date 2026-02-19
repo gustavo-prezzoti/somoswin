@@ -474,9 +474,9 @@ public class OpenAiService {
                 systemPrompt.append(
                         "   - NÃO force nem sugira agendamento sem necessidade. Só atue quando houver interesse explícito do usuário.\n");
                 systemPrompt.append(
-                        "   - Use 'buscar_horarios_disponiveis' para listar horários, depois 'criar_agendamento_google' com nome, email, telefone (NUNCA peça CPF).\n");
+                        "   - Use 'buscar_horarios_disponiveis' para listar horários, depois 'criar_agendamento_google' com nome e email (telefone já vem do WhatsApp). NUNCA peça CPF.\n");
                 systemPrompt.append(
-                        "   - Ofereça apenas 2-3 horários por vez. Peça nome, email e telefone antes de confirmar.\n");
+                        "   - Ofereça apenas 2-3 horários por vez. Peça nome e email antes de confirmar.\n");
                 String configSummary = agendamentoService.getConfigSummaryForPrompt(aiContext.getCompany());
                 if (configSummary != null && !configSummary.isEmpty()) {
                     systemPrompt.append("   - Regras da empresa: ").append(configSummary).append("\n");
@@ -1081,20 +1081,22 @@ public class OpenAiService {
         if (aiContext != null && aiContext.getCompany() != null
                 && agendamentoService.isAgendamentoEnabledForCompany(aiContext.getCompany())) {
             tools.add(createTool("buscar_horarios_disponiveis",
-                    "Busca horários disponíveis no Google Calendar para agendamento.",
+                    "Busca horários disponíveis no Google Calendar para agendamento. Retorna lista no formato 'YYYY-MM-DD HH:mm'.",
                     Map.of(
                             "data", Map.of("type", "string", "description", "Data no formato YYYY-MM-DD (opcional, padrão: hoje)."),
-                            "dias", Map.of("type", "integer", "description", "Número de dias para buscar (padrão: 7)."))));
+                            "dias", Map.of("type", "integer", "description", "Número de dias para buscar (padrão: 7).")),
+                    List.of()));
             tools.add(createTool("criar_agendamento_google",
-                    "Cria agendamento no Google Calendar. Requer nome, email e telefone do lead (NUNCA peça CPF).",
+                    "Cria agendamento no Google Calendar. Use data e hora de um slot retornado por buscar_horarios_disponiveis. Formato: data=YYYY-MM-DD, hora=HH:mm. Telefone vem do WhatsApp automaticamente.",
                     Map.of(
                             "nome", Map.of("type", "string", "description", "Nome completo do lead."),
                             "email", Map.of("type", "string", "description", "Email do lead."),
-                            "telefone", Map.of("type", "string", "description", "Telefone do lead."),
-                            "data", Map.of("type", "string", "description", "Data YYYY-MM-DD."),
-                            "hora", Map.of("type", "string", "description", "Hora HH:mm."),
+                            "telefone", Map.of("type", "string", "description", "Telefone (opcional - já temos do WhatsApp)."),
+                            "data", Map.of("type", "string", "description", "Data no formato YYYY-MM-DD (ex: 2025-02-19)."),
+                            "hora", Map.of("type", "string", "description", "Hora no formato HH:mm (ex: 09:00 ou 14:30)."),
                             "titulo", Map.of("type", "string", "description", "Título do agendamento (opcional)."),
-                            "observacoes", Map.of("type", "string", "description", "Observações (opcional)."))));
+                            "observacoes", Map.of("type", "string", "description", "Observações (opcional).")),
+                    List.of("nome", "email", "data", "hora")));
         }
 
         return tools;
@@ -1130,16 +1132,22 @@ public class OpenAiService {
             if ("criar_agendamento_google".equalsIgnoreCase(functionName)) {
                 try {
                     JsonNode args = objectMapper.readTree(jsonArgs);
-                    String nome = args.has("nome") ? args.get("nome").asText() : "";
-                    String email = args.has("email") ? args.get("email").asText() : "";
-                    String telefone = args.has("telefone") ? args.get("telefone").asText()
+                    String nome = args.has("nome") ? args.get("nome").asText().trim() : "";
+                    String email = args.has("email") ? args.get("email").asText().trim() : "";
+                    String telefone = args.has("telefone") ? args.get("telefone").asText().trim()
                             : (aiContext.getPhoneNumber() != null ? aiContext.getPhoneNumber() : "");
-                    String data = args.has("data") ? args.get("data").asText() : "";
-                    String hora = args.has("hora") ? args.get("hora").asText() : "";
-                    String titulo = args.has("titulo") ? args.get("titulo").asText() : "";
-                    String observacoes = args.has("observacoes") ? args.get("observacoes").asText() : "";
-                    if (nome.isEmpty() || data.isEmpty() || hora.isEmpty()) {
+                    String dataRaw = args.has("data") ? args.get("data").asText().trim() : "";
+                    String horaRaw = args.has("hora") ? args.get("hora").asText().trim() : "";
+                    String titulo = args.has("titulo") ? args.get("titulo").asText().trim() : "";
+                    String observacoes = args.has("observacoes") ? args.get("observacoes").asText().trim() : "";
+                    if (nome.isEmpty() || dataRaw.isEmpty() || horaRaw.isEmpty()) {
                         return "Erro: nome, data e hora são obrigatórios para agendar.";
+                    }
+                    String data = dataRaw;
+                    String hora = horaRaw;
+                    // Normaliza hora: 9:00 -> 09:00 (LocalTime.parse exige HH:mm)
+                    if (hora.matches("^\\d:[0-5]\\d$")) {
+                        hora = "0" + hora;
                     }
                     return agendamentoService.createAppointment(aiContext.getCompany(), aiContext.getLead(), nome,
                             email, telefone, data, hora, titulo, observacoes);
@@ -1153,6 +1161,12 @@ public class OpenAiService {
     }
 
     private Map<String, Object> createTool(String name, String description, Map<String, Object> properties) {
+        return createTool(name, description, properties,
+                properties.isEmpty() ? List.of() : new ArrayList<>(properties.keySet()));
+    }
+
+    private Map<String, Object> createTool(String name, String description, Map<String, Object> properties,
+            List<String> required) {
         Map<String, Object> tool = new HashMap<>();
         tool.put("type", "function");
         Map<String, Object> func = new HashMap<>();
@@ -1161,8 +1175,8 @@ public class OpenAiService {
         Map<String, Object> params = new HashMap<>();
         params.put("type", "object");
         params.put("properties", properties);
-        if (!properties.isEmpty()) {
-            params.put("required", new ArrayList<>(properties.keySet()));
+        if (!required.isEmpty()) {
+            params.put("required", required);
         }
         func.put("parameters", params);
         tool.put("function", func);
