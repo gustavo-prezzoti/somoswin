@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, Unlock, Trash2, Building2, Link as LinkIcon, Plus, Smartphone, RefreshCw, Activity, ArrowUpRight, Filter } from 'lucide-react';
 import adminService from '../../../services/adminService';
+import { getErrorMessage } from '../../../services/utils/errorHelper';
 import { useModal } from '../../../components/Admin/ModalContext';
 import './AdminUserConnections.css';
 
@@ -59,6 +60,7 @@ const AdminUserConnections: React.FC = () => {
             })));
         } catch (err: any) {
             console.error('Erro ao carregar dados:', err);
+            showToast(getErrorMessage(err, 'Erro ao carregar dados.'), 'error');
         } finally {
             setLoading(false);
         }
@@ -74,7 +76,7 @@ const AdminUserConnections: React.FC = () => {
             await loadData();
             showToast('Conexão criada com sucesso.');
         } catch (err: any) {
-            showToast('Falha ao criar a conexão.', 'error');
+            showToast(getErrorMessage(err, 'Falha ao criar a conexão.'), 'error');
             throw err;
         }
     };
@@ -156,7 +158,7 @@ const AdminUserConnections: React.FC = () => {
             await loadData();
             showToast('Estado da rede modificado.');
         } catch (err: any) {
-            showToast('Falha ao processar comando de rede.', 'error');
+            showToast(getErrorMessage(err, 'Falha ao processar comando de rede.'), 'error');
         }
     };
 
@@ -171,7 +173,7 @@ const AdminUserConnections: React.FC = () => {
                     await loadData();
                     showToast('Conexão removida com sucesso.');
                 } catch (err: any) {
-                    showToast('Não foi possível remover a conexão.', 'error');
+                    showToast(getErrorMessage(err, 'Não foi possível remover a conexão.'), 'error');
                 }
             }
         });

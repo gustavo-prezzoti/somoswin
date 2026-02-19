@@ -8,6 +8,46 @@ import { AuthResponse } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
+/**
+ * Extrai mensagem de erro padronizada da resposta da API.
+ * Backend retorna: { message, success, errors? }
+ */
+function extractErrorMessage(data: unknown, status: number): string {
+  if (data && typeof data === 'object' && 'message' in data) {
+    const m = (data as { message: unknown }).message;
+    if (typeof m === 'string' && m.trim()) return m;
+  }
+  if (data && typeof data === 'object' && 'error' in data) {
+    const e = (data as { error: unknown }).error;
+    if (typeof e === 'string' && e.trim()) return e;
+  }
+  if (data && typeof data === 'object' && 'errors' in data) {
+    const errs = (data as { errors: unknown }).errors;
+    if (errs && typeof errs === 'object' && !Array.isArray(errs)) {
+      const firstVal = Object.values(errs)[0];
+      if (typeof firstVal === 'string' && firstVal) return firstVal;
+    }
+    if (Array.isArray(errs) && errs.length > 0) {
+      const first = errs[0];
+      if (first && typeof first === 'object' && 'defaultMessage' in first) {
+        const d = (first as { defaultMessage: unknown }).defaultMessage;
+        if (typeof d === 'string' && d) return d;
+      }
+      if (first && typeof first === 'object' && 'message' in first) {
+        const m = (first as { message: unknown }).message;
+        if (typeof m === 'string' && m) return m;
+      }
+      const firstVal = Object.values(first as object)[0];
+      if (typeof firstVal === 'string' && firstVal) return firstVal;
+    }
+  }
+  if (status === 401) return 'Sessão expirada. Faça login novamente.';
+  if (status === 403) return 'Acesso negado.';
+  if (status === 404) return 'Recurso não encontrado.';
+  if (status >= 500) return 'Erro no servidor. Tente novamente mais tarde.';
+  return 'Erro na requisição. Tente novamente.';
+}
+
 interface RequestConfig extends RequestInit {
     skipAuth?: boolean;
 }
@@ -159,26 +199,13 @@ class HttpClient {
     }
 
     /**
-     * Processa a resposta da API
+     * Processa a resposta da API - extrai mensagem padronizada de erro para exibição no admin
      */
     private async handleResponse<T>(response: Response): Promise<T> {
         const data = await response.json().catch(() => null);
 
         if (!response.ok) {
-            let message: string = typeof data?.message === 'string' ? data.message
-                : typeof data?.error === 'string' ? data.error
-                : 'Erro na requisição';
-            // Se a mensagem parecer JSON bruto (ex: erro da Meta), tentar extrair texto amigável
-            if (message.startsWith('{') && message.includes('"error"')) {
-                try {
-                    const obj = JSON.parse(message);
-                    const err = obj?.error;
-                    if (err && typeof err === 'object') {
-                        const friendly = err.error_user_msg || err.error_user_title || err.message;
-                        if (typeof friendly === 'string' && friendly.trim()) message = friendly;
-                    }
-                } catch { /* manter message original */ }
-            }
+            const message = extractErrorMessage(data, response.status);
             throw new ApiError(message, response.status, data);
         }
 

@@ -3,6 +3,7 @@ import { knowledgeBaseService, KnowledgeBase } from '../../services/api/knowledg
 import { Plus, Edit2, Trash2, Bot, Database, Link as LinkIcon, Unlink, Smartphone, ShieldCheck, Zap, Building2, Search, ArrowRight, Activity } from 'lucide-react';
 import { httpClient } from '../../services/api/http-client';
 import adminService, { Company } from '../../services/adminService';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 
 interface Connection {
@@ -89,7 +90,7 @@ const AdminAgentsAI = () => {
             loadBases();
             showToast('Configurações salvas com sucesso.');
         } catch (error) {
-            showToast('Falha ao salvar as configurações.', 'error');
+            showToast(getErrorMessage(error, 'Falha ao salvar as configurações.'), 'error');
             throw error;
         }
     };
@@ -112,7 +113,7 @@ const AdminAgentsAI = () => {
                         setCompanies(prev => prev.map(c => c.id === currentCompany.id ? { ...c, defaultSupportMode: mode } : c));
                     } catch (e) {
                         console.error(e);
-                        showToast('Erro ao salvar configuração da empresa', 'error');
+                        showToast(getErrorMessage(e, 'Erro ao salvar configuração da empresa.'), 'error');
                     }
                 }
             };
@@ -267,7 +268,7 @@ const AdminAgentsAI = () => {
                     await load();
                     showToast('Instância vinculada com sucesso.');
                 } catch (e) {
-                    showToast('Esta instância já possui um agente vinculado.', 'error');
+                    showToast(getErrorMessage(e, 'Esta instância já possui um agente vinculado.'), 'error');
                 }
             };
 
@@ -363,7 +364,7 @@ const AdminAgentsAI = () => {
                     loadBases();
                     showToast('Agente excluído com sucesso.');
                 } catch (error) {
-                    showToast('Falha ao excluir o agente.', 'error');
+                    showToast(getErrorMessage(error, 'Falha ao excluir o agente.'), 'error');
                 }
             }
         });

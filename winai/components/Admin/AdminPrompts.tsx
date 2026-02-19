@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Plus, Edit2, Trash2, Zap, Search, LayoutGrid, Terminal, CheckCircle2, AlertCircle, Save, X } from 'lucide-react';
 import adminService, { SystemPrompt, CreateSystemPromptRequest, UpdateSystemPromptRequest } from '../../services/adminService';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 
 const AdminPrompts: React.FC = () => {
@@ -27,7 +28,7 @@ const AdminPrompts: React.FC = () => {
             setPrompts(data || []);
         } catch (error) {
             console.error('Erro ao carregar prompts:', error);
-            showToast('Erro ao carregar os prompts.', 'error');
+            showToast(getErrorMessage(error, 'Erro ao carregar os prompts.'), 'error');
         } finally {
             setLoading(false);
         }
@@ -45,7 +46,7 @@ const AdminPrompts: React.FC = () => {
             loadPrompts();
         } catch (error) {
             console.error('Erro ao salvar prompt:', error);
-            showToast('Falha ao salvar o prompt.', 'error');
+            showToast(getErrorMessage(error, 'Falha ao salvar o prompt.'), 'error');
             throw error;
         }
     };
@@ -178,7 +179,7 @@ const AdminPrompts: React.FC = () => {
                     showToast('Prompt excluído com sucesso.');
                     loadPrompts();
                 } catch (error) {
-                    showToast('Erro ao excluir prompt.', 'error');
+                    showToast(getErrorMessage(error, 'Erro ao excluir prompt.'), 'error');
                 }
             }
         });

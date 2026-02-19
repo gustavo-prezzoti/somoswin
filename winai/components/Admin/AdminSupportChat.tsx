@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Save, MessageSquare, Bot, AlertCircle, CheckCircle2, RotateCcw } from 'lucide-react';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
@@ -46,11 +46,12 @@ const AdminSupportChat: React.FC = () => {
             } else if (response.status === 401) {
                 setMessage({ type: 'error', text: 'Sessão expirada. Faça login novamente.' });
             } else {
-                setMessage({ type: 'error', text: 'Erro ao carregar configurações.' });
+                const data = await response.json().catch(() => ({}));
+                setMessage({ type: 'error', text: getErrorMessage({ message: data?.message, data }, 'Erro ao carregar configurações.') });
             }
         } catch (error) {
             console.error('Failed to fetch config', error);
-            setMessage({ type: 'error', text: 'Erro ao carregar configurações.' });
+            setMessage({ type: 'error', text: getErrorMessage(error, 'Erro ao carregar configurações.') });
         } finally {
             setIsLoading(false);
         }
@@ -80,11 +81,12 @@ const AdminSupportChat: React.FC = () => {
             } else if (response.status === 401) {
                 setMessage({ type: 'error', text: 'Sessão expirada. Faça login novamente.' });
             } else {
-                setMessage({ type: 'error', text: 'Erro ao salvar configurações.' });
+                const data = await response.json().catch(() => ({}));
+                setMessage({ type: 'error', text: getErrorMessage({ message: data?.message, data }, 'Erro ao salvar configurações.') });
             }
         } catch (error) {
             console.error('Failed to save', error);
-            setMessage({ type: 'error', text: 'Erro de conexão.' });
+            setMessage({ type: 'error', text: getErrorMessage(error, 'Erro ao salvar configurações.') });
         } finally {
             setIsSaving(false);
         }

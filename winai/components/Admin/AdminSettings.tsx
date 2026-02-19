@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { RefreshCw, Save, Globe, ShieldCheck, Zap, Activity } from 'lucide-react';
 import adminService, { GlobalWebhookConfig } from '../../services/adminService';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 
 const AdminSettings: React.FC = () => {
@@ -78,7 +79,7 @@ const AdminSettings: React.FC = () => {
                     await adminService.setGlobalWebhook(configToSave);
                     showToast('Configuração salva com sucesso.');
                 } catch (err: any) {
-                    showToast('Falha ao salvar configuração.', 'error');
+                    showToast(getErrorMessage(err, 'Falha ao salvar configuração.'), 'error');
                 } finally {
                     setSaving(false);
                 }

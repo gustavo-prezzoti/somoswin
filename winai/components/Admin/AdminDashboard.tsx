@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Users, MessageSquare, Smartphone, MessagesSquare, RefreshCw, AlertCircle, Activity, ArrowUpRight, Zap, Cpu } from 'lucide-react';
 import adminService from '../../services/adminService';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 
 interface StatCardProps {
     icon: React.ReactNode;
@@ -78,7 +79,7 @@ const AdminDashboard: React.FC = () => {
                 navigate('/admin/login');
                 return;
             }
-            setError(err.message || 'Erro ao carregar estatísticas');
+            setError(getErrorMessage(err, 'Erro ao carregar estatísticas'));
         } finally {
             setLoading(false);
         }

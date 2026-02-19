@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Building2, RefreshCw, Bot, User, Calendar, AlertCircle, CheckCircle, Settings, Info, Pause, MessageSquare, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import adminService, { Company, followUpService, FollowUpConfig, FollowUpConfigRequest, FollowUpStepRequest } from '../../services/adminService';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 
 const AdminFollowUp = () => {
@@ -136,7 +137,7 @@ const AdminFollowUp = () => {
             loadConfig();
         } catch (error) {
             console.error('Erro ao salvar:', error);
-            showToast('Erro ao salvar configurações.', 'error');
+            showToast(getErrorMessage(error, 'Erro ao salvar configurações.'), 'error');
         } finally {
             setIsSaving(false);
         }

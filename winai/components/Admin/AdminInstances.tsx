@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { RefreshCw, Wifi, WifiOff, Plus, Trash2, Power, Smartphone, QrCode, Search, Activity, Zap } from 'lucide-react';
 import adminService, { AdminInstance, CreateInstanceRequest } from '../../services/adminService';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 
 const AdminInstances: React.FC = () => {
@@ -66,7 +67,7 @@ const AdminInstances: React.FC = () => {
             showToast('Instância criada com sucesso.');
             await loadInstances();
         } catch (err: any) {
-            showToast(err.message || 'Falha ao criar instância.', 'error');
+            showToast(getErrorMessage(err, 'Falha ao criar instância.'), 'error');
             throw err;
         }
     };
@@ -206,7 +207,7 @@ const AdminInstances: React.FC = () => {
                 setTimeout(() => loadInstances(), 2000);
             }
         } catch (err: any) {
-            showToast('Falha ao conectar instância.', 'error');
+            showToast(getErrorMessage(err, 'Falha ao conectar instância.'), 'error');
         } finally {
             setConnectingInstance(null);
         }
@@ -224,7 +225,7 @@ const AdminInstances: React.FC = () => {
                     showToast('Instância desconectada com sucesso.');
                     await loadInstances();
                 } catch (err: any) {
-                    showToast('Falha ao desconectar a instância.', 'error');
+                    showToast(getErrorMessage(err, 'Falha ao desconectar a instância.'), 'error');
                 } finally {
                     setDisconnectingInstance(null);
                 }
@@ -243,7 +244,7 @@ const AdminInstances: React.FC = () => {
                     showToast('Instância excluída com sucesso.');
                     await loadInstances();
                 } catch (err: any) {
-                    showToast('Não foi possível excluir a instância.', 'error');
+                    showToast(getErrorMessage(err, 'Não foi possível excluir a instância.'), 'error');
                 }
             }
         });

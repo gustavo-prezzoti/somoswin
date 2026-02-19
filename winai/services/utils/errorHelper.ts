@@ -1,6 +1,6 @@
 /**
- * Extrai mensagem amigável de erros da API para exibição em toasts/alerts.
- * Suporta: ApiError, Error, respostas com errors[], e mensagens com JSON embutido (Asaas, etc).
+ * Extrai mensagem amigável de erros da API para exibição em toasts/alerts no admin.
+ * Suporta: ApiError, Error, respostas com message/errors, e JSON embutido (Asaas, Meta).
  */
 
 import { ApiError } from '../api/http-client';
@@ -34,7 +34,6 @@ function extractFromJsonInMessage(msg: string): string | null {
     const desc = parsed?.error?.description;
     if (desc && typeof desc === 'string') return desc;
   } catch {
-    // fallback: regex para "description":"..."
     const m = msg.match(/"description"\s*:\s*"([^"]+)"/);
     if (m) return m[1];
   }
@@ -43,8 +42,7 @@ function extractFromJsonInMessage(msg: string): string | null {
 
 /**
  * Retorna a melhor mensagem para exibir ao usuário a partir de qualquer erro.
- * @param error - Erro capturado (ApiError, Error, unknown)
- * @param fallback - Mensagem padrão se não conseguir extrair
+ * Usar em todos os catch do admin para mostrar o erro real retornado pela API.
  */
 export function getErrorMessage(
   error: unknown,
@@ -65,11 +63,19 @@ export function getErrorMessage(
     data = 'data' in error ? (error as { data: unknown }).data : null;
   }
 
-  if (!raw || typeof raw !== 'string') return fallback;
+  // 1) Prioridade: data.message (resposta padronizada do backend)
+  if (data && typeof data === 'object' && 'message' in data) {
+    const m = (data as { message: unknown }).message;
+    if (typeof m === 'string' && m.trim()) return m;
+  }
 
-  // 1) Se data tem errors[] (ex: validação do backend)
+  // 2) data.errors como objeto { campo: mensagem }
   if (data && typeof data === 'object' && 'errors' in data) {
     const errs = (data as { errors: unknown }).errors;
+    if (errs && typeof errs === 'object' && !Array.isArray(errs)) {
+      const firstVal = Object.values(errs)[0];
+      if (typeof firstVal === 'string' && firstVal) return firstVal;
+    }
     if (Array.isArray(errs) && errs.length > 0) {
       const first = errs[0];
       if (first && typeof first === 'object' && 'description' in first) {
@@ -83,18 +89,12 @@ export function getErrorMessage(
     }
   }
 
-  // 2) Se data tem message
-  if (data && typeof data === 'object' && 'message' in data) {
-    const m = (data as { message: unknown }).message;
-    if (typeof m === 'string' && m) return m;
+  // 3) raw (message do ApiError/Error) - já vem extraído pelo http-client
+  if (raw && typeof raw === 'string' && raw.trim()) {
+    const extracted = extractFromJsonInMessage(raw);
+    if (extracted) return extracted;
+    if (raw.length <= 300 && !raw.startsWith('{')) return raw;
   }
-
-  // 3) Se raw contém JSON embutido (ex: "Erro ao criar: {"errors":[...]}")
-  const extracted = extractFromJsonInMessage(raw);
-  if (extracted) return extracted;
-
-  // 4) Usar raw se for curta e legível
-  if (raw.length <= 200 && !raw.includes('{')) return raw;
 
   return fallback;
 }

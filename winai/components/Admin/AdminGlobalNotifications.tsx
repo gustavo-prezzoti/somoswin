@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, RefreshCw, User, AlertCircle, CheckCircle, Info, MessageSquare, Phone, Bell } from 'lucide-react';
 import adminService, { Company, globalNotificationService, GlobalNotificationConfig, GlobalNotificationConfigRequest } from '../../services/adminService';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 
 const AdminGlobalNotifications = () => {
@@ -102,7 +103,7 @@ const AdminGlobalNotifications = () => {
             loadConfig();
         } catch (error) {
             console.error('Erro ao salvar:', error);
-            showToast('Erro ao salvar configurações.', 'error');
+            showToast(getErrorMessage(error, 'Erro ao salvar configurações.'), 'error');
         } finally {
             setIsSaving(false);
         }
