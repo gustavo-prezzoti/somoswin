@@ -665,9 +665,17 @@ public class AIAgentService {
                     : conversation.getPhoneNumber()) + " solicitou um atendente.";
 
             for (User user : companyUsers) {
-                Notification notification = Notification.builder().user(user).title(title).message(message)
-                        .type("WARNING").relatedEntityType("CONVERSATION").relatedEntityId(conversation.getId())
-                        .actionUrl("/whatsapp?chatId=" + conversation.getId()).read(false).build();
+                Notification notification = Notification.builder()
+                        .user(user)
+                        .company(conversation.getCompany())
+                        .title(title)
+                        .message(message)
+                        .type("WARNING")
+                        .relatedEntityType("CONVERSATION")
+                        .relatedEntityId(conversation.getId())
+                        .actionUrl("/whatsapp?chatId=" + conversation.getId())
+                        .read(false)
+                        .build();
                 notificationRepository.save(notification);
             }
 

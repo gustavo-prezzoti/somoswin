@@ -2,6 +2,7 @@ package com.backend.winai.controller;
 
 import com.backend.winai.dto.response.NotificationResponse;
 import com.backend.winai.entity.User;
+import com.backend.winai.repository.UserRepository;
 import com.backend.winai.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,31 +18,40 @@ import java.util.UUID;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final UserRepository userRepository;
+
+    private User getUserWithCompany(User user) {
+        return userRepository.findByEmailWithCompany(user.getEmail())
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+    }
 
     /**
-     * Lista todas as notificações do usuário autenticado
+     * Lista todas as notificações do usuário autenticado (filtradas por empresa)
      */
     @GetMapping
     public ResponseEntity<List<NotificationResponse>> getNotifications(@AuthenticationPrincipal User user) {
-        List<NotificationResponse> notifications = notificationService.getUserNotifications(user);
+        User userWithCompany = getUserWithCompany(user);
+        List<NotificationResponse> notifications = notificationService.getUserNotifications(userWithCompany);
         return ResponseEntity.ok(notifications);
     }
 
     /**
-     * Lista apenas notificações não lidas
+     * Lista apenas notificações não lidas (filtradas por empresa)
      */
     @GetMapping("/unread")
     public ResponseEntity<List<NotificationResponse>> getUnreadNotifications(@AuthenticationPrincipal User user) {
-        List<NotificationResponse> notifications = notificationService.getUnreadNotifications(user);
+        User userWithCompany = getUserWithCompany(user);
+        List<NotificationResponse> notifications = notificationService.getUnreadNotifications(userWithCompany);
         return ResponseEntity.ok(notifications);
     }
 
     /**
-     * Conta notificações não lidas
+     * Conta notificações não lidas (filtradas por empresa)
      */
     @GetMapping("/unread/count")
     public ResponseEntity<Long> getUnreadCount(@AuthenticationPrincipal User user) {
-        Long count = notificationService.getUnreadCount(user);
+        User userWithCompany = getUserWithCompany(user);
+        Long count = notificationService.getUnreadCount(userWithCompany);
         return ResponseEntity.ok(count);
     }
 
@@ -52,7 +62,8 @@ public class NotificationController {
     public ResponseEntity<NotificationResponse> markAsRead(
             @PathVariable UUID id,
             @AuthenticationPrincipal User user) {
-        NotificationResponse notification = notificationService.markAsRead(id, user);
+        User userWithCompany = getUserWithCompany(user);
+        NotificationResponse notification = notificationService.markAsRead(id, userWithCompany);
         return ResponseEntity.ok(notification);
     }
 
@@ -61,7 +72,8 @@ public class NotificationController {
      */
     @PutMapping("/read-all")
     public ResponseEntity<Void> markAllAsRead(@AuthenticationPrincipal User user) {
-        notificationService.markAllAsRead(user);
+        User userWithCompany = getUserWithCompany(user);
+        notificationService.markAllAsRead(userWithCompany);
         return ResponseEntity.ok().build();
     }
 
@@ -72,7 +84,8 @@ public class NotificationController {
     public ResponseEntity<Void> deleteNotification(
             @PathVariable UUID id,
             @AuthenticationPrincipal User user) {
-        notificationService.deleteNotification(id, user);
+        User userWithCompany = getUserWithCompany(user);
+        notificationService.deleteNotification(id, userWithCompany);
         return ResponseEntity.ok().build();
     }
 }

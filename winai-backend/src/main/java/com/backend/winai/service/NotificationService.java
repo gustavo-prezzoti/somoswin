@@ -29,11 +29,12 @@ public class NotificationService {
      */
     @Transactional
     public NotificationResponse createNotification(CreateNotificationRequest request) {
-        User user = userRepository.findById(request.getUserId())
+        User user = userRepository.findByIdWithCompany(request.getUserId())
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
         Notification notification = Notification.builder()
                 .user(user)
+                .company(user.getCompany())
                 .title(request.getTitle())
                 .message(request.getMessage())
                 .type(request.getType())
@@ -48,32 +49,45 @@ public class NotificationService {
     }
 
     /**
-     * Lista todas as notificações do usuário
+     * Lista todas as notificações do usuário, filtradas por empresa quando aplicável
      */
     @Transactional(readOnly = true)
     public List<NotificationResponse> getUserNotifications(User user) {
-        List<Notification> notifications = notificationRepository.findByUserOrderByCreatedAtDesc(user);
+        List<Notification> notifications;
+        if (user.getCompany() != null) {
+            notifications = notificationRepository.findByUserAndCompanyOrderByCreatedAtDesc(user, user.getCompany());
+        } else {
+            notifications = notificationRepository.findByUserOrderByCreatedAtDesc(user);
+        }
         return notifications.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     /**
-     * Lista apenas notificações não lidas
+     * Lista apenas notificações não lidas, filtradas por empresa
      */
     @Transactional(readOnly = true)
     public List<NotificationResponse> getUnreadNotifications(User user) {
-        List<Notification> notifications = notificationRepository.findByUserAndReadOrderByCreatedAtDesc(user, false);
+        List<Notification> notifications;
+        if (user.getCompany() != null) {
+            notifications = notificationRepository.findByUserAndCompanyAndReadOrderByCreatedAtDesc(user, user.getCompany(), false);
+        } else {
+            notifications = notificationRepository.findByUserAndReadOrderByCreatedAtDesc(user, false);
+        }
         return notifications.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     /**
-     * Conta notificações não lidas
+     * Conta notificações não lidas, filtradas por empresa
      */
     @Transactional(readOnly = true)
     public Long getUnreadCount(User user) {
+        if (user.getCompany() != null) {
+            return notificationRepository.countUnreadByUserAndCompany(user, user.getCompany());
+        }
         return notificationRepository.countUnreadByUser(user);
     }
 
@@ -88,6 +102,10 @@ public class NotificationService {
         if (!notification.getUser().getId().equals(user.getId())) {
             throw new RuntimeException("Notificação não pertence ao usuário");
         }
+        if (user.getCompany() != null && notification.getCompany() != null
+                && !notification.getCompany().getId().equals(user.getCompany().getId())) {
+            throw new RuntimeException("Notificação não pertence à empresa do usuário");
+        }
 
         notification.setRead(true);
         notification = notificationRepository.save(notification);
@@ -95,11 +113,15 @@ public class NotificationService {
     }
 
     /**
-     * Marca todas as notificações como lidas
+     * Marca todas as notificações como lidas, filtradas por empresa
      */
     @Transactional
     public void markAllAsRead(User user) {
-        notificationRepository.markAllAsReadByUser(user);
+        if (user.getCompany() != null) {
+            notificationRepository.markAllAsReadByUserAndCompany(user, user.getCompany());
+        } else {
+            notificationRepository.markAllAsReadByUser(user);
+        }
     }
 
     /**
@@ -112,6 +134,10 @@ public class NotificationService {
 
         if (!notification.getUser().getId().equals(user.getId())) {
             throw new RuntimeException("Notificação não pertence ao usuário");
+        }
+        if (user.getCompany() != null && notification.getCompany() != null
+                && !notification.getCompany().getId().equals(user.getCompany().getId())) {
+            throw new RuntimeException("Notificação não pertence à empresa do usuário");
         }
 
         notificationRepository.delete(notification);
