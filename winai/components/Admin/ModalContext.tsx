@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { AlertCircle, CheckCircle2, Info, X, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
+import { getErrorMessage } from '../../services/utils/errorHelper';
 
 type ModalType = 'alert' | 'confirm' | 'success' | 'error' | 'warning' | 'danger';
 
@@ -69,6 +70,12 @@ export const ModalProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 closeModal();
             } catch (error) {
                 console.error('Modal action failed:', error);
+                const msg = getErrorMessage(error, 'Operação falhou. Tente novamente.');
+                setModalStack(prev => {
+                    const last = prev[prev.length - 1];
+                    if (!last) return prev;
+                    return [...prev.slice(0, -1), { ...last, message: msg, type: 'error' as ModalType }];
+                });
             } finally {
                 setIsLoading(false);
             }
@@ -172,7 +179,7 @@ export const ModalProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                                         )}
                                     </div>
                                     {currentModal.message && (
-                                        <p className="text-gray-500 text-sm mt-3 leading-relaxed font-bold italic">
+                                        <p className={`text-sm mt-3 leading-relaxed font-bold italic ${currentModal.type === 'error' || currentModal.type === 'danger' ? 'text-rose-600' : 'text-gray-500'}`}>
                                             {currentModal.message}
                                         </p>
                                     )}

@@ -5,6 +5,10 @@
 
 import { ApiError } from '../api/http-client';
 
+function isApiErrorLike(e: unknown): e is { message: string; data?: unknown } {
+  return e != null && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string';
+}
+
 function extractFromJsonInMessage(msg: string): string | null {
   if (!msg || typeof msg !== 'string') return null;
   const start = msg.indexOf('{"errors"');
@@ -56,6 +60,9 @@ export function getErrorMessage(
   if (error instanceof ApiError) {
     raw = error.message;
     data = error.data;
+  } else if (isApiErrorLike(error)) {
+    raw = error.message;
+    data = 'data' in error ? (error as { data: unknown }).data : null;
   } else if (error instanceof Error) {
     raw = error.message;
   } else if (typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
@@ -63,7 +70,18 @@ export function getErrorMessage(
     data = 'data' in error ? (error as { data: unknown }).data : null;
   }
 
-  // 1) Prioridade: data.message (resposta padronizada do backend)
+  // 0) Qualquer objeto com data.message (ex: ApiError após serialização entre módulos)
+  if (data && typeof data === 'object' && 'message' in data) {
+    const m = (data as { message: unknown }).message;
+    if (typeof m === 'string' && m.trim()) return m;
+  }
+
+  // 1) raw já pode conter a mensagem extraída pelo http-client
+  if (raw && typeof raw === 'string' && raw.trim() && raw.length <= 300 && !raw.startsWith('{')) {
+    return raw;
+  }
+
+  // 2) Prioridade: data.message (resposta padronizada do backend) - redundante com 0
   if (data && typeof data === 'object' && 'message' in data) {
     const m = (data as { message: unknown }).message;
     if (typeof m === 'string' && m.trim()) return m;
@@ -93,6 +111,7 @@ export function getErrorMessage(
   if (raw && typeof raw === 'string' && raw.trim()) {
     const extracted = extractFromJsonInMessage(raw);
     if (extracted) return extracted;
+    // Mensagem direta da API (ex: "Esta empresa já possui uma conexão com esta instância")
     if (raw.length <= 300 && !raw.startsWith('{')) return raw;
   }
 
