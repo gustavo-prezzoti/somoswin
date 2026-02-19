@@ -791,7 +791,7 @@ public class AdminService {
      * Lista todas as conexões WhatsApp de empresas
      */
     public List<Map<String, Object>> getAllUserWhatsAppConnections() {
-        return connectionRepository.findAll().stream()
+        return connectionRepository.findAllWithCompanyAndCreatedBy().stream()
                 .map(conn -> {
                     Map<String, Object> map = new HashMap<>();
                     map.put("id", conn.getId());

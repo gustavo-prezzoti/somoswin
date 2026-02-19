@@ -13,6 +13,9 @@ import java.util.UUID;
 @Repository
 public interface UserWhatsAppConnectionRepository extends JpaRepository<UserWhatsAppConnection, UUID> {
 
+        @Query("SELECT c FROM UserWhatsAppConnection c LEFT JOIN FETCH c.company LEFT JOIN FETCH c.createdBy")
+        List<UserWhatsAppConnection> findAllWithCompanyAndCreatedBy();
+
         /**
          * Busca todas as conexões de uma empresa
          */
