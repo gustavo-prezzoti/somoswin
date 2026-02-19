@@ -188,7 +188,11 @@ const AdminAgentsAI = () => {
                                 <input
                                     type="checkbox"
                                     checked={isCustom}
-                                    onChange={e => setIsCustom(e.target.checked)}
+                                    onChange={e => {
+                                        const checked = e.target.checked;
+                                        setIsCustom(checked);
+                                        if (!checked) update({ agentPrompt: '' });
+                                    }}
                                     className="w-5 h-5 rounded-lg border-2 border-gray-300 text-emerald-600 focus:ring-emerald-500"
                                 />
                                 <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Customizar System Prompt</span>

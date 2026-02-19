@@ -223,8 +223,8 @@ public class TrafficAdvisorChatService {
     }
 
     private String buildTrafficAdvisorSystemPrompt() {
-        // Busca o prompt mestre configurado no Admin para TRAFFIC_PAID
-        return systemPromptRepository.findByCategoryAndIsActiveTrueAndIsDefaultTrue("TRAFFIC_PAID")
+        // Busca o prompt mestre configurado no Admin para PAID_TRAFFIC
+        return systemPromptRepository.findByCategoryAndIsActiveTrueAndIsDefaultTrue("PAID_TRAFFIC")
                 .map(SystemPrompt::getContent)
                 .orElse(getDefaultTrafficAdvisorPrompt());
     }
