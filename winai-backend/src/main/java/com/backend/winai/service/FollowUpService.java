@@ -248,8 +248,10 @@ public class FollowUpService {
     /**
      * Processa follow-ups pendentes de forma assíncrona.
      * Chamado pelo FollowUpScheduler.
+     * Usa transação read-write pois processFollowUpByIdWithLock usa SELECT FOR UPDATE.
      */
     @Async("followUpTaskExecutor")
+    @Transactional(readOnly = false)
     public void processPendingFollowUpsAsync() {
         ZonedDateTime now = ZonedDateTime.now();
         List<FollowUpStatus> pendingList = statusRepository.findPendingFollowUps(now);
@@ -313,9 +315,9 @@ public class FollowUpService {
 
     /**
      * Processa follow-up com trava para evitar duplicidade em ambientes
-     * concorrentes.
+     * concorrentes. REQUIRES_NEW para não herdar read-only do caller.
      */
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = false)
     public void processFollowUpByIdWithLock(UUID statusId) {
         // Usa SELECT FOR UPDATE para garantir exclusividade imediata
         Optional<FollowUpStatus> statusOpt = statusRepository.findByIdWithLock(statusId);
