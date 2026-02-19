@@ -1242,48 +1242,49 @@ public class MarketingService {
     }
 
     /**
-     * Lista posts da página Meta elegíveis para promoção (boost).
-     * GET /{page-id}/feed?fields=id,message,created_time,full_picture,is_eligible_for_promotion,promotable_id
+     * Lista posts do Instagram elegíveis para promoção (boost).
+     * GET /{ig-user-id}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,boost_eligibility_info
      */
     public List<Map<String, Object>> getPagePosts(User user) {
         MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
                 .filter(MetaConnection::isConnected)
                 .orElseThrow(() -> new RuntimeException("Conecte sua conta Meta Ads em Configurações"));
-        if (conn.getPageId() == null || conn.getPageId().isBlank()) {
-            throw new RuntimeException("Página do Facebook não vinculada.");
+        if (conn.getInstagramBusinessId() == null || conn.getInstagramBusinessId().isBlank()) {
+            throw new RuntimeException("Conta do Instagram não vinculada. Reconecte o Meta Ads e autorize o Instagram.");
         }
-        String feedToken = conn.getPageAccessToken();
-        if (feedToken == null || feedToken.isBlank()) {
-            feedToken = fetchAndStorePageAccessToken(conn);
-        }
-        if (feedToken == null || feedToken.isBlank()) {
-            throw new RuntimeException("Não foi possível obter o token da página. Reconecte o Meta Ads em Configurações.");
+        String accessToken = conn.getAccessToken();
+        if (accessToken == null || accessToken.isBlank()) {
+            throw new RuntimeException("Token Meta não disponível. Reconecte o Meta Ads em Configurações.");
         }
         try {
             adaptiveThrottle();
-            // /published_posts pode funcionar com pages_read_engagement; /feed exige pages_read_user_content também
-            String url = metaApiBaseUrl + "/" + conn.getPageId() + "/published_posts?fields=id,message,created_time,full_picture,is_eligible_for_promotion,promotable_id&limit=25&access_token=" + feedToken;
+            String url = metaApiBaseUrl + "/" + conn.getInstagramBusinessId() + "/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,boost_eligibility_info&limit=25&access_token=" + accessToken;
             ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
             JsonNode node = parseJson(objectMapper, res.getBody());
             List<Map<String, Object>> list = new ArrayList<>();
             if (node.has("data") && node.get("data").isArray()) {
                 for (JsonNode item : node.get("data")) {
-                    boolean eligible = item.has("is_eligible_for_promotion") && item.get("is_eligible_for_promotion").asBoolean();
-                    String promotableId = item.has("promotable_id") ? item.get("promotable_id").asText() : item.get("id").asText();
+                    boolean eligible = true;
+                    if (item.has("boost_eligibility_info") && !item.get("boost_eligibility_info").isNull()) {
+                        JsonNode bei = item.get("boost_eligibility_info");
+                        eligible = bei.has("eligibility_status") && "ELIGIBLE".equalsIgnoreCase(bei.get("eligibility_status").asText());
+                    }
+                    String mediaId = item.get("id").asText();
+                    String picture = item.has("media_url") ? item.get("media_url").asText() : (item.has("thumbnail_url") ? item.get("thumbnail_url").asText() : null);
                     Map<String, Object> m = new HashMap<>();
-                    m.put("id", item.get("id").asText());
-                    m.put("promotableId", promotableId);
-                    m.put("message", item.has("message") ? item.get("message").asText() : "");
-                    m.put("createdTime", item.has("created_time") ? item.get("created_time").asText() : "");
-                    m.put("fullPicture", item.has("full_picture") ? item.get("full_picture").asText() : null);
+                    m.put("id", mediaId);
+                    m.put("promotableId", mediaId);
+                    m.put("message", item.has("caption") ? item.get("caption").asText() : "");
+                    m.put("createdTime", item.has("timestamp") ? item.get("timestamp").asText() : "");
+                    m.put("fullPicture", picture);
                     m.put("isEligibleForPromotion", eligible);
                     list.add(m);
                 }
             }
             return list;
         } catch (Exception e) {
-            log.error("[META] Error fetching page posts", e);
-            throw new RuntimeException("Erro ao buscar posts da página: " + (e.getMessage() != null ? e.getMessage() : "Verifique a conexão Meta."));
+            log.error("[META] Error fetching Instagram media", e);
+            throw new RuntimeException("Erro ao buscar posts do Instagram: " + (e.getMessage() != null ? e.getMessage() : "Verifique a conexão Meta."));
         }
     }
 
@@ -1373,7 +1374,11 @@ public class MarketingService {
 
             String creativeId;
             if (useExistingPost && existingPostId != null && !existingPostId.isBlank()) {
-                creativeId = createMetaAdCreativeFromExistingPost(adAccountId, accessToken, existingPostId);
+                String igUserId = conn.getInstagramBusinessId();
+                if (igUserId == null || igUserId.isBlank()) {
+                    throw new RuntimeException("Instagram não vinculado. Reconecte o Meta Ads e autorize o Instagram para promover posts existentes.");
+                }
+                creativeId = createMetaAdCreativeFromExistingPost(adAccountId, accessToken, pageId, igUserId, existingPostId);
             } else {
                 String adImageHash = null;
                 if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
@@ -1815,12 +1820,19 @@ public class MarketingService {
         throw new RuntimeException("Meta API: Falha ao fazer upload da imagem. Use uma URL pública de imagem.");
     }
 
-    private String createMetaAdCreativeFromExistingPost(String adAccountId, String accessToken, String existingPostId) {
+    private String createMetaAdCreativeFromExistingPost(String adAccountId, String accessToken, String pageId, String instagramUserId, String existingPostId) {
         String url = metaApiBaseUrl + "/" + adAccountId + "/adcreatives";
         Map<String, Object> params = new HashMap<>();
         params.put("name", "Creative - " + System.currentTimeMillis());
-        params.put("object_story_id", existingPostId);
         params.put("access_token", accessToken);
+
+        if (instagramUserId != null && !instagramUserId.isBlank()) {
+            params.put("object_id", pageId);
+            params.put("instagram_user_id", instagramUserId);
+            params.put("source_instagram_media_id", existingPostId);
+        } else {
+            params.put("object_story_id", existingPostId);
+        }
 
         ResponseEntity<String> res = postForm(url, params);
         String body = res.getBody();

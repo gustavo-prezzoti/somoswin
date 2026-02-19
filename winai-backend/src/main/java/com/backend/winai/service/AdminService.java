@@ -35,6 +35,12 @@ import com.backend.winai.repository.MetaAdRepository;
 import com.backend.winai.repository.MetaInsightRepository;
 import com.backend.winai.repository.SystemPromptRepository;
 import com.backend.winai.repository.PlanRepository;
+import com.backend.winai.repository.AiRecommendationCacheRepository;
+import com.backend.winai.repository.AgendamentoConfigRepository;
+import com.backend.winai.repository.FollowUpConfigRepository;
+import com.backend.winai.repository.FollowUpStatusRepository;
+import com.backend.winai.repository.GlobalNotificationConfigRepository;
+import com.backend.winai.repository.TrafficAdvisorChatRepository;
 import com.backend.winai.entity.UserWhatsAppConnection;
 import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.KnowledgeBase;
@@ -87,6 +93,12 @@ public class AdminService {
     private final MetaInsightRepository metaInsightRepository;
     private final SystemPromptRepository systemPromptRepository;
     private final PlanRepository planRepository;
+    private final AiRecommendationCacheRepository aiRecommendationCacheRepository;
+    private final AgendamentoConfigRepository agendamentoConfigRepository;
+    private final FollowUpConfigRepository followUpConfigRepository;
+    private final FollowUpStatusRepository followUpStatusRepository;
+    private final GlobalNotificationConfigRepository globalNotificationConfigRepository;
+    private final TrafficAdvisorChatRepository trafficAdvisorChatRepository;
     private final AsaasService asaasService;
     private final UazapService uazapService;
     private final PasswordEncoder passwordEncoder;
@@ -546,9 +558,10 @@ public class AdminService {
 
         log.info("Iniciando exclusão em cascata da empresa: {} ({})", company.getName(), companyId);
 
-        // 1. WhatsApp e Mensagens
+        // 1. WhatsApp e Mensagens (FollowUpStatus tem FK para conversation - deletar antes)
         List<WhatsAppConversation> conversations = conversationRepository.findByCompany(company);
         for (WhatsAppConversation conv : conversations) {
+            followUpStatusRepository.findByConversationId(conv.getId()).ifPresent(followUpStatusRepository::delete);
             messageRepository.deleteAll(messageRepository.findByConversationOrderByMessageTimestampAsc(conv));
         }
         conversationRepository.deleteAll(conversations);
@@ -582,19 +595,25 @@ public class AdminService {
         socialGrowthChatRepository.deleteByCompany(company);
         metaConnectionRepository.findByCompany(company).ifPresent(metaConnectionRepository::delete);
         googleDriveConnectionRepository.findByCompany(company).ifPresent(googleDriveConnectionRepository::delete);
+        trafficAdvisorChatRepository.deleteAll(trafficAdvisorChatRepository.findByCompanyOrderByCreatedAtDesc(company));
 
         meetingRepository.deleteByCompany(company);
         goalRepository.deleteByCompany(company);
 
-        // 5. Usuários (incluindo dependências do usuário)
+        // 5. Configs e caches por empresa
+        aiRecommendationCacheRepository.findByCompanyId(companyId).ifPresent(aiRecommendationCacheRepository::delete);
+        agendamentoConfigRepository.findByCompanyId(companyId).ifPresent(agendamentoConfigRepository::delete);
+        followUpConfigRepository.findByCompanyId(companyId).ifPresent(followUpConfigRepository::delete);
+        globalNotificationConfigRepository.findByCompanyId(companyId).ifPresent(globalNotificationConfigRepository::delete);
+
+        // 6. Usuários: desvincular (company=null) para manter acesso, sem deletar
         List<User> users = userRepository.findByCompanyId(companyId);
         for (User user : users) {
-            refreshTokenRepository.deleteByUser(user);
-            notificationRepository.deleteByUser(user);
-            userRepository.delete(user);
+            user.setCompany(null);
+            userRepository.save(user);
         }
 
-        // 6. Por fim, a empresa
+        // 7. Por fim, a empresa
         companyRepository.delete(company);
         log.info("Empresa {} e todos os seus dados foram excluídos com sucesso", companyId);
     }

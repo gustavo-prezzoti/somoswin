@@ -462,7 +462,7 @@ const Campaigns: React.FC = () => {
     }
     if (step === 2) {
       if (formData.useExistingPost) {
-        if (!formData.existingPostId?.trim()) errs.existingPostId = 'Selecione um post existente';
+        if (!formData.existingPostId?.trim()) errs.existingPostId = 'Selecione um post do Instagram';
       } else {
         const msg = formData.adMessage?.trim() || '';
         if (!msg) errs.adMessage = 'Texto do anúncio é obrigatório';
@@ -574,7 +574,7 @@ const Campaigns: React.FC = () => {
       const posts = await marketingService.getPagePosts();
       setPagePosts(posts);
     } catch (err: any) {
-      const msg = err?.message || 'Erro ao buscar posts da página.';
+      const msg = err?.message || 'Erro ao buscar posts do Instagram.';
       setPagePostsError(msg);
       setPagePosts([]);
       if (msg.includes('pages_read_engagement') || msg.includes('Page Public Content Access')) {
@@ -1396,14 +1396,14 @@ const Campaigns: React.FC = () => {
                       <label className={`flex-1 p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.useExistingPost ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50 hover:border-emerald-300'}`}>
                         <input type="radio" name="useExistingPost" checked={!!formData.useExistingPost} onChange={() => setFormData(p => ({ ...p, useExistingPost: true, adMessage: '', headline: '', adDescription: '', imageUrl: '' }))} className="sr-only" />
                         <p className="font-bold text-sm">Usar post existente</p>
-                        <p className="text-[10px] text-gray-500 mt-1">Promover um post da sua página</p>
+                        <p className="text-[10px] text-gray-500 mt-1">Promover um post do seu Instagram</p>
                       </label>
                     </div>
                   </div>
 
                   {formData.useExistingPost ? (
                     <div className="space-y-4">
-                      <label className="text-xs font-black text-gray-600 uppercase tracking-widest px-2 block">Selecione um post da sua página <span className="text-rose-500">*</span></label>
+                      <label className="text-xs font-black text-gray-600 uppercase tracking-widest px-2 block">Selecione um post do seu Instagram <span className="text-rose-500">*</span></label>
                       <div className="p-6 rounded-2xl border-2 border-gray-200 bg-gray-50/50">
                         <button
                           type="button"
@@ -1412,7 +1412,7 @@ const Campaigns: React.FC = () => {
                           className="w-full py-4 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
                         >
                           {pagePostsLoading ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
-                          {pagePostsLoading ? 'Carregando posts...' : 'Buscar posts da página'}
+                          {pagePostsLoading ? 'Carregando posts...' : 'Buscar posts do Instagram'}
                         </button>
                         {pagePostsError && (
                           <div className="mt-4 p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-3">
@@ -1420,15 +1420,15 @@ const Campaigns: React.FC = () => {
                             <div>
                               <p className="text-sm font-bold text-rose-800">Erro ao buscar posts</p>
                               <p className="text-xs text-rose-700 mt-1">{pagePostsError}</p>
-                              {(pagePostsError.includes('pages_read_engagement') || pagePostsError.includes('Page Public Content Access')) && (
-                                <p className="text-xs text-rose-600 mt-2">Reconecte sua conta Meta em Configurações para liberar a permissão de leitura dos posts da página.</p>
+                              {(pagePostsError.includes('pages_read_engagement') || pagePostsError.includes('instagram')) && (
+                                <p className="text-xs text-rose-600 mt-2">Reconecte sua conta Meta em Configurações e vincule o Instagram para listar os posts.</p>
                               )}
                             </div>
                           </div>
                         )}
                         <div className="mt-4 max-h-80 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100 bg-white">
                           {pagePosts.length === 0 && !pagePostsLoading && !pagePostsError && (
-                            <p className="p-6 text-sm text-gray-500 text-center">Clique em &quot;Buscar posts da página&quot; para carregar os posts.</p>
+                            <p className="p-6 text-sm text-gray-500 text-center">Clique em &quot;Buscar posts do Instagram&quot; para carregar os posts.</p>
                           )}
                           {pagePosts.map((post) => (
                             <button
