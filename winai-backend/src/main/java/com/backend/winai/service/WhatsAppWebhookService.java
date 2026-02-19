@@ -90,11 +90,13 @@ public class WhatsAppWebhookService {
             }
 
             // Buscar ou criar conversa
+            boolean[] wasNewConversation = new boolean[1];
             WhatsAppConversation conversation = findOrCreateConversation(
                     phoneNumber,
                     contactName,
                     webhook,
-                    company);
+                    company,
+                    wasNewConversation);
 
             // Verificar se mensagem já existe (evitar duplicatas)
             Optional<WhatsAppMessage> existingMessage = messageRepository.findByMessageId(messageId);
@@ -151,7 +153,8 @@ public class WhatsAppWebhookService {
             if (conversation.getUnreadCount() == null) {
                 conversation.setUnreadCount(0);
             }
-            if (!isFromMe) {
+            // Só incrementar unread se a conversa JÁ existia - novas já vêm com unreadCount=1
+            if (!isFromMe && !wasNewConversation[0]) {
                 conversation.setUnreadCount(conversation.getUnreadCount() + 1);
             }
             if (lead != null && conversation.getLead() == null) {
@@ -290,7 +293,8 @@ public class WhatsAppWebhookService {
             String phoneNumber,
             String contactName,
             UazapWebhookRequest webhook,
-            Company company) {
+            Company company,
+            boolean[] outWasNew) {
         String waChatId = webhook.getChat() != null ? webhook.getChat().getWa_chatid() : null;
         String instanceName = webhook.getInstanceName();
         boolean isNew = false;
@@ -313,7 +317,8 @@ public class WhatsAppWebhookService {
                     : conversationRepository.findByPhoneNumberAndCompany(phoneNumber, company);
         }
 
-        if (existing.isPresent()) {
+        boolean conversationExisted = existing.isPresent();
+        if (conversationExisted) {
             conversation = existing.get();
             // Atualizar nome do contato se necessário
             if (contactName != null && !contactName.isEmpty() &&
@@ -394,6 +399,9 @@ public class WhatsAppWebhookService {
 
         conversation = conversationRepository.save(conversation);
 
+        if (outWasNew != null) {
+            outWasNew[0] = isNew;
+        }
         if (isNew) {
             sendWebSocketNewContact(company.getId(), conversation);
         }
@@ -413,6 +421,7 @@ public class WhatsAppWebhookService {
                     .build();
 
             messagingTemplate.convertAndSend("/topic/whatsapp/" + companyId, message);
+            messagingTemplate.convertAndSend("/topic/whatsapp/conversations/" + companyId, message);
         } catch (Exception e) {
             log.error("Erro ao enviar WebSocket NEW_CONTACT", e);
         }

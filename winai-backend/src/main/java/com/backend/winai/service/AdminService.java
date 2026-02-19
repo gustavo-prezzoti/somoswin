@@ -696,7 +696,9 @@ public class AdminService {
      * Conecta uma instância ao WhatsApp
      */
     public Map<String, Object> connectInstance(String instanceName) {
-        return uazapService.connectInstance(instanceName);
+        Map<String, Object> result = uazapService.connectInstance(instanceName);
+        uazapService.ensureInstanceWebhookConfigured(instanceName);
+        return result;
     }
 
     /**

@@ -991,8 +991,12 @@ public class UazapService {
             body.put("token", request.getToken());
         }
 
-        if (request.getWebhookUrl() != null && !request.getWebhookUrl().isEmpty()) {
-            body.put("webhook", request.getWebhookUrl());
+        String webhookToUse = (request.getWebhookUrl() != null && !request.getWebhookUrl().isEmpty())
+                ? request.getWebhookUrl()
+                : (webhookUrl != null && !webhookUrl.isEmpty() ? webhookUrl : null);
+        if (webhookToUse != null) {
+            body.put("webhook", webhookToUse);
+            log.info("Webhook configurado na criação da instância: {}", webhookToUse);
         }
 
         if (request.getQrcode() != null) {

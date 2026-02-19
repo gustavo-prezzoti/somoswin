@@ -43,6 +43,8 @@ const WhatsApp: React.FC = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const loadConversationsRef = useRef<(silent?: boolean) => Promise<void>>(() => Promise.resolve());
+  const activeConversationRef = useRef<WhatsAppConversation | null>(null);
 
   // Modo de suporte vem da conversa ativa
   const supportMode = activeConversation?.supportMode || 'IA';
@@ -121,7 +123,7 @@ const WhatsApp: React.FC = () => {
       }
 
       // Se não encontrou pelo chatId ou não tinha chatId, pega a primeira se não tiver ativa
-      if (!selectedConv && data.length > 0 && !activeConversation && !silent) {
+      if (!selectedConv && data.length > 0 && !activeConversationRef.current && !silent) {
         selectedConv = data[0];
       }
 
@@ -134,7 +136,15 @@ const WhatsApp: React.FC = () => {
     } finally {
       if (!silent) setIsLoading(false);
     }
-  }, [activeConversation, user]);
+  }, [user, chatId]);
+
+  useEffect(() => {
+    activeConversationRef.current = activeConversation;
+  }, [activeConversation]);
+
+  useEffect(() => {
+    loadConversationsRef.current = loadConversations;
+  }, [loadConversations]);
 
   const loadNewMessages = async (conversationId: string) => {
     try {
@@ -170,10 +180,10 @@ const WhatsApp: React.FC = () => {
   useEffect(() => {
     if (!user?.id || !user?.company?.id) return;
     const intervalId = setInterval(() => {
-      loadConversations(true);
-    }, 1000);
+      loadConversationsRef.current(true);
+    }, 2000);
     return () => clearInterval(intervalId);
-  }, [user?.id, user?.company?.id, loadConversations]);
+  }, [user?.id, user?.company?.id]);
 
   useEffect(() => {
     // Polling de mensagens da conversa ativa como fallback (a cada 30 segundos)
@@ -261,9 +271,9 @@ const WhatsApp: React.FC = () => {
           return updated;
         }
 
-        // Se a conversa não existe, fazer reload para buscar o novo contato
-        console.log('Conversation not found, fetching new contact...');
-        loadConversations(true);
+        // Se a conversa não existe, agendar reload para buscar o novo contato (fora do setState)
+        console.log('Conversation not found, scheduling reload for new contact...');
+        setTimeout(() => loadConversationsRef.current(true), 0);
         return prev;
       });
     }
