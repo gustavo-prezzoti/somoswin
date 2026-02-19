@@ -6,6 +6,8 @@ import { userService } from '../services/api/user.service';
 import { useSearchParams } from 'react-router-dom';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import AudioPlayer from './ui/AudioPlayer';
+import { useToast } from '../hooks/useToast';
+import ToastComponent from './ui/Toast';
 
 const WhatsApp: React.FC = () => {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
@@ -35,6 +37,8 @@ const WhatsApp: React.FC = () => {
   // Estados para Modais de Confirmação
   const [showClearChatModal, setShowClearChatModal] = useState(false);
   const [showDeleteLeadModal, setShowDeleteLeadModal] = useState(false);
+
+  const { toasts, showToast, removeToast } = useToast();
 
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1420,6 +1424,13 @@ const WhatsApp: React.FC = () => {
         </div>
       )}
 
+      {/* Toast Container */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+        {toasts.map((toast) => (
+          <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
+        ))}
+      </div>
+
       {/* Modal de Confirmação - Excluir Lead */}
       {showDeleteLeadModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1443,14 +1454,20 @@ const WhatsApp: React.FC = () => {
                 <button
                   onClick={async () => {
                     if (!activeConversation?.leadId) return;
+                    const leadIdToDelete = activeConversation.leadId;
                     try {
                       setIsLoading(true);
-                      await import('../services/api/lead.service').then(m => m.leadService.deleteLead(activeConversation.leadId!));
-                      setActiveConversation(null);
-                      loadConversations();
+                      const { leadService } = await import('../services/api/lead.service');
+                      await leadService.deleteLead(leadIdToDelete);
                       setShowDeleteLeadModal(false);
+                      setActiveConversation(prev => prev ? { ...prev, leadId: null } : null);
+                      setConversations(prev => prev.map(c => c.id === activeConversation.id ? { ...c, leadId: null } : c));
+                      await loadConversations(true);
+                      showToast('Lead excluído com sucesso.', 'success');
                     } catch (error) {
                       console.error('Erro ao excluir lead:', error);
+                      const msg = (error as { message?: string })?.message || 'Erro ao excluir lead. Tente novamente.';
+                      showToast(msg, 'error');
                     } finally {
                       setIsLoading(false);
                     }

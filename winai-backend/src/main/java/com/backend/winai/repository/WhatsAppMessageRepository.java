@@ -15,7 +15,7 @@ import java.util.UUID;
 @Repository
 public interface WhatsAppMessageRepository extends JpaRepository<WhatsAppMessage, UUID> {
 
-        @Modifying
+        @Modifying(flushAutomatically = true, clearAutomatically = true)
         @Query("UPDATE WhatsAppMessage m SET m.lead = null WHERE m.lead.id = :leadId")
         void clearLeadReference(@Param("leadId") UUID leadId);
 

@@ -17,7 +17,7 @@ import java.util.UUID;
 @Repository
 public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
 
-        @Modifying
+        @Modifying(flushAutomatically = true, clearAutomatically = true)
         @Query("UPDATE Meeting m SET m.lead = null WHERE m.lead.id = :leadId")
         void clearLeadReference(@Param("leadId") UUID leadId);
 

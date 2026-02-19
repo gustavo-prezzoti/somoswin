@@ -132,16 +132,15 @@ public class LeadService {
      */
     @Transactional
     public void deleteLead(Company company, UUID id) {
-        Lead lead = leadRepository.findByIdAndCompany(id, company)
+        leadRepository.findByIdAndCompany(id, company)
                 .orElseThrow(() -> new RuntimeException("Lead não encontrado"));
 
-        // Limpar referências em outras tabelas para evitar violação de chave
-        // estrangeira
+        // Limpar referências em outras tabelas para evitar violação de chave estrangeira
         messageRepository.clearLeadReference(id);
         conversationRepository.clearLeadReference(id);
         meetingRepository.clearLeadReference(id);
 
-        leadRepository.delete(lead);
+        leadRepository.deleteById(id);
     }
 
     /**
