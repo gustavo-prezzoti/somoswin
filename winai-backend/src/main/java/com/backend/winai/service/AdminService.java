@@ -143,7 +143,7 @@ public class AdminService {
      * Lista todos os usuários do sistema
      */
     public List<AdminUserResponse> getAllUsers() {
-        List<User> users = userRepository.findAll();
+        List<User> users = userRepository.findAllWithCompany();
 
         return users.stream()
                 .map(this::mapToAdminUserResponse)
@@ -154,7 +154,7 @@ public class AdminService {
      * Busca um usuário por ID
      */
     public AdminUserResponse getUserById(UUID userId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdWithCompany(userId)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
         return mapToAdminUserResponse(user);
     }
