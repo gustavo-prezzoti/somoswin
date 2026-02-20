@@ -35,7 +35,7 @@ O endpoint de posts da página exige **`pages_read_engagement`** e, em alguns ca
 3. Em **Permissions**, adicione:
    - **`pages_read_engagement`** (obrigatório)
    - **`pages_read_user_content`** (recomendado para ler posts)
-   - **`whatsapp_business_management`** (para listar números WhatsApp nas campanhas)
+   - **`whatsapp_business_management`** (obrigatório para listar números WhatsApp conectados na BM nas campanhas Click to WhatsApp)
 4. Salve e peça aos usuários para **reconectar** a conta Meta em Configurações
 
 Se o app usa OAuth com `scope` (sem config_id), inclua todas as permissões no scope. Usuários que conectaram antes precisam reconectar para conceder as novas permissões.
@@ -48,3 +48,14 @@ Se o app usa OAuth com `scope` (sem config_id), inclua todas as permissões no s
 - **SomosAmplia (1792297934776856)** – User token, `whatsapp_business_management`. Usado no botão "Adicionar número".
 
 O User token permite `/me/accounts?fields=whatsapp_number`, que retorna os números vinculados às páginas. Configure `META_WHATSAPP_CONFIG_ID=1792297934776856`.
+
+---
+
+## Números WhatsApp nas campanhas (Click to WhatsApp)
+
+Para o seletor "Número WhatsApp" na criação de campanha exibir os números conectados ao Business Manager:
+
+1. **Conecte o WhatsApp à página** no Facebook: Configurações da Página → WhatsApp → Vincular número
+2. **Permissão** `whatsapp_business_management` no app (Facebook Login for Business)
+3. **Reconecte** o Meta Ads em Configurações após adicionar a permissão
+4. Os números são obtidos via `/{business-id}/owned_pages?fields=id,name,whatsapp_number` (BM) e fallbacks

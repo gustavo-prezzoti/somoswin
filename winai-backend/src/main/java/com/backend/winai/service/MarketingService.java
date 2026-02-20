@@ -1454,14 +1454,15 @@ public class MarketingService {
                 log.debug("[META] Page whatsapp_number direct GET error, trying /me/accounts");
             } else {
                 JsonNode node = parseJson(objectMapper, body);
-                if (node.has("whatsapp_number")) {
-                    return node.get("whatsapp_number").asText();
+                if (node.has("whatsapp_number") && !node.get("whatsapp_number").isNull()) {
+                    String num = node.get("whatsapp_number").asText();
+                    if (num != null && !num.isBlank()) return num;
                 }
             }
         } catch (Exception e) {
             log.debug("[META] Page whatsapp_number direct GET failed: {}", e.getMessage());
         }
-        // 2. Fallback: /me/accounts com fields incluindo whatsapp_number (alguns tokens retornam)
+        // 2. Fallback: /me/accounts com fields incluindo whatsapp_number (User token)
         try {
             String url = metaApiBaseUrl + "/me/accounts?fields=id,name,access_token,whatsapp_number&access_token=" + accessToken;
             ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
@@ -1469,8 +1470,9 @@ public class MarketingService {
             JsonNode data = root.has("data") ? root.get("data") : null;
             if (data != null && data.isArray()) {
                 for (JsonNode page : data) {
-                    if (page.has("id") && pageId.equals(page.get("id").asText()) && page.has("whatsapp_number")) {
-                        return page.get("whatsapp_number").asText();
+                    if (page.has("id") && pageId.equals(page.get("id").asText()) && page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
+                        String num = page.get("whatsapp_number").asText();
+                        if (num != null && !num.isBlank()) return num;
                     }
                 }
             }
@@ -1497,8 +1499,9 @@ public class MarketingService {
     }
 
     /**
-     * Lista números WhatsApp disponíveis para campanhas: primeiro o da página (conectado via Configurações da Página),
-     * depois os dos WABAs do Business (requer whatsapp_business_management).
+     * Lista números WhatsApp disponíveis para campanhas.
+     * Conforme documentação Meta: números conectados ao BM via owned_pages (páginas com WhatsApp),
+     * página direta, /me/accounts, e WABAs (requer whatsapp_business_management).
      */
     public List<String> getPageWhatsAppNumbers(User user) {
         MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
@@ -1509,8 +1512,33 @@ public class MarketingService {
         if (accessToken == null || accessToken.isBlank()) return Collections.emptyList();
 
         Set<String> seen = new LinkedHashSet<>();
+        String businessId = conn.getBusinessId();
 
-        // 1. Número da página (o que aparece no Meta Ads - conectado via Configurações da Página)
+        // 1. PRIORIDADE BM: owned_pages retorna Page com whatsapp_number (conectado na BM)
+        // Funciona com System User e User tokens. Coleta de TODAS as páginas do negócio.
+        if (businessId != null && !businessId.isBlank()) {
+            try {
+                String ownedUrl = metaApiBaseUrl + "/" + businessId + "/owned_pages?fields=id,name,whatsapp_number&access_token=" + accessToken;
+                ResponseEntity<String> ownedRes = restTemplate.getForEntity(ownedUrl, String.class);
+                JsonNode ownedRoot = parseJson(objectMapper, ownedRes.getBody());
+                JsonNode ownedData = ownedRoot.has("data") ? ownedRoot.get("data") : null;
+                if (ownedData != null && ownedData.isArray()) {
+                    for (JsonNode page : ownedData) {
+                        if (page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
+                            String num = page.get("whatsapp_number").asText();
+                            if (num != null && !num.isBlank()) {
+                                seen.add(normalizePhoneForDedup(num));
+                                log.info("[META] WhatsApp number from owned_pages (BM): {} (page {})", num, page.has("id") ? page.get("id").asText() : "?");
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Could not fetch whatsapp_number via owned_pages: {}", e.getMessage());
+            }
+        }
+
+        // 2. Número da página vinculada (GET direto ou /me/accounts - User token)
         if (conn.getPageId() != null && !conn.getPageId().isBlank()) {
             String pageToken = conn.getPageAccessToken();
             if (pageToken == null || pageToken.isBlank()) {
@@ -1524,38 +1552,12 @@ public class MarketingService {
             if (pageNum != null && !pageNum.isBlank()) {
                 seen.add(normalizePhoneForDedup(pageNum));
                 log.info("[META] WhatsApp number from page: {}", pageNum);
-            } else {
+            } else if (seen.isEmpty()) {
                 log.info("[META] No whatsapp_number from page {} (token type may not support this field)", conn.getPageId());
             }
         }
 
-        // 1.5. Fallback para System User: owned_pages retorna Page com whatsapp_number (BM)
-        String businessId = conn.getBusinessId();
-        if (seen.isEmpty() && businessId != null && !businessId.isBlank() && conn.getPageId() != null) {
-            try {
-                String ownedUrl = metaApiBaseUrl + "/" + businessId + "/owned_pages?fields=id,name,whatsapp_number&access_token=" + accessToken;
-                ResponseEntity<String> ownedRes = restTemplate.getForEntity(ownedUrl, String.class);
-                JsonNode ownedRoot = parseJson(objectMapper, ownedRes.getBody());
-                JsonNode ownedData = ownedRoot.has("data") ? ownedRoot.get("data") : null;
-                if (ownedData != null && ownedData.isArray()) {
-                    String targetPageId = conn.getPageId();
-                    for (JsonNode page : ownedData) {
-                        if (page.has("id") && targetPageId.equals(page.get("id").asText()) && page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
-                            String num = page.get("whatsapp_number").asText();
-                            if (num != null && !num.isBlank()) {
-                                seen.add(normalizePhoneForDedup(num));
-                                log.info("[META] WhatsApp number from owned_pages (System User): {}", num);
-                                break;
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.debug("Could not fetch whatsapp_number via owned_pages: {}", e.getMessage());
-            }
-        }
-
-        // 2. Números dos WABAs do Business (requer whatsapp_business_management; phone_numbers pode não suportar GET)
+        // 3. Números dos WABAs do Business (requer whatsapp_business_management; phone_numbers pode não suportar GET)
         if (businessId != null && !businessId.isBlank()) {
             try {
                 String wabaUrl = metaApiBaseUrl + "/" + businessId + "/owned_whatsapp_business_accounts?fields=id&access_token=" + accessToken;
