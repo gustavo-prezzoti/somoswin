@@ -1528,27 +1528,32 @@ public class MarketingService {
         Set<String> seen = new LinkedHashSet<>();
         String businessId = conn.getBusinessId();
 
-        // 1. PRIORIDADE BM: owned_pages retorna Page com whatsapp_number (conectado na BM)
-        // Funciona com System User e User tokens. Coleta de TODAS as páginas do negócio.
+        // 1. PRIORIDADE BM: owned_pages e client_pages retornam Page com whatsapp_number
+        // Nota: whatsapp_number pode retornar null para "New Pages Experience" (limitação Meta)
         if (businessId != null && !businessId.isBlank()) {
-            try {
-                String ownedUrl = metaApiBaseUrl + "/" + businessId + "/owned_pages?fields=id,name,whatsapp_number&access_token=" + accessToken;
-                ResponseEntity<String> ownedRes = restTemplate.getForEntity(ownedUrl, String.class);
-                JsonNode ownedRoot = parseJson(objectMapper, ownedRes.getBody());
-                JsonNode ownedData = ownedRoot.has("data") ? ownedRoot.get("data") : null;
-                if (ownedData != null && ownedData.isArray()) {
-                    for (JsonNode page : ownedData) {
-                        if (page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
-                            String num = page.get("whatsapp_number").asText();
-                            if (num != null && !num.isBlank()) {
-                                seen.add(normalizePhoneForDedup(num));
-                                log.info("[META] WhatsApp number from owned_pages (BM): {} (page {})", num, page.has("id") ? page.get("id").asText() : "?");
+            for (String edge : List.of("owned_pages", "client_pages")) {
+                try {
+                    String url = metaApiBaseUrl + "/" + businessId + "/" + edge + "?fields=id,name,whatsapp_number&access_token=" + accessToken;
+                    ResponseEntity<String> res = restTemplate.getForEntity(url, String.class);
+                    JsonNode root = parseJson(objectMapper, res.getBody());
+                    JsonNode data = root.has("data") ? root.get("data") : null;
+                    if (data != null && data.isArray()) {
+                        for (JsonNode page : data) {
+                            if (page.has("whatsapp_number") && !page.get("whatsapp_number").isNull()) {
+                                String num = page.get("whatsapp_number").asText();
+                                if (num != null && !num.isBlank()) {
+                                    seen.add(normalizePhoneForDedup(num));
+                                    log.info("[META] WhatsApp number from {} (BM): {} (page {})", edge, num, page.has("id") ? page.get("id").asText() : "?");
+                                }
                             }
                         }
+                        if (seen.isEmpty() && data.size() > 0) {
+                            log.info("[META] {} retornou {} página(s) mas nenhuma com whatsapp_number (pode ser limitação New Pages Experience)", edge, data.size());
+                        }
                     }
+                } catch (Exception e) {
+                    log.debug("Could not fetch whatsapp_number via {}: {}", edge, e.getMessage());
                 }
-            } catch (Exception e) {
-                log.debug("Could not fetch whatsapp_number via owned_pages: {}", e.getMessage());
             }
         }
 
