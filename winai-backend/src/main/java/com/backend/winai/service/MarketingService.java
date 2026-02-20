@@ -1510,8 +1510,8 @@ public class MarketingService {
 
     /**
      * Lista números WhatsApp disponíveis para campanhas.
-     * Conforme documentação Meta: números conectados ao BM via owned_pages (páginas com WhatsApp),
-     * página direta, /me/accounts, e WABAs (requer whatsapp_business_management).
+     * Com System User: prioriza WABAs (owned/client) pois whatsapp_number em Page costuma retornar null.
+     * Com User token: owned_pages e página direta também retornam whatsapp_number.
      */
     public List<String> getPageWhatsAppNumbers(User user) {
         log.info("[META] getPageWhatsAppNumbers called for company {}", user.getCompany().getId());
@@ -1528,8 +1528,13 @@ public class MarketingService {
         Set<String> seen = new LinkedHashSet<>();
         String businessId = conn.getBusinessId();
 
-        // 1. PRIORIDADE BM: owned_pages e client_pages retornam Page com whatsapp_number
-        // Nota: whatsapp_number pode retornar null para "New Pages Experience" (limitação Meta)
+        // 1. PRIORIDADE para System User: WABAs (owned + client) - funcionam com whatsapp_business_management
+        // whatsapp_number em Page costuma retornar null com System User (New Pages Experience)
+        if (businessId != null && !businessId.isBlank()) {
+            fetchWabaPhoneNumbers(businessId, accessToken, seen);
+        }
+
+        // 2. owned_pages e client_pages (Page.whatsapp_number) - pode retornar null com System User
         if (businessId != null && !businessId.isBlank()) {
             for (String edge : List.of("owned_pages", "client_pages")) {
                 try {
@@ -1557,7 +1562,7 @@ public class MarketingService {
             }
         }
 
-        // 2. Número da página vinculada (GET direto ou /me/accounts - User token)
+        // 3. Número da página vinculada (GET direto - User token costuma retornar; System User costuma null)
         if (conn.getPageId() != null && !conn.getPageId().isBlank()) {
             String pageToken = conn.getPageAccessToken();
             if (pageToken == null || pageToken.isBlank()) {
@@ -1576,9 +1581,13 @@ public class MarketingService {
             }
         }
 
-        // 3. Números dos WABAs do Business (requer whatsapp_business_management; phone_numbers pode não suportar GET)
-        if (businessId != null && !businessId.isBlank()) {
-            try {
+        log.info("[META] getPageWhatsAppNumbers returning {} number(s) for company {}", seen.size(), user.getCompany().getId());
+        return new ArrayList<>(seen);
+    }
+
+    /** Busca números dos WABAs do Business (owned + client). Funciona com System User + whatsapp_business_management. */
+    private void fetchWabaPhoneNumbers(String businessId, String accessToken, Set<String> seen) {
+        try {
                 String wabaUrl = metaApiBaseUrl + "/" + businessId + "/owned_whatsapp_business_accounts?fields=id&access_token=" + accessToken;
                 ResponseEntity<String> wabaRes = restTemplate.getForEntity(wabaUrl, String.class);
                 JsonNode wabaRoot = parseJson(objectMapper, wabaRes.getBody());
@@ -1613,9 +1622,8 @@ public class MarketingService {
                 if (wabaRoot.has("error")) {
                     log.info("[META] owned_whatsapp_business_accounts error: {} - {}", wabaRoot.get("error").path("code").asText("?"), wabaRoot.get("error").path("message").asText("?"));
                 }
-                // Fallback: client_whatsapp_business_accounts (WABAs compartilhados)
-                if (seen.isEmpty()) {
-                    String clientUrl = metaApiBaseUrl + "/" + businessId + "/client_whatsapp_business_accounts?fields=id&access_token=" + accessToken;
+                // client_whatsapp_business_accounts (WABAs compartilhados/com clientes)
+                String clientUrl = metaApiBaseUrl + "/" + businessId + "/client_whatsapp_business_accounts?fields=id&access_token=" + accessToken;
                     ResponseEntity<String> clientRes = restTemplate.getForEntity(clientUrl, String.class);
                     JsonNode clientRoot = parseJson(objectMapper, clientRes.getBody());
                     JsonNode clientData = clientRoot.has("data") ? clientRoot.get("data") : null;
@@ -1642,18 +1650,13 @@ public class MarketingService {
                                     }
                                 }
                             } catch (Exception e) {
-                                log.debug("Could not fetch phone_numbers for client WABA {}: {}", wabaId, e.getMessage());
+                                log.info("[META] Could not fetch phone_numbers for client WABA {}: {}", wabaId, e.getMessage());
                             }
                         }
                     }
-                }
-            } catch (Exception e) {
-                log.debug("Could not fetch WABAs for business {}: {}", businessId, e.getMessage());
-            }
+        } catch (Exception e) {
+            log.info("[META] Could not fetch WABAs for business {}: {}", businessId, e.getMessage());
         }
-
-        log.info("[META] getPageWhatsAppNumbers returning {} number(s) for company {}", seen.size(), user.getCompany().getId());
-        return new ArrayList<>(seen);
     }
 
     private static String normalizePhoneForDedup(String phone) {
