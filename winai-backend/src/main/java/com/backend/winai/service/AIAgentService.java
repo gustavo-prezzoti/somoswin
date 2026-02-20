@@ -6,6 +6,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +49,9 @@ public class AIAgentService {
     private final FollowUpService followUpService;
     private final GlobalNotificationService globalNotificationService;
     private final com.backend.winai.repository.LeadRepository leadRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     // ASYNC DEBOUNCING FIELDS
     private final java.util.concurrent.ScheduledExecutorService scheduler = java.util.concurrent.Executors
@@ -114,10 +119,12 @@ public class AIAgentService {
                 return null;
             }
 
-            // FORCE INITIALIZATION of the proxy to avoid LazyInitializationException
-            // even inside Transactional if it came from a detached web of objects
+            // Recarrega do banco para garantir prompt e conteúdo atualizados (evita cache)
             try {
                 knowledgeBase = knowledgeBaseRepository.findById(knowledgeBase.getId()).orElse(knowledgeBase);
+                if (entityManager.contains(knowledgeBase)) {
+                    entityManager.refresh(knowledgeBase);
+                }
             } catch (Exception e) {
                 log.warn("Failed to re-fetch KB, trying to use as is: {}", e.getMessage());
             }
