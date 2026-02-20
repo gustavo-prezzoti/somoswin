@@ -1583,6 +1583,8 @@ public class MarketingService {
                 ResponseEntity<String> wabaRes = restTemplate.getForEntity(wabaUrl, String.class);
                 JsonNode wabaRoot = parseJson(objectMapper, wabaRes.getBody());
                 JsonNode wabaData = wabaRoot.has("data") ? wabaRoot.get("data") : null;
+                int wabaCount = (wabaData != null && wabaData.isArray()) ? wabaData.size() : 0;
+                log.info("[META] owned_whatsapp_business_accounts retornou {} WABA(s) para business {}", wabaCount, businessId);
                 if (wabaData != null && wabaData.isArray()) {
                     for (JsonNode waba : wabaData) {
                         if (!waba.has("id")) continue;
@@ -1592,18 +1594,24 @@ public class MarketingService {
                             ResponseEntity<String> pnRes = restTemplate.getForEntity(pnUrl, String.class);
                             JsonNode pnRoot = parseJson(objectMapper, pnRes.getBody());
                             JsonNode pnData = pnRoot.has("data") ? pnRoot.get("data") : null;
-                            if (pnData != null && pnData.isArray()) {
-                                for (JsonNode pn : pnData) {
-                                    if (pn.has("display_phone_number")) {
-                                        String num = pn.get("display_phone_number").asText();
-                                        if (num != null && !num.isBlank()) seen.add(normalizePhoneForDedup(num));
+                                if (pnData != null && pnData.isArray()) {
+                                    for (JsonNode pn : pnData) {
+                                        if (pn.has("display_phone_number")) {
+                                            String num = pn.get("display_phone_number").asText();
+                                            if (num != null && !num.isBlank()) {
+                                                seen.add(normalizePhoneForDedup(num));
+                                                log.info("[META] WhatsApp number from WABA {}: {}", wabaId, num);
+                                            }
+                                        }
                                     }
                                 }
-                            }
                         } catch (Exception e) {
-                            log.debug("Could not fetch phone_numbers for WABA {}: {}", wabaId, e.getMessage());
+                            log.info("[META] Could not fetch phone_numbers for WABA {}: {}", wabaId, e.getMessage());
                         }
                     }
+                }
+                if (wabaRoot.has("error")) {
+                    log.info("[META] owned_whatsapp_business_accounts error: {} - {}", wabaRoot.get("error").path("code").asText("?"), wabaRoot.get("error").path("message").asText("?"));
                 }
                 // Fallback: client_whatsapp_business_accounts (WABAs compartilhados)
                 if (seen.isEmpty()) {
@@ -1611,6 +1619,11 @@ public class MarketingService {
                     ResponseEntity<String> clientRes = restTemplate.getForEntity(clientUrl, String.class);
                     JsonNode clientRoot = parseJson(objectMapper, clientRes.getBody());
                     JsonNode clientData = clientRoot.has("data") ? clientRoot.get("data") : null;
+                    int clientWabaCount = (clientData != null && clientData.isArray()) ? clientData.size() : 0;
+                    log.info("[META] client_whatsapp_business_accounts retornou {} WABA(s)", clientWabaCount);
+                    if (clientRoot.has("error")) {
+                        log.info("[META] client_whatsapp_business_accounts error: {} - {}", clientRoot.get("error").path("code").asText("?"), clientRoot.get("error").path("message").asText("?"));
+                    }
                     if (clientData != null && clientData.isArray()) {
                         for (JsonNode waba : clientData) {
                             if (!waba.has("id")) continue;
