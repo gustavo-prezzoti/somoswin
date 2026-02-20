@@ -71,4 +71,7 @@ public class CreateCampaignRequest {
 
     /** Nome do anúncio */
     private String adName;
+
+    /** Onde exibir o anúncio: "facebook,instagram" (padrão), "facebook", "instagram". Opcional. */
+    private String publisherPlatforms;
 }

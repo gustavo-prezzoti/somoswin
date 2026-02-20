@@ -103,7 +103,8 @@ const Campaigns: React.FC = () => {
     adDescription: '',
     imageUrl: '',
     adSetName: '',
-    adName: ''
+    adName: '',
+    publisherPlatforms: 'facebook,instagram'
   });
   const [pagePosts, setPagePosts] = useState<PagePost[]>([]);
   const [pagePostsLoading, setPagePostsLoading] = useState(false);
@@ -522,7 +523,8 @@ const Campaigns: React.FC = () => {
       adDescription: '',
       imageUrl: '',
       adSetName: '',
-      adName: ''
+      adName: '',
+      publisherPlatforms: 'facebook,instagram'
     });
     setSelectedInterests([]);
     setInterestsSearch('');
@@ -1146,6 +1148,38 @@ const Campaigns: React.FC = () => {
                   <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
                     <p className="text-xs font-bold text-emerald-800">Destino: WhatsApp</p>
                     <p className="text-[10px] text-emerald-700 mt-1">Anúncios direcionarão cliques para o WhatsApp.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Onde exibir o anúncio</label>
+                    <p className="text-[9px] text-gray-400 px-2">Escolha em quais plataformas o anúncio será exibido. O clique sempre leva ao WhatsApp.</p>
+                    <div className="flex flex-wrap gap-4 p-4 rounded-2xl bg-gray-50">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(formData.publisherPlatforms || 'facebook,instagram').includes('facebook')}
+                          onChange={(e) => {
+                            const current = (formData.publisherPlatforms || 'facebook,instagram').split(',').filter(Boolean);
+                            const next = e.target.checked ? [...current.filter(p => p !== 'facebook'), 'facebook'] : current.filter(p => p !== 'facebook');
+                            setFormData(prev => ({ ...prev, publisherPlatforms: next.join(',') }));
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span className="text-sm font-bold text-gray-800">Facebook</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(formData.publisherPlatforms || 'facebook,instagram').includes('instagram')}
+                          onChange={(e) => {
+                            const current = (formData.publisherPlatforms || 'facebook,instagram').split(',').filter(Boolean);
+                            const next = e.target.checked ? [...current.filter(p => p !== 'instagram'), 'instagram'] : current.filter(p => p !== 'instagram');
+                            setFormData(prev => ({ ...prev, publisherPlatforms: next.join(',') }));
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span className="text-sm font-bold text-gray-800">Instagram</span>
+                      </label>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento diário (R$) <span className="text-rose-500">*</span></label>

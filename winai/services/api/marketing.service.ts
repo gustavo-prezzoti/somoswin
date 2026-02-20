@@ -40,6 +40,8 @@ export interface CreateCampaignRequest {
     imageUrl?: string;
     adSetName?: string;
     adName?: string;
+    /** Onde exibir o anúncio: "facebook,instagram" (padrão), "facebook", "instagram". Opcional. */
+    publisherPlatforms?: string;
 }
 
 export interface PagePost {

@@ -138,6 +138,16 @@ public class MarketingService {
         String accountName = conn.getAccountName() != null ? conn.getAccountName() : "Conta de Anúncios";
 
         List<MetaCampaign> campaigns = metaCampaignRepository.findByCompanyId(company.getId());
+        // Se banco vazio, sincroniza da Meta antes de retornar (evita lista vazia após conectar ou criar campanha)
+        if (campaigns.isEmpty()) {
+            log.info("[Campaigns] company={} - banco vazio, disparando sync sob demanda", company.getId());
+            try {
+                metaSyncService.syncForConnection(conn);
+                campaigns = metaCampaignRepository.findByCompanyId(company.getId());
+            } catch (Exception e) {
+                log.warn("[Campaigns] Sync sob demanda falhou: {}", e.getMessage());
+            }
+        }
         List<CampaignListItemDTO> result = new ArrayList<>();
 
         for (MetaCampaign c : campaigns) {
@@ -1376,7 +1386,8 @@ public class MarketingService {
                 try {
                     adSetId = createMetaAdSet(adAccountId, accessToken, campaignId, pageId,
                             dailyBudgetCents, request.getStartDate(), request.getEndDate(),
-                            country, ageMin, ageMax, gendersList, optGoal, request.getInterests(), adSetName);
+                            country, ageMin, ageMax, gendersList, optGoal, request.getInterests(), adSetName,
+                            request.getPublisherPlatforms());
                     log.info("[META] Ad Set created with optimization_goal={}: {}", optGoal, adSetId);
                     break;
                 } catch (RuntimeException e) {
@@ -1788,7 +1799,8 @@ public class MarketingService {
     private String createMetaAdSet(String adAccountId, String accessToken, String campaignId, String pageId,
                                    long dailyBudgetCents, String startDate, String endDate,
                                    String country, int ageMin, int ageMax, List<Integer> genders,
-                                   String optimizationGoal, String interestsJson, String adSetName) {
+                                   String optimizationGoal, String interestsJson, String adSetName,
+                                   String publisherPlatforms) {
         String url = metaApiBaseUrl + "/" + adAccountId + "/adsets";
 
         Map<String, Object> targeting = new HashMap<>();
@@ -1824,7 +1836,21 @@ public class MarketingService {
         }
 
         // Meta API v23+: targeting_automation.advantage_audience obrigatório (1=habilitar, 0=desabilitar)
-        targeting.put("targeting_automation", Map.of("advantage_audience", 0));
+        targeting.put("targeting_automation", Map.of("advantage_audience", 1));
+
+        // Onde exibir o anúncio: facebook, instagram (publisher_platforms). Destino do clique = WhatsApp (destination_type).
+        if (publisherPlatforms != null && !publisherPlatforms.isBlank()) {
+            List<String> platforms = java.util.Arrays.stream(publisherPlatforms.split("[,;]"))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(String::toLowerCase)
+                    .filter(s -> "facebook".equals(s) || "instagram".equals(s) || "messenger".equals(s) || "audience_network".equals(s))
+                    .distinct()
+                    .toList();
+            if (!platforms.isEmpty()) {
+                targeting.put("publisher_platforms", platforms);
+            }
+        }
 
         Map<String, Object> promotedObject = new HashMap<>();
         promotedObject.put("page_id", pageId);
