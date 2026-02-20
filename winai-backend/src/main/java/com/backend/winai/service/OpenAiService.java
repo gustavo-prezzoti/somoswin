@@ -142,9 +142,12 @@ public class OpenAiService {
                     - Uma ou duas palavras sem contexto claro de pedido de humano
                     - Emoji sozinho, "kkk", "haha"
 
-                    === REGRA DE OURO ===
-                    Na dúvida, SEMPRE retorne CONTINUE. O bot pode lidar com agendamento, dúvidas e fluxos normais.
-                    Só use HANDOFF quando estiver CERTO de que o usuário quer falar com humano e não com o bot.""";
+                    === COMPORTAMENTO DO SISTEMA ===
+                    O sistema SEMPRE comunica ao lead. Nunca deixe o usuário sem resposta.
+                    - HANDOFF: o sistema informa ao lead "Te transferi para um atendente humano" e faz a transferência.
+                    - CONTINUE: o agente principal responde. Se a mensagem for confusa ou incompreensível, o agente dirá "Desculpe, não entendi. Pode repetir ou reformular?" em vez de inventar resposta.
+                    - Em mensagens ambíguas que NÃO são pedido explícito de humano, retorne CONTINUE. O agente tratará e, se não entender, comunicará "não entendi" ao lead.
+                    - Use HANDOFF apenas quando o usuário pedir EXPLICITAMENTE falar com humano.""";
 
             // Use lightweight model for classification
             String originalModel = this.currentTextModel;
@@ -482,20 +485,22 @@ public class OpenAiService {
         systemPrompt.append("Instruções importantes:\n");
         systemPrompt.append("1. Responda APENAS com base nas informações da base de conhecimento quando possível.\n");
         systemPrompt.append(
-                "2. Se não souber a resposta, seja honesto e sugira que o usuário entre em contato com um atendente humano.\n");
-        systemPrompt.append("3. Seja cordial, profissional e use linguagem natural.\n");
-        systemPrompt.append("4. Mantenha respostas concisas e diretas (ideal para WhatsApp).\n");
-        systemPrompt.append("5. Use emojis de forma moderada para tornar a conversa mais amigável.\n");
-        systemPrompt.append("6. Nunca invente informações que não estejam na base de conhecimento.\n");
+                "2. Se não entender a mensagem do usuário (ambígua, incompleta, fora de contexto), responda: \"Desculpe, não entendi. Pode repetir ou reformular?\" NUNCA invente ou assuma o que o usuário quis dizer.\n");
         systemPrompt.append(
-                "7. Use a tag [SPLIT] para dividir mensagens longas em vários balões de conversa. Cada parte deve ser uma continuação direta sem repetir saudações ou introduções. O objetivo é um fluxo natural de mensagens sequenciais.\n");
-        systemPrompt.append("8. REGRAS DE OURO PARA EVITAR REPETIÇÃO E SAUDAÇÕES:\n");
+                "3. Se não souber a resposta sobre um tema, seja honesto e sugira que o usuário entre em contato com um atendente humano.\n");
+        systemPrompt.append("4. Seja cordial, profissional e use linguagem natural.\n");
+        systemPrompt.append("5. Mantenha respostas concisas e diretas (ideal para WhatsApp).\n");
+        systemPrompt.append("6. Use emojis de forma moderada para tornar a conversa mais amigável.\n");
+        systemPrompt.append("7. Nunca invente informações que não estejam na base de conhecimento.\n");
+        systemPrompt.append(
+                "8. Use a tag [SPLIT] para dividir mensagens longas em vários balões de conversa. Cada parte deve ser uma continuação direta sem repetir saudações ou introduções. O objetivo é um fluxo natural de mensagens sequenciais.\n");
+        systemPrompt.append("9. REGRAS DE OURO PARA EVITAR REPETIÇÃO E SAUDAÇÕES:\n");
         systemPrompt.append(
                 "   - Se houver histórico de conversa, NÃO comece com saudações (Olá, Oi, Tudo bem, etc.) nem reapresente o assistente.\n");
         systemPrompt.append(
                 "   - NÃO repita informações que já foram ditas por você ou pelo usuário anteriormente na conversa.\n");
         systemPrompt.append("   - Vá direto ao ponto da dúvida atual.\n");
-        systemPrompt.append("9. REGRAS PARA TRANSIÇÃO HUMANA:\n");
+        systemPrompt.append("10. REGRAS PARA TRANSIÇÃO HUMANA:\n");
         systemPrompt.append(
                 "   - SE o usuário pedir explicitamente para falar com um humano, use a ferramenta 'escalar_humano'.\n");
         systemPrompt.append(
@@ -504,7 +509,7 @@ public class OpenAiService {
                 "   - SE o usuário quiser reagendar ou cancelar algo que você não pode fazer, use a ferramenta respectiva.\n");
         systemPrompt.append(
                 "   - NÃO tente simular um humano ou mentir. Se for solicitado, mude para o modo humano imediatamente.\n");
-        systemPrompt.append("10. REGRAS PARA MEMÓRIA (IMPORTANTE):\n");
+        systemPrompt.append("11. REGRAS PARA MEMÓRIA (IMPORTANTE):\n");
         systemPrompt.append(
                 "   - Se você perceber que um assunto foi CONCLUÍDO, FINALIZADO ou a conversa está encerrando (tchau, obrigado, resolvido), ADICIONE a tag [SUMMARY] no final da sua resposta.\n");
         systemPrompt.append(
@@ -513,7 +518,7 @@ public class OpenAiService {
         if (aiContext != null && aiContext.getCompany() != null) {
             boolean agendamentoDisponivel = agendamentoService.isAgendamentoEnabledForCompany(aiContext.getCompany());
             if (agendamentoDisponivel) {
-                systemPrompt.append("\n11. AGENDAMENTO DISPONÍVEL (Google Calendar):\n");
+                systemPrompt.append("\n12. AGENDAMENTO DISPONÍVEL (Google Calendar):\n");
                 systemPrompt.append(
                         "   - Você TEM capacidade de agendar. SOMENTE quando o usuário perguntar ou demonstrar interesse em agendar, marcar horário, agendar visita ou reunião: ofereça ajudar e use as ferramentas.\n");
                 systemPrompt.append(
@@ -527,7 +532,7 @@ public class OpenAiService {
                     systemPrompt.append("   - Regras da empresa: ").append(configSummary).append("\n");
                 }
             } else {
-                systemPrompt.append("\n11. AGENDAMENTO NÃO DISPONÍVEL - TRANSIÇÃO HUMANA:\n");
+                systemPrompt.append("\n12. AGENDAMENTO NÃO DISPONÍVEL - TRANSIÇÃO HUMANA:\n");
                 systemPrompt.append(
                         "   - Você NÃO tem capacidade de agendar. Quando o usuário quiser agendar, marcar horário ou agendar visita: NÃO invente horários.\n");
                 systemPrompt.append(
