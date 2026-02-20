@@ -425,7 +425,7 @@ public class OpenAiService {
                 systemPrompt.append(
                         "   - Ofereça apenas 2-3 horários por vez. Telefone já vem do WhatsApp. NUNCA peça CPF.\n");
                 systemPrompt.append(
-                        "   - DADOS DO AGENDAMENTO: Use APENAS o que o cliente informou EXPLICITAMENTE. Nome: só o que o cliente disse. Observações: NUNCA inclua Pagamento, valor, CNPJ ou origem - deixe vazio se o cliente não informou.\n");
+                        "   - DADOS DO AGENDAMENTO: Nome só o que o cliente disse. Observações: Objetivo (produto/serviço) | Problema (se houver) | Urgente (sim/não). Uma linha por item, separados por |. Use APENAS o que o cliente informou. NUNCA invente pagamento, CNPJ ou valor.\n");
                 systemPrompt.append(
                         "   - CRÍTICO: Se a ferramenta retornar 'Horários disponíveis:' com lista de slots, NUNCA diga 'não há horários'. Liste os horários. Só diga 'não há horários' quando retornar 'Nenhum horário disponível'.\n");
                 systemPrompt.append(
@@ -1066,7 +1066,7 @@ public class OpenAiService {
                             "data", Map.of("type", "string", "description", "Data no formato YYYY-MM-DD (ex: 2025-02-19)."),
                             "hora", Map.of("type", "string", "description", "Hora no formato HH:mm (ex: 09:00 ou 14:30)."),
                             "titulo", Map.of("type", "string", "description", "Título do agendamento (opcional)."),
-                            "observacoes", Map.of("type", "string", "description", "Só o que o cliente disse. NUNCA inclua Pagamento, valor, CNPJ ou origem.")),
+                            "observacoes", Map.of("type", "string", "description", "Observações profissionais. Uma linha por item: Objetivo: (o que quer) | Problema: (se houver) | Urgente: sim/não. Use APENAS o que o cliente informou. NUNCA invente pagamento, CNPJ ou valor.")),
                     List.of("nome", "data", "hora")));
             tools.add(createTool("reagendar_agendamento",
                     "REAGENDA em uma única operação: cria o novo agendamento e cancela o antigo. Use quando o usuário quiser alterar data/hora. OBRIGATÓRIO: meeting_id do agendamento atual (listar_meus_agendamentos) + data e hora do novo slot.",
@@ -1077,7 +1077,7 @@ public class OpenAiService {
                             "data", Map.of("type", "string", "description", "Nova data YYYY-MM-DD."),
                             "hora", Map.of("type", "string", "description", "Nova hora HH:mm."),
                             "titulo", Map.of("type", "string", "description", "Título (opcional)."),
-                            "observacoes", Map.of("type", "string", "description", "Observações (opcional).")),
+                            "observacoes", Map.of("type", "string", "description", "Observações: Objetivo | Problema | Urgente (sim/não). Uma linha por item.")),
                     List.of("meeting_id", "nome", "data", "hora")));
             tools.add(createTool("cancelar_agendamento_google",
                     "Cancela um agendamento. Use o meeting_id retornado por listar_meus_agendamentos (campo 'meeting_id:'). NÃO escale para humano - use esta ferramenta.",

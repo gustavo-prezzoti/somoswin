@@ -269,6 +269,21 @@ public class AgendamentoService {
     }
 
     /**
+     * Formata observações com espaçamento e quebras de linha.
+     * Aceita "Objetivo: X | Problema: Y | Urgente: não" ou linhas separadas.
+     */
+    private static String formatObservacoes(String notes) {
+        if (notes == null || notes.trim().isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (String part : notes.split("[|\\n]")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty())
+                sb.append("• ").append(trimmed).append("\n\n");
+        }
+        return sb.toString().trim();
+    }
+
+    /**
      * Create appointment: Meeting + Google Calendar event.
      * Lead data: nome, email, telefone (no CPF).
      */
@@ -296,24 +311,19 @@ public class AgendamentoService {
         }
         int duration = opt.get().getSlotDurationMinutes();
 
-        // Descrição completa para o dono do calendário: contato, resumo do lead (GPT) e observações
+        // Descrição para o dono do calendário: contato e observações bem formatados
         StringBuilder desc = new StringBuilder();
-        desc.append("Cliente: ").append(nome);
+        desc.append("═══ CONTATO ═══\n\n");
+        desc.append("Cliente: ").append(nome).append("\n");
         if (telefone != null && !telefone.isEmpty())
-            desc.append("\nTelefone: ").append(telefone);
+            desc.append("Telefone: ").append(telefone).append("\n");
         if (email != null && !email.trim().isEmpty())
-            desc.append("\nE-mail: ").append(email);
+            desc.append("E-mail: ").append(email).append("\n");
         else
-            desc.append("\nContato via WhatsApp (sem e-mail)");
-        desc.append("\n");
-        if (lead != null && lead.getAiSummary() != null && !lead.getAiSummary().trim().isEmpty()) {
-            desc.append("\n--- Resumo do lead (IA) ---\n");
-            desc.append(lead.getAiSummary().trim());
-            desc.append("\n");
-        }
+            desc.append("Contato: WhatsApp (sem e-mail)\n");
         if (notes != null && !notes.trim().isEmpty()) {
-            desc.append("\n--- Observações ---\n");
-            desc.append(notes.trim());
+            desc.append("\n═══ OBSERVAÇÕES ═══\n\n");
+            desc.append(formatObservacoes(notes.trim()));
         }
         String notesFinal = desc.toString().trim();
 
