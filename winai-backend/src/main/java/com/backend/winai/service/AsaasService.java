@@ -42,9 +42,6 @@ public class AsaasService {
     @Value("${asaas.api.token:}")
     private String asaasApiToken;
 
-    @Value("${asaas.billing-type:BOLETO}")
-    private String asaasBillingType;
-
     @PostConstruct
     public void init() {
         if (asaasApiToken == null || asaasApiToken.isBlank()) {
@@ -142,7 +139,7 @@ public class AsaasService {
     /**
      * Cria uma assinatura recorrente no Asaas para a empresa com base no plano.
      * O Asaas gera cobranças automaticamente a cada ciclo (MONTHLY).
-     * A primeira cobrança é gerada imediatamente (nextDueDate = hoje).
+     * A primeira cobrança vence no FIM da vigência configurada no site (subscriptionEndDate).
      */
     @Transactional
     public AsaasSubscriptionResponse createSubscription(UUID companyId, UUID planId) {
@@ -155,18 +152,16 @@ public class AsaasService {
         // Garante que o cliente existe no Asaas
         String customerId = ensureCustomer(company);
 
-        // Primeira cobrança: fim da vigência (hoje + 30 dias). O Asaas gera as próximas automaticamente (mensal).
-        LocalDate firstDueDate = LocalDate.now().plusDays(30);
-
-        String billingType = (asaasBillingType != null && !asaasBillingType.isBlank())
-                ? asaasBillingType.toUpperCase() : "BOLETO";
-        if (!java.util.Set.of("BOLETO", "PIX", "CREDIT_CARD", "UNDEFINED").contains(billingType)) {
-            billingType = "BOLETO";
+        // Primeira cobrança vence no FIM da vigência - usa subscriptionEndDate do site se configurado
+        LocalDate vigenciaFim = company.getSubscriptionEndDate();
+        if (vigenciaFim == null || vigenciaFim.isBefore(LocalDate.now())) {
+            vigenciaFim = LocalDate.now().plusDays(30);
         }
+        LocalDate firstDueDate = vigenciaFim;
 
         AsaasSubscriptionRequest request = AsaasSubscriptionRequest.builder()
                 .customer(customerId)
-                .billingType(billingType)
+                .billingType("PIX")
                 .value(plan.getPrice().doubleValue())
                 .nextDueDate(firstDueDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
                 .cycle("MONTHLY")
@@ -194,9 +189,13 @@ public class AsaasService {
                 } catch (IllegalArgumentException e) {
                     log.warn("[ASAAS] Plano '{}' não encontrado no enum UserPlan, mantendo plano atual", plan.getName());
                 }
-                // Vigência: início = hoje, fim = hoje + 30 dias (será estendido ao confirmar pagamento)
-                company.setSubscriptionStartDate(LocalDate.now());
-                company.setSubscriptionEndDate(LocalDate.now().plusDays(30));
+                // Vigência: usa as datas já configuradas no site, ou hoje + 30 dias se não houver
+                if (company.getSubscriptionStartDate() == null) {
+                    company.setSubscriptionStartDate(LocalDate.now());
+                }
+                if (company.getSubscriptionEndDate() == null) {
+                    company.setSubscriptionEndDate(vigenciaFim);
+                }
                 companyRepository.save(company);
 
                 log.info("[ASAAS] Assinatura recorrente criada: {} para empresa {} - Plano {} - Vencimento: {}",
@@ -254,11 +253,11 @@ public class AsaasService {
             }
         }
 
-        // Limpa todos os dados de assinatura (sempre, inclusive quando 404)
+        // Limpa dados de assinatura (preserva vigência para uso na renovação)
         company.setAsaasSubscriptionId(null);
         company.setSubscriptionStatus("CANCELLED");
         company.setSubscriptionDueDate(null);
-        company.setSubscriptionEndDate(null);
+        // Mantém subscriptionStartDate e subscriptionEndDate - usados como vigência na criação da nova assinatura
         companyRepository.save(company);
 
         log.info("[ASAAS] Dados de assinatura limpos para empresa {} - pronto para renovação", company.getName());
@@ -358,9 +357,7 @@ public class AsaasService {
         // Cria cobrança avulsa no Asaas (não é assinatura, é um payment único)
         Map<String, Object> paymentBody = new java.util.LinkedHashMap<>();
         paymentBody.put("customer", customerId);
-        String billingType = (asaasBillingType != null && !asaasBillingType.isBlank())
-                ? asaasBillingType.toUpperCase() : "BOLETO";
-        paymentBody.put("billingType", java.util.Set.of("BOLETO", "PIX", "CREDIT_CARD", "UNDEFINED").contains(billingType) ? billingType : "BOLETO");
+        paymentBody.put("billingType", "PIX");
         paymentBody.put("value", chargeValue.doubleValue());
         paymentBody.put("dueDate", LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE));
         paymentBody.put("description", String.format(
