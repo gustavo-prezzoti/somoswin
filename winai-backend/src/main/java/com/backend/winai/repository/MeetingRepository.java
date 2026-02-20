@@ -43,5 +43,12 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
 
         List<Meeting> findByCompanyAndGoogleEventIdIsNotNull(Company company);
 
+        @Query("SELECT m FROM Meeting m WHERE m.company = :company AND m.meetingDate >= :today " +
+                "AND m.status IN ('SCHEDULED', 'CONFIRMED') " +
+                "AND ((:leadId IS NOT NULL AND m.lead.id = :leadId) OR (:phone IS NOT NULL AND :phone <> '' AND m.contactPhone = :phone)) " +
+                "ORDER BY m.meetingDate, m.meetingTime")
+        List<Meeting> findUpcomingByLeadOrPhone(@Param("company") Company company, @Param("leadId") UUID leadId,
+                @Param("phone") String phone, @Param("today") java.time.LocalDate today);
+
         void deleteByCompany(Company company);
 }

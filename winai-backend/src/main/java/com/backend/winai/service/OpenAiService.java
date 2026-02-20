@@ -18,6 +18,7 @@ import org.springframework.web.client.RestTemplate;
 import com.backend.winai.dto.ai.AIContext;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Lead;
+import com.backend.winai.entity.Meeting;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -396,7 +397,7 @@ public class OpenAiService {
         systemPrompt.append(
                 "   - Se você ver no histórico que o atendente já foi solicitado ou que a ferramenta 'escalar_humano' já foi chamada anteriormente, NÃO chame a ferramenta novamente. Simplesmente informe que o atendente já está a caminho.\n");
         systemPrompt.append(
-                "   - SE o usuário quiser reagendar ou cancelar algo que você não pode fazer, use a ferramenta respectiva.\n");
+                "   - Quando agendamento ESTÁ disponível: reagendar = listar_meus_agendamentos + buscar_horarios + criar_agendamento + cancelar_agendamento_google. Cancelar = cancelar_agendamento_google. NÃO escale para humano.\n");
         systemPrompt.append(
                 "   - NÃO tente simular um humano ou mentir. Se for solicitado, mude para o modo humano imediatamente.\n");
         systemPrompt.append("11. REGRAS PARA MEMÓRIA (IMPORTANTE):\n");
@@ -414,11 +415,17 @@ public class OpenAiService {
                 systemPrompt.append(
                         "   - NÃO force nem sugira agendamento sem necessidade. Só atue quando houver interesse explícito do usuário.\n");
                 systemPrompt.append(
-                        "   - Use 'buscar_horarios_disponiveis' para listar horários, depois 'criar_agendamento_google' com nome (e-mail opcional). Telefone já vem do WhatsApp. NUNCA peça CPF.\n");
+                        "   - Use 'listar_meus_agendamentos' quando o usuário perguntar sobre agendamentos, quiser reagendar ou cancelar.\n");
                 systemPrompt.append(
-                        "   - Ofereça apenas 2-3 horários por vez. Peça nome e e-mail (e-mail opcional - se o cliente não tiver, agende mesmo assim com descrição completa).\n");
+                        "   - Reagendar: listar_meus_agendamentos (mostrar atual) -> buscar_horarios_disponiveis -> criar_agendamento_google (novo) -> cancelar_agendamento_google (antigo). NUNCA escale para humano para reagendar.\n");
                 systemPrompt.append(
-                        "   - CRÍTICO: Se a ferramenta retornar 'Horários disponíveis:' com lista de slots, NUNCA diga 'não há horários' ou 'não tem nos próximos X dias'. Liste os horários retornados. Só diga 'não há horários' quando a ferramenta retornar explicitamente 'Nenhum horário disponível'.\n");
+                        "   - Cancelar: listar_meus_agendamentos -> cancelar_agendamento_google com o meeting_id. NUNCA escale para humano para cancelar.\n");
+                systemPrompt.append(
+                        "   - Novo agendamento: buscar_horarios_disponiveis -> criar_agendamento_google. Peça nome e e-mail (opcional). NUNCA escale para humano.\n");
+                systemPrompt.append(
+                        "   - Ofereça apenas 2-3 horários por vez. Telefone já vem do WhatsApp. NUNCA peça CPF.\n");
+                systemPrompt.append(
+                        "   - CRÍTICO: Se a ferramenta retornar 'Horários disponíveis:' com lista de slots, NUNCA diga 'não há horários'. Liste os horários. Só diga 'não há horários' quando retornar 'Nenhum horário disponível'.\n");
                 String configSummary = agendamentoService.getConfigSummaryForPrompt(aiContext.getCompany());
                 if (configSummary != null && !configSummary.isEmpty()) {
                     systemPrompt.append("   - Regras da empresa: ").append(configSummary).append("\n");
@@ -1009,20 +1016,17 @@ public class OpenAiService {
     private List<Map<String, Object>> getGlobalTools(AIContext aiContext) {
         List<Map<String, Object>> tools = new ArrayList<>();
 
-        // Tool: escalar_humano
-        tools.add(createTool("escalar_humano", "Chama um atendente humano para continuar o atendimento.",
+        // Tool: escalar_humano (só quando usuário PEDIR EXPLICITAMENTE humano)
+        tools.add(createTool("escalar_humano", "Chama um atendente humano. Use SOMENTE quando o usuário pedir explicitamente para falar com um humano, atendente ou pessoa.",
                 new HashMap<>()));
 
-        // Tool: reagendar_atendimento
-        tools.add(
-                createTool("reagendar_atendimento", "Escala para humano para reagendar um horário.", new HashMap<>()));
+        boolean agendamentoDisponivel = aiContext != null && aiContext.getCompany() != null
+                && agendamentoService.isAgendamentoEnabledForCompany(aiContext.getCompany());
 
-        // Tool: cancelar_atendimento
-        tools.add(createTool("cancelar_atendimento", "Escala para humano para cancelar um agendamento.",
-                new HashMap<>()));
-
-        if (aiContext != null && aiContext.getCompany() != null
-                && agendamentoService.isAgendamentoEnabledForCompany(aiContext.getCompany())) {
+        if (agendamentoDisponivel) {
+            tools.add(createTool("listar_meus_agendamentos",
+                    "Lista os agendamentos futuros do lead. Use quando o usuário perguntar sobre seus agendamentos, quiser reagendar ou cancelar.",
+                    new HashMap<>()));
             tools.add(createTool("buscar_horarios_disponiveis",
                     "Busca horários disponíveis no Google Calendar para agendamento. Retorna lista no formato 'YYYY-MM-DD HH:mm'.",
                     Map.of(
@@ -1040,6 +1044,16 @@ public class OpenAiService {
                             "titulo", Map.of("type", "string", "description", "Título do agendamento (opcional)."),
                             "observacoes", Map.of("type", "string", "description", "Observações: do que se trata, para quem, finalidade (opcional).")),
                     List.of("nome", "data", "hora")));
+            tools.add(createTool("cancelar_agendamento_google",
+                    "Cancela um agendamento. Use o id retornado por listar_meus_agendamentos. NÃO escale para humano para cancelar - use esta ferramenta.",
+                    Map.of("meeting_id", Map.of("type", "string", "description", "UUID do agendamento (retornado por listar_meus_agendamentos).")),
+                    List.of("meeting_id")));
+        } else {
+            // Sem agendamento: reagendar/cancelar só via humano
+            tools.add(createTool("reagendar_atendimento", "Escala para humano para reagendar. Use SOMENTE quando agendamento NÃO está disponível.",
+                    new HashMap<>()));
+            tools.add(createTool("cancelar_atendimento", "Escala para humano para cancelar. Use SOMENTE quando agendamento NÃO está disponível.",
+                    new HashMap<>()));
         }
 
         return tools;
@@ -1052,6 +1066,40 @@ public class OpenAiService {
             return "HUMAN_HANDOFF_REQUESTED";
         }
         if (aiContext != null && aiContext.getCompany() != null) {
+            if ("listar_meus_agendamentos".equalsIgnoreCase(functionName)) {
+                try {
+                    List<Meeting> meetings = agendamentoService.listUpcomingMeetingsForLead(
+                            aiContext.getCompany(), aiContext.getLead(), aiContext.getPhoneNumber());
+                    if (meetings.isEmpty())
+                        return "Nenhum agendamento futuro encontrado.";
+                    StringBuilder sb = new StringBuilder("Agendamentos futuros:\n");
+                    for (Meeting m : meetings) {
+                        sb.append("- ID: ").append(m.getId()).append(" | ")
+                                .append(m.getMeetingDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")))
+                                .append(" às ").append(m.getMeetingTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))
+                                .append(" | ").append(m.getTitle());
+                        if (m.getNotes() != null && !m.getNotes().isEmpty())
+                            sb.append(" (obs: ").append(m.getNotes()).append(")");
+                        sb.append("\n");
+                    }
+                    return sb.toString();
+                } catch (Exception e) {
+                    log.error("Erro ao listar agendamentos", e);
+                    return "Erro ao listar agendamentos.";
+                }
+            }
+            if ("cancelar_agendamento_google".equalsIgnoreCase(functionName)) {
+                try {
+                    JsonNode args = objectMapper.readTree(jsonArgs);
+                    String idStr = args.has("meeting_id") ? args.get("meeting_id").asText().trim() : "";
+                    if (idStr.isEmpty())
+                        return "Erro: meeting_id é obrigatório.";
+                    return agendamentoService.cancelMeeting(aiContext.getCompany(), java.util.UUID.fromString(idStr));
+                } catch (Exception e) {
+                    log.error("Erro ao cancelar agendamento", e);
+                    return "Erro ao cancelar: " + e.getMessage();
+                }
+            }
             if ("buscar_horarios_disponiveis".equalsIgnoreCase(functionName)) {
                 try {
                     JsonNode args = objectMapper.readTree(jsonArgs);

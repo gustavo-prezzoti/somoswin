@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -258,6 +259,42 @@ public class AgendamentoService {
 
     public Optional<AgendamentoConfig> getConfigForCompany(Company company) {
         return configRepository.findByCompany(company);
+    }
+
+    /**
+     * Lista agendamentos futuros do lead (por leadId ou telefone).
+     */
+    public List<Meeting> listUpcomingMeetingsForLead(Company company, Lead lead, String phone) {
+        UUID leadId = lead != null ? lead.getId() : null;
+        String phoneStr = (phone != null && !phone.trim().isEmpty()) ? phone.trim() : null;
+        if (leadId == null && phoneStr == null)
+            return List.of();
+        return meetingRepository.findUpcomingByLeadOrPhone(company, leadId,
+                phoneStr != null && !phoneStr.isEmpty() ? phoneStr : null, LocalDate.now());
+    }
+
+    /**
+     * Cancela um agendamento (Meeting + Google Calendar). Retorna mensagem de sucesso ou erro.
+     */
+    @Transactional
+    public String cancelMeeting(Company company, UUID meetingId) {
+        Optional<Meeting> opt = meetingRepository.findByIdAndCompany(meetingId, company);
+        if (opt.isEmpty())
+            return "Agendamento não encontrado.";
+        Meeting m = opt.get();
+        if (m.getStatus() == MeetingStatus.CANCELLED)
+            return "Este agendamento já foi cancelado.";
+        try {
+            if (m.getGoogleEventId() != null)
+                googleDriveService.deleteCalendarEvent(company, m.getGoogleEventId());
+            m.setStatus(MeetingStatus.CANCELLED);
+            meetingRepository.save(m);
+            return "Agendamento de " + m.getMeetingDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                    + " às " + m.getMeetingTime().format(TIME_FMT) + " foi cancelado com sucesso.";
+        } catch (Exception e) {
+            log.error("Erro ao cancelar agendamento", e);
+            return "Erro ao cancelar: " + e.getMessage();
+        }
     }
 
     /**
