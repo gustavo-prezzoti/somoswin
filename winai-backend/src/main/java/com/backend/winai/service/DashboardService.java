@@ -7,6 +7,7 @@ import com.backend.winai.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -665,9 +666,11 @@ public class DashboardService {
         }
 
         /**
-         * Gera insights usando IA com base nos dados das campanhas
+         * Gera insights usando IA com base nos dados das campanhas.
+         * REQUIRES_NEW garante transação read-write isolada por empresa, evitando
+         * "cannot execute INSERT in a read-only transaction" quando chamado pelo scheduler.
          */
-        @Transactional
+        @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
         public void refreshAIInsights(Company company) {
                 if (company == null || !openAiService.isChatEnabled())
                         return;

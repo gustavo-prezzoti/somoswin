@@ -32,6 +32,9 @@ public class FollowUpService {
 
     private static final ZoneId BRAZIL_ZONE = ZoneId.of("America/Sao_Paulo");
 
+    /** Resultado da reserva de follow-up (transação curta que libera lock antes do envio). */
+    private record PrepareFollowUpResult(UUID statusId, UUID conversationId, UUID configId, int stepIndex) {}
+
     private final FollowUpConfigRepository configRepository;
     private final FollowUpStatusRepository statusRepository;
     private final WhatsAppConversationRepository conversationRepository;
@@ -315,80 +318,76 @@ public class FollowUpService {
     }
 
     /**
-     * Processa follow-up com trava para evitar duplicidade em ambientes
-     * concorrentes. REQUIRES_NEW para não herdar read-only do caller.
+     * Processa follow-up com trava para evitar duplicidade.
+     * NOT_SUPPORTED: reserva em transação curta (commit libera lock), depois executa envio sem lock.
+     * Evita statement timeout em updateFollowUpStatusAfterSend (lock era mantido durante IA+Uazap).
      */
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = false)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void processFollowUpByIdWithLock(UUID statusId) {
-        // Usa SELECT FOR UPDATE para garantir exclusividade imediata
+        PrepareFollowUpResult result = self.reserveFollowUpForProcessing(statusId);
+        if (result != null) {
+            self.executeLongFollowUpWork(result.statusId(), result.conversationId(), result.configId(), result.stepIndex());
+        }
+    }
+
+    /**
+     * Reserva follow-up em transação curta. SELECT FOR UPDATE, valida, salva e COMMITA.
+     * Ao retornar, o lock é liberado antes do envio (evita timeout em updateFollowUpStatusAfterSend).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
+    public PrepareFollowUpResult reserveFollowUpForProcessing(UUID statusId) {
         Optional<FollowUpStatus> statusOpt = statusRepository.findByIdWithLock(statusId);
         if (statusOpt.isEmpty())
-            return;
+            return null;
 
         FollowUpStatus status = statusOpt.get();
 
-        // Verificação DUPLA dentro da trava: se outra thread já limpou o timer, aborta.
         if (status.getNextFollowUpAt() == null || status.getNextFollowUpAt().isAfter(ZonedDateTime.now())) {
             log.debug("Follow-up {} já processado ou adiado por outra thread", statusId);
-            return;
+            return null;
         }
 
         log.info("Processando follow-up bloqueado [StatusID: {} | ConvID: {} | Fone: {}]",
                 statusId, status.getConversation().getId(), status.getConversation().getPhoneNumber());
-        processFollowUpForConversation(status);
-    }
 
-    @Transactional
-    public void processFollowUpForConversation(FollowUpStatus status) {
-        // 1. Limpa o timer IMEDIATAMENTE (dentro da transação travada)
-        // para garantir que ninguém mais processe isso.
         status.setNextFollowUpAt(null);
         statusRepository.saveAndFlush(status);
 
         WhatsAppConversation conversation = status.getConversation();
-
-        Optional<FollowUpConfig> configOpt = configRepository.findByCompanyId(
-                conversation.getCompany().getId());
+        Optional<FollowUpConfig> configOpt = configRepository.findByCompanyId(conversation.getCompany().getId());
 
         if (configOpt.isEmpty() || !configOpt.get().getEnabled()) {
             log.debug("Follow-up desabilitado para empresa da conversa {}", conversation.getId());
-            status.setNextFollowUpAt(null);
-            statusRepository.save(status);
-            return;
+            return null;
         }
 
         FollowUpConfig config = configOpt.get();
 
-        // Verifica janela de horário
         if (!isWithinTimeWindow(config)) {
             log.debug("Fora da janela de horário para follow-up - adiando para próxima janela");
-            // Agenda para início da próxima janela
             ZonedDateTime nextWindow = calculateNextTimeWindow(config);
             status.setNextFollowUpAt(nextWindow);
             statusRepository.save(status);
-            return;
+            return null;
         }
 
-        // Verifica limite máximo baseado na lista de steps
         int currentStepIndex = status.getFollowUpCount();
         if (currentStepIndex >= config.getSteps().size()) {
             log.debug("Todos os steps executados para conversa {}", conversation.getId());
             status.setNextFollowUpAt(null);
             status.setEligible(false);
             statusRepository.save(status);
-            return;
+            return null;
         }
 
-        // Verifica se conversa está em modo IA
         if (!"IA".equals(conversation.getSupportMode())) {
             log.debug("Conversa {} não está em modo IA - pulando follow-up", conversation.getId());
             status.setNextFollowUpAt(null);
             statusRepository.save(status);
-            return;
+            return null;
         }
 
-        // Executa geração + envio SEM segurar conexão (evita connection leak)
-        self.executeLongFollowUpWork(status.getId(), conversation.getId(), config.getId(), currentStepIndex);
+        return new PrepareFollowUpResult(status.getId(), conversation.getId(), config.getId(), currentStepIndex);
     }
 
     /**

@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
@@ -86,22 +87,23 @@ public class OpenAiService {
     /**
      * Analyzes the user's intent to determine if they are requesting a human agent.
      * Uses a lightweight model (gpt-4o-mini) for speed and cost-efficiency.
-     * 
+     * NOT_SUPPORTED evita connection leak durante chamada HTTP à OpenAI.
+     *
      * @param userMessage         The latest message from the user.
      * @param conversationHistory Recent conversation context.
      * @return "HANDOFF" if human intervention is needed, "CONTINUE" otherwise.
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String analyzeIntent(String userMessage, List<ChatMessage> conversationHistory) {
         if (!isChatEnabled())
             return "CONTINUE";
 
         try {
-            String systemPrompt = "You are an intent classifier for a customer support bot. " +
-                    "Analyze the user's message and recent context. " +
-                    "If the user explicitly asks to speak with a human, support agent, attendant, " +
-                    "or expresses frustration requiring human intervention, return ONLY the string 'HANDOFF'. " +
-                    "Otherwise, return 'CONTINUE'. " +
-                    "Do not output any reasoning, just the classification label.";
+            String systemPrompt = "Classificador de intenção. Responda APENAS com uma palavra: CONTINUE ou HANDOFF.\n\n" +
+                    "HANDOFF: SOMENTE se o usuário pedir EXPLICITAMENTE para falar com humano, atendente ou pessoa real. " +
+                    "Exemplos que são HANDOFF: 'quero falar com um humano', 'me transfira para atendente', 'falar com pessoa'.\n\n" +
+                    "CONTINUE: todo o resto. Inclui: horários (14h, 15h, 9h), datas, sim/não/ok, agendamento, dúvidas, " +
+                    "respostas curtas, números, qualquer mensagem ambígua. Na dúvida, responda CONTINUE.";
 
             // Use lightweight model for classification
             String originalModel = this.currentTextModel;
@@ -127,6 +129,7 @@ public class OpenAiService {
     }
 
     @SuppressWarnings("unchecked")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String generateResponse(String systemPrompt, String userMessage, String imageUrl,
             List<ChatMessage> conversationHistory) {
         if (!isChatEnabled()) {
@@ -398,6 +401,7 @@ public class OpenAiService {
                 null);
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String generateResponseWithContext(String agentPrompt, String knowledgeBaseContent, String userMessage,
             String imageUrl, List<ChatMessage> recentMessages, AIContext aiContext) {
         StringBuilder systemPrompt = new StringBuilder();
@@ -666,6 +670,7 @@ public class OpenAiService {
     private AgendamentoService agendamentoService;
 
     @SuppressWarnings("unchecked")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String generateClinicorpResponse(String userMessage, List<String> recentMessages, String contextInfo,
             String agentPrompt) {
         if (!isChatEnabled())
