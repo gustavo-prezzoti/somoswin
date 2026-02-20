@@ -613,7 +613,7 @@ public class MarketingService {
             }
             return Map.of("url", url, "mode", "config_id", "config_id", metaConfigId.trim(), "token_type", isSystemUser ? "system_user" : "user");
         }
-        String scope = "ads_management,pages_show_list,pages_read_engagement,pages_read_user_content,business_management,whatsapp_business_management,leads_retrieval,email,public_profile";
+        String scope = "ads_management,pages_show_list,pages_read_engagement,pages_read_user_content,business_management,whatsapp_business_management,whatsapp_business_messaging,leads_retrieval,email,public_profile";
         String url = String.format(
                 "https://www.facebook.com/v19.0/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s&response_type=code",
                 clientId, redirectUri, state, scope);
