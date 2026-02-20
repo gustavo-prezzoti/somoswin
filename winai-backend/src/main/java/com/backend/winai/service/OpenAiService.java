@@ -432,6 +432,8 @@ public class OpenAiService {
                         "   - Quando o usuário disser manhã, tarde ou noite (ex: 'prefiro tarde', 'tem manhã?', 'horário de noite'), use o parâmetro preferencia em buscar_horarios_disponiveis.\n");
                 systemPrompt.append(
                         "   - NÃO ofereça transferir para atendente quando puder fazer reagendar/cancelar/agendar você mesmo. Só transfira quando o usuário PEDIR explicitamente.\n");
+                systemPrompt.append(
+                        "   - Após executar qualquer ferramenta (agendar, cancelar, reagendar, listar), SEMPRE responda ao usuário em português confirmando o que foi feito de forma clara e amigável.\n");
                 String configSummary = agendamentoService.getConfigSummaryForPrompt(aiContext.getCompany());
                 if (configSummary != null && !configSummary.isEmpty()) {
                     systemPrompt.append("   - Regras da empresa: ").append(configSummary).append("\n");
@@ -469,12 +471,18 @@ public class OpenAiService {
 
         List<Map<String, Object>> tools = getGlobalTools(aiContext);
 
-        // Loop for Tool calling support (Max 3 turns for general flow)
-        for (int turn = 0; turn < 3; turn++) {
+        // Loop for Tool calling support (Max 5 turns para permitir múltiplas ferramentas + resposta final)
+        for (int turn = 0; turn < 5; turn++) {
             Map<String, Object> body = new HashMap<>();
             body.put("model", currentTextModel);
             body.put("messages", messages);
             body.put("tools", tools);
+
+            // Após executar ferramentas: forçar resposta em texto (evita retorno vazio)
+            boolean lastIsTool = !messages.isEmpty() && "tool".equals(((Map<?, ?>) messages.get(messages.size() - 1)).get("role"));
+            if (lastIsTool) {
+                body.put("tool_choice", "none");
+            }
 
             // GPT-5 reasoning parameters for consistent responses
             if (currentTextModel.startsWith("gpt-5")) {
@@ -519,15 +527,24 @@ public class OpenAiService {
                         messages.add(toolMsg);
                     }
                 } else {
-                    String content = (String) message.get("content");
-                    return content != null ? content.replace("*", "") : null;
+                    Object contentObj = message.get("content");
+                    String content = extractTextContent(contentObj);
+                    if (content != null && !content.isBlank())
+                        return content.replace("*", "");
+                    // Resposta vazia após tools: fallback para não deixar o lead sem resposta
+                    if (lastIsTool)
+                        return "Pronto! Ação realizada com sucesso. Posso ajudar em mais alguma coisa?";
+                    return null;
                 }
             } catch (Exception e) {
                 log.error("Erro na chamada OpenAI com ferramentas: {}", e.getMessage());
                 break;
             }
         }
-
+        // Limite de turns atingido sem resposta: fallback se houve execução de tools
+        boolean hadToolResults = messages.stream().anyMatch(m -> "tool".equals(((Map<?, ?>) m).get("role")));
+        if (hadToolResults)
+            return "Pronto! Ação realizada. Posso ajudar em mais alguma coisa?";
         return null;
     }
 
@@ -1213,6 +1230,20 @@ public class OpenAiService {
                 } catch (Exception e) {
                     log.error("Erro ao criar agendamento", e);
                     return "Erro ao criar agendamento: " + e.getMessage();
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String extractTextContent(Object contentObj) {
+        if (contentObj == null) return null;
+        if (contentObj instanceof String s) return s;
+        if (contentObj instanceof java.util.List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> m && "text".equals(m.get("type"))) {
+                    Object t = m.get("text");
+                    if (t instanceof String) return (String) t;
                 }
             }
         }
