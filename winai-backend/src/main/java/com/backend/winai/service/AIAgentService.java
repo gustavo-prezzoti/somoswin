@@ -208,20 +208,23 @@ public class AIAgentService {
             }
 
             String phoneNumber = conversation.getPhoneNumber();
-            String baseUrl = conversation.getUazapBaseUrl();
-            String token = conversation.getUazapToken();
+            String baseUrl = null;
+            String token = null;
             String instanceName = conversation.getUazapInstance();
 
-            if (baseUrl == null || token == null) {
-                UserWhatsAppConnection connection = findConnectionForConversation(conversation);
-                if (connection != null) {
-                    baseUrl = connection.getInstanceBaseUrl();
-                    token = connection.getInstanceToken();
-                    if (instanceName == null || instanceName.isEmpty()) {
-                        instanceName = connection.getInstanceName();
-                    }
+            // Priorizar conexão (sempre atualizada) sobre conversa (pode ter credenciais antigas)
+            UserWhatsAppConnection connection = findConnectionForConversation(conversation);
+            if (connection != null) {
+                baseUrl = connection.getInstanceBaseUrl();
+                token = connection.getInstanceToken();
+                if (instanceName == null || instanceName.isEmpty()) {
+                    instanceName = connection.getInstanceName();
                 }
             }
+
+            // Fallback: credenciais da conversa (se conexão não encontrada)
+            if (baseUrl == null) baseUrl = conversation.getUazapBaseUrl();
+            if (token == null) token = conversation.getUazapToken();
 
             if (baseUrl == null || token == null || phoneNumber == null) {
                 log.warn("Missing credentials to send AI response for conversation: {}", conversation.getId());
@@ -836,21 +839,27 @@ public class AIAgentService {
             String instanceName = conversation.getUazapInstance();
             UUID companyId = conversation.getCompany().getId();
 
+            // 1. Buscar por instanceName (se conversa tiver)
             if (instanceName != null && !instanceName.isEmpty()) {
-                return whatsAppConnectionRepository.findByCompanyIdAndInstanceName(companyId, instanceName)
+                var conn = whatsAppConnectionRepository.findByCompanyIdAndInstanceName(companyId, instanceName)
                         .orElse(null);
+                if (conn != null) return conn;
             }
 
+            // 2. Buscar por baseUrl+token (se conversa tiver)
             String baseUrl = conversation.getUazapBaseUrl();
             String token = conversation.getUazapToken();
-
             if (baseUrl != null && token != null) {
-                return whatsAppConnectionRepository.findByInstanceBaseUrlAndInstanceToken(baseUrl, token)
-                        .filter(conn -> conn.getCompany().getId().equals(companyId))
+                var conn = whatsAppConnectionRepository.findByInstanceBaseUrlAndInstanceToken(baseUrl, token)
+                        .filter(c -> c.getCompany().getId().equals(companyId))
                         .orElse(null);
+                if (conn != null) return conn;
             }
 
-            return null;
+            // 3. Fallback: primeira conexão ativa da empresa (igual ao fluxo humano)
+            return whatsAppConnectionRepository.findByCompanyIdAndIsActiveTrue(companyId).stream()
+                    .findFirst()
+                    .orElse(null);
 
         } catch (Exception e) {
             log.error("Error finding connection for conversation: {}", e.getMessage());
