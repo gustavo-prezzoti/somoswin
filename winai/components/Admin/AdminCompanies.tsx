@@ -481,9 +481,9 @@ const AdminCompanies: React.FC = () => {
                                      company.subscriptionStatus === 'CANCELLED' ? 'Cancelada' :
                                      'Sem Assinatura'}
                                 </span>
-                                {company.subscriptionDueDate && (
+                                {(company.subscriptionEndDate || company.subscriptionDueDate) && (
                                     <span className="text-[9px] text-gray-400 font-medium">
-                                        Próx. cobrança: {new Date(company.subscriptionDueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                        Próx. cobrança: {new Date((company.subscriptionEndDate || company.subscriptionDueDate)! + 'T00:00:00').toLocaleDateString('pt-BR')}
                                     </span>
                                 )}
                             </div>

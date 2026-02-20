@@ -734,11 +734,11 @@ const Settings: React.FC = () => {
                                 </div>
                               );
                             })()}
-                            {subscription.subscriptionDueDate && (
+                            {(subscription.subscriptionEndDate || subscription.subscriptionDueDate) && (
                               <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-xl">
                                 <CreditCard size={14} className="text-emerald-400" />
                                 <span className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">
-                                  Próx. cobrança: {new Date(subscription.subscriptionDueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                  Próx. cobrança: {new Date((subscription.subscriptionEndDate || subscription.subscriptionDueDate)! + 'T00:00:00').toLocaleDateString('pt-BR')}
                                 </span>
                               </div>
                             )}
