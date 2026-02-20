@@ -207,14 +207,9 @@ public class UazapService {
                 company,
                 config);
 
-        String url;
-        if (instance != null && !instance.isEmpty()) {
-            url = baseUrl.replaceAll("/$", "") + "/message/sendText/" + instance;
-            log.info("  [SEND] URL final (Evolution API v2): {}", url);
-        } else {
-            url = baseUrl.replaceAll("/$", "") + "/send/text";
-            log.info("  [SEND] URL final (legado): {}", url);
-        }
+        // Uazap usa sempre /send/text - instância identificada pelo token no header
+        String url = baseUrl.replaceAll("/$", "") + "/send/text";
+        log.info("  [SEND] URL final (Uazap /send/text): {}", url);
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             HttpHeaders headers = new HttpHeaders();
@@ -229,9 +224,6 @@ public class UazapService {
             Map<String, String> body = new HashMap<>();
             body.put("number", request.getPhoneNumber());
             body.put("text", request.getMessage());
-            if (token != null && !token.isEmpty()) {
-                body.put("token", token);
-            }
 
             HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
 
@@ -377,26 +369,20 @@ public class UazapService {
 
     /**
      * Envia uma mensagem de texto simples via Uazap (usado por AI Agent).
-     * Usa Evolution API v2: POST /message/sendText/{instance} quando instanceName está disponível.
-     * Fallback para /send/text (formato legado) quando instance não está disponível.
+     * Usa sempre POST /send/text com token no header.
      */
     public void sendTextMessage(String phoneNumber, String message, String baseUrl, String token) {
         sendTextMessage(phoneNumber, message, baseUrl, token, null);
     }
 
     /**
-     * Envia uma mensagem de texto via Uazap com suporte ao endpoint Evolution API v2.
+     * Envia uma mensagem de texto via Uazap.
+     * Usa sempre /send/text - instância identificada pelo token no header.
      */
     public void sendTextMessage(String phoneNumber, String message, String baseUrl, String token, String instanceName) {
         String base = baseUrl != null ? baseUrl.replaceAll("/$", "") : "";
-        String url;
-        if (instanceName != null && !instanceName.isEmpty()) {
-            url = base + "/message/sendText/" + instanceName;
-            log.debug("Usando endpoint Evolution API v2: {}", url);
-        } else {
-            url = base + "/send/text";
-            log.debug("Usando endpoint legado (fallback): {}", url);
-        }
+        String url = base + "/send/text";
+        log.debug("Usando endpoint Uazap /send/text: {}", url);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
