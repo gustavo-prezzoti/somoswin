@@ -210,12 +210,16 @@ public class AIAgentService {
             String phoneNumber = conversation.getPhoneNumber();
             String baseUrl = conversation.getUazapBaseUrl();
             String token = conversation.getUazapToken();
+            String instanceName = conversation.getUazapInstance();
 
             if (baseUrl == null || token == null) {
                 UserWhatsAppConnection connection = findConnectionForConversation(conversation);
                 if (connection != null) {
                     baseUrl = connection.getInstanceBaseUrl();
                     token = connection.getInstanceToken();
+                    if (instanceName == null || instanceName.isEmpty()) {
+                        instanceName = connection.getInstanceName();
+                    }
                 }
             }
 
@@ -224,7 +228,7 @@ public class AIAgentService {
                 return false;
             }
 
-            uazapService.sendTextMessage(phoneNumber, aiResponse, baseUrl, token);
+            uazapService.sendTextMessage(phoneNumber, aiResponse, baseUrl, token, instanceName);
             log.info("AI response sent successfully to {} for conversation {}", phoneNumber, conversation.getId());
             return true;
 

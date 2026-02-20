@@ -207,8 +207,14 @@ public class UazapService {
                 company,
                 config);
 
-        String url = baseUrl.replaceAll("/$", "") + "/send/text";
-        log.info("  [SEND] URL final: {}", url);
+        String url;
+        if (instance != null && !instance.isEmpty()) {
+            url = baseUrl.replaceAll("/$", "") + "/message/sendText/" + instance;
+            log.info("  [SEND] URL final (Evolution API v2): {}", url);
+        } else {
+            url = baseUrl.replaceAll("/$", "") + "/send/text";
+            log.info("  [SEND] URL final (legado): {}", url);
+        }
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             HttpHeaders headers = new HttpHeaders();
@@ -370,17 +376,36 @@ public class UazapService {
     }
 
     /**
-     * Envia uma mensagem de texto simples via Uazap (usado por AI Agent)
+     * Envia uma mensagem de texto simples via Uazap (usado por AI Agent).
+     * Usa Evolution API v2: POST /message/sendText/{instance} quando instanceName está disponível.
+     * Fallback para /send/text (formato legado) quando instance não está disponível.
      */
     public void sendTextMessage(String phoneNumber, String message, String baseUrl, String token) {
-        String url = baseUrl.replaceAll("/$", "") + "/send/text";
+        sendTextMessage(phoneNumber, message, baseUrl, token, null);
+    }
+
+    /**
+     * Envia uma mensagem de texto via Uazap com suporte ao endpoint Evolution API v2.
+     */
+    public void sendTextMessage(String phoneNumber, String message, String baseUrl, String token, String instanceName) {
+        String base = baseUrl != null ? baseUrl.replaceAll("/$", "") : "";
+        String url;
+        if (instanceName != null && !instanceName.isEmpty()) {
+            url = base + "/message/sendText/" + instanceName;
+            log.debug("Usando endpoint Evolution API v2: {}", url);
+        } else {
+            url = base + "/send/text";
+            log.debug("Usando endpoint legado (fallback): {}", url);
+        }
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Accept", "application/json");
-        headers.set("admintoken", adminToken);
-        headers.set("apikey", adminToken);
-        headers.set("token", token);
+        if (adminToken != null && !adminToken.isEmpty()) {
+            headers.set("admintoken", adminToken);
+            headers.set("apikey", adminToken);
+        }
+        headers.set("token", token != null ? token : "");
 
         Map<String, String> body = new HashMap<>();
         body.put("number", phoneNumber);
@@ -389,7 +414,7 @@ public class UazapService {
         HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
 
         int maxRetries = 3;
-        int delayMs = 4000; // 4 segundos entre tentativas
+        int delayMs = 4000;
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -402,7 +427,7 @@ public class UazapService {
 
                 if (response.getStatusCode().is2xxSuccessful()) {
                     log.info("Mensagem da IA enviada com sucesso para: {} (Tentativa {})", phoneNumber, attempt);
-                    return; // Sucesso!
+                    return;
                 } else {
                     log.error("Falha ao enviar mensagem de IA. Status: {}. Tentativa {}/{}",
                             response.getStatusCode(), attempt, maxRetries);
@@ -411,19 +436,16 @@ public class UazapService {
                 String errorMsg = e.getMessage() != null ? e.getMessage() : "";
                 log.warn("Tentativa {}/{} falhou para {}: {}", attempt, maxRetries, phoneNumber, errorMsg);
 
-                // Se for erro de desconexão ou servidor indisponível, vale a pena tentar de
-                // novo
                 if (attempt < maxRetries && (errorMsg.contains("disconnected") || errorMsg.contains("503")
-                        || errorMsg.contains("500"))) {
+                        || errorMsg.contains("500") || errorMsg.contains("404"))) {
                     try {
-                        log.info("Aguardando {}ms para re-tentativa devido a desconexão temporária...", delayMs);
+                        log.info("Aguardando {}ms para re-tentativa...", delayMs);
                         Thread.sleep(delayMs);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         break;
                     }
                 } else {
-                    // Se for outro erro ou já esgotou as tentativas, joga a exceção
                     if (attempt == maxRetries) {
                         log.error("Esgotadas as tentativas de envio para {}", phoneNumber);
                         throw new RuntimeException(
