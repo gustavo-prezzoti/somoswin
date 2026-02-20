@@ -205,6 +205,8 @@ public class AsaasService {
 
     /**
      * Cancela a assinatura no Asaas e limpa todos os dados locais.
+     * Se Asaas retornar 404 (assinatura já cancelada/inexistente), limpa os dados locais
+     * para permitir renovação.
      */
     @Transactional
     public void cancelSubscription(UUID companyId) {
@@ -212,7 +214,12 @@ public class AsaasService {
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada: " + companyId));
 
         if (company.getAsaasSubscriptionId() == null || company.getAsaasSubscriptionId().isBlank()) {
-            log.warn("[ASAAS] Empresa {} não possui assinatura para cancelar", company.getName());
+            log.warn("[ASAAS] Empresa {} não possui assinatura para cancelar - limpando estado local", company.getName());
+            // Limpa estado local mesmo sem asaasSubscriptionId (permite renovar)
+            company.setSubscriptionStatus("CANCELLED");
+            company.setSubscriptionDueDate(null);
+            company.setSubscriptionEndDate(null);
+            companyRepository.save(company);
             return;
         }
 
@@ -225,21 +232,27 @@ public class AsaasService {
                     HttpMethod.DELETE,
                     entity,
                     String.class);
+            log.info("[ASAAS] Assinatura {} cancelada no Asaas", oldSubscriptionId);
         } catch (HttpClientErrorException e) {
-            log.error("[ASAAS] Erro ao cancelar assinatura {}: {} - {}",
-                    oldSubscriptionId, e.getStatusCode(), e.getResponseBodyAsString());
-            throw new RuntimeException(ErrorHelper.normalizeMessage(e.getResponseBodyAsString()));
+            int status = e.getStatusCode().value();
+            if (status == 404) {
+                // Assinatura já cancelada/inexistente no Asaas - limpa local para permitir renovação
+                log.warn("[ASAAS] Assinatura {} não encontrada no Asaas (404) - limpando dados locais para permitir renovação", oldSubscriptionId);
+            } else {
+                log.error("[ASAAS] Erro ao cancelar assinatura {}: {} - {}",
+                        oldSubscriptionId, e.getStatusCode(), e.getResponseBodyAsString());
+                throw new RuntimeException(ErrorHelper.normalizeMessage(e.getResponseBodyAsString()));
+            }
         }
 
-        // Limpa todos os dados de assinatura
+        // Limpa todos os dados de assinatura (sempre, inclusive quando 404)
         company.setAsaasSubscriptionId(null);
         company.setSubscriptionStatus("CANCELLED");
         company.setSubscriptionDueDate(null);
         company.setSubscriptionEndDate(null);
         companyRepository.save(company);
 
-        log.info("[ASAAS] Assinatura {} cancelada e dados limpos para empresa {}",
-                oldSubscriptionId, company.getName());
+        log.info("[ASAAS] Dados de assinatura limpos para empresa {} - pronto para renovação", company.getName());
     }
 
     /**

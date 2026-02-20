@@ -82,6 +82,7 @@ const AdminCompanies: React.FC = () => {
         planId: string,
         subscriptionStartDate: string,
         subscriptionEndDate: string,
+        subscriptionStatus: string,
         selectedCompany?: Company | null
     ) => {
         if (!companyName.trim()) {
@@ -107,7 +108,8 @@ const AdminCompanies: React.FC = () => {
                     emailContratante: emailContratante || undefined,
                     planId: planId || undefined,
                     subscriptionStartDate: subscriptionStartDate || undefined,
-                    subscriptionEndDate: subscriptionEndDate || undefined
+                    subscriptionEndDate: subscriptionEndDate || undefined,
+                    subscriptionStatus: subscriptionStatus || undefined
                 };
                 await adminService.updateCompany(selectedCompany.id, request);
             }
@@ -129,6 +131,7 @@ const AdminCompanies: React.FC = () => {
         let currentPlanId = company?.planId || '';
         let currentStartDate = company?.subscriptionStartDate || '';
         let currentEndDate = company?.subscriptionEndDate || '';
+        let currentSubscriptionStatus = company?.subscriptionStatus || 'PENDING';
 
         // Fetch available plans
         let availablePlans: Plan[] = [];
@@ -146,6 +149,7 @@ const AdminCompanies: React.FC = () => {
             const [planId, setPlanId] = useState(currentPlanId);
             const [startDate, setStartDate] = useState(currentStartDate);
             const [endDate, setEndDate] = useState(currentEndDate);
+            const [subscriptionStatus, setSubscriptionStatus] = useState(currentSubscriptionStatus);
             const [showPlanDetails, setShowPlanDetails] = useState(false);
 
             const selectedPlan = availablePlans.find(p => p.id === planId);
@@ -302,6 +306,26 @@ const AdminCompanies: React.FC = () => {
                                     />
                                 </div>
                             </div>
+                            {mode === 'edit' && (
+                                <div className="mt-4">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Status da Assinatura</label>
+                                    <select
+                                        value={subscriptionStatus}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setSubscriptionStatus(val);
+                                            currentSubscriptionStatus = val;
+                                        }}
+                                        className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-emerald-500/10 focus:bg-white transition-all font-medium text-gray-800"
+                                    >
+                                        <option value="ACTIVE">Ativa</option>
+                                        <option value="PENDING">Pendente</option>
+                                        <option value="OVERDUE">Atrasada</option>
+                                        <option value="CANCELLED">Cancelada</option>
+                                    </select>
+                                    <p className="mt-1.5 text-[10px] text-gray-500">Ao estender vigência, altere para &quot;Ativa&quot; para reativar.</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -313,7 +337,7 @@ const AdminCompanies: React.FC = () => {
             body: <ModalBody />,
             confirmText: mode === 'create' ? 'Criar Empresa' : 'Salvar Alterações',
             onConfirm: async () => {
-                await handleSave(mode, currentName, currentContratante, currentDocumento, currentEmailContratante, currentPlanId, currentStartDate, currentEndDate, company);
+                await handleSave(mode, currentName, currentContratante, currentDocumento, currentEmailContratante, currentPlanId, currentStartDate, currentEndDate, currentSubscriptionStatus, company);
             }
         });
     };

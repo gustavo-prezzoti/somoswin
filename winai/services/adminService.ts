@@ -133,6 +133,7 @@ export interface UpdateCompanyRequest {
     defaultSupportMode?: string;
     subscriptionStartDate?: string;
     subscriptionEndDate?: string;
+    subscriptionStatus?: string;
 }
 
 export interface CreateUserWhatsAppConnectionRequest {

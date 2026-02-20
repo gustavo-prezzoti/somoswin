@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
@@ -378,9 +379,6 @@ public class FollowUpService {
             return;
         }
 
-        // Recupera o step atual
-        FollowUpStep currentStep = config.getSteps().get(currentStepIndex);
-
         // Verifica se conversa está em modo IA
         if (!"IA".equals(conversation.getSupportMode())) {
             log.debug("Conversa {} não está em modo IA - pulando follow-up", conversation.getId());
@@ -389,56 +387,79 @@ public class FollowUpService {
             return;
         }
 
-        // Gera mensagem de follow-up usando o step atual
+        // Executa geração + envio SEM segurar conexão (evita connection leak)
+        self.executeLongFollowUpWork(status.getId(), conversation.getId(), config.getId(), currentStepIndex);
+    }
+
+    /**
+     * Executa a parte longa do follow-up (IA + envio) sem manter transação ativa.
+     * Evita connection leak do HikariCP durante chamadas OpenAI/Uazap.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void executeLongFollowUpWork(UUID statusId, UUID conversationId, UUID configId, int stepIndex) {
+        WhatsAppConversation conversation = conversationRepository.findByIdWithCompany(conversationId).orElse(null);
+        if (conversation == null) return;
+
+        FollowUpConfig config = configRepository.findByCompanyId(conversation.getCompany().getId()).orElse(null);
+        if (config == null || stepIndex >= config.getSteps().size()) return;
+
+        FollowUpStep currentStep = config.getSteps().get(stepIndex);
         String followUpMessage = generateFollowUpMessage(currentStep, conversation);
 
         try {
-            // 1. Envia via WhatsApp
             boolean sent = aiAgentService.sendSplitResponse(conversation, followUpMessage);
-
-            if (sent) {
-                ZonedDateTime now = ZonedDateTime.now();
-                status.setFollowUpCount(status.getFollowUpCount() + 1);
-                status.setLastFollowUpAt(now);
-
-                // Agenda próximo step se existir
-                int nextStepIndex = status.getFollowUpCount();
-                if (nextStepIndex < config.getSteps().size()) {
-                    FollowUpStep nextStep = config.getSteps().get(nextStepIndex);
-                    // Agendar próximo: now + delay do próximo step
-                    // Nota: O delay do step é "tempo a esperar APÓS o evento anterior".
-                    // Aqui, o evento anterior é este envio.
-                    ZonedDateTime proposedTime = now.plusMinutes(nextStep.getDelayMinutes());
-                    if (!isWithinTimeWindowForDateTime(config, proposedTime)) {
-                        proposedTime = calculateNextTimeWindowFrom(config, proposedTime);
-                        log.info("Follow-up ajustado para horário comercial: {}", proposedTime);
-                    }
-
-                    status.setNextFollowUpAt(proposedTime);
-                } else {
-                    status.setNextFollowUpAt(null); // Fim do fluxo
-                }
-
-                statusRepository.save(status);
-                log.info("Follow-up Step #{} enviado para conversa {}", currentStep.getStepOrder(),
-                        conversation.getId());
-            }
-
+            self.updateFollowUpStatusAfterSend(statusId, configId, sent, stepIndex);
         } catch (Exception e) {
-            log.error("Erro ao enviar follow-up para conversa {}: {}",
-                    conversation.getId(), e.getMessage(), e);
+            log.error("Erro ao enviar follow-up para conversa {}: {}", conversationId, e.getMessage(), e);
+            self.updateFollowUpStatusAfterSendFailure(statusId, configId, stepIndex);
+        }
+    }
 
-            if (status.getLastFollowUpAt() == null
-                    || status.getLastFollowUpAt().isBefore(ZonedDateTime.now().minusMinutes(5))) {
-                log.info("Agendando UMA única retentativa para conversa {}", conversation.getId());
-                status.setNextFollowUpAt(ZonedDateTime.now().plusMinutes(30));
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
+    public void updateFollowUpStatusAfterSend(UUID statusId, UUID configId, boolean sent, int stepIndex) {
+        FollowUpStatus status = statusRepository.findById(statusId).orElse(null);
+        if (status == null) return;
+
+        FollowUpConfig config = configRepository.findByCompanyId(status.getConversation().getCompany().getId()).orElse(null);
+        if (config == null) return;
+
+        if (sent) {
+            ZonedDateTime now = ZonedDateTime.now();
+            status.setFollowUpCount(status.getFollowUpCount() + 1);
+            status.setLastFollowUpAt(now);
+
+            int nextStepIndex = status.getFollowUpCount();
+            if (nextStepIndex < config.getSteps().size()) {
+                FollowUpStep nextStep = config.getSteps().get(nextStepIndex);
+                ZonedDateTime proposedTime = now.plusMinutes(nextStep.getDelayMinutes());
+                if (!isWithinTimeWindowForDateTime(config, proposedTime)) {
+                    proposedTime = calculateNextTimeWindowFrom(config, proposedTime);
+                    log.info("Follow-up ajustado para horário comercial: {}", proposedTime);
+                }
+                status.setNextFollowUpAt(proposedTime);
             } else {
-                log.warn("Falha persistente no follow-up da conversa {}. Parando tentativas.", conversation.getId());
                 status.setNextFollowUpAt(null);
-                status.setEligible(false);
             }
             statusRepository.save(status);
+            log.info("Follow-up Step #{} enviado para conversa {}", nextStepIndex, status.getConversation().getId());
         }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
+    public void updateFollowUpStatusAfterSendFailure(UUID statusId, UUID configId, int stepIndex) {
+        FollowUpStatus status = statusRepository.findById(statusId).orElse(null);
+        if (status == null) return;
+
+        if (status.getLastFollowUpAt() == null
+                || status.getLastFollowUpAt().isBefore(ZonedDateTime.now().minusMinutes(5))) {
+            log.info("Agendando UMA única retentativa para conversa {}", status.getConversation().getId());
+            status.setNextFollowUpAt(ZonedDateTime.now().plusMinutes(30));
+        } else {
+            log.warn("Falha persistente no follow-up da conversa {}. Parando tentativas.", status.getConversation().getId());
+            status.setNextFollowUpAt(null);
+            status.setEligible(false);
+        }
+        statusRepository.save(status);
     }
 
     /**

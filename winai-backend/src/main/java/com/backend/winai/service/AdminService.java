@@ -530,6 +530,13 @@ public class AdminService {
                 company.setSubscriptionEndDate(java.time.LocalDate.parse(endStr));
             }
         }
+        // Permite alterar status manualmente (ex: CANCELLED -> ACTIVE ao estender vigência)
+        if (details.get("subscriptionStatus") != null) {
+            String statusStr = (String) details.get("subscriptionStatus");
+            if (statusStr != null && !statusStr.isEmpty()) {
+                company.setSubscriptionStatus(statusStr);
+            }
+        }
 
         Company savedCompany = companyRepository.save(company);
         log.info("Empresa atualizada via Map: {}", savedCompany.getName());
