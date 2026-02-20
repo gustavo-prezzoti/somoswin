@@ -1255,7 +1255,20 @@ const Campaigns: React.FC = () => {
                     </div>
                     <p className="text-[9px] text-gray-400">
                       {whatsappNumbers.length === 0
-                        ? 'Nenhum número disponível. Clique em Atualizar para recarregar.'
+                        ? (
+                          <>
+                            Nenhum número disponível.{' '}
+                            <a
+                              href="https://www.facebook.com/pages/management/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-emerald-600 hover:underline font-bold"
+                            >
+                              Vincule o WhatsApp à sua página do Facebook
+                            </a>
+                            {' '}e clique em Atualizar.
+                          </>
+                        )
                         : 'Números carregados do Meta (página e WABAs). Clique em Atualizar para recarregar.'}
                     </p>
                   </div>

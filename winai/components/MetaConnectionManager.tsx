@@ -11,7 +11,8 @@ import {
     RefreshCw,
     X,
     Megaphone,
-    Building2
+    Building2,
+    ExternalLink
 } from 'lucide-react';
 import { marketingService, MetaConnectionDetails } from '../services/api/marketing.service';
 
@@ -213,6 +214,15 @@ const MetaConnectionManager: React.FC<MetaConnectionManagerProps> = ({ onClose }
                                         <span className="font-medium text-blue-600">{formatNumber(details.page.fanCount)}</span>
                                     </div>
                                 </div>
+                                <a
+                                    href={`https://www.facebook.com/pages/management/?selected_page_id=${details.page.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                                >
+                                    <ExternalLink size={12} />
+                                    Vincular WhatsApp à página
+                                </a>
                             </div>
                         )}
 
