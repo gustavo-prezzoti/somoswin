@@ -35,10 +35,10 @@ public class OpenAiService {
     @Value("${openai.api-key:${openai.api.key:}}")
     private String apiKey;
 
-    @Value("${openai.model:gpt-5}")
+    @Value("${openai.model:gpt-5-mini}")
     private String model;
 
-    @Value("${openai.model.vision:gpt-4o}")
+    @Value("${openai.model.vision:gpt-5-mini}")
     private String visionModel;
 
     @Value("${openai.reasoning-effort:medium}")
@@ -53,8 +53,6 @@ public class OpenAiService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // Fallback models if primary model fails
-    private static final String[] FALLBACK_MODELS = { "gpt-5", "gpt-4o", "gpt-4-turbo", "gpt-4o-mini", "gpt-4" };
     private String currentTextModel;
     private String currentVisionModel;
 
@@ -86,7 +84,7 @@ public class OpenAiService {
 
     /**
      * Analyzes the user's intent to determine if they are requesting a human agent.
-     * Uses a lightweight model (gpt-4o-mini) for speed and cost-efficiency.
+     * Uses gpt-5-mini for speed and cost-efficiency.
      * NOT_SUPPORTED evita connection leak durante chamada HTTP à OpenAI.
      *
      * @param userMessage         The latest message from the user.
@@ -151,7 +149,7 @@ public class OpenAiService {
 
             // Use lightweight model for classification
             String originalModel = this.currentTextModel;
-            this.currentTextModel = "gpt-4o-mini"; // Force lightweight model
+            this.currentTextModel = "gpt-5-mini"; // Lightweight model for intent classification
 
             String result = generateResponse(systemPrompt, userMessage, null, conversationHistory);
 
@@ -276,10 +274,7 @@ public class OpenAiService {
                         errorMessage.contains("access") ||
                         errorMessage.contains("unauthorized"))) {
                     log.error("🚨 MODEL ERROR DETECTED: '{}' | Error: {}", currentModel, errorMessage);
-                    log.warn("⚠️ Attempting fallback to alternative models...");
-                    return tryFallbackModels(systemPrompt, userMessage, imageUrl, conversationHistory, currentModel);
                 }
-
                 return null;
             }
 
@@ -317,11 +312,6 @@ public class OpenAiService {
             if (content == null || content.trim().isEmpty()) {
                 log.warn("⚠️ OpenAI returned EMPTY content | Model: {} | Refusal: {} | Message obj: {}",
                         currentModel, refusal, messageObj);
-                // Try fallback if content is empty but no explicit error
-                if (refusal == null) {
-                    log.warn("📌 Content is empty but no refusal - trying fallback models");
-                    return tryFallbackModels(systemPrompt, userMessage, imageUrl, conversationHistory, currentModel);
-                }
                 return null;
             }
 
@@ -332,106 +322,6 @@ public class OpenAiService {
             log.error("❌ Exception in generateResponse: {}", e.getMessage(), e);
             return null;
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private String tryFallbackModels(String systemPrompt, String userMessage, String imageUrl,
-            List<ChatMessage> conversationHistory, String failedModel) {
-        log.warn("🔄 Trying fallback models after failure with: {}", failedModel);
-
-        for (String fallbackModel : FALLBACK_MODELS) {
-            if (fallbackModel.equals(failedModel)) {
-                continue; // Skip the model that already failed
-            }
-
-            try {
-                log.info("🔄 Fallback attempt with model: {}", fallbackModel);
-
-                List<Map<String, Object>> messages = new ArrayList<>();
-
-                // System Message
-                Map<String, Object> sysMsg = new HashMap<>();
-                sysMsg.put("role", "system");
-                sysMsg.put("content", systemPrompt);
-                messages.add(sysMsg);
-
-                // History
-                if (conversationHistory != null) {
-                    for (ChatMessage msg : conversationHistory) {
-                        Map<String, Object> histMsg = new HashMap<>();
-                        histMsg.put("role", msg.getRole());
-                        histMsg.put("content", msg.getContent());
-                        messages.add(histMsg);
-                    }
-                }
-
-                // User Message
-                Map<String, Object> userMsg = new HashMap<>();
-                userMsg.put("role", "user");
-
-                if (imageUrl != null && !imageUrl.isEmpty()) {
-                    List<Map<String, Object>> contentList = new ArrayList<>();
-
-                    // Text
-                    Map<String, Object> textPart = new HashMap<>();
-                    textPart.put("type", "text");
-                    textPart.put("text", userMessage != null ? userMessage : "Analise esta imagem.");
-                    contentList.add(textPart);
-
-                    // Image
-                    Map<String, Object> imagePart = new HashMap<>();
-                    imagePart.put("type", "image_url");
-                    Map<String, String> urlMap = new HashMap<>();
-                    urlMap.put("url", imageUrl);
-                    imagePart.put("image_url", urlMap);
-                    contentList.add(imagePart);
-
-                    userMsg.put("content", contentList);
-                } else {
-                    userMsg.put("content", userMessage);
-                }
-                messages.add(userMsg);
-
-                Map<String, Object> body = new HashMap<>();
-                body.put("model", fallbackModel);
-                body.put("messages", messages);
-                body.put("max_completion_tokens", maxTokens);
-
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                headers.setBearerAuth(apiKey);
-
-                HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-                String url = "https://api.openai.com/v1/chat/completions";
-
-                ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
-                Map<String, Object> responseBody = response.getBody();
-
-                if (responseBody != null && !responseBody.containsKey("error")) {
-                    List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
-                    if (choices != null && !choices.isEmpty()) {
-                        Map<String, Object> messageObj = (Map<String, Object>) choices.get(0).get("message");
-                        if (messageObj != null) {
-                            String content = (String) messageObj.get("content");
-                            if (content != null && !content.trim().isEmpty()) {
-                                log.info("✅ SUCCESS with fallback model: {} | Content: {} chars",
-                                        fallbackModel, content.length());
-                                // currentModel update removed to avoid state issues
-                                return content;
-                            }
-                        }
-                    }
-                }
-
-                log.warn("❌ Fallback model {} failed or returned empty", fallbackModel);
-
-            } catch (Exception e) {
-                log.warn("❌ Fallback model {} threw exception: {}", fallbackModel, e.getMessage());
-            }
-        }
-
-        log.error("🚨 All fallback models failed. Original model: {}", failedModel);
-        return null;
     }
 
     public String generateResponseWithContext(String agentPrompt, String knowledgeBaseContent, String userMessage,
