@@ -215,7 +215,7 @@ const MetaConnectionManager: React.FC<MetaConnectionManagerProps> = ({ onClose }
                                     </div>
                                 </div>
                                 <a
-                                    href={`https://www.facebook.com/pages/management/?selected_page_id=${details.page.id}`}
+                                    href="https://pt-br.facebook.com/business/help/1583303048513172"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-medium"

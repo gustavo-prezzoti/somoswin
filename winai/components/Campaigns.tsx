@@ -1259,7 +1259,7 @@ const Campaigns: React.FC = () => {
                           <>
                             Nenhum número disponível.{' '}
                             <a
-                              href="https://www.facebook.com/pages/management/"
+                              href="https://pt-br.facebook.com/business/help/1583303048513172"
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-emerald-600 hover:underline font-bold"
