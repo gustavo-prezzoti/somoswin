@@ -1231,32 +1231,35 @@ const Campaigns: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp</label>
+                    {whatsappNumbers.length > 0 && (
+                      <p className="text-[10px] text-gray-500 px-2">Clique em um número para preencher ou digite manualmente:</p>
+                    )}
+                    {whatsappNumbers.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {whatsappNumbers.map((num) => {
+                          const masked = maskPhoneInput(num);
+                          const isSelected = formData.whatsappPhone === masked || (formData.whatsappPhone && formData.whatsappPhone.replace(/\D/g, '') === num.replace(/\D/g, ''));
+                          return (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => { setFormData(prev => ({ ...prev, whatsappPhone: masked })); setFormErrors(prev => ({ ...prev, whatsappPhone: '' })); }}
+                              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isSelected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                            >
+                              {masked}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-2">
-                      {whatsappNumbers.length > 0 ? (
-                        <select
-                          name="whatsappPhone"
-                          value={formData.whatsappPhone || ''}
-                          onChange={(e) => { setFormData(prev => ({ ...prev, whatsappPhone: e.target.value })); setFormErrors(prev => ({ ...prev, whatsappPhone: '' })); }}
-                          disabled={whatsappNumbersLoading}
-                          className="flex-1 min-w-[180px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
-                        >
-                          <option value="">Selecione o telefone</option>
-                          {whatsappNumbers.map((num) => {
-                            const masked = maskPhoneInput(num);
-                            return (
-                              <option key={num} value={masked}>{masked}</option>
-                            );
-                          })}
-                        </select>
-                      ) : (
-                        <input
-                          name="whatsappPhone"
-                          value={formData.whatsappPhone || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, whatsappPhone: e.target.value }))}
-                          placeholder="Ex: +55 47 9168-5019"
-                          className="flex-1 min-w-[180px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                        />
-                      )}
+                      <input
+                        name="whatsappPhone"
+                        value={formData.whatsappPhone || ''}
+                        onChange={handleInputChange}
+                        placeholder="Digite o número (ex: +55 47 9168-5019)"
+                        className="flex-1 min-w-[200px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
                       <button
                         type="button"
                         onClick={refreshWhatsAppNumbers}
@@ -1269,22 +1272,21 @@ const Campaigns: React.FC = () => {
                       </button>
                     </div>
                     <p className="text-[9px] text-gray-400">
-                      {whatsappNumbers.length === 0
-                        ? (
+                      {whatsappNumbers.length > 0
+                        ? 'Números conectados acima. Ou digite manualmente e clique em Atualizar para recarregar a lista.'
+                        : (
                           <>
-                            Nenhum número disponível pela API. Digite o número manualmente (ex: +55 47 9168-5019),{' '}
+                            Digite o número que aparece nas configurações da sua Página do Facebook.{' '}
                             <a
                               href="https://pt-br.facebook.com/business/help/1583303048513172"
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-emerald-600 hover:underline font-bold"
                             >
-                              vincule o WhatsApp à sua página
+                              Como vincular WhatsApp à página
                             </a>
-                            , ou crie sua conta WhatsApp Business abaixo.
                           </>
-                        )
-                        : 'Números carregados do Meta (página e WABAs). Clique em Atualizar para recarregar.'}
+                        )}
                     </p>
                     {whatsappNumbers.length === 0 && (
                       <div className="mt-2">
