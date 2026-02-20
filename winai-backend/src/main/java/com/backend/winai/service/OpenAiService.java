@@ -425,7 +425,11 @@ public class OpenAiService {
                 systemPrompt.append(
                         "   - Ofereça apenas 2-3 horários por vez. Telefone já vem do WhatsApp. NUNCA peça CPF.\n");
                 systemPrompt.append(
+                        "   - DADOS DO AGENDAMENTO: Use APENAS o que o cliente informou EXPLICITAMENTE. Nome: só o que o cliente disse. Observações: NUNCA inclua Pagamento, valor, CNPJ ou origem - deixe vazio se o cliente não informou.\n");
+                systemPrompt.append(
                         "   - CRÍTICO: Se a ferramenta retornar 'Horários disponíveis:' com lista de slots, NUNCA diga 'não há horários'. Liste os horários. Só diga 'não há horários' quando retornar 'Nenhum horário disponível'.\n");
+                systemPrompt.append(
+                        "   - Quando o usuário disser manhã, tarde ou noite (ex: 'prefiro tarde', 'tem manhã?', 'horário de noite'), use o parâmetro preferencia em buscar_horarios_disponiveis.\n");
                 systemPrompt.append(
                         "   - NÃO ofereça transferir para atendente quando puder fazer reagendar/cancelar/agendar você mesmo. Só transfira quando o usuário PEDIR explicitamente.\n");
                 String configSummary = agendamentoService.getConfigSummaryForPrompt(aiContext.getCompany());
@@ -1030,21 +1034,22 @@ public class OpenAiService {
                     "Lista os agendamentos futuros do lead. Use quando o usuário perguntar sobre seus agendamentos, quiser reagendar ou cancelar.",
                     new HashMap<>()));
             tools.add(createTool("buscar_horarios_disponiveis",
-                    "Busca horários disponíveis no Google Calendar para agendamento. Retorna lista no formato 'YYYY-MM-DD HH:mm'.",
+                    "Busca horários disponíveis no Google Calendar. Se o usuário disser manhã, tarde ou noite, use preferencia para filtrar. manha=06-12h, tarde=12-18h, noite=18-22h.",
                     Map.of(
                             "data", Map.of("type", "string", "description", "Data no formato YYYY-MM-DD (opcional, padrão: hoje)."),
-                            "dias", Map.of("type", "integer", "description", "Número de dias para buscar (padrão: 7).")),
+                            "dias", Map.of("type", "integer", "description", "Número de dias para buscar (padrão: 7)."),
+                            "preferencia", Map.of("type", "string", "description", "Período: manha, tarde ou noite (quando o usuário disser 'prefiro manhã', 'tem tarde?', 'horário de noite', etc).")),
                     List.of()));
             tools.add(createTool("criar_agendamento_google",
-                    "Cria agendamento no Google Calendar. Use data e hora de um slot retornado por buscar_horarios_disponiveis. Formato: data=YYYY-MM-DD, hora=HH:mm. Telefone vem do WhatsApp automaticamente. E-mail é OPCIONAL - se o cliente não tiver, agende mesmo assim.",
+                    "Cria agendamento no Google Calendar. Use data e hora de um slot retornado por buscar_horarios_disponiveis. Formato: data=YYYY-MM-DD, hora=HH:mm. Telefone vem do WhatsApp automaticamente. E-mail é OPCIONAL. Use APENAS dados que o cliente informou explicitamente - NUNCA invente nome, pagamento, CNPJ ou valor.",
                     Map.of(
-                            "nome", Map.of("type", "string", "description", "Nome completo do lead."),
+                            "nome", Map.of("type", "string", "description", "Nome que o cliente informou explicitamente. NUNCA use nomes de memória ou contexto."),
                             "email", Map.of("type", "string", "description", "Email do lead (opcional - se não tiver, deixe vazio)."),
                             "telefone", Map.of("type", "string", "description", "Telefone (opcional - já temos do WhatsApp)."),
                             "data", Map.of("type", "string", "description", "Data no formato YYYY-MM-DD (ex: 2025-02-19)."),
                             "hora", Map.of("type", "string", "description", "Hora no formato HH:mm (ex: 09:00 ou 14:30)."),
                             "titulo", Map.of("type", "string", "description", "Título do agendamento (opcional)."),
-                            "observacoes", Map.of("type", "string", "description", "Observações: do que se trata, para quem, finalidade (opcional).")),
+                            "observacoes", Map.of("type", "string", "description", "Só o que o cliente disse. NUNCA inclua Pagamento, valor, CNPJ ou origem.")),
                     List.of("nome", "data", "hora")));
             tools.add(createTool("cancelar_agendamento_google",
                     "Cancela um agendamento. Use o id retornado por listar_meus_agendamentos. NÃO escale para humano para cancelar - use esta ferramenta.",
@@ -1107,16 +1112,28 @@ public class OpenAiService {
                     JsonNode args = objectMapper.readTree(jsonArgs);
                     java.time.LocalDate data = java.time.LocalDate.now();
                     int dias = 7;
+                    String preferencia = null;
                     if (args.has("data") && !args.get("data").asText().isEmpty()) {
                         data = java.time.LocalDate.parse(args.get("data").asText());
                     }
                     if (args.has("dias")) {
                         dias = args.get("dias").asInt();
                     }
-                    List<String> slots = agendamentoService.getAvailableSlotsForDays(aiContext.getCompany(), data, dias);
-                    return slots.isEmpty()
-                            ? "Nenhum horário disponível nos próximos " + dias + " dias."
-                            : "Horários disponíveis:\n" + String.join("\n", slots);
+                    if (args.has("preferencia") && !args.get("preferencia").asText().trim().isEmpty()) {
+                        String p = args.get("preferencia").asText().trim().toLowerCase();
+                        if (p.startsWith("manh")) p = "manha";
+                        else if (p.startsWith("tard")) p = "tarde";
+                        else if (p.startsWith("noit")) p = "noite";
+                        preferencia = p;
+                    }
+                    List<String> slots = agendamentoService.getAvailableSlotsForDays(aiContext.getCompany(), data, dias, preferencia);
+                    if (slots.isEmpty()) {
+                        String periodo = preferencia != null ? " no período da " + preferencia : "";
+                        return "Nenhum horário disponível nos próximos " + dias + " dias" + periodo + ".";
+                    }
+                    String display = agendamentoService.formatSlotsForDisplay(slots);
+                    return "Horários disponíveis (máx 2 por dia):\n" + display
+                            + "\n\nSlots para agendar (data=YYYY-MM-DD, hora=HH:mm): " + String.join(", ", slots);
                 } catch (Exception e) {
                     log.error("Erro ao buscar horários", e);
                     return "Erro ao buscar horários disponíveis.";

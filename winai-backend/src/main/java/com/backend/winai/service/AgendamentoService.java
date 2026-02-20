@@ -168,19 +168,104 @@ public class AgendamentoService {
                 .collect(Collectors.toSet());
     }
 
-    /**
-     * Get available slots for multiple days (e.g. next 7 days).
-     */
     public List<String> getAvailableSlotsForDays(Company company, LocalDate fromDate, int days) {
+        return getAvailableSlotsForDays(company, fromDate, days, null);
+    }
+
+    /**
+     * Get available slots for multiple days. Máximo 2 horários por dia.
+     * preferencia: "manha", "tarde", "noite" ou null/vazio para todos.
+     */
+    public List<String> getAvailableSlotsForDays(Company company, LocalDate fromDate, int days, String preferencia) {
         List<String> all = new ArrayList<>();
         for (int i = 0; i < days; i++) {
             LocalDate d = fromDate.plusDays(i);
             List<String> daySlots = getAvailableSlots(company, d);
-            for (String slot : daySlots) {
-                all.add(d.format(DateTimeFormatter.ISO_LOCAL_DATE) + " " + slot);
+            if (daySlots.isEmpty()) continue;
+            // Filtra por preferência (manhã, tarde, noite)
+            if (preferencia != null && !preferencia.trim().isEmpty()) {
+                daySlots = filterSlotsByTimePreference(daySlots, preferencia.trim().toLowerCase());
+                if (daySlots.isEmpty()) continue;
+            }
+            // Máximo 2 por dia
+            int limit = Math.min(2, daySlots.size());
+            for (int j = 0; j < limit; j++) {
+                all.add(d.format(DateTimeFormatter.ISO_LOCAL_DATE) + " " + daySlots.get(j));
             }
         }
         return all;
+    }
+
+    /**
+     * Filtra slots HH:mm por período: manha (06-12), tarde (12-18), noite (18-22).
+     */
+    public List<String> filterSlotsByTimePreference(List<String> slots, String preferencia) {
+        if (slots == null || preferencia == null || preferencia.isEmpty()) return slots != null ? slots : List.of();
+        LocalTime minInclusive;
+        LocalTime maxExclusive;
+        switch (preferencia) {
+            case "manha":
+            case "manhã":
+                minInclusive = LocalTime.of(6, 0);
+                maxExclusive = LocalTime.of(12, 0);
+                break;
+            case "tarde":
+                minInclusive = LocalTime.of(12, 0);
+                maxExclusive = LocalTime.of(18, 0);
+                break;
+            case "noite":
+                minInclusive = LocalTime.of(18, 0);
+                maxExclusive = LocalTime.of(22, 0);
+                break;
+            default:
+                return slots;
+        }
+        return slots.stream()
+                .filter(s -> {
+                    try {
+                        LocalTime t = LocalTime.parse(s, TIME_FMT);
+                        return !t.isBefore(minInclusive) && t.isBefore(maxExclusive);
+                    } catch (Exception e) {
+                        return false;
+                    }
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Formata slots para exibição ao usuário: "Seg 23/02: 09:00, 10:00" (máx 2/dia).
+     */
+    public String formatSlotsForDisplay(List<String> rawSlots) {
+        if (rawSlots == null || rawSlots.isEmpty()) return "";
+        java.util.Map<String, java.util.List<String>> byDay = new java.util.LinkedHashMap<>();
+        DateTimeFormatter dayFmt = DateTimeFormatter.ofPattern("dd/MM");
+        DateTimeFormatter dayNameFmt = DateTimeFormatter.ofPattern("EEEE", java.util.Locale.forLanguageTag("pt-BR"));
+        for (String s : rawSlots) {
+            String[] parts = s.split(" ");
+            if (parts.length >= 2) {
+                try {
+                    LocalDate date = LocalDate.parse(parts[0]);
+                    String dayKey = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+                    byDay.computeIfAbsent(dayKey, k -> new ArrayList<>()).add(parts[1]);
+                } catch (Exception ignored) {}
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (var e : byDay.entrySet()) {
+            LocalDate d = LocalDate.parse(e.getKey());
+            String diaNome = d.format(dayNameFmt);
+            String diaNum = d.format(dayFmt);
+            List<String> horas = e.getValue();
+            if (horas.size() > 2) horas = horas.subList(0, 2);
+            sb.append(capitalize(diaNome)).append(" ").append(diaNum).append(": ")
+                    .append(String.join(", ", horas)).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private static String capitalize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return s.substring(0, 1).toUpperCase() + s.substring(1).toLowerCase();
     }
 
     /**
