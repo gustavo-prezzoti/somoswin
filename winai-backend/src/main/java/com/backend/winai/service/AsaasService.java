@@ -42,6 +42,9 @@ public class AsaasService {
     @Value("${asaas.api.token:}")
     private String asaasApiToken;
 
+    @Value("${asaas.billing-type:BOLETO}")
+    private String asaasBillingType;
+
     @PostConstruct
     public void init() {
         if (asaasApiToken == null || asaasApiToken.isBlank()) {
@@ -152,12 +155,18 @@ public class AsaasService {
         // Garante que o cliente existe no Asaas
         String customerId = ensureCustomer(company);
 
-        // Primeira cobrança: hoje. O Asaas gera as próximas automaticamente (mensal).
-        LocalDate firstDueDate = LocalDate.now();
+        // Primeira cobrança: fim da vigência (hoje + 30 dias). O Asaas gera as próximas automaticamente (mensal).
+        LocalDate firstDueDate = LocalDate.now().plusDays(30);
+
+        String billingType = (asaasBillingType != null && !asaasBillingType.isBlank())
+                ? asaasBillingType.toUpperCase() : "BOLETO";
+        if (!java.util.Set.of("BOLETO", "PIX", "CREDIT_CARD", "UNDEFINED").contains(billingType)) {
+            billingType = "BOLETO";
+        }
 
         AsaasSubscriptionRequest request = AsaasSubscriptionRequest.builder()
                 .customer(customerId)
-                .billingType("PIX")
+                .billingType(billingType)
                 .value(plan.getPrice().doubleValue())
                 .nextDueDate(firstDueDate.format(DateTimeFormatter.ISO_LOCAL_DATE))
                 .cycle("MONTHLY")
@@ -349,7 +358,9 @@ public class AsaasService {
         // Cria cobrança avulsa no Asaas (não é assinatura, é um payment único)
         Map<String, Object> paymentBody = new java.util.LinkedHashMap<>();
         paymentBody.put("customer", customerId);
-        paymentBody.put("billingType", "PIX");
+        String billingType = (asaasBillingType != null && !asaasBillingType.isBlank())
+                ? asaasBillingType.toUpperCase() : "BOLETO";
+        paymentBody.put("billingType", java.util.Set.of("BOLETO", "PIX", "CREDIT_CARD", "UNDEFINED").contains(billingType) ? billingType : "BOLETO");
         paymentBody.put("value", chargeValue.doubleValue());
         paymentBody.put("dueDate", LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE));
         paymentBody.put("description", String.format(
