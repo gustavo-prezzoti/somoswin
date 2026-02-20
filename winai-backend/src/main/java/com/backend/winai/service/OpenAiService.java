@@ -99,11 +99,52 @@ public class OpenAiService {
             return "CONTINUE";
 
         try {
-            String systemPrompt = "Classificador de intenção. Responda APENAS com uma palavra: CONTINUE ou HANDOFF.\n\n" +
-                    "HANDOFF: SOMENTE se o usuário pedir EXPLICITAMENTE para falar com humano, atendente ou pessoa real. " +
-                    "Exemplos que são HANDOFF: 'quero falar com um humano', 'me transfira para atendente', 'falar com pessoa'.\n\n" +
-                    "CONTINUE: todo o resto. Inclui: horários (14h, 15h, 9h), datas, sim/não/ok, agendamento, dúvidas, " +
-                    "respostas curtas, números, qualquer mensagem ambígua. Na dúvida, responda CONTINUE.";
+            String systemPrompt = """
+                    Você é um classificador de intenção para um chatbot de atendimento via WhatsApp.
+                    Sua única tarefa é decidir se a mensagem do usuário requer transferência para atendente humano.
+                    Responda APENAS com uma palavra: CONTINUE ou HANDOFF. Sem explicações, sem pontuação extra.
+
+                    === HANDOFF (transferir para humano) ===
+                    Retorne HANDOFF SOMENTE quando o usuário pedir EXPLICITAMENTE e de forma inequívoca falar com uma pessoa real.
+                    Frases que indicam HANDOFF:
+                    - "quero falar com um humano", "falar com atendente", "falar com pessoa"
+                    - "me transfira para um humano", "transferir para atendente"
+                    - "não quero falar com robô", "quero uma pessoa de verdade"
+                    - "preciso de um atendente humano", "atendimento humano por favor"
+                    - "cadê o humano?", "onde está o atendente?"
+                    - Frustração explícita: "já pedi 3 vezes para falar com humano"
+
+                    === CONTINUE (bot continua atendendo) ===
+                    Retorne CONTINUE em TODOS os outros casos. Inclui:
+
+                    Horários e datas (NUNCA é HANDOFF):
+                    - "14h", "15h", "9h", "14:00", "às 10", "meio-dia"
+                    - "segunda", "amanhã", "próxima semana", "dia 25"
+                    - "2025-02-20", "20/02"
+
+                    Confirmações e respostas curtas:
+                    - "sim", "não", "ok", "tá bom", "pode ser", "claro"
+                    - "entendi", "obrigado", "valeu", "beleza"
+
+                    Agendamento e marcação:
+                    - Qualquer resposta sobre horário disponível, data, confirmação de agendamento
+                    - "quero agendar", "tem vaga?", "qual horário?", "pode ser às 14h"
+
+                    Dúvidas e perguntas:
+                    - Perguntas sobre produtos, serviços, preços, endereço
+                    - "quanto custa?", "onde fica?", "como faço?"
+
+                    Números e dados:
+                    - CPF, telefone, valores, quantidades
+                    - Respostas que são apenas números
+
+                    Mensagens ambíguas ou curtas:
+                    - Uma ou duas palavras sem contexto claro de pedido de humano
+                    - Emoji sozinho, "kkk", "haha"
+
+                    === REGRA DE OURO ===
+                    Na dúvida, SEMPRE retorne CONTINUE. O bot pode lidar com agendamento, dúvidas e fluxos normais.
+                    Só use HANDOFF quando estiver CERTO de que o usuário quer falar com humano e não com o bot.""";
 
             // Use lightweight model for classification
             String originalModel = this.currentTextModel;
