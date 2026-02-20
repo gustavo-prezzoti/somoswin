@@ -1200,7 +1200,17 @@ public class MarketingService {
             metaAdRepository.deleteByCompany(company);
             metaAdSetRepository.deleteByCompany(company);
             metaCampaignRepository.deleteByCompany(company);
-            metaConnectionRepository.delete(conn);
+            try {
+                metaConnectionRepository.delete(conn);
+            } catch (Exception e) {
+                // Idempotência: se já foi deletado (ex: clique duplo, requisições concorrentes), tratar como sucesso
+                String msg = e.getMessage() != null ? e.getMessage() : "";
+                if (msg.contains("Unexpected row count") || msg.contains("row count")) {
+                    log.info("[Meta] Conexão já removida (idempotente) para empresa {}", company.getId());
+                    return;
+                }
+                throw e;
+            }
             log.info("[Meta] Desconectado e dados removidos para empresa {}", company.getId());
         });
     }
@@ -1504,10 +1514,14 @@ public class MarketingService {
      * página direta, /me/accounts, e WABAs (requer whatsapp_business_management).
      */
     public List<String> getPageWhatsAppNumbers(User user) {
+        log.info("[META] getPageWhatsAppNumbers called for company {}", user.getCompany().getId());
         MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
                 .filter(MetaConnection::isConnected)
                 .orElse(null);
-        if (conn == null) return Collections.emptyList();
+        if (conn == null) {
+            log.info("[META] No Meta connection for company {} - returning empty WhatsApp numbers", user.getCompany().getId());
+            return Collections.emptyList();
+        }
         String accessToken = conn.getAccessToken();
         if (accessToken == null || accessToken.isBlank()) return Collections.emptyList();
 
@@ -1620,6 +1634,7 @@ public class MarketingService {
             }
         }
 
+        log.info("[META] getPageWhatsAppNumbers returning {} number(s) for company {}", seen.size(), user.getCompany().getId());
         return new ArrayList<>(seen);
     }
 

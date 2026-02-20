@@ -151,9 +151,9 @@ const Campaigns: React.FC = () => {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  // Ao abrir o modal, buscar números WhatsApp conectados (página + Business Manager)
-  const loadWhatsAppNumbers = async () => {
-    if (!isMetaConnected) return;
+  // Ao abrir o modal ou clicar em Atualizar: buscar números WhatsApp (página + BM)
+  // Sempre chama a API para ter feedback; backend retorna [] quando sem conexão Meta
+  const loadWhatsAppNumbers = async (): Promise<string[]> => {
     setWhatsappNumbersLoading(true);
     try {
       const res = await marketingService.getPageWhatsAppNumbers();
@@ -163,17 +163,19 @@ const Campaigns: React.FC = () => {
         const masked = maskPhoneInput(list[0]);
         setFormData(prev => ({ ...prev, whatsappPhone: masked }));
       }
+      return list;
     } catch {
       setWhatsappNumbers([]);
+      return [];
     } finally {
       setWhatsappNumbersLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!isModalOpen || !isMetaConnected) return;
+    if (!isModalOpen) return;
     loadWhatsAppNumbers();
-  }, [isModalOpen, isMetaConnected]);
+  }, [isModalOpen]);
 
 
   const runInterestsSearch = async () => {
@@ -563,8 +565,16 @@ const Campaigns: React.FC = () => {
   };
 
   const refreshWhatsAppNumbers = async () => {
-    await loadWhatsAppNumbers();
-    showToast('Lista de números atualizada.', 'success');
+    try {
+      const list = await loadWhatsAppNumbers();
+      if (list.length > 0) {
+        showToast('Lista de números atualizada.', 'success');
+      } else {
+        showToast('Nenhum número encontrado. Conecte o Meta Ads e vincule o WhatsApp à sua página do Facebook.', 'info');
+      }
+    } catch {
+      showToast('Erro ao buscar números. Verifique se o Meta Ads está conectado em Configurações.', 'error');
+    }
   };
 
   const loadPagePosts = async () => {
