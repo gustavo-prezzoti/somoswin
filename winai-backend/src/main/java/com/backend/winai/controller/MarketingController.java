@@ -151,6 +151,11 @@ public class MarketingController {
         return ResponseEntity.ok(Map.of("whatsappNumbers", numbers != null ? numbers : java.util.Collections.emptyList()));
     }
 
+    @GetMapping("/whatsapp-embedded-signup-config")
+    public ResponseEntity<Map<String, String>> getWhatsAppEmbeddedSignupConfig() {
+        return ResponseEntity.ok(marketingService.getWhatsAppEmbeddedSignupConfig());
+    }
+
     @GetMapping("/targeting-search")
     public ResponseEntity<List<Map<String, Object>>> searchTargeting(
             @AuthenticationPrincipal User user,

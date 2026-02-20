@@ -70,6 +70,10 @@ public class MarketingService {
     @Value("${meta.token.type:system_user}")
     private String metaTokenType;
 
+    /** config_id para WhatsApp Embedded Signup (Facebook Login for Business, Login variation: WhatsApp Embedded Signup). */
+    @Value("${meta.whatsapp.embedded.signup.config.id:}")
+    private String whatsappEmbeddedSignupConfigId;
+
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
@@ -390,6 +394,18 @@ public class MarketingService {
 
     public String getFrontendUrl() {
         return frontendUrl;
+    }
+
+    /**
+     * Config para WhatsApp Embedded Signup (Tech Provider).
+     * Retorna appId e configId se META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID estiver configurado.
+     */
+    public Map<String, String> getWhatsAppEmbeddedSignupConfig() {
+        Map<String, String> config = new java.util.HashMap<>();
+        config.put("appId", clientId != null ? clientId : "");
+        config.put("configId", whatsappEmbeddedSignupConfigId != null ? whatsappEmbeddedSignupConfigId : "");
+        config.put("enabled", (whatsappEmbeddedSignupConfigId != null && !whatsappEmbeddedSignupConfigId.isBlank()) ? "true" : "false");
+        return config;
     }
 
     public TrafficMetricsResponse getTrafficMetrics() {

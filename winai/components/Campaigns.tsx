@@ -7,6 +7,7 @@ import type { MetricsDateRange } from '../services/api/marketing.service';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
+import WhatsAppEmbeddedSignupButton from './WhatsAppEmbeddedSignupButton';
 import { META_LIMITS, maskPhoneInput, parsePhoneDigits, parseApiErrorMessage } from '../utils/metaAdsLimits';
 
 const SummaryCard = ({ icon: Icon, label, metric, color }: { icon: any, label: string, metric?: any, color: string }) => {
@@ -1271,7 +1272,7 @@ const Campaigns: React.FC = () => {
                       {whatsappNumbers.length === 0
                         ? (
                           <>
-                            Nenhum número disponível pela API. Digite o número manualmente (ex: +55 47 9168-5019) ou{' '}
+                            Nenhum número disponível pela API. Digite o número manualmente (ex: +55 47 9168-5019),{' '}
                             <a
                               href="https://pt-br.facebook.com/business/help/1583303048513172"
                               target="_blank"
@@ -1280,11 +1281,22 @@ const Campaigns: React.FC = () => {
                             >
                               vincule o WhatsApp à sua página
                             </a>
-                            {' '}e clique em Atualizar.
+                            , ou crie sua conta WhatsApp Business abaixo.
                           </>
                         )
                         : 'Números carregados do Meta (página e WABAs). Clique em Atualizar para recarregar.'}
                     </p>
+                    {whatsappNumbers.length === 0 && (
+                      <div className="mt-2">
+                        <WhatsAppEmbeddedSignupButton
+                          variant="secondary"
+                          onSuccess={loadWhatsAppNumbers}
+                          onError={(msg) => showToast(msg, 'error')}
+                        >
+                          Criar conta WhatsApp Business
+                        </WhatsAppEmbeddedSignupButton>
+                      </div>
+                    )}
                     {formErrors.whatsappPhone && <p className="text-xs text-rose-600 px-2">{formErrors.whatsappPhone}</p>}
                   </div>
                   <hr className="border-gray-200 my-6" />

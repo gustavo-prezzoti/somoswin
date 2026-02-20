@@ -15,6 +15,8 @@ import {
     ExternalLink
 } from 'lucide-react';
 import { marketingService, MetaConnectionDetails } from '../services/api/marketing.service';
+import WhatsAppEmbeddedSignupButton from './WhatsAppEmbeddedSignupButton';
+import { useToast } from '../hooks/useToast';
 
 interface MetaConnectionManagerProps {
     onClose: () => void;
@@ -24,6 +26,7 @@ const MetaConnectionManager: React.FC<MetaConnectionManagerProps> = ({ onClose }
     const [details, setDetails] = useState<MetaConnectionDetails | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { showToast } = useToast();
 
     useEffect(() => {
         loadDetails();
@@ -214,15 +217,25 @@ const MetaConnectionManager: React.FC<MetaConnectionManagerProps> = ({ onClose }
                                         <span className="font-medium text-blue-600">{formatNumber(details.page.fanCount)}</span>
                                     </div>
                                 </div>
-                                <a
-                                    href="https://pt-br.facebook.com/business/help/1583303048513172"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-                                >
-                                    <ExternalLink size={12} />
-                                    Vincular WhatsApp à página
-                                </a>
+                                <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
+                                    <a
+                                        href="https://pt-br.facebook.com/business/help/1583303048513172"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                                    >
+                                        <ExternalLink size={12} />
+                                        Vincular WhatsApp à página
+                                    </a>
+                                    <WhatsAppEmbeddedSignupButton
+                                        variant="secondary"
+                                        onSuccess={() => { showToast('WhatsApp Business conectado! Clique em Atualizar para ver os números.', 'success'); loadDetails(); }}
+                                        onError={(msg) => showToast(msg, 'error')}
+                                        className="w-full justify-center"
+                                    >
+                                        Criar conta WhatsApp Business
+                                    </WhatsAppEmbeddedSignupButton>
+                                </div>
                             </div>
                         )}
 
