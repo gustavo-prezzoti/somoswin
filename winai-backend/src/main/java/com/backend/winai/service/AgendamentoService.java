@@ -168,26 +168,24 @@ public class AgendamentoService {
                 .collect(Collectors.toSet());
     }
 
-    public List<String> getAvailableSlotsForDays(Company company, LocalDate fromDate, int days) {
-        return getAvailableSlotsForDays(company, fromDate, days, null);
-    }
-
     /**
      * Get available slots for multiple days. Máximo 2 horários por dia.
-     * preferencia: "manha", "tarde", "noite" ou null/vazio para todos.
+     * horaMinima/horaMaxima: filtro opcional em HH:mm (ex: "15:00" para "após 15h").
      */
-    public List<String> getAvailableSlotsForDays(Company company, LocalDate fromDate, int days, String preferencia) {
+    public List<String> getAvailableSlotsForDays(Company company, LocalDate fromDate, int days) {
+        return getAvailableSlotsForDays(company, fromDate, days, null, null);
+    }
+
+    public List<String> getAvailableSlotsForDays(Company company, LocalDate fromDate, int days, String horaMinima, String horaMaxima) {
         List<String> all = new ArrayList<>();
+        LocalTime minHora = parseTime(horaMinima);
+        LocalTime maxHora = parseTime(horaMaxima);
         for (int i = 0; i < days; i++) {
             LocalDate d = fromDate.plusDays(i);
             List<String> daySlots = getAvailableSlots(company, d);
             if (daySlots.isEmpty()) continue;
-            // Filtra por preferência (manhã, tarde, noite)
-            if (preferencia != null && !preferencia.trim().isEmpty()) {
-                daySlots = filterSlotsByTimePreference(daySlots, preferencia.trim().toLowerCase());
-                if (daySlots.isEmpty()) continue;
-            }
-            // Máximo 2 por dia
+            daySlots = filterSlotsByTimeRange(daySlots, minHora, maxHora);
+            if (daySlots.isEmpty()) continue;
             int limit = Math.min(2, daySlots.size());
             for (int j = 0; j < limit; j++) {
                 all.add(d.format(DateTimeFormatter.ISO_LOCAL_DATE) + " " + daySlots.get(j));
@@ -196,38 +194,26 @@ public class AgendamentoService {
         return all;
     }
 
-    /**
-     * Filtra slots HH:mm por período: manha (06-12), tarde (12-18), noite (18-22).
-     */
-    public List<String> filterSlotsByTimePreference(List<String> slots, String preferencia) {
-        if (slots == null || preferencia == null || preferencia.isEmpty()) return slots != null ? slots : List.of();
-        LocalTime minInclusive;
-        LocalTime maxExclusive;
-        switch (preferencia) {
-            case "manha":
-            case "manhã":
-                minInclusive = LocalTime.of(6, 0);
-                maxExclusive = LocalTime.of(12, 0);
-                break;
-            case "tarde":
-                minInclusive = LocalTime.of(12, 0);
-                maxExclusive = LocalTime.of(18, 0);
-                break;
-            case "noite":
-                minInclusive = LocalTime.of(18, 0);
-                maxExclusive = LocalTime.of(22, 0);
-                break;
-            default:
-                return slots;
+    private static LocalTime parseTime(String s) {
+        if (s == null || s.trim().isEmpty()) return null;
+        try {
+            return LocalTime.parse(s.trim(), TIME_FMT);
+        } catch (Exception e) {
+            return null;
         }
+    }
+
+    private static List<String> filterSlotsByTimeRange(List<String> slots, LocalTime minInclusive, LocalTime maxExclusive) {
+        if (slots == null) return List.of();
+        if (minInclusive == null && maxExclusive == null) return slots;
         return slots.stream()
                 .filter(s -> {
                     try {
                         LocalTime t = LocalTime.parse(s, TIME_FMT);
-                        return !t.isBefore(minInclusive) && t.isBefore(maxExclusive);
-                    } catch (Exception e) {
-                        return false;
-                    }
+                        if (minInclusive != null && t.isBefore(minInclusive)) return false;
+                        if (maxExclusive != null && !t.isBefore(maxExclusive)) return false;
+                        return true;
+                    } catch (Exception e) { return false; }
                 })
                 .collect(Collectors.toList());
     }

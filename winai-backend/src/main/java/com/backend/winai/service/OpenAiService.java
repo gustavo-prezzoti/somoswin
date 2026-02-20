@@ -417,7 +417,9 @@ public class OpenAiService {
                 systemPrompt.append(
                         "   - Use 'listar_meus_agendamentos' quando o usuário perguntar sobre agendamentos, quiser reagendar ou cancelar.\n");
                 systemPrompt.append(
-                        "   - Reagendar: listar_meus_agendamentos -> buscar_horarios_disponiveis -> reagendar_agendamento (meeting_id do antigo + nova data/hora). Use SEMPRE reagendar_agendamento (cria novo e cancela antigo em uma chamada). NUNCA use criar_agendamento + cancelar separados.\n");
+                        "   - Reagendar: listar_meus_agendamentos -> buscar_horarios_disponiveis -> reagendar_agendamento. Use SEMPRE reagendar_agendamento (cria novo e cancela antigo em uma chamada).\n");
+                systemPrompt.append(
+                        "   - CRÍTICO REAGENDAMENTO: Quando o usuário confirmar (sim, pode, confirmo, prossiga, pode confirmar), EXECUTE reagendar_agendamento IMEDIATAMENTE. NÃO peça confirmação novamente. NÃO pergunte 'deseja que eu prossiga?' — execute.\n");
                 systemPrompt.append(
                         "   - Cancelar: listar_meus_agendamentos -> cancelar_agendamento_google com o meeting_id. NUNCA escale para humano para cancelar.\n");
                 systemPrompt.append(
@@ -429,7 +431,7 @@ public class OpenAiService {
                 systemPrompt.append(
                         "   - CRÍTICO: Se a ferramenta retornar 'Horários disponíveis:' com lista de slots, NUNCA diga 'não há horários'. Liste os horários. Só diga 'não há horários' quando retornar 'Nenhum horário disponível'.\n");
                 systemPrompt.append(
-                        "   - Quando o usuário disser manhã, tarde ou noite (ex: 'prefiro tarde', 'tem manhã?', 'horário de noite'), use o parâmetro preferencia em buscar_horarios_disponiveis.\n");
+                        "   - Para filtrar horários: use hora_minima e hora_maxima (HH:mm) em buscar_horarios_disponiveis conforme o usuário pedir. Ex: 'após 15h' → hora_minima=15:00; 'manhã' → hora_maxima=12:00; 'tarde' → hora_minima=12:00, hora_maxima=18:00.\n");
                 systemPrompt.append(
                         "   - NÃO ofereça transferir para atendente quando puder fazer reagendar/cancelar/agendar você mesmo. Só transfira quando o usuário PEDIR explicitamente.\n");
                 systemPrompt.append(
@@ -1051,11 +1053,12 @@ public class OpenAiService {
                     "Lista os agendamentos futuros do lead. Use quando o usuário perguntar sobre seus agendamentos, quiser reagendar ou cancelar.",
                     new HashMap<>()));
             tools.add(createTool("buscar_horarios_disponiveis",
-                    "Busca horários disponíveis no Google Calendar. Se o usuário disser manhã, tarde ou noite, use preferencia para filtrar. manha=06-12h, tarde=12-18h, noite=18-22h.",
+                    "Busca horários disponíveis no Google Calendar. Use hora_minima e hora_maxima (HH:mm) conforme o usuário pedir. Ex: 'após 15h' → hora_minima=15:00; 'até meio-dia' → hora_maxima=12:00; 'tarde' → hora_minima=12:00, hora_maxima=18:00.",
                     Map.of(
-                            "data", Map.of("type", "string", "description", "Data no formato YYYY-MM-DD (opcional, padrão: hoje)."),
-                            "dias", Map.of("type", "integer", "description", "Número de dias para buscar (padrão: 7)."),
-                            "preferencia", Map.of("type", "string", "description", "Período: manha, tarde ou noite (quando o usuário disser 'prefiro manhã', 'tem tarde?', 'horário de noite', etc).")),
+                            "data", Map.of("type", "string", "description", "Data YYYY-MM-DD (opcional, padrão: hoje)."),
+                            "dias", Map.of("type", "integer", "description", "Dias para buscar (padrão: 7)."),
+                            "hora_minima", Map.of("type", "string", "description", "Slots a partir desta hora HH:mm (ex: 15:00 para 'após 15h')."),
+                            "hora_maxima", Map.of("type", "string", "description", "Slots até esta hora HH:mm (ex: 12:00 para 'até meio-dia').")),
                     List.of()));
             tools.add(createTool("criar_agendamento_google",
                     "Cria agendamento no Google Calendar. Use data e hora de um slot retornado por buscar_horarios_disponiveis. Formato: data=YYYY-MM-DD, hora=HH:mm. Telefone vem do WhatsApp automaticamente. E-mail é OPCIONAL. Use APENAS dados que o cliente informou explicitamente - NUNCA invente nome, pagamento, CNPJ ou valor.",
@@ -1069,7 +1072,7 @@ public class OpenAiService {
                             "observacoes", Map.of("type", "string", "description", "Observações profissionais. Uma linha por item: Objetivo: (o que quer) | Problema: (se houver) | Urgente: sim/não. Use APENAS o que o cliente informou. NUNCA invente pagamento, CNPJ ou valor.")),
                     List.of("nome", "data", "hora")));
             tools.add(createTool("reagendar_agendamento",
-                    "REAGENDA em uma única operação: cria o novo agendamento e cancela o antigo. Use quando o usuário quiser alterar data/hora. OBRIGATÓRIO: meeting_id do agendamento atual (listar_meus_agendamentos) + data e hora do novo slot.",
+                    "REAGENDA: cria novo e cancela o antigo. Quando o usuário confirmar (sim, pode, confirmo), EXECUTE imediatamente — NÃO peça confirmação de novo. meeting_id + data + hora obrigatórios.",
                     Map.of(
                             "meeting_id", Map.of("type", "string", "description", "UUID do agendamento atual a ser substituído (de listar_meus_agendamentos)."),
                             "nome", Map.of("type", "string", "description", "Nome do cliente (do agendamento atual ou informado)."),
@@ -1170,32 +1173,25 @@ public class OpenAiService {
                     JsonNode args = objectMapper.readTree(jsonArgs);
                     java.time.LocalDate data = java.time.LocalDate.now();
                     int dias = 7;
-                    String preferencia = null;
+                    String horaMinima = args.has("hora_minima") ? args.get("hora_minima").asText().trim() : null;
+                    String horaMaxima = args.has("hora_maxima") ? args.get("hora_maxima").asText().trim() : null;
                     if (args.has("data") && !args.get("data").asText().isEmpty()) {
                         data = java.time.LocalDate.parse(args.get("data").asText());
                     }
                     if (args.has("dias")) {
                         dias = args.get("dias").asInt();
                     }
-                    if (args.has("preferencia") && !args.get("preferencia").asText().trim().isEmpty()) {
-                        String p = args.get("preferencia").asText().trim().toLowerCase();
-                        if (p.startsWith("manh")) p = "manha";
-                        else if (p.startsWith("tard")) p = "tarde";
-                        else if (p.startsWith("noit")) p = "noite";
-                        preferencia = p;
-                    }
-                    List<String> slots = agendamentoService.getAvailableSlotsForDays(aiContext.getCompany(), data, dias, preferencia);
-                    if (slots.isEmpty() && preferencia != null) {
-                        List<String> slotsGeral = agendamentoService.getAvailableSlotsForDays(aiContext.getCompany(), data, dias, null);
+                    List<String> slots = agendamentoService.getAvailableSlotsForDays(aiContext.getCompany(), data, dias, horaMinima, horaMaxima);
+                    if (slots.isEmpty() && (horaMinima != null || horaMaxima != null)) {
+                        List<String> slotsGeral = agendamentoService.getAvailableSlotsForDays(aiContext.getCompany(), data, dias, null, null);
                         if (!slotsGeral.isEmpty()) {
                             String display = agendamentoService.formatSlotsForDisplay(slotsGeral);
-                            return "Não há horários no período da " + preferencia + ", mas há em outros horários:\n" + display
+                            return "Não há horários no período solicitado, mas há em outros horários:\n" + display
                                     + "\n\nSlots para agendar (data=YYYY-MM-DD, hora=HH:mm): " + String.join(", ", slotsGeral);
                         }
                     }
                     if (slots.isEmpty()) {
-                        String periodo = preferencia != null ? " no período da " + preferencia : "";
-                        return "Nenhum horário disponível nos próximos " + dias + " dias" + periodo + ".";
+                        return "Nenhum horário disponível nos próximos " + dias + " dias.";
                     }
                     String display = agendamentoService.formatSlotsForDisplay(slots);
                     return "Horários disponíveis (máx 2 por dia):\n" + display
