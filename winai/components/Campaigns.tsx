@@ -7,8 +7,7 @@ import type { MetricsDateRange } from '../services/api/marketing.service';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
-import WhatsAppEmbeddedSignupButton from './WhatsAppEmbeddedSignupButton';
-import { META_LIMITS, maskPhoneInput, parsePhoneDigits, parseApiErrorMessage } from '../utils/metaAdsLimits';
+import { META_LIMITS, parseApiErrorMessage } from '../utils/metaAdsLimits';
 
 const SummaryCard = ({ icon: Icon, label, metric, color }: { icon: any, label: string, metric?: any, color: string }) => {
   const value = metric?.value || '0';
@@ -97,7 +96,6 @@ const Campaigns: React.FC = () => {
     ageMax: 65,
     genders: '',
     interests: '',
-    whatsappPhone: '',
     useExistingPost: false,
     existingPostId: '',
     adMessage: '',
@@ -110,8 +108,6 @@ const Campaigns: React.FC = () => {
   const [pagePosts, setPagePosts] = useState<PagePost[]>([]);
   const [pagePostsLoading, setPagePostsLoading] = useState(false);
   const [pagePostsError, setPagePostsError] = useState<string | null>(null);
-  const [whatsappNumbers, setWhatsappNumbers] = useState<string[]>([]);
-  const [whatsappNumbersLoading, setWhatsappNumbersLoading] = useState(false);
 
   const steps = [
     { id: 0, title: 'Campanha', icon: Briefcase },
@@ -151,33 +147,6 @@ const Campaigns: React.FC = () => {
     const interval = setInterval(() => loadRecommendations(true), 5000);
     return () => clearInterval(interval);
   }, [activeTab]);
-
-  // Ao abrir o modal ou clicar em Atualizar: buscar números WhatsApp (página + BM)
-  // Sempre chama a API para ter feedback; backend retorna [] quando sem conexão Meta
-  const loadWhatsAppNumbers = async (): Promise<string[]> => {
-    setWhatsappNumbersLoading(true);
-    try {
-      const res = await marketingService.getPageWhatsAppNumbers();
-      const list = res.whatsappNumbers || [];
-      setWhatsappNumbers(list);
-      if (list.length > 0 && !formData.whatsappPhone) {
-        const masked = maskPhoneInput(list[0]);
-        setFormData(prev => ({ ...prev, whatsappPhone: masked }));
-      }
-      return list;
-    } catch {
-      setWhatsappNumbers([]);
-      return [];
-    } finally {
-      setWhatsappNumbersLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isModalOpen) return;
-    loadWhatsAppNumbers();
-  }, [isModalOpen]);
-
 
   const runInterestsSearch = async () => {
     const q = interestsSearch.trim();
@@ -451,7 +420,6 @@ const Campaigns: React.FC = () => {
     if (name === 'dailyBudget' || name === 'lifetimeBudget') parsed = parseFloat(value) || 0;
     else if (name === 'ageMin' || name === 'ageMax') parsed = parseInt(value, 10) || 18;
     setFormData(prev => ({ ...prev, [name]: parsed }));
-    if (name === 'whatsappPhone') setFormErrors(prev => ({ ...prev, whatsappPhone: '' }));
   };
 
   const validateStep = (step: number): boolean => {
@@ -463,9 +431,6 @@ const Campaigns: React.FC = () => {
     }
     if (step === 1) {
       if (!formData.dailyBudget || formData.dailyBudget < 1) errs.dailyBudget = 'Orçamento diário mínimo: R$ 1,00';
-      const phoneDigits = parsePhoneDigits(formData.whatsappPhone || '');
-      if (phoneDigits.length < 10) errs.whatsappPhone = 'Informe o número WhatsApp (ex: +55 47 9168-5019)';
-      else if (phoneDigits.length > 15) errs.whatsappPhone = 'Número inválido (máx 15 dígitos)';
     }
     if (step === 2) {
       if (formData.useExistingPost) {
@@ -518,7 +483,6 @@ const Campaigns: React.FC = () => {
     try {
       const payload = {
         ...formData,
-        whatsappPhone: parsePhoneDigits(formData.whatsappPhone || '') || formData.whatsappPhone,
         interests: selectedInterests.length > 0 ? JSON.stringify(selectedInterests) : ''
       };
       await marketingService.createCampaign(payload);
@@ -551,7 +515,6 @@ const Campaigns: React.FC = () => {
       ageMax: 65,
       genders: '',
       interests: '',
-      whatsappPhone: '',
       useExistingPost: false,
       existingPostId: '',
       adMessage: '',
@@ -567,19 +530,6 @@ const Campaigns: React.FC = () => {
     setInterestsHasSearched(false);
     setPagePosts([]);
     setPagePostsError(null);
-  };
-
-  const refreshWhatsAppNumbers = async () => {
-    try {
-      const list = await loadWhatsAppNumbers();
-      if (list.length > 0) {
-        showToast('Lista de números atualizada.', 'success');
-      } else {
-        showToast('Nenhum número encontrado. Conecte o Meta Ads e vincule o WhatsApp à sua página do Facebook.', 'info');
-      }
-    } catch {
-      showToast('Erro ao buscar números. Verifique se o Meta Ads está conectado em Configurações.', 'error');
-    }
   };
 
   const loadPagePosts = async () => {
@@ -1228,78 +1178,6 @@ const Campaigns: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do grupo (opcional)</label>
                     <input name="adSetName" value={formData.adSetName || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.adSetName.max} placeholder="Ex: Conjunto Brasil 18-35" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Número WhatsApp</label>
-                    {whatsappNumbers.length > 0 && (
-                      <p className="text-[10px] text-gray-500 px-2">Clique em um número para preencher ou digite manualmente:</p>
-                    )}
-                    {whatsappNumbers.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {whatsappNumbers.map((num) => {
-                          const masked = maskPhoneInput(num);
-                          const isSelected = formData.whatsappPhone === masked || (formData.whatsappPhone && formData.whatsappPhone.replace(/\D/g, '') === num.replace(/\D/g, ''));
-                          return (
-                            <button
-                              key={num}
-                              type="button"
-                              onClick={() => { setFormData(prev => ({ ...prev, whatsappPhone: masked })); setFormErrors(prev => ({ ...prev, whatsappPhone: '' })); }}
-                              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isSelected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                            >
-                              {masked}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        name="whatsappPhone"
-                        value={formData.whatsappPhone || ''}
-                        onChange={handleInputChange}
-                        placeholder="Digite o número (ex: +55 47 9168-5019)"
-                        className="flex-1 min-w-[200px] px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                      />
-                      <button
-                        type="button"
-                        onClick={refreshWhatsAppNumbers}
-                        disabled={whatsappNumbersLoading}
-                        className="px-4 py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-gray-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
-                        title="Atualizar lista de números"
-                      >
-                        {whatsappNumbersLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                        Atualizar
-                      </button>
-                    </div>
-                    <p className="text-[9px] text-gray-400">
-                      {whatsappNumbers.length > 0
-                        ? 'Números conectados acima. Ou digite manualmente e clique em Atualizar para recarregar a lista.'
-                        : (
-                          <>
-                            Digite o número que aparece nas configurações da sua Página do Facebook.{' '}
-                            <a
-                              href="https://pt-br.facebook.com/business/help/1583303048513172"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-emerald-600 hover:underline font-bold"
-                            >
-                              Como vincular WhatsApp à página
-                            </a>
-                          </>
-                        )}
-                    </p>
-                    {whatsappNumbers.length === 0 && (
-                      <div className="mt-2">
-                        <WhatsAppEmbeddedSignupButton
-                          variant="secondary"
-                          onSuccess={loadWhatsAppNumbers}
-                          onError={(msg) => showToast(msg, 'error')}
-                        >
-                          Criar conta WhatsApp Business
-                        </WhatsAppEmbeddedSignupButton>
-                      </div>
-                    )}
-                    {formErrors.whatsappPhone && <p className="text-xs text-rose-600 px-2">{formErrors.whatsappPhone}</p>}
                   </div>
                   <hr className="border-gray-200 my-6" />
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Público-alvo (localização, idade, gênero, interesses)</p>

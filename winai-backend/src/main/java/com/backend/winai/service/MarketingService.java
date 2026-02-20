@@ -396,10 +396,6 @@ public class MarketingService {
         return frontendUrl;
     }
 
-    /**
-     * Config para WhatsApp Embedded Signup (Tech Provider).
-     * Retorna appId e configId se META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID estiver configurado.
-     */
     public Map<String, String> getWhatsAppEmbeddedSignupConfig() {
         Map<String, String> config = new java.util.HashMap<>();
         config.put("appId", clientId != null ? clientId : "");
@@ -1345,10 +1341,7 @@ public class MarketingService {
         boolean useExistingPost = Boolean.TRUE.equals(request.getUseExistingPost());
         String existingPostId = (request.getExistingPostId() != null && !request.getExistingPostId().isBlank()) ? request.getExistingPostId() : null;
 
-        String effectiveLink = null;
-        if (!useExistingPost) {
-            effectiveLink = resolveEffectiveLink(request, pageId, accessToken);
-        }
+        String effectiveLink = resolveEffectiveLink(request, pageId, accessToken);
 
         long dailyBudgetCents = Math.max(100, Math.round((request.getDailyBudget() != null ? request.getDailyBudget() : 50.0) * 100));
 
@@ -1405,7 +1398,7 @@ public class MarketingService {
                 if (igUserId == null || igUserId.isBlank()) {
                     throw new RuntimeException("Instagram não vinculado. Reconecte o Meta Ads e autorize o Instagram para promover posts existentes.");
                 }
-                creativeId = createMetaAdCreativeFromExistingPost(adAccountId, accessToken, pageId, igUserId, existingPostId);
+                creativeId = createMetaAdCreativeFromExistingPost(adAccountId, accessToken, pageId, igUserId, existingPostId, effectiveLink);
             } else {
                 String adImageHash = null;
                 if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
@@ -1875,18 +1868,33 @@ public class MarketingService {
         throw new RuntimeException("Meta API: Falha ao fazer upload da imagem. Use uma URL pública de imagem.");
     }
 
-    private String createMetaAdCreativeFromExistingPost(String adAccountId, String accessToken, String pageId, String instagramUserId, String existingPostId) {
+    /**
+     * Cria criativo a partir de post existente do Instagram.
+     * Para campanhas WhatsApp, a Meta exige call_to_action com link (URL do site).
+     * Doc: https://developers.facebook.com/docs/marketing-api/ad-creative/messaging-ads/click-to-whatsapp
+     */
+    private String createMetaAdCreativeFromExistingPost(String adAccountId, String accessToken, String pageId, String instagramUserId, String existingPostId, String whatsappLink) {
         String url = metaApiBaseUrl + "/" + adAccountId + "/adcreatives";
         Map<String, Object> params = new HashMap<>();
         params.put("name", "Creative - " + System.currentTimeMillis());
         params.put("access_token", accessToken);
 
+        String effectiveLink = (whatsappLink != null && !whatsappLink.isBlank()) ? whatsappLink : "https://api.whatsapp.com/send";
+
         if (instagramUserId != null && !instagramUserId.isBlank()) {
             params.put("object_id", pageId);
             params.put("instagram_user_id", instagramUserId);
             params.put("source_instagram_media_id", existingPostId);
+            Map<String, Object> cta = new HashMap<>();
+            cta.put("type", "WHATSAPP_MESSAGE");
+            cta.put("value", Map.of("link", effectiveLink, "app_destination", "WHATSAPP"));
+            params.put("call_to_action", serializeToJson(objectMapper, cta));
         } else {
             params.put("object_story_id", existingPostId);
+            Map<String, Object> cta = new HashMap<>();
+            cta.put("type", "WHATSAPP_MESSAGE");
+            cta.put("value", Map.of("link", effectiveLink, "app_destination", "WHATSAPP"));
+            params.put("call_to_action", serializeToJson(objectMapper, cta));
         }
 
         ResponseEntity<String> res = postForm(url, params);
