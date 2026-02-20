@@ -426,6 +426,8 @@ public class OpenAiService {
                         "   - Ofereça apenas 2-3 horários por vez. Telefone já vem do WhatsApp. NUNCA peça CPF.\n");
                 systemPrompt.append(
                         "   - CRÍTICO: Se a ferramenta retornar 'Horários disponíveis:' com lista de slots, NUNCA diga 'não há horários'. Liste os horários. Só diga 'não há horários' quando retornar 'Nenhum horário disponível'.\n");
+                systemPrompt.append(
+                        "   - NÃO ofereça transferir para atendente quando puder fazer reagendar/cancelar/agendar você mesmo. Só transfira quando o usuário PEDIR explicitamente.\n");
                 String configSummary = agendamentoService.getConfigSummaryForPrompt(aiContext.getCompany());
                 if (configSummary != null && !configSummary.isEmpty()) {
                     systemPrompt.append("   - Regras da empresa: ").append(configSummary).append("\n");
