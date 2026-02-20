@@ -296,17 +296,26 @@ public class AgendamentoService {
         }
         int duration = opt.get().getSlotDurationMinutes();
 
-        // Quando sem e-mail: descrição completa para o dono do calendário (empresa) saber para quem é e do que se trata
-        String notesFinal = notes;
-        if (email == null || email.trim().isEmpty()) {
-            StringBuilder desc = new StringBuilder("Cliente: ").append(nome);
-            if (telefone != null && !telefone.isEmpty())
-                desc.append(" | Telefone: ").append(telefone);
-            desc.append(" | Contato via WhatsApp (sem e-mail)");
-            if (notes != null && !notes.trim().isEmpty())
-                desc.append("\n").append(notes);
-            notesFinal = desc.toString();
+        // Descrição completa para o dono do calendário: contato, resumo do lead (GPT) e observações
+        StringBuilder desc = new StringBuilder();
+        desc.append("Cliente: ").append(nome);
+        if (telefone != null && !telefone.isEmpty())
+            desc.append("\nTelefone: ").append(telefone);
+        if (email != null && !email.trim().isEmpty())
+            desc.append("\nE-mail: ").append(email);
+        else
+            desc.append("\nContato via WhatsApp (sem e-mail)");
+        desc.append("\n");
+        if (lead != null && lead.getAiSummary() != null && !lead.getAiSummary().trim().isEmpty()) {
+            desc.append("\n--- Resumo do lead (IA) ---\n");
+            desc.append(lead.getAiSummary().trim());
+            desc.append("\n");
         }
+        if (notes != null && !notes.trim().isEmpty()) {
+            desc.append("\n--- Observações ---\n");
+            desc.append(notes.trim());
+        }
+        String notesFinal = desc.toString().trim();
 
         Meeting meeting = Meeting.builder()
                 .company(company)
@@ -359,6 +368,29 @@ public class AgendamentoService {
     }
 
     /**
+     * Reagenda: cria novo agendamento e cancela o antigo em uma única operação.
+     * Ordem: cria primeiro, depois cancela (evita perder o antigo se criar falhar).
+     */
+    @Transactional
+    public String rescheduleMeeting(Company company, Lead lead, UUID oldMeetingId, String nome, String email,
+            String telefone, String dataStr, String horaStr, String title, String notes) {
+        Optional<Meeting> oldOpt = meetingRepository.findByIdAndCompany(oldMeetingId, company);
+        if (oldOpt.isEmpty())
+            return "Agendamento antigo não encontrado.";
+        Meeting oldMeeting = oldOpt.get();
+        if (oldMeeting.getStatus() == MeetingStatus.CANCELLED)
+            return "O agendamento antigo já foi cancelado.";
+        try {
+            String createResult = createAppointment(company, lead, nome, email, telefone, dataStr, horaStr, title, notes);
+            cancelMeeting(company, oldMeetingId);
+            return createResult + " O agendamento anterior foi cancelado.";
+        } catch (Exception e) {
+            log.error("Erro ao reagendar", e);
+            return "Erro ao criar novo agendamento: " + e.getMessage();
+        }
+    }
+
+    /**
      * Cancela um agendamento (Meeting + Google Calendar). Retorna mensagem de sucesso ou erro.
      */
     @Transactional
@@ -370,8 +402,13 @@ public class AgendamentoService {
         if (m.getStatus() == MeetingStatus.CANCELLED)
             return "Este agendamento já foi cancelado.";
         try {
-            if (m.getGoogleEventId() != null)
-                googleDriveService.deleteCalendarEvent(company, m.getGoogleEventId());
+            if (m.getGoogleEventId() != null && !m.getGoogleEventId().isEmpty()) {
+                try {
+                    googleDriveService.deleteCalendarEvent(company, m.getGoogleEventId());
+                } catch (Exception ex) {
+                    log.warn("Não foi possível remover do Google Calendar (evento pode já estar excluído): {}", ex.getMessage());
+                }
+            }
             m.setStatus(MeetingStatus.CANCELLED);
             meetingRepository.save(m);
             return "Agendamento de " + m.getMeetingDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))

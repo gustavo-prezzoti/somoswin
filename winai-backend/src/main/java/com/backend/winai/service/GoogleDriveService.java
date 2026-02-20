@@ -400,8 +400,17 @@ public class GoogleDriveService {
                     continue;
                 EventDateTime start = ev.getStart();
                 EventDateTime end = ev.getEnd();
-                if (start != null && start.getDateTime() != null && end != null && end.getDateTime() != null) {
-                    busy.add(new long[] { start.getDateTime().getValue(), end.getDateTime().getValue() });
+                if (start != null && end != null) {
+                    if (start.getDateTime() != null && end.getDateTime() != null) {
+                        busy.add(new long[] { start.getDateTime().getValue(), end.getDateTime().getValue() });
+                    } else if (start.getDate() != null && end.getDate() != null) {
+                        // Evento dia inteiro: bloqueia o dia todo se nossa data estiver no intervalo
+                        java.time.LocalDate sd = java.time.LocalDate.parse(start.getDate().toStringRfc3339().substring(0, 10));
+                        java.time.LocalDate ed = java.time.LocalDate.parse(end.getDate().toStringRfc3339().substring(0, 10));
+                        if (!date.isBefore(sd) && date.isBefore(ed)) {
+                            busy.add(new long[] { dayStart.toInstant().toEpochMilli(), dayEnd.toInstant().toEpochMilli() });
+                        }
+                    }
                 }
             }
 
@@ -432,10 +441,10 @@ public class GoogleDriveService {
     }
 
     /**
-     * Delete a calendar event
+     * Delete a calendar event from Google Calendar.
      */
     public void deleteCalendarEvent(Company company, String eventId) {
-        if (eventId == null)
+        if (eventId == null || eventId.isEmpty())
             return;
         try {
             GoogleDriveConnection connection = driveConnectionRepository.findByCompany(company)
@@ -448,6 +457,12 @@ public class GoogleDriveService {
             service.events().delete("primary", eventId).execute();
             log.info("Deleted calendar event: {}", eventId);
 
+        } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
+            if (e.getStatusCode() == 404) {
+                log.info("Calendar event {} já removido (404)", eventId);
+                return;
+            }
+            log.error("Error deleting calendar event: {}", e.getMessage());
         } catch (Exception e) {
             log.error("Error deleting calendar event", e);
         }

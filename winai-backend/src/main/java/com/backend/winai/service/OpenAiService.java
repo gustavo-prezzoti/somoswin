@@ -417,7 +417,7 @@ public class OpenAiService {
                 systemPrompt.append(
                         "   - Use 'listar_meus_agendamentos' quando o usuário perguntar sobre agendamentos, quiser reagendar ou cancelar.\n");
                 systemPrompt.append(
-                        "   - Reagendar: listar_meus_agendamentos (mostrar atual) -> buscar_horarios_disponiveis -> criar_agendamento_google (novo) -> cancelar_agendamento_google (antigo). NUNCA escale para humano para reagendar.\n");
+                        "   - Reagendar: listar_meus_agendamentos -> buscar_horarios_disponiveis -> reagendar_agendamento (meeting_id do antigo + nova data/hora). Use SEMPRE reagendar_agendamento (cria novo e cancela antigo em uma chamada). NUNCA use criar_agendamento + cancelar separados.\n");
                 systemPrompt.append(
                         "   - Cancelar: listar_meus_agendamentos -> cancelar_agendamento_google com o meeting_id. NUNCA escale para humano para cancelar.\n");
                 systemPrompt.append(
@@ -1051,9 +1051,20 @@ public class OpenAiService {
                             "titulo", Map.of("type", "string", "description", "Título do agendamento (opcional)."),
                             "observacoes", Map.of("type", "string", "description", "Só o que o cliente disse. NUNCA inclua Pagamento, valor, CNPJ ou origem.")),
                     List.of("nome", "data", "hora")));
+            tools.add(createTool("reagendar_agendamento",
+                    "REAGENDA em uma única operação: cria o novo agendamento e cancela o antigo. Use quando o usuário quiser alterar data/hora. OBRIGATÓRIO: meeting_id do agendamento atual (listar_meus_agendamentos) + data e hora do novo slot.",
+                    Map.of(
+                            "meeting_id", Map.of("type", "string", "description", "UUID do agendamento atual a ser substituído (de listar_meus_agendamentos)."),
+                            "nome", Map.of("type", "string", "description", "Nome do cliente (do agendamento atual ou informado)."),
+                            "email", Map.of("type", "string", "description", "Email (opcional)."),
+                            "data", Map.of("type", "string", "description", "Nova data YYYY-MM-DD."),
+                            "hora", Map.of("type", "string", "description", "Nova hora HH:mm."),
+                            "titulo", Map.of("type", "string", "description", "Título (opcional)."),
+                            "observacoes", Map.of("type", "string", "description", "Observações (opcional).")),
+                    List.of("meeting_id", "nome", "data", "hora")));
             tools.add(createTool("cancelar_agendamento_google",
-                    "Cancela um agendamento. Use o id retornado por listar_meus_agendamentos. NÃO escale para humano para cancelar - use esta ferramenta.",
-                    Map.of("meeting_id", Map.of("type", "string", "description", "UUID do agendamento (retornado por listar_meus_agendamentos).")),
+                    "Cancela um agendamento. Use o meeting_id retornado por listar_meus_agendamentos (campo 'meeting_id:'). NÃO escale para humano - use esta ferramenta.",
+                    Map.of("meeting_id", Map.of("type", "string", "description", "UUID exato do agendamento (ex: 550e8400-e29b-41d4-a716-446655440000).")),
                     List.of("meeting_id")));
         } else {
             // Sem agendamento: reagendar/cancelar só via humano
@@ -1079,11 +1090,12 @@ public class OpenAiService {
                             aiContext.getCompany(), aiContext.getLead(), aiContext.getPhoneNumber());
                     if (meetings.isEmpty())
                         return "Nenhum agendamento futuro encontrado.";
-                    StringBuilder sb = new StringBuilder("Agendamentos futuros:\n");
+                    StringBuilder sb = new StringBuilder("Agendamentos futuros (use meeting_id para cancelar ou reagendar):\n");
                     for (Meeting m : meetings) {
-                        sb.append("- ID: ").append(m.getId()).append(" | ")
+                        sb.append("- meeting_id: ").append(m.getId()).append(" | ")
                                 .append(m.getMeetingDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")))
                                 .append(" às ").append(m.getMeetingTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))
+                                .append(" | nome: ").append(m.getContactName() != null ? m.getContactName() : "N/A")
                                 .append(" | ").append(m.getTitle());
                         if (m.getNotes() != null && !m.getNotes().isEmpty())
                             sb.append(" (obs: ").append(m.getNotes()).append(")");
@@ -1095,12 +1107,41 @@ public class OpenAiService {
                     return "Erro ao listar agendamentos.";
                 }
             }
+            if ("reagendar_agendamento".equalsIgnoreCase(functionName)) {
+                try {
+                    JsonNode args = objectMapper.readTree(jsonArgs);
+                    String meetingIdStr = args.has("meeting_id") ? args.get("meeting_id").asText().trim() : "";
+                    String nome = args.has("nome") ? args.get("nome").asText().trim() : "";
+                    String email = args.has("email") ? args.get("email").asText().trim() : "";
+                    String telefone = args.has("telefone") && !args.get("telefone").asText().trim().isEmpty()
+                            ? args.get("telefone").asText().trim() : (aiContext.getPhoneNumber() != null ? aiContext.getPhoneNumber() : "");
+                    String dataRaw = args.has("data") ? args.get("data").asText().trim() : "";
+                    String horaRaw = args.has("hora") ? args.get("hora").asText().trim() : "";
+                    String titulo = args.has("titulo") ? args.get("titulo").asText().trim() : "";
+                    String observacoes = args.has("observacoes") ? args.get("observacoes").asText().trim() : "";
+                    if (meetingIdStr.isEmpty() || nome.isEmpty() || dataRaw.isEmpty() || horaRaw.isEmpty())
+                        return "Erro: meeting_id, nome, data e hora são obrigatórios para reagendar.";
+                    meetingIdStr = extractUuid(meetingIdStr);
+                    if (meetingIdStr == null)
+                        return "Erro: meeting_id inválido. Use o UUID exato da listagem.";
+                    String hora = horaRaw;
+                    if (hora.matches("^\\d:[0-5]\\d$")) hora = "0" + hora;
+                    return agendamentoService.rescheduleMeeting(aiContext.getCompany(), aiContext.getLead(),
+                            java.util.UUID.fromString(meetingIdStr), nome, email, telefone, dataRaw, hora, titulo, observacoes);
+                } catch (Exception e) {
+                    log.error("Erro ao reagendar", e);
+                    return "Erro ao reagendar: " + e.getMessage();
+                }
+            }
             if ("cancelar_agendamento_google".equalsIgnoreCase(functionName)) {
                 try {
                     JsonNode args = objectMapper.readTree(jsonArgs);
                     String idStr = args.has("meeting_id") ? args.get("meeting_id").asText().trim() : "";
                     if (idStr.isEmpty())
                         return "Erro: meeting_id é obrigatório.";
+                    idStr = extractUuid(idStr);
+                    if (idStr == null)
+                        return "Erro: meeting_id inválido. Use o UUID exato (ex: 550e8400-e29b-41d4-a716-446655440000).";
                     return agendamentoService.cancelMeeting(aiContext.getCompany(), java.util.UUID.fromString(idStr));
                 } catch (Exception e) {
                     log.error("Erro ao cancelar agendamento", e);
@@ -1127,6 +1168,14 @@ public class OpenAiService {
                         preferencia = p;
                     }
                     List<String> slots = agendamentoService.getAvailableSlotsForDays(aiContext.getCompany(), data, dias, preferencia);
+                    if (slots.isEmpty() && preferencia != null) {
+                        List<String> slotsGeral = agendamentoService.getAvailableSlotsForDays(aiContext.getCompany(), data, dias, null);
+                        if (!slotsGeral.isEmpty()) {
+                            String display = agendamentoService.formatSlotsForDisplay(slotsGeral);
+                            return "Não há horários no período da " + preferencia + ", mas há em outros horários:\n" + display
+                                    + "\n\nSlots para agendar (data=YYYY-MM-DD, hora=HH:mm): " + String.join(", ", slotsGeral);
+                        }
+                    }
                     if (slots.isEmpty()) {
                         String periodo = preferencia != null ? " no período da " + preferencia : "";
                         return "Nenhum horário disponível nos próximos " + dias + " dias" + periodo + ".";
@@ -1168,6 +1217,14 @@ public class OpenAiService {
             }
         }
         return null;
+    }
+
+    private static String extractUuid(String s) {
+        if (s == null || s.isEmpty()) return null;
+        s = s.trim();
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+        java.util.regex.Matcher m = p.matcher(s);
+        return m.find() ? m.group() : null;
     }
 
     private Map<String, Object> createTool(String name, String description, Map<String, Object> properties) {
