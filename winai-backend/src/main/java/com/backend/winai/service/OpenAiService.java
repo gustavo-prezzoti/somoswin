@@ -414,9 +414,11 @@ public class OpenAiService {
                 systemPrompt.append(
                         "   - NÃO force nem sugira agendamento sem necessidade. Só atue quando houver interesse explícito do usuário.\n");
                 systemPrompt.append(
-                        "   - Use 'buscar_horarios_disponiveis' para listar horários, depois 'criar_agendamento_google' com nome e email (telefone já vem do WhatsApp). NUNCA peça CPF.\n");
+                        "   - Use 'buscar_horarios_disponiveis' para listar horários, depois 'criar_agendamento_google' com nome (e-mail opcional). Telefone já vem do WhatsApp. NUNCA peça CPF.\n");
                 systemPrompt.append(
-                        "   - Ofereça apenas 2-3 horários por vez. Peça nome e email antes de confirmar.\n");
+                        "   - Ofereça apenas 2-3 horários por vez. Peça nome e e-mail (e-mail opcional - se o cliente não tiver, agende mesmo assim com descrição completa).\n");
+                systemPrompt.append(
+                        "   - CRÍTICO: Se a ferramenta retornar 'Horários disponíveis:' com lista de slots, NUNCA diga 'não há horários' ou 'não tem nos próximos X dias'. Liste os horários retornados. Só diga 'não há horários' quando a ferramenta retornar explicitamente 'Nenhum horário disponível'.\n");
                 String configSummary = agendamentoService.getConfigSummaryForPrompt(aiContext.getCompany());
                 if (configSummary != null && !configSummary.isEmpty()) {
                     systemPrompt.append("   - Regras da empresa: ").append(configSummary).append("\n");
@@ -1028,16 +1030,16 @@ public class OpenAiService {
                             "dias", Map.of("type", "integer", "description", "Número de dias para buscar (padrão: 7).")),
                     List.of()));
             tools.add(createTool("criar_agendamento_google",
-                    "Cria agendamento no Google Calendar. Use data e hora de um slot retornado por buscar_horarios_disponiveis. Formato: data=YYYY-MM-DD, hora=HH:mm. Telefone vem do WhatsApp automaticamente.",
+                    "Cria agendamento no Google Calendar. Use data e hora de um slot retornado por buscar_horarios_disponiveis. Formato: data=YYYY-MM-DD, hora=HH:mm. Telefone vem do WhatsApp automaticamente. E-mail é OPCIONAL - se o cliente não tiver, agende mesmo assim.",
                     Map.of(
                             "nome", Map.of("type", "string", "description", "Nome completo do lead."),
-                            "email", Map.of("type", "string", "description", "Email do lead."),
+                            "email", Map.of("type", "string", "description", "Email do lead (opcional - se não tiver, deixe vazio)."),
                             "telefone", Map.of("type", "string", "description", "Telefone (opcional - já temos do WhatsApp)."),
                             "data", Map.of("type", "string", "description", "Data no formato YYYY-MM-DD (ex: 2025-02-19)."),
                             "hora", Map.of("type", "string", "description", "Hora no formato HH:mm (ex: 09:00 ou 14:30)."),
                             "titulo", Map.of("type", "string", "description", "Título do agendamento (opcional)."),
-                            "observacoes", Map.of("type", "string", "description", "Observações (opcional).")),
-                    List.of("nome", "email", "data", "hora")));
+                            "observacoes", Map.of("type", "string", "description", "Observações: do que se trata, para quem, finalidade (opcional).")),
+                    List.of("nome", "data", "hora")));
         }
 
         return tools;
@@ -1082,7 +1084,7 @@ public class OpenAiService {
                     String titulo = args.has("titulo") ? args.get("titulo").asText().trim() : "";
                     String observacoes = args.has("observacoes") ? args.get("observacoes").asText().trim() : "";
                     if (nome.isEmpty() || dataRaw.isEmpty() || horaRaw.isEmpty()) {
-                        return "Erro: nome, data e hora são obrigatórios para agendar.";
+                        return "Erro: nome, data e hora são obrigatórios para agendar. E-mail é opcional.";
                     }
                     String data = dataRaw;
                     String hora = horaRaw;

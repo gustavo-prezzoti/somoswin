@@ -55,6 +55,7 @@ public class GoogleDriveService {
 
     private final GoogleDriveConnectionRepository driveConnectionRepository;
     private final com.backend.winai.repository.MeetingRepository meetingRepository;
+    private final GoogleOAuthService googleOAuthService;
 
     @Value("${google.client.id:}")
     private String clientId;
@@ -93,6 +94,7 @@ public class GoogleDriveService {
             return flow.newAuthorizationUrl()
                     .setRedirectUri(redirectUri)
                     .setState(user.getCompany().getId().toString())
+                    .set("prompt", "consent")  // Força tela de consentimento para obter refresh_token
                     .build();
         } catch (GeneralSecurityException | IOException e) {
             log.error("Error generating authorization URL", e);
@@ -126,7 +128,11 @@ public class GoogleDriveService {
 
             connection.setCompany(Company.builder().id(java.util.UUID.fromString(companyId)).build());
             connection.setAccessToken(tokenResponse.getAccessToken());
-            connection.setRefreshToken(tokenResponse.getRefreshToken());
+            // Preservar refresh_token existente se Google não retornar (ex: re-autorização)
+            String newRefresh = tokenResponse.getRefreshToken();
+            if (newRefresh != null && !newRefresh.trim().isEmpty()) {
+                connection.setRefreshToken(newRefresh);
+            }
             connection.setTokenExpiresAt(ZonedDateTime.now().plusSeconds(tokenResponse.getExpiresInSeconds()));
             connection.setEmail(email);
             connection.setConnected(true);
@@ -447,6 +453,52 @@ public class GoogleDriveService {
         }
     }
 
+    /**
+     * Renova o access token usando o refresh token.
+     * Doc Google: access token expira em 3600s (1h), refresh token obtém novo access token.
+     * https://developers.google.com/identity/protocols/oauth2/web-server
+     * @return true se renovou com sucesso, false se não precisava renovar
+     */
+    @Transactional
+    public boolean refreshTokenIfNeeded(GoogleDriveConnection connection) throws GeneralSecurityException, IOException {
+        var companyId = connection.getCompany().getId();
+        GoogleDriveConnection conn = driveConnectionRepository.findByCompanyId(companyId).orElse(null);
+        if (conn == null || !conn.isConnected()) return false;
+
+        String refreshToken = conn.getRefreshToken();
+        if (refreshToken == null || refreshToken.trim().isEmpty())
+            return false;
+
+        if (conn.getTokenExpiresAt() == null)
+            return false;
+
+        // Doc Google: access token dura 1h (3600s). Renovar se expira em até 10 min.
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now();
+        if (!conn.getTokenExpiresAt().isBefore(now.plusMinutes(10)))
+            return false;
+
+        NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+        com.google.auth.oauth2.UserCredentials credentials = com.google.auth.oauth2.UserCredentials
+                .newBuilder()
+                .setClientId(clientId)
+                .setClientSecret(clientSecret)
+                .setAccessToken(new AccessToken(
+                        conn.getAccessToken(),
+                        Date.from(conn.getTokenExpiresAt().toInstant())))
+                .setRefreshToken(refreshToken)
+                .build();
+
+        credentials.refresh();
+        conn.setAccessToken(credentials.getAccessToken().getTokenValue());
+        long expiresIn = 3600; // Doc: padrão 3600s (1h)
+        if (credentials.getAccessToken().getExpirationTime() != null) {
+            expiresIn = Math.max(1, (credentials.getAccessToken().getExpirationTime().getTime() - System.currentTimeMillis()) / 1000);
+        }
+        conn.setTokenExpiresAt(now.plusSeconds(expiresIn));
+        driveConnectionRepository.save(conn);
+        return true;
+    }
+
     private Calendar getCalendarService(GoogleDriveConnection connection) throws GeneralSecurityException, IOException {
         NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
 
@@ -485,17 +537,15 @@ public class GoogleDriveService {
                 // Se não conseguir fazer refresh e o token está expirado, marcar como
                 // desconectado
                 if (connection.getTokenExpiresAt().isBefore(java.time.ZonedDateTime.now())) {
-                    connection.setConnected(false);
-                    driveConnectionRepository.save(connection);
-                    log.info("Marked connection as disconnected due to expired token without refresh capability");
+                    googleOAuthService.markDisconnectedAndNotify(connection);
+                    throw new IllegalStateException("Token expired and refresh failed. Please re-authenticate.");
                 }
             }
         } else if (!hasRefreshToken && connection.getTokenExpiresAt().isBefore(java.time.ZonedDateTime.now())) {
-            // Token expirado sem refresh token - marcar como desconectado
+            // Token expirado sem refresh token - marcar como desconectado e notificar
             log.warn("Token expired for company {} without refresh token. Marking as disconnected.",
                     connection.getCompany().getId());
-            connection.setConnected(false);
-            driveConnectionRepository.save(connection);
+            googleOAuthService.markDisconnectedAndNotify(connection);
             throw new IllegalStateException("Token expired and no refresh token available. Please re-authenticate.");
         }
 

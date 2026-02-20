@@ -210,18 +210,30 @@ public class AgendamentoService {
         }
         int duration = opt.get().getSlotDurationMinutes();
 
+        // Quando sem e-mail: descrição completa para o dono do calendário (empresa) saber para quem é e do que se trata
+        String notesFinal = notes;
+        if (email == null || email.trim().isEmpty()) {
+            StringBuilder desc = new StringBuilder("Cliente: ").append(nome);
+            if (telefone != null && !telefone.isEmpty())
+                desc.append(" | Telefone: ").append(telefone);
+            desc.append(" | Contato via WhatsApp (sem e-mail)");
+            if (notes != null && !notes.trim().isEmpty())
+                desc.append("\n").append(notes);
+            notesFinal = desc.toString();
+        }
+
         Meeting meeting = Meeting.builder()
                 .company(company)
                 .lead(lead)
                 .title(title != null && !title.isEmpty() ? title : "Agendamento - " + nome)
                 .contactName(nome)
-                .contactEmail(email)
+                .contactEmail(email != null && !email.trim().isEmpty() ? email : null)
                 .contactPhone(telefone)
                 .meetingDate(date)
                 .meetingTime(time)
                 .durationMinutes(duration)
                 .status(MeetingStatus.SCHEDULED)
-                .notes(notes)
+                .notes(notesFinal)
                 .scheduledBy("IA")
                 .build();
 
