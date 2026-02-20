@@ -1341,7 +1341,7 @@ public class MarketingService {
         boolean useExistingPost = Boolean.TRUE.equals(request.getUseExistingPost());
         String existingPostId = (request.getExistingPostId() != null && !request.getExistingPostId().isBlank()) ? request.getExistingPostId() : null;
 
-        String effectiveLink = resolveEffectiveLink(request, pageId, accessToken);
+        String effectiveLink = resolveEffectiveLink(user, request, pageId, accessToken);
 
         long dailyBudgetCents = Math.max(100, Math.round((request.getDailyBudget() != null ? request.getDailyBudget() : 50.0) * 100));
 
@@ -1451,13 +1451,22 @@ public class MarketingService {
                 new org.springframework.http.HttpEntity<>(headers), String.class);
     }
 
-    private String resolveEffectiveLink(CreateCampaignRequest request, String pageId, String accessToken) {
+    private String resolveEffectiveLink(User user, CreateCampaignRequest request, String pageId, String accessToken) {
         String phone = request.getWhatsappPhone();
         if (phone == null || phone.isBlank()) {
             phone = fetchPageWhatsAppNumber(pageId, accessToken);
         }
+        if (phone == null || phone.isBlank() && user != null) {
+            java.util.List<String> numbers = getPageWhatsAppNumbers(user);
+            if (numbers != null && !numbers.isEmpty()) {
+                phone = numbers.get(0);
+            }
+        }
         if (phone == null || phone.isBlank()) {
-            throw new RuntimeException("Informe o número WhatsApp ou vincule o WhatsApp à sua página do Facebook.");
+            // Fallback: link genérico. A Meta pode resolver o destino pela página (WhatsApp vinculado).
+            // Doc: https://developers.facebook.com/docs/marketing-api/ad-creative/messaging-ads/click-to-whatsapp
+            log.info("[META] WhatsApp number not found via API; using generic link (page {} has WhatsApp linked in settings)", pageId);
+            return "https://api.whatsapp.com/send";
         }
         String digits = phone.replaceAll("[^0-9]", "");
         return "https://wa.me/" + digits;
