@@ -1823,6 +1823,9 @@ public class MarketingService {
             }
         }
 
+        // Meta API v23+: targeting_automation.advantage_audience obrigatório (1=habilitar, 0=desabilitar)
+        targeting.put("targeting_automation", Map.of("advantage_audience", 0));
+
         Map<String, Object> promotedObject = new HashMap<>();
         promotedObject.put("page_id", pageId);
 
