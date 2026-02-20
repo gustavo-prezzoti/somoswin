@@ -507,8 +507,8 @@ const AdminCompanies: React.FC = () => {
                                     <span className="text-[11px] font-bold text-gray-400 mt-1 uppercase font-mono tracking-tighter">#{company.id.slice(0, 8)}...</span>
                                 </div>
                             </div>
-                            {/* Asaas Actions */}
-                            {company.planId && !company.asaasSubscriptionId && (
+                            {/* Asaas Actions - Mostrar "Ativar" quando sem assinatura OU quando cancelada (permite renovar) */}
+                            {company.planId && (!company.asaasSubscriptionId || company.subscriptionStatus === 'CANCELLED') && (
                                 <button
                                     onClick={async () => {
                                         if (!company.contratante || !company.documento || !company.emailContratante) {
@@ -516,12 +516,14 @@ const AdminCompanies: React.FC = () => {
                                             return;
                                         }
                                         showConfirm({
-                                            title: 'Criar Assinatura',
-                                            message: `Deseja criar uma assinatura no Asaas para "${company.name}" no plano ${company.planName}?`,
+                                            title: company.subscriptionStatus === 'CANCELLED' ? 'Renovar Assinatura' : 'Criar Assinatura',
+                                            message: company.subscriptionStatus === 'CANCELLED'
+                                                ? `Deseja criar uma nova assinatura no Asaas para "${company.name}" no plano ${company.planName}? Isso gerará uma nova fatura.`
+                                                : `Deseja criar uma assinatura no Asaas para "${company.name}" no plano ${company.planName}?`,
                                             onConfirm: async () => {
                                                 try {
                                                     await asaasService.createSubscription(company.id, company.planId!);
-                                                    showToast('Assinatura criada com sucesso no Asaas!');
+                                                    showToast('Assinatura criada com sucesso! O link da fatura estará disponível.');
                                                     fetchCompanies();
                                                 } catch (error: any) {
                                                     console.error('Erro ao criar assinatura:', error);
@@ -533,50 +535,78 @@ const AdminCompanies: React.FC = () => {
                                     className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-all"
                                 >
                                     <DollarSign size={14} />
-                                    Ativar Assinatura Recorrente
+                                    {company.subscriptionStatus === 'CANCELLED' ? 'Renovar / Gerar Fatura' : 'Ativar Assinatura Recorrente'}
                                 </button>
                             )}
-                            {company.asaasSubscriptionId && (
-                                <div className="flex gap-2">
+                            {company.asaasSubscriptionId && company.subscriptionStatus !== 'CANCELLED' && (
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const link = await asaasService.getPaymentLink(company.id);
+                                                    if (link) {
+                                                        window.open(link, '_blank');
+                                                    } else {
+                                                        showToast('Nenhum link disponível. A assinatura pode estar cancelada no Asaas. Use "Renovar" para gerar nova fatura.', 'error');
+                                                    }
+                                                } catch (error) {
+                                                    showToast('Assinatura inválida no Asaas. Use "Renovar" para gerar nova fatura.', 'error');
+                                                }
+                                            }}
+                                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-50 text-blue-700 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all"
+                                        >
+                                            <ExternalLink size={12} />
+                                            Ver Fatura
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                showConfirm({
+                                                    title: 'Cancelar Assinatura',
+                                                    message: `Tem certeza que deseja cancelar a assinatura de "${company.name}"?`,
+                                                    type: 'danger',
+                                                    onConfirm: async () => {
+                                                        try {
+                                                            await asaasService.cancelSubscription(company.id);
+                                                            showToast('Assinatura cancelada.');
+                                                            fetchCompanies();
+                                                        } catch (error) {
+                                                            showToast(getErrorMessage(error, 'Erro ao cancelar assinatura.'), 'error');
+                                                        }
+                                                    }
+                                                });
+                                            }}
+                                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-rose-100 transition-all"
+                                        >
+                                            <XCircle size={12} />
+                                            Cancelar
+                                        </button>
+                                    </div>
                                     <button
                                         onClick={async () => {
-                                            try {
-                                                const link = await asaasService.getPaymentLink(company.id);
-                                                if (link) {
-                                                    window.open(link, '_blank');
-                                                } else {
-                                                    showToast('Nenhum link de pagamento disponível.', 'error');
-                                                }
-                                            } catch (error) {
-                                                showToast(getErrorMessage(error, 'Erro ao buscar link de pagamento.'), 'error');
+                                            if (!company.contratante || !company.documento || !company.emailContratante) {
+                                                showAlert('Dados Incompletos', 'Preencha os dados do contratante antes de renovar.', 'warning');
+                                                return;
                                             }
-                                        }}
-                                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-50 text-blue-700 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all"
-                                    >
-                                        <ExternalLink size={12} />
-                                        Ver Fatura
-                                    </button>
-                                    <button
-                                        onClick={() => {
                                             showConfirm({
-                                                title: 'Cancelar Assinatura',
-                                                message: `Tem certeza que deseja cancelar a assinatura de "${company.name}"? Esta ação não pode ser desfeita.`,
-                                                type: 'danger',
+                                                title: 'Renovar / Gerar Nova Fatura',
+                                                message: `Criar nova assinatura no Asaas para "${company.name}"? A anterior será substituída e uma nova fatura será gerada.`,
                                                 onConfirm: async () => {
                                                     try {
                                                         await asaasService.cancelSubscription(company.id);
-                                                        showToast('Assinatura cancelada.');
+                                                        await asaasService.createSubscription(company.id, company.planId!);
+                                                        showToast('Nova assinatura criada! O link da fatura estará disponível.');
                                                         fetchCompanies();
-                                                    } catch (error) {
-                                                        showToast(getErrorMessage(error, 'Erro ao cancelar assinatura.'), 'error');
+                                                    } catch (error: any) {
+                                                        showToast(getErrorMessage(error, 'Erro ao renovar.'), 'error');
                                                     }
                                                 }
                                             });
                                         }}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-rose-100 transition-all"
+                                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-amber-50 text-amber-700 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-amber-100 transition-all"
                                     >
-                                        <XCircle size={12} />
-                                        Cancelar
+                                        <DollarSign size={12} />
+                                        Renovar / Gerar Nova Fatura
                                     </button>
                                 </div>
                             )}
