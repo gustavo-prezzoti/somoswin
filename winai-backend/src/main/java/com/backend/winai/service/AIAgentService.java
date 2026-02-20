@@ -270,7 +270,7 @@ public class AIAgentService {
         // 2. Set "Composing" immediately to acknowledge receipt
         // Typing indicator removed as per user request
 
-        // 3. Schedule new task for 20 seconds
+        // 3. Schedule new task (10s debounce - reduz latência)
         java.util.concurrent.ScheduledFuture<?> newTask = scheduler.schedule(() -> {
             try {
                 // Remove self from map to clean up
@@ -279,7 +279,7 @@ public class AIAgentService {
             } catch (Exception e) {
                 log.error("Error in scheduled AI processing for {}: {}", conversationId, e.getMessage(), e);
             }
-        }, 20, java.util.concurrent.TimeUnit.SECONDS);
+        }, 2, java.util.concurrent.TimeUnit.SECONDS);
 
         debounceMap.put(conversationId, newTask);
 
@@ -287,7 +287,7 @@ public class AIAgentService {
     }
 
     /**
-     * Lógica real de processamento da IA, executada após os 20s de silêncio.
+     * Lógica real de processamento da IA, executada após os 10s de silêncio.
      * Busca o histórico ATUALIZADO (incluindo todas as msgs que chegaram no delay).
      */
     @Transactional

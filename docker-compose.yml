@@ -116,6 +116,11 @@ services:
 
       # Internal API Key
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+
+      # OpenAI (latência: gpt-5-mini + low reasoning)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5-mini}
+      - OPENAI_REASONING_EFFORT=${OPENAI_REASONING_EFFORT:-low}
     depends_on:
       redis:
         condition: service_started
@@ -162,6 +167,9 @@ services:
       - ASAAS_API_URL=${ASAAS_API_URL}
       - ASAAS_API_TOKEN=${ASAAS_API_TOKEN}
       - META_SYNC_ENABLED=true
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5-mini}
+      - OPENAI_REASONING_EFFORT=${OPENAI_REASONING_EFFORT:-low}
       # A cada hora (Spring cron: seg min hora dia mês dia-semana)
       - META_SYNC_CRON=0 0 * * * *
       # Sync inicial 15s após restart (garante DB pronto)
@@ -219,6 +227,8 @@ services:
       - META_API_THROTTLE_DELAY_MS=${META_API_THROTTLE_DELAY_MS:-2000}
       - META_API_RATE_LIMIT_RETRY_WAIT_MS=${META_API_RATE_LIMIT_RETRY_WAIT_MS:-300000}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5-mini}
+      - OPENAI_REASONING_EFFORT=${OPENAI_REASONING_EFFORT:-low}
       - ASAAS_API_URL=${ASAAS_API_URL}
       - ASAAS_API_TOKEN=${ASAAS_API_TOKEN}
       - APP_FRONTEND_URL=${FRONTEND_URL}
@@ -263,6 +273,9 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
       - FOLLOWUP_WORKER_ENABLED=true
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5-mini}
+      - OPENAI_REASONING_EFFORT=${OPENAI_REASONING_EFFORT:-low}
       # UaZap (WhatsApp) - necessário para enviar follow-ups
       - UAZAP_BASE_URL=${UAZAP_BASE_URL}
       - UAZAP_TOKEN=${UAZAP_TOKEN}
@@ -343,6 +356,7 @@ services:
       - JAVA_API_URL=http://backend:8080
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5-mini}
       - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-1024}
       # Delay em ms entre requisições OpenAI (evita rate limit)
       - OPENAI_DELAY_BETWEEN_REQUESTS_MS=${OPENAI_DELAY_BETWEEN_REQUESTS_MS:-1000}
