@@ -45,7 +45,7 @@ public class OpenAiService {
     @Value("${openai.reasoning-effort:low}")
     private String reasoningEffort;
 
-    @Value("${openai.max-tokens:4096}")
+    @Value("${openai.max-tokens:16384}")
     private Integer maxTokens;
 
     @Value("${openai.enabled:true}")
@@ -183,9 +183,17 @@ public class OpenAiService {
         try {
             List<Map<String, Object>> messages = new ArrayList<>();
 
+            // Determinar o papel da mensagem de sistema (reasoning models preferem
+            // 'developer')
+            String currentModel = (imageUrl != null && !imageUrl.isEmpty()) ? currentVisionModel : currentTextModel;
+            String systemRole = (currentModel.startsWith("gpt-5") || currentModel.startsWith("o1")
+                    || currentModel.startsWith("o3"))
+                            ? "developer"
+                            : "system";
+
             // System Message
             Map<String, Object> sysMsg = new HashMap<>();
-            sysMsg.put("role", "system");
+            sysMsg.put("role", systemRole);
             sysMsg.put("content", systemPrompt);
             messages.add(sysMsg);
 
@@ -204,8 +212,6 @@ public class OpenAiService {
             userMsg.put("role", "user");
 
             // Determine model logic
-            String currentModel = (imageUrl != null && !imageUrl.isEmpty()) ? currentVisionModel : currentTextModel;
-
             if (imageUrl != null && !imageUrl.isEmpty()) {
                 List<Map<String, Object>> contentList = new ArrayList<>();
 
@@ -431,9 +437,14 @@ public class OpenAiService {
             }
         }
 
+        String systemRole = (currentTextModel.startsWith("gpt-5") || currentTextModel.startsWith("o1")
+                || currentTextModel.startsWith("o3"))
+                        ? "developer"
+                        : "system";
+
         List<Map<String, Object>> messages = new ArrayList<>();
         Map<String, Object> sysMsg = new HashMap<>();
-        sysMsg.put("role", "system");
+        sysMsg.put("role", systemRole);
         sysMsg.put("content", systemPrompt.toString());
         messages.add(sysMsg);
 
@@ -873,11 +884,17 @@ public class OpenAiService {
             sysPrompt.append(
                     "    * *Nota:* Ao usar essa tool, apenas avise o cliente e encerre. Você será pausada.\n\n");
 
+            String systemRole = (currentTextModel.startsWith("gpt-5") || currentTextModel.startsWith("o1")
+                    || currentTextModel.startsWith("o3"))
+                            ? "developer"
+                            : "system";
+
             // Se a memória está vazia ou não tem System Prompt, inicializamos
-            boolean hasSystem = messages.stream().anyMatch(m -> "system".equals(m.get("role")));
+            boolean hasSystem = messages.stream()
+                    .anyMatch(m -> "system".equals(m.get("role")) || "developer".equals(m.get("role")));
             if (!hasSystem) {
                 Map<String, Object> sysMsg = new HashMap<>();
-                sysMsg.put("role", "system");
+                sysMsg.put("role", systemRole);
                 sysMsg.put("content", sysPrompt.toString());
                 messages.add(0, sysMsg);
             }
