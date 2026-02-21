@@ -240,42 +240,22 @@ public class OpenAiService {
                 body.put("reasoning_effort", reasoningEffort);
             }
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-
-            String url = "https://api.openai.com/v1/chat/completions";
-
             log.debug("📤 Sending request to OpenAI | Model: {} | Messages: {}", currentModel, messages.size());
 
-            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
-            Map<String, Object> responseBody = response.getBody();
+            // Chamada com retry automático (até 5 tentativas)
+            Map<String, Object> responseBody = callOpenAIWithRetry(body);
 
             if (responseBody == null) {
-                log.error("❌ OpenAI returned NULL response body");
+                log.error("❌ OpenAI falhou após todas tentativas de retry");
                 return null;
             }
 
-            // Log the full response for debugging
-            log.debug("📥 OpenAI Raw Response: {}", responseBody);
-
-            // Check for API errors
+            // Check for API errors (erros fatais que passaram pelo retry)
             if (responseBody.containsKey("error")) {
                 Map<String, Object> error = (Map<String, Object>) responseBody.get("error");
                 String errorType = (String) error.get("type");
                 String errorMessage = (String) error.get("message");
-                log.error("❌ OpenAI API Error [{}]: {}", errorType, errorMessage);
-
-                // Check if it's a model authorization error
-                if (errorMessage != null && (errorMessage.contains("does not exist") ||
-                        errorMessage.contains("not available") ||
-                        errorMessage.contains("not supported") ||
-                        errorMessage.contains("access") ||
-                        errorMessage.contains("unauthorized"))) {
-                    log.error("🚨 MODEL ERROR DETECTED: '{}' | Error: {}", currentModel, errorMessage);
-                }
+                log.error("❌ OpenAI API Error [{}]: {} | Model: {}", errorType, errorMessage, currentModel);
                 return null;
             }
 
@@ -311,7 +291,7 @@ public class OpenAiService {
                     messageObj);
 
             if (content == null || content.trim().isEmpty()) {
-                log.warn("⚠️ OpenAI returned EMPTY content | Model: {} | Refusal: {} | Message obj: {}",
+                log.warn("⚠️ OpenAI returned EMPTY content após retry | Model: {} | Refusal: {} | Message obj: {}",
                         currentModel, refusal, messageObj);
                 return null;
             }
@@ -493,56 +473,50 @@ public class OpenAiService {
                 body.put("reasoning_effort", reasoningEffort);
             }
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
+            // Chamada com retry automático (até 5 tentativas por turn)
+            Map<String, Object> responseBody = callOpenAIWithRetry(body);
 
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-
-            try {
-                ResponseEntity<Map> response = restTemplate.postForEntity("https://api.openai.com/v1/chat/completions",
-                        entity, Map.class);
-                Map<String, Object> responseBody = response.getBody();
-                List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
-                if (choices == null || choices.isEmpty())
-                    return null;
-
-                Map<String, Object> choice = choices.get(0);
-                Map<String, Object> message = (Map<String, Object>) choice.get("message");
-                messages.add(message);
-
-                if (message.containsKey("tool_calls")) {
-                    List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) message.get("tool_calls");
-                    for (Map<String, Object> toolCall : toolCalls) {
-                        Map<String, Object> function = (Map<String, Object>) toolCall.get("function");
-                        String functionName = (String) function.get("name");
-                        String arguments = (String) function.get("arguments");
-                        String toolCallId = (String) toolCall.get("id");
-
-                        String result = executeGlobalTool(functionName, arguments, aiContext);
-                        if ("HUMAN_HANDOFF_REQUESTED".equals(result)) {
-                            return "HUMAN_HANDOFF_REQUESTED";
-                        }
-
-                        Map<String, Object> toolMsg = new HashMap<>();
-                        toolMsg.put("role", "tool");
-                        toolMsg.put("tool_call_id", toolCallId);
-                        toolMsg.put("content", result != null ? result : "Ok");
-                        messages.add(toolMsg);
-                    }
-                } else {
-                    Object contentObj = message.get("content");
-                    String content = extractTextContent(contentObj);
-                    if (content != null && !content.isBlank())
-                        return content.replace("*", "");
-                    // Resposta vazia após tools: fallback para não deixar o lead sem resposta
-                    if (lastIsTool)
-                        return "Pronto! Ação realizada com sucesso. Posso ajudar em mais alguma coisa?";
-                    return null;
-                }
-            } catch (Exception e) {
-                log.error("Erro na chamada OpenAI com ferramentas: {}", e.getMessage());
+            if (responseBody == null || !responseBody.containsKey("choices")) {
+                log.error("OpenAI falhou após retries no turn {} de ferramentas", turn);
                 break;
+            }
+
+            List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
+            if (choices == null || choices.isEmpty())
+                return null;
+
+            Map<String, Object> choice = choices.get(0);
+            Map<String, Object> message = (Map<String, Object>) choice.get("message");
+            messages.add(message);
+
+            if (message.containsKey("tool_calls")) {
+                List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) message.get("tool_calls");
+                for (Map<String, Object> toolCall : toolCalls) {
+                    Map<String, Object> function = (Map<String, Object>) toolCall.get("function");
+                    String functionName = (String) function.get("name");
+                    String arguments = (String) function.get("arguments");
+                    String toolCallId = (String) toolCall.get("id");
+
+                    String result = executeGlobalTool(functionName, arguments, aiContext);
+                    if ("HUMAN_HANDOFF_REQUESTED".equals(result)) {
+                        return "HUMAN_HANDOFF_REQUESTED";
+                    }
+
+                    Map<String, Object> toolMsg = new HashMap<>();
+                    toolMsg.put("role", "tool");
+                    toolMsg.put("tool_call_id", toolCallId);
+                    toolMsg.put("content", result != null ? result : "Ok");
+                    messages.add(toolMsg);
+                }
+            } else {
+                Object contentObj = message.get("content");
+                String content = extractTextContent(contentObj);
+                if (content != null && !content.isBlank())
+                    return content.replace("*", "");
+                // Resposta vazia após tools: fallback para não deixar o lead sem resposta
+                if (lastIsTool)
+                    return "Pronto! Ação realizada com sucesso. Posso ajudar em mais alguma coisa?";
+                return null;
             }
         }
         // Limite de turns atingido sem resposta: fallback se houve execução de tools
@@ -550,6 +524,129 @@ public class OpenAiService {
         if (hadToolResults)
             return "Pronto! Ação realizada. Posso ajudar em mais alguma coisa?";
         return null;
+    }
+
+    // ===========================
+    // Retry Helper - Centralizado
+    // ===========================
+    private static final int MAX_RETRIES = 5;
+    private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+
+    /**
+     * Chama a OpenAI API com retry de até 5 tentativas e backoff exponencial.
+     * Retorna o response body como Map, ou null se todas tentativas falharem.
+     * Faz retry em: exceções de rede, respostas vazias, erros de rate limit (429).
+     * NÃO faz retry em: erros de autenticação, modelo não encontrado.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> callOpenAIWithRetry(Map<String, Object> body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(apiKey);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+        String modelUsed = (String) body.get("model");
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                ResponseEntity<Map> response = restTemplate.postForEntity(OPENAI_API_URL, entity, Map.class);
+                Map<String, Object> responseBody = response.getBody();
+
+                if (responseBody == null) {
+                    log.warn("🔄 OpenAI retornou body null (tentativa {}/{}) | Model: {}", attempt, MAX_RETRIES,
+                            modelUsed);
+                    sleepWithBackoff(attempt);
+                    continue;
+                }
+
+                // Erros da API
+                if (responseBody.containsKey("error")) {
+                    Map<String, Object> error = (Map<String, Object>) responseBody.get("error");
+                    String errorType = error != null ? (String) error.get("type") : "unknown";
+                    String errorMessage = error != null ? (String) error.get("message") : "unknown";
+
+                    // Erros que NÃO devem ter retry (problemas de configuração)
+                    if (errorMessage != null && (errorMessage.contains("does not exist") ||
+                            errorMessage.contains("not available") ||
+                            errorMessage.contains("not supported") ||
+                            errorMessage.contains("unauthorized") ||
+                            errorMessage.contains("invalid_api_key"))) {
+                        log.error("🚨 Erro fatal OpenAI (sem retry): [{}] {} | Model: {}", errorType, errorMessage,
+                                modelUsed);
+                        return responseBody; // Retorna o erro para o caller tratar
+                    }
+
+                    // Rate limit ou erros transientes: retry
+                    log.warn("🔄 OpenAI API Error (tentativa {}/{}): [{}] {} | Model: {}",
+                            attempt, MAX_RETRIES, errorType, errorMessage, modelUsed);
+                    sleepWithBackoff(attempt);
+                    continue;
+                }
+
+                // Verificar resposta vazia (comum com GPT-5 reasoning + tokens baixos)
+                if (responseBody.containsKey("choices")) {
+                    List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
+                    if (choices != null && !choices.isEmpty()) {
+                        Map<String, Object> firstChoice = choices.get(0);
+                        Map<String, Object> message = firstChoice != null
+                                ? (Map<String, Object>) firstChoice.get("message")
+                                : null;
+
+                        // Se tem tool_calls, retorna imediatamente (não é resposta vazia)
+                        if (message != null && message.containsKey("tool_calls")) {
+                            log.debug("✅ OpenAI retornou tool_calls na tentativa {}/{}", attempt, MAX_RETRIES);
+                            return responseBody;
+                        }
+
+                        // Verificar conteúdo vazio
+                        if (message != null) {
+                            Object contentObj = message.get("content");
+                            String content = contentObj instanceof String ? (String) contentObj : null;
+                            if (content != null && !content.trim().isEmpty()) {
+                                if (attempt > 1) {
+                                    log.info("✅ OpenAI respondeu com sucesso na tentativa {}/{} | Model: {}", attempt,
+                                            MAX_RETRIES, modelUsed);
+                                }
+                                return responseBody;
+                            }
+                        }
+
+                        // Resposta vazia - retry
+                        log.warn("🔄 OpenAI retornou conteúdo vazio (tentativa {}/{}) | Model: {} | Message: {}",
+                                attempt, MAX_RETRIES, modelUsed, message);
+                        sleepWithBackoff(attempt);
+                        continue;
+                    }
+                }
+
+                // Sem choices - retry
+                log.warn("🔄 OpenAI response sem 'choices' (tentativa {}/{}) | Model: {} | Body: {}",
+                        attempt, MAX_RETRIES, modelUsed, responseBody);
+                sleepWithBackoff(attempt);
+
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("🔄 Exceção na chamada OpenAI (tentativa {}/{}): {} | Model: {}",
+                        attempt, MAX_RETRIES, e.getMessage(), modelUsed);
+                sleepWithBackoff(attempt);
+            }
+        }
+
+        log.error("❌ OpenAI falhou após {} tentativas | Model: {}", MAX_RETRIES, modelUsed, lastException);
+        return null;
+    }
+
+    /**
+     * Sleep com backoff exponencial: 1s, 2s, 4s, 8s, 16s
+     */
+    private void sleepWithBackoff(int attempt) {
+        try {
+            long sleepMs = 1000L * (1L << (attempt - 1)); // 1s, 2s, 4s, 8s, 16s
+            Thread.sleep(Math.min(sleepMs, 16000));
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -807,36 +904,14 @@ public class OpenAiService {
                     body.put("reasoning_effort", reasoningEffort);
                 }
 
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                headers.setBearerAuth(apiKey);
+                // Chamada com retry automático (até 5 tentativas por turn)
+                Map<String, Object> responseBody = callOpenAIWithRetry(body);
 
-                HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-
-                // Retry logic for OpenAI API (Max 3 retries)
-                ResponseEntity<Map> response = null;
-                Exception lastEx = null;
-                for (int retry = 0; retry < 3; retry++) {
-                    try {
-                        response = restTemplate.postForEntity("https://api.openai.com/v1/chat/completions", entity,
-                                Map.class);
-                        break;
-                    } catch (Exception e) {
-                        log.warn("Erro ao chamar OpenAI (tentativa {}/3): {}", retry + 1, e.getMessage());
-                        lastEx = e;
-                        try {
-                            Thread.sleep(1000 * (retry + 1));
-                        } catch (InterruptedException ie) {
-                        }
-                    }
-                }
-
-                if (response == null || response.getBody() == null || !response.getBody().containsKey("choices")) {
-                    log.error("OpenAI falhou após retentativas", lastEx);
+                if (responseBody == null || !responseBody.containsKey("choices")) {
+                    log.error("OpenAI falhou após retries no turn {} (Clinicorp)", turn);
                     return "Desculpe, tive um problema de conexão. Poderia repetir?";
                 }
 
-                Map<String, Object> responseBody = response.getBody();
                 List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
                 if (choices.isEmpty())
                     return null;
