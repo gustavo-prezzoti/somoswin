@@ -29,7 +29,8 @@ public class MarketingAiRecommendationsService {
 
     /**
      * Retorna recomendações do cache, filtradas pelo status atual das campanhas.
-     * Não retorna PAUSE para campanhas já pausadas, nem INCREASE_BUDGET para campanhas pausadas.
+     * Não retorna PAUSE para campanhas já pausadas, nem INCREASE_BUDGET para
+     * campanhas pausadas.
      */
     public List<AiRecommendationDTO> getRecommendations(User user) {
         List<AiRecommendationDTO> cached = getRecommendationsForCompany(user.getCompany());
@@ -45,21 +46,29 @@ public class MarketingAiRecommendationsService {
                     }
                     try {
                         return (List<AiRecommendationDTO>) objectMapper.readValue(cache.getRecommendationsJson(),
-                                objectMapper.getTypeFactory().constructCollectionType(List.class, AiRecommendationDTO.class));
+                                objectMapper.getTypeFactory().constructCollectionType(List.class,
+                                        AiRecommendationDTO.class));
                     } catch (Exception e) {
-                        log.warn("Failed to parse cached recommendations for company {}: {}", company.getId(), e.getMessage());
+                        log.warn("Failed to parse cached recommendations for company {}: {}", company.getId(),
+                                e.getMessage());
                         return Collections.<AiRecommendationDTO>emptyList();
                     }
                 })
                 .orElse(Collections.emptyList());
     }
 
-    /** Remove recomendações inválidas: PAUSE para campanha pausada, INCREASE_BUDGET para campanha pausada. */
-    private List<AiRecommendationDTO> filterByCampaignStatus(List<AiRecommendationDTO> recommendations, Company company) {
-        if (recommendations == null || recommendations.isEmpty()) return recommendations;
+    /**
+     * Remove recomendações inválidas: PAUSE para campanha pausada, INCREASE_BUDGET
+     * para campanha pausada.
+     */
+    private List<AiRecommendationDTO> filterByCampaignStatus(List<AiRecommendationDTO> recommendations,
+            Company company) {
+        if (recommendations == null || recommendations.isEmpty())
+            return recommendations;
         try {
             CampaignsListResponse resp = marketingService.getCampaignsForCompany(company);
-            if (resp == null || resp.getCampaigns() == null) return recommendations;
+            if (resp == null || resp.getCampaigns() == null)
+                return recommendations;
             Map<String, String> statusByCampaignId = new java.util.HashMap<>();
             for (CampaignListItemDTO c : resp.getCampaigns()) {
                 if (c.getId() != null && c.getStatus() != null) {
@@ -69,7 +78,8 @@ public class MarketingAiRecommendationsService {
             return recommendations.stream()
                     .filter(rec -> {
                         String campaignId = rec.getCampaignId();
-                        if (campaignId == null) return true;
+                        if (campaignId == null)
+                            return true;
                         String status = statusByCampaignId.getOrDefault(campaignId, "");
                         boolean isPaused = "PAUSED".equals(status);
                         if ("PAUSE".equals(rec.getActionType()) && isPaused) {
@@ -129,25 +139,33 @@ public class MarketingAiRecommendationsService {
         String campaignsJson = buildCampaignsContext(campaigns);
         String systemPrompt = """
                 Você é um especialista em Meta Ads e otimização de campanhas. Analise os dados das campanhas e retorne EXATAMENTE 3 recomendações acionáveis.
+
                 REGRAS OBRIGATÓRIAS:
                 - NUNCA recomende PAUSE para campanhas com Status:PAUSED (já estão pausadas).
                 - NUNCA recomende INCREASE_BUDGET para campanhas com Status:PAUSED (só aumente orçamento de campanhas ativas).
                 - Priorize campanhas com Status:ACTIVE para todas as ações.
-                Responda APENAS com um JSON válido, sem markdown, no formato:
+                - Responda no formato JSON.
+
+                FORMATO DO JSON (retorne em um bloco de código markdown):
                 [
                   {"type":"SCALE","title":"Título","description":"Descrição detalhada","actionLabel":"Texto do botão","actionType":"INCREASE_BUDGET","campaignId":"id","campaignName":"nome","payload":{"percent":20}},
                   {"type":"AUDIENCE","title":"...","description":"...","actionLabel":"...","actionType":"APPLY_AUDIENCE","campaignId":"...","campaignName":"...","payload":{}},
                   {"type":"PAUSE","title":"...","description":"...","actionLabel":"...","actionType":"PAUSE","campaignId":"...","campaignName":"...","payload":{}}
                 ]
-                Tipos: SCALE (escalar orçamento), AUDIENCE (refinar público), PAUSE (pausar campanha ineficiente).
-                actionType: INCREASE_BUDGET, APPLY_AUDIENCE, PAUSE.
-                Use dados reais das campanhas. Seja específico com números (CPL, CTR, cliques, alcance, impressões, conversões, gasto).
-                OBRIGATÓRIO: Em TODAS as recomendações, mencione SEMPRE o nome da campanha na descrição (ex: "A campanha 'CAMP. FEV01 - WPP'..."). Nunca use "desta campanha" ou "esta campanha" sem dizer o nome.
+
+                DETALHES:
+                - Tipos: SCALE (escalar orçamento), AUDIENCE (refinar público), PAUSE (pausar campanha ineficiente).
+                - actionType: INCREASE_BUDGET, APPLY_AUDIENCE, PAUSE.
+                - Use dados reais das campanhas fornecidos. Seja específico com números (CPL, CTR, cliques, alcance, impressões, conversões, gasto).
+                - OBRIGATÓRIO: Em TODAS as recomendações, mencione SEMPRE o nome da campanha na descrição (ex: "A campanha 'CAMP. FEV01 - WPP'..."). Nunca use "desta campanha" ou "esta campanha" sem dizer o nome.
                 """;
 
         try {
-            String aiResponse = openAiService.generateResponse(systemPrompt, campaignsJson, Collections.emptyList());
-            if (aiResponse == null || aiResponse.trim().isEmpty()) return Collections.emptyList();
+            String userRequest = "Aqui estão os dados das minhas campanhas do Meta Ads. Analise cada uma com cuidado e gere as 3 melhores recomendações possíveis acompanhando o formato JSON solicitado:\n\n"
+                    + campaignsJson;
+            String aiResponse = openAiService.generateResponse(systemPrompt, userRequest, Collections.emptyList());
+            if (aiResponse == null || aiResponse.trim().isEmpty())
+                return Collections.emptyList();
 
             String jsonStr = extractJson(aiResponse);
             JsonNode arr = objectMapper.readTree(jsonStr);
@@ -175,7 +193,8 @@ public class MarketingAiRecommendationsService {
     private String buildCampaignsContext(List<CampaignListItemDTO> campaigns) {
         StringBuilder sb = new StringBuilder();
         for (CampaignListItemDTO c : campaigns) {
-            sb.append(String.format("- %s (id:%s) | Status:%s | Objetivo:%s | Gasto:R$%.2f | Impressões:%d | Alcance:%d | Cliques:%d | CTR:%.2f%% | Conversões:%d | CPL:%s | Orçamento diário:%s\n",
+            sb.append(String.format(
+                    "- %s (id:%s) | Status:%s | Objetivo:%s | Gasto:R$%.2f | Impressões:%d | Alcance:%d | Cliques:%d | CTR:%.2f%% | Conversões:%d | CPL:%s | Orçamento diário:%s\n",
                     c.getName(), c.getId(), c.getStatus(), c.getObjective(),
                     c.getSpend() != null ? c.getSpend() : 0,
                     c.getImpressions() != null ? c.getImpressions() : 0,
@@ -192,7 +211,8 @@ public class MarketingAiRecommendationsService {
     private String extractJson(String text) {
         int start = text.indexOf('[');
         int end = text.lastIndexOf(']');
-        if (start >= 0 && end > start) return text.substring(start, end + 1);
+        if (start >= 0 && end > start)
+            return text.substring(start, end + 1);
         return "[]";
     }
 
@@ -204,10 +224,12 @@ public class MarketingAiRecommendationsService {
             int percent = 20;
             if (recommendation.getPayload() instanceof Map) {
                 Object p = ((Map<?, ?>) recommendation.getPayload()).get("percent");
-                if (p instanceof Number) percent = ((Number) p).intValue();
+                if (p instanceof Number)
+                    percent = ((Number) p).intValue();
             } else if (recommendation.getPayload() instanceof JsonNode) {
                 JsonNode pn = (JsonNode) recommendation.getPayload();
-                if (pn.has("percent")) percent = pn.get("percent").asInt();
+                if (pn.has("percent"))
+                    percent = pn.get("percent").asInt();
             }
             marketingService.increaseCampaignBudget(user, campaignId, percent);
         } else if ("PAUSE".equals(actionType) && campaignId != null) {
