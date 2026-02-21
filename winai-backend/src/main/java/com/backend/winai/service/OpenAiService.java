@@ -45,7 +45,7 @@ public class OpenAiService {
     @Value("${openai.reasoning-effort:low}")
     private String reasoningEffort;
 
-    @Value("${openai.max-tokens:1024}")
+    @Value("${openai.max-tokens:4096}")
     private Integer maxTokens;
 
     @Value("${openai.enabled:true}")
