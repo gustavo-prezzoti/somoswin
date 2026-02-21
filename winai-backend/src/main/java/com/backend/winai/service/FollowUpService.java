@@ -32,8 +32,12 @@ public class FollowUpService {
 
     private static final ZoneId BRAZIL_ZONE = ZoneId.of("America/Sao_Paulo");
 
-    /** Resultado da reserva de follow-up (transação curta que libera lock antes do envio). */
-    private record PrepareFollowUpResult(UUID statusId, UUID conversationId, UUID configId, int stepIndex) {}
+    /**
+     * Resultado da reserva de follow-up (transação curta que libera lock antes do
+     * envio).
+     */
+    private record PrepareFollowUpResult(UUID statusId, UUID conversationId, UUID configId, int stepIndex) {
+    }
 
     private final FollowUpConfigRepository configRepository;
     private final FollowUpStatusRepository statusRepository;
@@ -152,6 +156,19 @@ public class FollowUpService {
                         .followUpCount(0)
                         .build());
 
+        // Verificar se a última mensagem veio do FOLLOW-UP ANTES de sobrescrever
+        // (evita loop infinito: follow-up envia → updateLastMessage("AI") → reseta
+        // count → repete)
+        String previousFrom = status.getLastMessageFrom();
+        if ("FOLLOWUP".equals(previousFrom) && "AI".equals(from)) {
+            log.debug("Ignorando updateLastMessage(AI) - último remetente foi FOLLOWUP para conversa {}. " +
+                    "O follow-up já agendou o próximo step.", conversationId);
+            // Apenas salva o status sem alterar agendamento
+            statusRepository.save(status);
+            return;
+        }
+
+        // Agora sim, atualizar os campos
         status.setLastMessageAt(now);
         status.setLastMessageFrom(from);
         status.setEligible(true);
@@ -164,8 +181,7 @@ public class FollowUpService {
             status.setFollowUpCount(0);
         } else if ("AI".equals(from) && config.getTriggerOnAiResponse()) {
             shouldSchedule = true;
-            // IA respondeu, também reseta o contador para reativar o ciclo se estava no
-            // limite
+            // IA respondeu (resposta normal, não follow-up), reseta o contador
             status.setFollowUpCount(0);
         }
 
@@ -252,7 +268,8 @@ public class FollowUpService {
     /**
      * Processa follow-ups pendentes de forma assíncrona.
      * Chamado pelo FollowUpScheduler.
-     * Usa transação read-write pois processFollowUpByIdWithLock usa SELECT FOR UPDATE.
+     * Usa transação read-write pois processFollowUpByIdWithLock usa SELECT FOR
+     * UPDATE.
      */
     @Async("followUpTaskExecutor")
     @Transactional(readOnly = false)
@@ -319,20 +336,25 @@ public class FollowUpService {
 
     /**
      * Processa follow-up com trava para evitar duplicidade.
-     * NOT_SUPPORTED: reserva em transação curta (commit libera lock), depois executa envio sem lock.
-     * Evita statement timeout em updateFollowUpStatusAfterSend (lock era mantido durante IA+Uazap).
+     * NOT_SUPPORTED: reserva em transação curta (commit libera lock), depois
+     * executa envio sem lock.
+     * Evita statement timeout em updateFollowUpStatusAfterSend (lock era mantido
+     * durante IA+Uazap).
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void processFollowUpByIdWithLock(UUID statusId) {
         PrepareFollowUpResult result = self.reserveFollowUpForProcessing(statusId);
         if (result != null) {
-            self.executeLongFollowUpWork(result.statusId(), result.conversationId(), result.configId(), result.stepIndex());
+            self.executeLongFollowUpWork(result.statusId(), result.conversationId(), result.configId(),
+                    result.stepIndex());
         }
     }
 
     /**
-     * Reserva follow-up em transação curta. SELECT FOR UPDATE, valida, salva e COMMITA.
-     * Ao retornar, o lock é liberado antes do envio (evita timeout em updateFollowUpStatusAfterSend).
+     * Reserva follow-up em transação curta. SELECT FOR UPDATE, valida, salva e
+     * COMMITA.
+     * Ao retornar, o lock é liberado antes do envio (evita timeout em
+     * updateFollowUpStatusAfterSend).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
     public PrepareFollowUpResult reserveFollowUpForProcessing(UUID statusId) {
@@ -397,10 +419,12 @@ public class FollowUpService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void executeLongFollowUpWork(UUID statusId, UUID conversationId, UUID configId, int stepIndex) {
         WhatsAppConversation conversation = conversationRepository.findByIdWithCompany(conversationId).orElse(null);
-        if (conversation == null) return;
+        if (conversation == null)
+            return;
 
         FollowUpConfig config = configRepository.findByCompanyId(conversation.getCompany().getId()).orElse(null);
-        if (config == null || stepIndex >= config.getSteps().size()) return;
+        if (config == null || stepIndex >= config.getSteps().size())
+            return;
 
         FollowUpStep currentStep = config.getSteps().get(stepIndex);
         String followUpMessage = generateFollowUpMessage(currentStep, conversation);
@@ -417,15 +441,21 @@ public class FollowUpService {
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
     public void updateFollowUpStatusAfterSend(UUID statusId, UUID configId, boolean sent, int stepIndex) {
         FollowUpStatus status = statusRepository.findById(statusId).orElse(null);
-        if (status == null) return;
+        if (status == null)
+            return;
 
-        FollowUpConfig config = configRepository.findByCompanyId(status.getConversation().getCompany().getId()).orElse(null);
-        if (config == null) return;
+        FollowUpConfig config = configRepository.findByCompanyId(status.getConversation().getCompany().getId())
+                .orElse(null);
+        if (config == null)
+            return;
 
         if (sent) {
             ZonedDateTime now = ZonedDateTime.now();
             status.setFollowUpCount(status.getFollowUpCount() + 1);
             status.setLastFollowUpAt(now);
+            // Marca como FOLLOWUP para que updateLastMessage("AI") não resete o count
+            status.setLastMessageAt(now);
+            status.setLastMessageFrom("FOLLOWUP");
 
             int nextStepIndex = status.getFollowUpCount();
             if (nextStepIndex < config.getSteps().size()) {
@@ -438,23 +468,27 @@ public class FollowUpService {
                 status.setNextFollowUpAt(proposedTime);
             } else {
                 status.setNextFollowUpAt(null);
+                status.setEligible(false); // Régua completa, marcar como ineligível
             }
             statusRepository.save(status);
-            log.info("Follow-up Step #{} enviado para conversa {}", nextStepIndex, status.getConversation().getId());
+            log.info("Follow-up Step #{} enviado para conversa {}. Próximo em: {}",
+                    nextStepIndex, status.getConversation().getId(), status.getNextFollowUpAt());
         }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
     public void updateFollowUpStatusAfterSendFailure(UUID statusId, UUID configId, int stepIndex) {
         FollowUpStatus status = statusRepository.findById(statusId).orElse(null);
-        if (status == null) return;
+        if (status == null)
+            return;
 
         if (status.getLastFollowUpAt() == null
                 || status.getLastFollowUpAt().isBefore(ZonedDateTime.now().minusMinutes(5))) {
             log.info("Agendando UMA única retentativa para conversa {}", status.getConversation().getId());
             status.setNextFollowUpAt(ZonedDateTime.now().plusMinutes(30));
         } else {
-            log.warn("Falha persistente no follow-up da conversa {}. Parando tentativas.", status.getConversation().getId());
+            log.warn("Falha persistente no follow-up da conversa {}. Parando tentativas.",
+                    status.getConversation().getId());
             status.setNextFollowUpAt(null);
             status.setEligible(false);
         }
@@ -481,14 +515,20 @@ public class FollowUpService {
                 String historyText = history.stream().map(m -> m.getRole() + ": " + m.getContent())
                         .collect(Collectors.joining("\n"));
 
+                // Incluir aiPrompt do step como instrução personalizada (se configurado)
+                String userInstruction = (step.getAiPrompt() != null && !step.getAiPrompt().isBlank())
+                        ? step.getAiPrompt()
+                        : "Criar mensagem de retomada curta, empática e informal.";
+
                 String prompt = String.format(
                         "CONTEXTO DE REENGAJAMENTO (FOLLOW-UP - TENTATIVA %d):\n" +
                                 "O lead %s parou de responder.\n" +
                                 "Histórico recente abaixo.\n" +
-                                "Missão: Criar mensagem de retomada curta, empática e informal.\n" +
+                                "INSTRUÇÃO OBRIGATÓRIA: %s\n" +
+                                "Use a instrução acima como base da mensagem, adaptando ao contexto do histórico.\n" +
                                 "Histórico:\n%s\n" +
                                 "Retorne APENAS a mensagem.",
-                        step.getStepOrder(), leadName, historyText);
+                        step.getStepOrder(), leadName, userInstruction, historyText);
 
                 String aiResponse = aiAgentService.processMessageWithAI(conversation, prompt, leadName);
 
@@ -526,7 +566,7 @@ public class FollowUpService {
     }
 
     /**
-
+    
      */
     private ZonedDateTime calculateNextTimeWindow(FollowUpConfig config) {
         return calculateNextTimeWindowFrom(config, ZonedDateTime.now());
