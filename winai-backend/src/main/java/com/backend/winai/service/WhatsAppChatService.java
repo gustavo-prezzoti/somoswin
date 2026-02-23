@@ -40,6 +40,7 @@ public class WhatsAppChatService {
         private final SupabaseStorageService supabaseStorageService;
         private final UserWhatsAppConnectionRepository userWhatsAppConnectionRepository;
         private final FollowUpService followUpService;
+        private final ChatMemoryService chatMemoryService;
 
         /**
          * Busca todas as conversas de uma empresa
@@ -346,6 +347,17 @@ public class WhatsAppChatService {
                 conversation.setLastMessageTimestamp(System.currentTimeMillis()); // Atualiza timestamp para refletir a
                                                                                   // ação
                 conversationRepository.save(conversation);
+
+                if (conversation.getLead() != null) {
+                        Lead lead = conversation.getLead();
+                        lead.setAiSummary(null);
+                        lead.setLastSummaryAt(null);
+                        lead.setInteractionCount(0);
+                        leadRepository.save(lead);
+
+                        chatMemoryService.clearHistory(lead.getId().toString());
+                        chatMemoryService.clearHistory(conversationId.toString());
+                }
         }
 
         // ========== Métodos auxiliares de mapeamento ==========

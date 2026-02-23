@@ -31,6 +31,7 @@ public class LeadService {
     private final WhatsAppMessageRepository messageRepository;
     private final WhatsAppConversationRepository conversationRepository;
     private final MeetingRepository meetingRepository;
+    private final ChatMemoryService chatMemoryService;
 
     private static final Map<LeadStatus, String> STATUS_LABELS = Map.of(
             LeadStatus.NEW, "Novo",
@@ -134,6 +135,8 @@ public class LeadService {
     public void deleteLead(Company company, UUID id) {
         leadRepository.findByIdAndCompany(id, company)
                 .orElseThrow(() -> new RuntimeException("Lead não encontrado"));
+
+        chatMemoryService.clearHistory(id.toString());
 
         // Limpar referências em outras tabelas para evitar violação de chave estrangeira
         messageRepository.clearLeadReference(id);
