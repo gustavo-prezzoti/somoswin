@@ -2,6 +2,7 @@ package com.backend.winai.service;
 
 import com.backend.winai.dto.marketing.CampaignListItemDTO;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
+import com.backend.winai.dto.marketing.AdItemRequest;
 import com.backend.winai.dto.marketing.CreateCampaignRequest;
 import com.backend.winai.dto.marketing.InstagramMetricsResponse;
 import com.backend.winai.dto.marketing.TrafficMetricsResponse;
@@ -1345,12 +1346,11 @@ public class MarketingService {
 
         validateRequest(request);
 
-        // Doc Meta "Objective Mapping": WHATSAPP está em LINK_CLICKS→OUTCOME_TRAFFIC (não OUTCOME_ENGAGEMENT)
-        // OUTCOME_TRAFFIC + WHATSAPP: optimization_goal LINK_CLICKS, REACH ou IMPRESSIONS
-        String objective = "OUTCOME_TRAFFIC";
-        boolean useExistingPost = Boolean.TRUE.equals(request.getUseExistingPost());
-        String existingPostId = (request.getExistingPostId() != null && !request.getExistingPostId().isBlank()) ? request.getExistingPostId() : null;
+        // Lista de anúncios: múltiplos criativos (posts/criativos) no mesmo grupo
+        List<AdItemRequest> adItems = buildAdItemsList(request);
 
+        // Doc Meta "Objective Mapping": WHATSAPP está em LINK_CLICKS→OUTCOME_TRAFFIC
+        String objective = "OUTCOME_TRAFFIC";
         String effectiveLink = resolveEffectiveLink(user, request, pageId, accessToken);
 
         long dailyBudgetCents = Math.max(100, Math.round((request.getDailyBudget() != null ? request.getDailyBudget() : 50.0) * 100));
@@ -1366,11 +1366,10 @@ public class MarketingService {
 
         List<Integer> gendersList = parseGenders(request.getGenders());
 
-        // Doc Meta "Objective Mapping": OUTCOME_TRAFFIC + WHATSAPP = LINK_CLICKS, REACH, IMPRESSIONS
         List<String> optimizationGoals = List.of("LINK_CLICKS", "REACH", "IMPRESSIONS");
         String adSetName = (request.getAdSetName() != null && !request.getAdSetName().isBlank())
                 ? request.getAdSetName() : ("Ad Set - " + System.currentTimeMillis());
-        String adName = (request.getAdName() != null && !request.getAdName().isBlank())
+        String defaultAdName = (request.getAdName() != null && !request.getAdName().isBlank())
                 ? request.getAdName() : request.getName();
 
         String campaignId = null;
@@ -1403,30 +1402,36 @@ public class MarketingService {
                 throw lastError != null ? lastError : new RuntimeException("Nenhuma optimization_goal funcionou para Engajamento+WhatsApp");
             }
 
-            String creativeId;
-            if (useExistingPost && existingPostId != null && !existingPostId.isBlank()) {
-                String igUserId = conn.getInstagramBusinessId();
-                if (igUserId == null || igUserId.isBlank()) {
-                    throw new RuntimeException("Instagram não vinculado. Reconecte o Meta Ads e autorize o Instagram para promover posts existentes.");
-                }
-                creativeId = createMetaAdCreativeFromExistingPost(adAccountId, accessToken, pageId, igUserId, existingPostId, effectiveLink);
-            } else {
-                String adImageHash = null;
-                if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
-                    try {
-                        adImageHash = uploadAdImage(adAccountId, accessToken, request.getImageUrl());
-                    } catch (Exception e) {
-                        log.warn("[META] Image upload failed: {}", e.getMessage());
-                    }
-                }
-                creativeId = createMetaAdCreative(adAccountId, accessToken, pageId,
-                        request.getAdMessage(), effectiveLink, request.getHeadline(), request.getAdDescription(),
-                        adImageHash, request.getImageUrl(), "WHATSAPP_MESSAGE");
-            }
-            log.info("[META] Ad Creative created: {}", creativeId);
+            String igUserId = conn.getInstagramBusinessId();
+            for (int i = 0; i < adItems.size(); i++) {
+                AdItemRequest ad = adItems.get(i);
+                boolean useExistingPost = Boolean.TRUE.equals(ad.getUseExistingPost());
+                String existingPostId = (ad.getExistingPostId() != null && !ad.getExistingPostId().isBlank()) ? ad.getExistingPostId() : null;
 
-            createMetaAd(adAccountId, accessToken, adSetId, creativeId, adName);
-            log.info("[META] Ad created successfully for campaign: {}", request.getName());
+                String creativeId;
+                if (useExistingPost && existingPostId != null) {
+                    if (igUserId == null || igUserId.isBlank()) {
+                        throw new RuntimeException("Instagram não vinculado. Reconecte o Meta Ads e autorize o Instagram para promover posts existentes.");
+                    }
+                    creativeId = createMetaAdCreativeFromExistingPost(adAccountId, accessToken, pageId, igUserId, existingPostId, effectiveLink);
+                } else {
+                    String adImageHash = null;
+                    if (ad.getImageUrl() != null && !ad.getImageUrl().isBlank()) {
+                        try {
+                            adImageHash = uploadAdImage(adAccountId, accessToken, ad.getImageUrl());
+                        } catch (Exception e) {
+                            log.warn("[META] Image upload failed for ad {}: {}", i + 1, e.getMessage());
+                        }
+                    }
+                    creativeId = createMetaAdCreative(adAccountId, accessToken, pageId,
+                            ad.getAdMessage(), effectiveLink, ad.getHeadline(), ad.getAdDescription(),
+                            adImageHash, ad.getImageUrl(), "WHATSAPP_MESSAGE");
+                }
+                String nameForAd = (ad.getAdName() != null && !ad.getAdName().isBlank())
+                        ? ad.getAdName() : (adItems.size() > 1 ? (defaultAdName + " " + (i + 1)) : defaultAdName);
+                createMetaAd(adAccountId, accessToken, adSetId, creativeId, nameForAd);
+                log.info("[META] Ad {} created for campaign: {}", i + 1, request.getName());
+            }
 
         } catch (org.springframework.web.client.HttpClientErrorException e) {
             String body = e.getResponseBodyAsString();
@@ -1721,6 +1726,23 @@ public class MarketingService {
         }
     }
 
+    /** Monta a lista de anúncios: se request.ads preenchido usa ela; senão um único item com os campos do request. */
+    private List<AdItemRequest> buildAdItemsList(CreateCampaignRequest request) {
+        if (request.getAds() != null && !request.getAds().isEmpty()) {
+            return request.getAds();
+        }
+        AdItemRequest single = AdItemRequest.builder()
+                .useExistingPost(request.getUseExistingPost())
+                .existingPostId(request.getExistingPostId())
+                .adMessage(request.getAdMessage())
+                .headline(request.getHeadline())
+                .adDescription(request.getAdDescription())
+                .imageUrl(request.getImageUrl())
+                .adName(request.getAdName())
+                .build();
+        return List.of(single);
+    }
+
     private void validateRequest(CreateCampaignRequest r) {
         if (r.getName() == null || r.getName().isBlank()) {
             throw new RuntimeException("Nome da campanha é obrigatório");
@@ -1728,29 +1750,37 @@ public class MarketingService {
         if (r.getName().length() > 256) {
             throw new RuntimeException("Nome da campanha: máximo 256 caracteres (Meta)");
         }
-        boolean useExisting = Boolean.TRUE.equals(r.getUseExistingPost());
-        if (useExisting) {
-            if (r.getExistingPostId() == null || r.getExistingPostId().isBlank()) {
-                throw new RuntimeException("Selecione um post existente da sua página.");
-            }
-        } else {
-            if (r.getAdMessage() == null || r.getAdMessage().isBlank()) {
-                throw new RuntimeException("Texto do anúncio é obrigatório");
-            }
-            if (r.getAdMessage().length() > 2200) {
-                throw new RuntimeException("Texto do anúncio: máximo 2200 caracteres (Meta)");
-            }
-            if (r.getHeadline() != null && !r.getHeadline().isBlank() && r.getHeadline().length() > 40) {
-                throw new RuntimeException("Headline: máximo 40 caracteres (Meta)");
-            }
-            if (r.getAdDescription() != null && !r.getAdDescription().isBlank() && r.getAdDescription().length() > 30) {
-                throw new RuntimeException("Descrição: máximo 30 caracteres (Meta)");
-            }
-            if (r.getImageUrl() == null || r.getImageUrl().isBlank()) {
-                throw new RuntimeException("Imagem do anúncio é obrigatória");
+        List<AdItemRequest> adItems = buildAdItemsList(r);
+        if (adItems.isEmpty()) {
+            throw new RuntimeException("Adicione ao menos um anúncio.");
+        }
+        for (int i = 0; i < adItems.size(); i++) {
+            AdItemRequest ad = adItems.get(i);
+            boolean useExisting = Boolean.TRUE.equals(ad.getUseExistingPost());
+            int num = i + 1;
+            if (useExisting) {
+                if (ad.getExistingPostId() == null || ad.getExistingPostId().isBlank()) {
+                    throw new RuntimeException("Anúncio " + num + ": selecione um post existente.");
+                }
+            } else {
+                if (ad.getAdMessage() == null || ad.getAdMessage().isBlank()) {
+                    throw new RuntimeException("Anúncio " + num + ": texto do anúncio é obrigatório");
+                }
+                if (ad.getAdMessage().length() > 2200) {
+                    throw new RuntimeException("Anúncio " + num + ": texto máximo 2200 caracteres (Meta)");
+                }
+                if (ad.getHeadline() != null && !ad.getHeadline().isBlank() && ad.getHeadline().length() > 40) {
+                    throw new RuntimeException("Anúncio " + num + ": headline máximo 40 caracteres (Meta)");
+                }
+                if (ad.getAdDescription() != null && !ad.getAdDescription().isBlank() && ad.getAdDescription().length() > 30) {
+                    throw new RuntimeException("Anúncio " + num + ": descrição máximo 30 caracteres (Meta)");
+                }
+                if (ad.getImageUrl() == null || ad.getImageUrl().isBlank()) {
+                    throw new RuntimeException("Anúncio " + num + ": imagem é obrigatória");
+                }
             }
         }
-        if (!Boolean.TRUE.equals(r.getUseExistingPost()) && r.getWhatsappPhone() != null && !r.getWhatsappPhone().isBlank()) {
+        if (r.getWhatsappPhone() != null && !r.getWhatsappPhone().isBlank()) {
             String digits = r.getWhatsappPhone().replaceAll("\\D", "");
             if (digits.length() < 10 || digits.length() > 15) {
                 throw new RuntimeException("WhatsApp: informe 10 a 15 dígitos (código país + número)");

@@ -74,4 +74,10 @@ public class CreateCampaignRequest {
 
     /** Onde exibir o anúncio: "facebook,instagram" (padrão), "facebook", "instagram". Opcional. */
     private String publisherPlatforms;
+
+    /**
+     * Lista de anúncios: cada item = um criativo (post existente ou novo).
+     * Se null ou vazio, usa os campos useExistingPost, existingPostId, adMessage, etc. como um único anúncio (retrocompat).
+     */
+    private java.util.List<AdItemRequest> ads;
 }

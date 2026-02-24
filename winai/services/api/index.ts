@@ -14,7 +14,7 @@ export { whatsappService } from './whatsapp.service';
 export type { DashboardData, MetricCard, ChartDataPoint, GoalDTO, InsightDTO, CreateGoalRequest } from './dashboard.service';
 export type { LeadData, LeadRequest, LeadStatusType, PagedResponse } from './lead.service';
 export type { MeetingData, MeetingRequest, MeetingStatusType, CalendarData, CalendarStats, MeetingAttendee } from './meeting.service';
-export type { TrafficMetrics, MetricDetail, DailyPerformance, CreateCampaignRequest, PagePost, CampaignListItem, CampaignsListResponse, AiRecommendation, MetricsDateRange } from './marketing.service';
+export type { TrafficMetrics, MetricDetail, DailyPerformance, CreateCampaignRequest, AdItemRequest, PagePost, CampaignListItem, CampaignsListResponse, AiRecommendation, MetricsDateRange } from './marketing.service';
 export type { DriveFile, DriveConnectionStatus } from './google-drive.service';
 export type { WhatsAppConversation, WhatsAppMessage, SendMessageRequest, SDRAgentStatus } from './whatsapp.service';
 

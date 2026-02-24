@@ -42,6 +42,18 @@ export interface CreateCampaignRequest {
     adName?: string;
     /** Onde exibir o anúncio: "facebook,instagram" (padrão), "facebook", "instagram". Opcional. */
     publisherPlatforms?: string;
+    /** Vários anúncios (criativos) no mesmo grupo. Se enviado, cria um anúncio por item. */
+    ads?: AdItemRequest[];
+}
+
+export interface AdItemRequest {
+    useExistingPost?: boolean;
+    existingPostId?: string;
+    adMessage?: string;
+    headline?: string;
+    adDescription?: string;
+    imageUrl?: string;
+    adName?: string;
 }
 
 export interface PagePost {

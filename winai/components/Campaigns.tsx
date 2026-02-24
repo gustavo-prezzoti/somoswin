@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { marketingService, TrafficMetrics, CreateCampaignRequest, PagePost, CampaignListItem, AiRecommendation } from '../services';
+import { marketingService, TrafficMetrics, CreateCampaignRequest, AdItemRequest, PagePost, CampaignListItem, AiRecommendation } from '../services';
 import type { MetricsDateRange } from '../services/api/marketing.service';
 import { trafficChatService, TrafficChat, TrafficChatMessage } from '../services/api/trafficChat.service';
 import { useToast } from '../hooks/useToast';
@@ -106,6 +106,18 @@ const Campaigns: React.FC = () => {
     adName: '',
     publisherPlatforms: 'facebook,instagram'
   });
+
+  const defaultAdItem = (): AdItemRequest => ({
+    useExistingPost: false,
+    existingPostId: '',
+    adMessage: '',
+    headline: '',
+    adDescription: '',
+    imageUrl: '',
+    adName: ''
+  });
+  const [adItems, setAdItems] = useState<AdItemRequest[]>([defaultAdItem()]);
+
   const [pagePosts, setPagePosts] = useState<PagePost[]>([]);
   const [pagePostsLoading, setPagePostsLoading] = useState(false);
   const [pagePostsError, setPagePostsError] = useState<string | null>(null);
@@ -434,18 +446,22 @@ const Campaigns: React.FC = () => {
       if (!formData.dailyBudget || formData.dailyBudget < 1) errs.dailyBudget = 'Orçamento diário mínimo: R$ 1,00';
     }
     if (step === 2) {
-      if (formData.useExistingPost) {
-        if (!formData.existingPostId?.trim()) errs.existingPostId = 'Selecione um post do Instagram';
-      } else {
-        const msg = formData.adMessage?.trim() || '';
-        if (!msg) errs.adMessage = 'Texto do anúncio é obrigatório';
-        else if (msg.length > META_LIMITS.primaryText.max) errs.adMessage = `Máximo ${META_LIMITS.primaryText.max} caracteres`;
-        if (!formData.imageUrl?.trim()) errs.imageUrl = 'Imagem do anúncio é obrigatória';
-        const headline = formData.headline?.trim() || '';
-        if (headline && headline.length > META_LIMITS.headline.max) errs.headline = `Máximo ${META_LIMITS.headline.max} caracteres`;
-        const desc = formData.adDescription?.trim() || '';
-        if (desc && desc.length > META_LIMITS.linkDescription.max) errs.adDescription = `Máximo ${META_LIMITS.linkDescription.max} caracteres`;
-      }
+      adItems.forEach((ad, i) => {
+        const num = i + 1;
+        const prefix = adItems.length > 1 ? `Anúncio ${num}: ` : '';
+        if (ad.useExistingPost) {
+          if (!ad.existingPostId?.trim()) errs[`ad_${i}_existingPostId`] = `${prefix}Selecione um post do Instagram`;
+        } else {
+          const msg = ad.adMessage?.trim() || '';
+          if (!msg) errs[`ad_${i}_adMessage`] = `${prefix}Texto do anúncio é obrigatório`;
+          else if (msg.length > META_LIMITS.primaryText.max) errs[`ad_${i}_adMessage`] = `${prefix}Máximo ${META_LIMITS.primaryText.max} caracteres`;
+          if (!ad.imageUrl?.trim()) errs[`ad_${i}_imageUrl`] = `${prefix}Imagem é obrigatória`;
+          const headline = ad.headline?.trim() || '';
+          if (headline && headline.length > META_LIMITS.headline.max) errs[`ad_${i}_headline`] = `${prefix}Máximo ${META_LIMITS.headline.max} caracteres`;
+          const desc = ad.adDescription?.trim() || '';
+          if (desc && desc.length > META_LIMITS.linkDescription.max) errs[`ad_${i}_adDescription`] = `${prefix}Máximo ${META_LIMITS.linkDescription.max} caracteres`;
+        }
+      });
     }
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
@@ -484,7 +500,8 @@ const Campaigns: React.FC = () => {
     try {
       const payload = {
         ...formData,
-        interests: selectedInterests.length > 0 ? JSON.stringify(selectedInterests) : ''
+        interests: selectedInterests.length > 0 ? JSON.stringify(selectedInterests) : '',
+        ads: adItems
       };
       await marketingService.createCampaign(payload);
       setCurrentStep(3);
@@ -532,6 +549,7 @@ const Campaigns: React.FC = () => {
     setInterestsHasSearched(false);
     setPagePosts([]);
     setPagePostsError(null);
+    setAdItems([defaultAdItem()]);
   };
 
   const loadPagePosts = async () => {
@@ -1333,7 +1351,7 @@ const Campaigns: React.FC = () => {
                 </div>
               )}
 
-              {/* STEP 2: ANÚNCIO - novo ou post existente */}
+              {/* STEP 2: ANÚNCIOS - um ou mais (post existente ou criativo novo cada) */}
               {currentStep === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-right duration-300">
                   {validationAttempted && Object.keys(formErrors).length > 0 && (
@@ -1349,23 +1367,35 @@ const Campaigns: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Tipo de anúncio</label>
-                    <div className="flex gap-4">
-                      <label className={`flex-1 p-4 rounded-2xl border-2 cursor-pointer transition-all ${!formData.useExistingPost ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50 hover:border-emerald-300'}`}>
-                        <input type="radio" name="useExistingPost" checked={!formData.useExistingPost} onChange={() => setFormData(p => ({ ...p, useExistingPost: false, existingPostId: '' }))} className="sr-only" />
-                        <p className="font-bold text-sm">Criar novo anúncio</p>
-                        <p className="text-[10px] text-gray-500 mt-1">Texto, título, descrição e imagem</p>
-                      </label>
-                      <label className={`flex-1 p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.useExistingPost ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50 hover:border-emerald-300'}`}>
-                        <input type="radio" name="useExistingPost" checked={!!formData.useExistingPost} onChange={() => setFormData(p => ({ ...p, useExistingPost: true, adMessage: '', headline: '', adDescription: '', imageUrl: '' }))} className="sr-only" />
-                        <p className="font-bold text-sm">Usar post existente</p>
-                        <p className="text-[10px] text-gray-500 mt-1">Promover um post do seu Instagram</p>
-                      </label>
-                    </div>
-                  </div>
+                  <p className="text-[10px] text-gray-500 font-bold">Crie um ou mais anúncios para testar (ex.: 3 criativos para validar). Mesmo grupo de anúncio, orçamento e público.</p>
 
-                  {formData.useExistingPost ? (
+                  {adItems.map((ad, index) => (
+                    <div key={index} className="p-6 rounded-2xl border-2 border-gray-200 bg-gray-50/30 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Anúncio {index + 1}</span>
+                        {adItems.length > 1 && (
+                          <button type="button" onClick={() => setAdItems(prev => prev.filter((_, i) => i !== index))} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors" title="Remover anúncio">
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Tipo</label>
+                        <div className="flex gap-4">
+                          <label className={`flex-1 p-4 rounded-2xl border-2 cursor-pointer transition-all ${!ad.useExistingPost ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50 hover:border-emerald-300'}`}>
+                            <input type="radio" checked={!ad.useExistingPost} onChange={() => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, useExistingPost: false, existingPostId: '', adMessage: a.adMessage || '', headline: a.headline || '', adDescription: a.adDescription || '', imageUrl: a.imageUrl || '' } : a))} className="sr-only" />
+                            <p className="font-bold text-sm">Criar novo anúncio</p>
+                            <p className="text-[10px] text-gray-500 mt-1">Texto, título, descrição e imagem</p>
+                          </label>
+                          <label className={`flex-1 p-4 rounded-2xl border-2 cursor-pointer transition-all ${ad.useExistingPost ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50 hover:border-emerald-300'}`}>
+                            <input type="radio" checked={!!ad.useExistingPost} onChange={() => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, useExistingPost: true, adMessage: '', headline: '', adDescription: '', imageUrl: '' } : a))} className="sr-only" />
+                            <p className="font-bold text-sm">Usar post existente</p>
+                            <p className="text-[10px] text-gray-500 mt-1">Promover um post do Instagram</p>
+                          </label>
+                        </div>
+                      </div>
+
+                      {ad.useExistingPost ? (
                     <div className="space-y-4">
                       <label className="text-xs font-black text-gray-600 uppercase tracking-widest px-2 block">Selecione um post do seu Instagram <span className="text-rose-500">*</span></label>
                       <div className="p-6 rounded-2xl border-2 border-gray-200 bg-gray-50/50">
@@ -1398,8 +1428,8 @@ const Campaigns: React.FC = () => {
                             <button
                               key={post.id}
                               type="button"
-                              onClick={() => setFormData(p => ({ ...p, existingPostId: post.promotableId }))}
-                              className={`w-full text-left p-4 flex gap-4 transition-all ${formData.existingPostId === post.promotableId ? 'bg-emerald-50 border-l-4 border-emerald-500' : 'hover:bg-gray-50'}`}
+                              onClick={() => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, existingPostId: post.promotableId } : a))}
+                              className={`w-full text-left p-4 flex gap-4 transition-all ${ad.existingPostId === post.promotableId ? 'bg-emerald-50 border-l-4 border-emerald-500' : 'hover:bg-gray-50'}`}
                             >
                               {post.fullPicture && <img src={post.fullPicture} alt="" className="w-20 h-20 rounded-lg object-cover shrink-0" />}
                               <div className="flex-1 min-w-0">
@@ -1421,48 +1451,47 @@ const Campaigns: React.FC = () => {
                           ))}
                         </div>
                       </div>
-                      {formErrors.existingPostId && <p className="text-xs text-rose-600 px-2">{formErrors.existingPostId}</p>}
+                      {formErrors[`ad_${index}_existingPostId`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_existingPostId`]}</p>}
                     </div>
-                  ) : (
+                      ) : (
                     <>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Texto principal <span className="text-rose-500">*</span></label>
                         <textarea
-                          name="adMessage"
-                          value={formData.adMessage}
-                          onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, adMessage: '' })); }}
+                          value={ad.adMessage || ''}
+                          onChange={(e) => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, adMessage: e.target.value } : a))}
                           rows={4}
                           maxLength={META_LIMITS.primaryText.max}
                           placeholder="Texto principal (125 chars visíveis no mobile)"
-                          className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all resize-none ${formErrors.adMessage ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
+                          className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all resize-none ${formErrors[`ad_${index}_adMessage`] ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
                         />
-                        <p className="text-[9px] text-gray-400 px-2">{formData.adMessage?.length || 0}/{META_LIMITS.primaryText.max}</p>
-                        {formErrors.adMessage && <p className="text-xs text-rose-600 px-2">{formErrors.adMessage}</p>}
+                        <p className="text-[9px] text-gray-400 px-2">{ad.adMessage?.length || 0}/{META_LIMITS.primaryText.max}</p>
+                        {formErrors[`ad_${index}_adMessage`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_adMessage`]}</p>}
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Título (máx 40 caracteres)</label>
-                        <input name="headline" value={formData.headline || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.headline.max} placeholder="Confira agora!" className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none ${formErrors.headline ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`} />
-                        <p className="text-[9px] text-gray-400 px-2">{formData.headline?.length || 0}/{META_LIMITS.headline.max}</p>
-                        {formErrors.headline && <p className="text-xs text-rose-600 px-2">{formErrors.headline}</p>}
+                        <input value={ad.headline || ''} onChange={(e) => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, headline: e.target.value } : a))} type="text" maxLength={META_LIMITS.headline.max} placeholder="Confira agora!" className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none ${formErrors[`ad_${index}_headline`] ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`} />
+                        <p className="text-[9px] text-gray-400 px-2">{ad.headline?.length || 0}/{META_LIMITS.headline.max}</p>
+                        {formErrors[`ad_${index}_headline`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_headline`]}</p>}
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Descrição (máx 30 caracteres)</label>
-                        <input name="adDescription" value={formData.adDescription || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.linkDescription.max} placeholder="Oferta especial" className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none ${formErrors.adDescription ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`} />
-                        <p className="text-[9px] text-gray-400 px-2">{formData.adDescription?.length || 0}/{META_LIMITS.linkDescription.max}</p>
-                        {formErrors.adDescription && <p className="text-xs text-rose-600 px-2">{formErrors.adDescription}</p>}
+                        <input value={ad.adDescription || ''} onChange={(e) => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, adDescription: e.target.value } : a))} type="text" maxLength={META_LIMITS.linkDescription.max} placeholder="Oferta especial" className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none ${formErrors[`ad_${index}_adDescription`] ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`} />
+                        <p className="text-[9px] text-gray-400 px-2">{ad.adDescription?.length || 0}/{META_LIMITS.linkDescription.max}</p>
+                        {formErrors[`ad_${index}_adDescription`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_adDescription`]}</p>}
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Imagem do anúncio <span className="text-rose-500">*</span></label>
-                        <label className={`block p-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formErrors.imageUrl ? 'bg-rose-50 border-rose-300' : 'bg-gray-50 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50'}`}>
+                        <label className={`block p-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formErrors[`ad_${index}_imageUrl`] ? 'bg-rose-50 border-rose-300' : 'bg-gray-50 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50'}`}>
                           <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
                               setImageUploading(true);
-                              setFormErrors(prev => ({ ...prev, imageUrl: '' }));
+                              setFormErrors(prev => ({ ...prev, [`ad_${index}_imageUrl`]: '' }));
                               try {
                                 const { url } = await marketingService.uploadCampaignImage(file);
-                                setFormData(p => ({ ...p, imageUrl: url }));
+                                setAdItems(prev => prev.map((a, i) => i === index ? { ...a, imageUrl: url } : a));
                               } catch (err: any) {
                                 showToast(err?.message || 'Erro ao enviar imagem.', 'error');
                               } finally {
@@ -1477,20 +1506,26 @@ const Campaigns: React.FC = () => {
                             <span className="font-bold text-sm">{imageUploading ? 'Enviando...' : 'Enviar imagem'}</span>
                           </div>
                         </label>
-                        {formErrors.imageUrl && <p className="text-xs text-rose-600 px-2">{formErrors.imageUrl}</p>}
-                        {formData.imageUrl && (
+                        {formErrors[`ad_${index}_imageUrl`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_imageUrl`]}</p>}
+                        {ad.imageUrl && (
                           <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 max-w-[200px]">
-                            <img src={formData.imageUrl} alt="Preview" className="w-full h-24 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            <img src={ad.imageUrl} alt="Preview" className="w-full h-24 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                           </div>
                         )}
                       </div>
                     </>
-                  )}
+                      )}
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do anúncio (opcional)</label>
-                    <input name="adName" value={formData.adName || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.adName.max} placeholder="Ex: Anúncio Principal" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                  </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do anúncio (opcional)</label>
+                        <input value={ad.adName || ''} onChange={(e) => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, adName: e.target.value } : a))} type="text" maxLength={META_LIMITS.adName.max} placeholder="Ex: Anúncio Principal" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                      </div>
+                    </div>
+                  ))}
+
+                  <button type="button" onClick={() => setAdItems(prev => [...prev, defaultAdItem()])} className="w-full py-4 rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50/50 font-bold text-sm flex items-center justify-center gap-2 transition-colors">
+                    <Plus size={20} /> Adicionar outro anúncio
+                  </button>
                 </div>
               )}
 
