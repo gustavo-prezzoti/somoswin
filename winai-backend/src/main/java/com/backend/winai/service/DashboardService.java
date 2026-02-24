@@ -91,9 +91,33 @@ public class DashboardService {
 
                 List<AIInsight> insights = company != null
                                 ? insightRepository
-                                                .findTop5ByCompanyAndIsDismissedFalseOrderByPriorityDescCreatedAtDesc(
+                                                .findByCompanyAndIsDismissedFalseOrderByPriorityDescCreatedAtDesc(
                                                                 company)
                                 : List.of();
+                if (company != null && !insights.isEmpty()) {
+                        List<AIInsight> withButton = insights.stream()
+                                        .filter(i -> i.getActionUrl() != null && !i.getActionUrl().isBlank()
+                                                        && i.getActionLabel() != null && !i.getActionLabel().isBlank())
+                                        .collect(Collectors.toList());
+                        List<AIInsight> toDismiss = new ArrayList<>();
+                        for (int idx = 0; idx < insights.size(); idx++) {
+                                AIInsight i = insights.get(idx);
+                                boolean hasButton = i.getActionUrl() != null && !i.getActionUrl().isBlank()
+                                                && i.getActionLabel() != null && !i.getActionLabel().isBlank();
+                                if (!hasButton)
+                                        toDismiss.add(i);
+                                else {
+                                        int pos = withButton.indexOf(i);
+                                        if (pos >= 3)
+                                                toDismiss.add(i);
+                                }
+                        }
+                        if (!toDismiss.isEmpty()) {
+                                toDismiss.forEach(i -> i.setIsDismissed(true));
+                                insightRepository.saveAll(toDismiss);
+                        }
+                        insights = withButton.stream().limit(3).collect(Collectors.toList());
+                }
 
                 double avgScore = localMetrics.stream()
                                 .mapToDouble(m -> m.getPerformanceScore() != null ? m.getPerformanceScore() : 0)

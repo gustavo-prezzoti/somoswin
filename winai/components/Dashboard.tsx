@@ -396,13 +396,16 @@ const Dashboard: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {data.insights && data.insights.length > 0 ? (
-              data.insights.map((insight) => (
-                <InsightCard
-                  key={insight.id}
-                  insight={insight}
-                  onAction={(url) => navigate(url)}
-                />
-              ))
+              data.insights
+                .filter((i) => i.actionUrl && i.actionLabel)
+                .slice(0, 3)
+                .map((insight) => (
+                  <InsightCard
+                    key={insight.id}
+                    insight={insight}
+                    onAction={(url) => navigate(url)}
+                  />
+                ))
             ) : (
               <div className="col-span-full bg-white p-12 rounded-[48px] border border-gray-100 shadow-sm text-center">
                 <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
