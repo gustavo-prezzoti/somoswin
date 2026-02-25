@@ -49,6 +49,8 @@ public class AIAgentService {
     private final FollowUpService followUpService;
     private final GlobalNotificationService globalNotificationService;
     private final com.backend.winai.repository.LeadRepository leadRepository;
+    /** Proxy para self-invocation e garantir REQUIRES_NEW em persistAndNotifyByConversationId */
+    private final AIAgentService self;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -71,7 +73,8 @@ public class AIAgentService {
             org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate,
             @org.springframework.context.annotation.Lazy FollowUpService followUpService,
             GlobalNotificationService globalNotificationService,
-            com.backend.winai.repository.LeadRepository leadRepository) {
+            com.backend.winai.repository.LeadRepository leadRepository,
+            @org.springframework.context.annotation.Lazy AIAgentService self) {
         this.openAiService = openAiService;
         this.connectionRepository = connectionRepository;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
@@ -85,6 +88,7 @@ public class AIAgentService {
         this.followUpService = followUpService;
         this.globalNotificationService = globalNotificationService;
         this.leadRepository = leadRepository;
+        this.self = self;
     }
 
     @Transactional
@@ -561,7 +565,7 @@ public class AIAgentService {
             log.warn("persistAndNotify: company null for conversation {}", conversationId);
             return;
         }
-        persistAndNotifyByConversationId(conversationId, companyId, aiResponse);
+        self.persistAndNotifyByConversationId(conversationId, companyId, aiResponse);
     }
 
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = false)
