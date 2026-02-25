@@ -208,6 +208,16 @@ const WhatsApp: React.FC = () => {
   const handleWebSocketMessage = useCallback((data: any) => {
     console.log('WebSocket message received:', data.type);
 
+    // Garantir que só processamos eventos da nossa empresa (payload deve vir com companyId)
+    const myCompanyId = user?.company?.id != null ? String(user.company.id) : null;
+    if (myCompanyId && data.companyId != null && String(data.companyId) !== myCompanyId) {
+      console.warn('WebSocket evento ignorado: companyId do payload não corresponde ao usuário', {
+        payloadCompanyId: data.companyId,
+        myCompanyId
+      });
+      return;
+    }
+
     // ===============================================
     // 1. NOVA MENSAGEM RECEBIDA
     // ===============================================
@@ -220,17 +230,21 @@ const WhatsApp: React.FC = () => {
         contentPreview: msg.content?.substring(0, 50) || '[MEDIA]'
       });
 
+      // Normalizar IDs para comparação (backend pode enviar UUID como string)
+      const msgConvId = msg.conversationId != null ? String(msg.conversationId) : null;
+      const activeConvId = activeConversation?.id != null ? String(activeConversation.id) : null;
+
       // Adicionar mensagem à conversa ativa se for dela
-      if (activeConversation && msg.conversationId === activeConversation.id) {
+      if (activeConversation && msgConvId && activeConvId && msgConvId === activeConvId) {
         setMessages(prev => {
-          // Evitar duplicatas
-          if (prev.some(m => m.id === msg.id)) {
+          // Evitar duplicatas (comparar por id da mensagem)
+          if (prev.some(m => String(m.id) === String(msg.id))) {
             console.log('Message duplicate, skipping');
             return prev;
           }
           console.log('Adding new message to chat');
           setShouldScrollToBottom(true);
-          return [...prev, msg].sort((a, b) => a.messageTimestamp - b.messageTimestamp);
+          return [...prev, msg].sort((a, b) => (a.messageTimestamp || 0) - (b.messageTimestamp || 0));
         });
 
         // Atualizar preview da conversa ativa
@@ -249,7 +263,7 @@ const WhatsApp: React.FC = () => {
 
       // Atualizar lista de conversas - mover para o topo e atualizar preview
       setConversations(prev => {
-        const existingIndex = prev.findIndex(c => c.id === msg.conversationId);
+        const existingIndex = prev.findIndex(c => String(c.id) === msgConvId);
 
         if (existingIndex >= 0) {
           const updated = [...prev];
@@ -260,7 +274,7 @@ const WhatsApp: React.FC = () => {
           conversation.lastMessageTimestamp = msg.messageTimestamp;
 
           // Incrementar unread se não for a conversa ativa
-          if (!activeConversation || msg.conversationId !== activeConversation.id) {
+          if (!activeConversation || msgConvId !== activeConvId) {
             conversation.unreadCount = (conversation.unreadCount || 0) + 1;
           } else {
             conversation.unreadCount = 0; // Forçar a zero se for a ativa
@@ -374,7 +388,7 @@ const WhatsApp: React.FC = () => {
       });
     }
 
-  }, [activeConversation, loadConversations]);
+  }, [activeConversation, loadConversations, user]);
 
   // WebSocket para atualização em tempo real
   useWebSocket(

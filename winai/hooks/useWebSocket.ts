@@ -45,9 +45,12 @@ export const useWebSocket = (
             onConnect: () => {
                 setIsConnected(true);
                 console.log('WebSocket conectado');
+                const topic = `/topic/whatsapp/${companyId}`;
+                const topicConv = `/topic/whatsapp/conversations/${companyId}`;
+                console.log('WebSocket inscrito em', topic, '(companyId:', companyId, ')');
 
                 // Subscrever aos tópicos da empresa
-                client.subscribe(`/topic/whatsapp/${companyId}`, (message: IMessage) => {
+                client.subscribe(topic, (message: IMessage) => {
                     try {
                         const data = JSON.parse(message.body);
                         onMessageRef.current(data);
@@ -56,7 +59,7 @@ export const useWebSocket = (
                     }
                 });
 
-                client.subscribe(`/topic/whatsapp/conversations/${companyId}`, (message: IMessage) => {
+                client.subscribe(topicConv, (message: IMessage) => {
                     try {
                         const data = JSON.parse(message.body);
                         onMessageRef.current(data);
