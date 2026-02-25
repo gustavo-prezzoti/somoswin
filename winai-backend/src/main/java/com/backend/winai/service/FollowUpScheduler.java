@@ -24,10 +24,10 @@ public class FollowUpScheduler {
     private final FollowUpService followUpService;
 
     /**
-     * Executa no intervalo configurado (default: a cada 5 min).
+     * Executa no intervalo configurado (default: a cada 15 seg).
      * O processamento real é feito de forma assíncrona no FollowUpService.
      */
-    @Scheduled(cron = "${followup.worker.cron:0 */5 * * * *}")
+    @Scheduled(cron = "${followup.worker.cron:*/15 * * * * *}")
     public void triggerFollowUps() {
         log.info("[FOLLOW-UP WORKER] Iniciando verificação de follow-ups pendentes...");
 
