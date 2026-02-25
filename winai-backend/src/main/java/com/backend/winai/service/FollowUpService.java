@@ -519,6 +519,12 @@ public class FollowUpService {
                 String userInstruction = (step.getAiPrompt() != null && !step.getAiPrompt().isBlank())
                         ? step.getAiPrompt()
                         : "Criar mensagem de retomada curta, empática e informal.";
+                if (step.getAiPrompt() != null && !step.getAiPrompt().isBlank()) {
+                    log.info("Follow-up usando Prompt da IA do passo {}: \"{}\"", step.getStepOrder(),
+                            step.getAiPrompt().length() > 80 ? step.getAiPrompt().substring(0, 80) + "..." : step.getAiPrompt());
+                } else {
+                    log.debug("Follow-up passo {} sem prompt customizado, usando instrução padrão", step.getStepOrder());
+                }
 
                 String prompt = String.format(
                         "CONTEXTO DE REENGAJAMENTO (FOLLOW-UP - TENTATIVA %d):\n" +

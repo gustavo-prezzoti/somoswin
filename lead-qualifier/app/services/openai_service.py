@@ -11,6 +11,8 @@ from config import settings
 from app.models import Lead, Message, LeadStatus
 from app.services.whisper_service import WhisperService
 
+OPENAI_MAX_COMPLETION_TOKENS_LIMIT = 128000
+
 VALID_STATUSES = {"NEW", "CONTACTED", "QUALIFIED", "MEETING_SCHEDULED", "WON", "LOST", "KEEP_CURRENT"}
 
 logger = logging.getLogger(__name__)
@@ -100,13 +102,14 @@ Qual deve ser o status deste lead?"""
 
         try:
             await self._throttle()
+            max_tokens = min(settings.openai_max_tokens, OPENAI_MAX_COMPLETION_TOKENS_LIMIT)
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
                 ],
-                max_completion_tokens=settings.openai_max_tokens
+                max_completion_tokens=max_tokens
             )
             
             result = response.choices[0].message.content.strip().upper() if response.choices[0].message.content else ""
