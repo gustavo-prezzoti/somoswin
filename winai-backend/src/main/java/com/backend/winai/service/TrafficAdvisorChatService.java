@@ -111,14 +111,41 @@ public class TrafficAdvisorChatService {
         // Build system prompt for Traffic Advisor
         String systemPrompt = buildTrafficAdvisorSystemPrompt();
 
-        // Add user message
+        // --- ATTACHMENT HANDLING (same as Social Growth: image analysis + document text) ---
+        String finalUserMessage = request.getMessage() != null ? request.getMessage() : "";
+        String imageUrl = null;
+
+        if (request.getAttachmentUrl() != null && !request.getAttachmentUrl().isEmpty()) {
+            String type = request.getAttachmentType() != null ? request.getAttachmentType().toUpperCase() : "";
+
+            if ("IMAGE".equals(type)) {
+                imageUrl = processImageAttachment(request.getAttachmentUrl());
+            } else if ("DOCUMENT".equals(type)) {
+                String extractedText = extractDocumentContent(request.getAttachmentUrl());
+                if (extractedText != null) {
+                    finalUserMessage += "\n\n[CONTEÚDO DO ARQUIVO ANEXO]:\n" + extractedText;
+                }
+            }
+        }
+
+        if ((finalUserMessage == null || finalUserMessage.trim().isEmpty()) && request.getAttachmentUrl() != null) {
+            if ("IMAGE".equals(request.getAttachmentType())) {
+                finalUserMessage = "Analise esta imagem.";
+            } else {
+                finalUserMessage = "Analise este documento.";
+            }
+        }
+
+        // Add user message (with attachment for history/display)
         ChatMessageDTO userMsg = ChatMessageDTO.builder()
                 .role("user")
-                .content(request.getMessage())
+                .content(finalUserMessage)
+                .attachmentUrl(request.getAttachmentUrl())
+                .attachmentType(request.getAttachmentType())
                 .build();
         messages.add(userMsg);
 
-        // Map for OpenAI
+        // Map for OpenAI (text only; image passed separately when present)
         List<OpenAiService.ChatMessage> history = messages.stream()
                 .map(m -> new OpenAiService.ChatMessage(m.getRole(), m.getContent()))
                 .collect(Collectors.toList());
@@ -131,7 +158,7 @@ public class TrafficAdvisorChatService {
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 log.debug("🔄 Attempting to get AI response (attempt {}/{})", attempt, MAX_RETRIES);
-                aiResponse = openAiService.generateResponse(systemPrompt, request.getMessage(), history);
+                aiResponse = openAiService.generateResponse(systemPrompt, finalUserMessage, imageUrl, history);
 
                 if (aiResponse != null && !aiResponse.trim().isEmpty()) {
                     log.info("✅ AI response received successfully on attempt {}: {} chars", attempt,
@@ -165,15 +192,11 @@ public class TrafficAdvisorChatService {
         if (aiResponse == null || aiResponse.trim().isEmpty()) {
             log.error("🚨 Failed to get AI response after {} attempts", MAX_RETRIES);
 
-            String errorMessage = "Desculpe, tive um problema ao processar sua resposta.";
-            if (lastException != null) {
-                String excMessage = lastException.getMessage();
-                log.error("Last exception details: {}", excMessage, lastException);
-                errorMessage += " (" + lastException.getClass().getSimpleName() + ")";
-            }
-
             aiResponse = "Desculpe, tive um problema ao processar sua resposta. " +
                     "Verifique sua chave de API do OpenAI ou tente novamente.";
+            if (lastException != null) {
+                log.error("Last exception details: {}", lastException.getMessage(), lastException);
+            }
         }
 
         ChatMessageDTO aiMsg = ChatMessageDTO.builder()
@@ -188,18 +211,14 @@ public class TrafficAdvisorChatService {
             chat.setFullHistory(objectMapper.writeValueAsString(messages));
             // Atualização inteligente do título
             boolean isNewChat = chat.getTitle() == null || chat.getTitle().equals("Novo Chat");
-            // Se o título atual for muito curto (ex: "Oi", "Olá") e a nova mensagem for
-            // mais substancial, atualizamos
             boolean isCurrentTitleShort = chat.getTitle() != null && chat.getTitle().length() < 15;
-            boolean isNewMessageSubstantial = request.getMessage().length() > 15;
+            boolean isNewMessageSubstantial = finalUserMessage != null && finalUserMessage.length() > 15;
 
             if (isNewChat || (isCurrentTitleShort && isNewMessageSubstantial)) {
-                String newTitle = request.getMessage().trim();
-                // Pega apenas a primeira linha se houver quebras
+                String newTitle = (finalUserMessage != null ? finalUserMessage : "").trim();
                 if (newTitle.contains("\n")) {
                     newTitle = newTitle.split("\n")[0];
                 }
-
                 if (newTitle.length() > 40) {
                     newTitle = newTitle.substring(0, 40) + "...";
                 }
@@ -209,7 +228,7 @@ public class TrafficAdvisorChatService {
             log.debug("Chat saved successfully with {} messages", messages.size());
 
             // Redis Memory update
-            chatMemoryService.saveMessage(chat.getId().toString(), "user", request.getMessage());
+            chatMemoryService.saveMessage(chat.getId().toString(), "user", finalUserMessage);
             chatMemoryService.saveMessage(chat.getId().toString(), "assistant", aiResponse);
 
         } catch (Exception e) {
@@ -220,6 +239,84 @@ public class TrafficAdvisorChatService {
                 .message(aiMsg)
                 .chatId(chat.getId())
                 .build();
+    }
+
+    private String processImageAttachment(String fileUrl) {
+        try {
+            if (fileUrl.startsWith("data:")) {
+                return fileUrl;
+            }
+
+            byte[] fileContent = null;
+            String mimeType = "image/jpeg";
+
+            if (fileUrl.startsWith("http")) {
+                try (java.io.InputStream is = new java.net.URL(fileUrl).openStream()) {
+                    fileContent = is.readAllBytes();
+                    if (fileUrl.toLowerCase().endsWith(".png"))
+                        mimeType = "image/png";
+                    else if (fileUrl.toLowerCase().endsWith(".gif"))
+                        mimeType = "image/gif";
+                    else if (fileUrl.toLowerCase().endsWith(".webp"))
+                        mimeType = "image/webp";
+                }
+            } else {
+                java.nio.file.Path filePath = java.nio.file.Paths
+                        .get(fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl);
+                if (java.nio.file.Files.exists(filePath)) {
+                    fileContent = java.nio.file.Files.readAllBytes(filePath);
+                    if (fileUrl.toLowerCase().endsWith(".png"))
+                        mimeType = "image/png";
+                }
+            }
+
+            if (fileContent != null) {
+                String base64 = java.util.Base64.getEncoder().encodeToString(fileContent);
+                return "data:" + mimeType + ";base64," + base64;
+            }
+
+            return null;
+        } catch (Exception e) {
+            log.error("Error processing image attachment", e);
+            return fileUrl;
+        }
+    }
+
+    private String extractDocumentContent(String fileUrl) {
+        try {
+            java.io.InputStream inputStream = null;
+
+            if (fileUrl.startsWith("http")) {
+                inputStream = new java.net.URL(fileUrl).openStream();
+            } else {
+                java.nio.file.Path filePath = java.nio.file.Paths
+                        .get(fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl);
+                if (java.nio.file.Files.exists(filePath)) {
+                    inputStream = java.nio.file.Files.newInputStream(filePath);
+                }
+            }
+
+            if (inputStream == null) {
+                return "[Erro: Arquivo não encontrado ou inacessível]";
+            }
+
+            try (java.io.InputStream is = inputStream) {
+                if (fileUrl.toLowerCase().endsWith(".pdf")) {
+                    try (org.apache.pdfbox.pdmodel.PDDocument document = org.apache.pdfbox.pdmodel.PDDocument
+                            .load(is)) {
+                        org.apache.pdfbox.text.PDFTextStripper stripper = new org.apache.pdfbox.text.PDFTextStripper();
+                        return stripper.getText(document);
+                    }
+                } else {
+                    try (java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A")) {
+                        return s.hasNext() ? s.next() : "";
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error extracting document content", e);
+            return "[Erro ao ler arquivo: " + e.getMessage() + "]";
+        }
     }
 
     private String buildTrafficAdvisorSystemPrompt() {

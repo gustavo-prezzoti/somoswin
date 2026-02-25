@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle } from 'lucide-react';
+import { DollarSign, Eye, MousePointerClick, Play, Plus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, Settings, Sparkles, History, Send, Trash2, AlertTriangle, Paperclip, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { marketingService, TrafficMetrics, CreateCampaignRequest, AdItemRequest, PagePost, CampaignListItem, AiRecommendation } from '../services';
 import type { MetricsDateRange } from '../services/api/marketing.service';
@@ -63,6 +63,10 @@ const Campaigns: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+
+  // Attachment (Traffic Advisor chat)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Campaign list & AI recommendations (Gestão tab)
   const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
@@ -369,6 +373,7 @@ const Campaigns: React.FC = () => {
   const handleNewChat = () => {
     setActiveChatId(null);
     setMessages([]);
+    setSelectedFile(null);
   };
 
   const handleDeleteChat = (e: React.MouseEvent, id: string) => {
@@ -394,36 +399,59 @@ const Campaigns: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!prompt.trim() || isSending) return;
+    if ((!prompt.trim() && !selectedFile) || isSending) return;
+
+    const currentFile = selectedFile;
+    const currentPrompt = prompt;
+
+    const userMsg: TrafficChatMessage = {
+      role: 'user',
+      content: currentPrompt,
+      attachmentUrl: currentFile ? URL.createObjectURL(currentFile) : undefined,
+      attachmentType: currentFile ? (currentFile.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT') : undefined
+    };
+    setMessages(prev => [...prev, userMsg]);
+    setPrompt('');
+    setSelectedFile(null);
+    setIsSending(true);
 
     try {
-      setIsSending(true);
-      const tempPrompt = prompt;
-      setPrompt('');
+      let attachmentUrl: string | undefined;
+      let attachmentType: string | undefined;
 
-      // Add user message optimistically
-      const userMsg: TrafficChatMessage = { role: 'user', content: tempPrompt };
-      setMessages(prev => [...prev, userMsg]);
+      if (currentFile) {
+        const formData = new FormData();
+        formData.append('file', currentFile);
+        const uploadResult = await trafficChatService.uploadFile(formData);
+        attachmentUrl = uploadResult.url;
+        attachmentType = currentFile.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT';
+      }
 
-      // Call API
-      const response = await trafficChatService.sendMessage(tempPrompt, activeChatId || undefined);
+      const response = await trafficChatService.sendMessage(
+        currentPrompt,
+        activeChatId || undefined,
+        attachmentUrl,
+        attachmentType
+      );
 
-      // Update chat state
       setMessages(prev => [...prev, response.message]);
 
       if (!activeChatId) {
         setActiveChatId(response.chatId);
-        loadChats(); // Refresh list to show new chat title
+        loadChats();
       } else {
-        // Update list order for current chat
         loadChats();
       }
-
     } catch (error) {
       console.error('Failed to send message', error);
-      // Aqui você poderia adicionar uma mensagem de erro visual para o usuário
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
     }
   };
 
@@ -993,6 +1021,37 @@ const Campaigns: React.FC = () => {
                       ? 'bg-[#003d2b] text-white rounded-tr-none'
                       : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
                       }`}>
+
+                      {msg.attachmentUrl && (
+                        <div className={`mb-4 rounded-2xl overflow-hidden ${msg.role === 'user' ? 'bg-black/20' : 'bg-gray-50 border border-gray-100'}`}>
+                          {msg.attachmentType === 'IMAGE' ? (
+                            <img
+                              src={msg.attachmentUrl}
+                              alt="Anexo"
+                              className="w-full h-auto max-h-[300px] object-cover"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <a
+                              href={msg.attachmentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-3 p-4 hover:bg-black/5 transition-colors"
+                            >
+                              <div className={`p-2 rounded-lg ${msg.role === 'user' ? 'bg-white/20' : 'bg-emerald-100 text-emerald-600'}`}>
+                                <FileText size={20} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold truncate underline underline-offset-2">
+                                  Ver documento anexo
+                                </p>
+                                <p className="text-[9px] opacity-70 font-medium uppercase">Clique para abrir</p>
+                              </div>
+                            </a>
+                          )}
+                        </div>
+                      )}
+
                       <div className={`prose prose-sm max-w-none ${msg.role === 'user' ? 'prose-invert' : 'prose-emerald'}`}>
                         <ReactMarkdown
                           components={{
@@ -1039,18 +1098,56 @@ const Campaigns: React.FC = () => {
 
               <div className="p-8 bg-white border-t border-gray-100">
                 <div className="max-w-4xl mx-auto relative">
+                  {selectedFile && (
+                    <div className="absolute -top-20 left-0 bg-white p-3 rounded-2xl shadow-lg border border-gray-100 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
+                      <div className="p-2 bg-emerald-50 rounded-lg">
+                        {selectedFile.type.startsWith('image/') ? (
+                          <Eye size={16} className="text-emerald-600" />
+                        ) : (
+                          <FileText size={16} className="text-emerald-600" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-800 truncate max-w-[150px]">{selectedFile.name}</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase">{selectedFile.type.split('/')[1]}</p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedFile(null)}
+                        className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    accept=".jpg,.jpeg,.png,.pdf,.txt"
+                  />
                   <input
                     type="text"
-                    placeholder="Peça uma análise ou estratégia de tráfego..."
-                    className="w-full pl-8 pr-20 py-6 bg-gray-50 rounded-[32px] border-none focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none transition-all font-medium text-sm"
+                    placeholder="Peça uma análise ou anexe imagem/documento..."
+                    className="w-full pl-14 pr-20 py-6 bg-gray-50 rounded-[32px] border-none focus:bg-white focus:ring-1 focus:ring-emerald-500 outline-none transition-all font-medium text-sm"
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     disabled={isSending}
                   />
                   <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isSending}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                    title="Anexar arquivo (Imagem, PDF, TXT)"
+                  >
+                    <Paperclip size={20} />
+                  </button>
+                  <button
                     onClick={handleSendMessage}
-                    disabled={isSending || !prompt.trim()}
+                    disabled={isSending || (!prompt.trim() && !selectedFile)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-4 bg-emerald-600 text-white rounded-[24px] hover:bg-emerald-700 shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
