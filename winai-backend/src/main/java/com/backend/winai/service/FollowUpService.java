@@ -1,5 +1,6 @@
 package com.backend.winai.service;
 
+import com.backend.winai.config.FollowUpBackendNotifyConfig;
 import com.backend.winai.dto.request.FollowUpConfigRequest;
 import com.backend.winai.dto.response.FollowUpConfigResponse;
 import com.backend.winai.dto.response.FollowUpStatusResponse;
@@ -44,6 +45,7 @@ public class FollowUpService {
     private final WhatsAppConversationRepository conversationRepository;
     private final CompanyRepository companyRepository;
     private final AIAgentService aiAgentService;
+    private final Optional<FollowUpBackendNotifyConfig.BackendNotifyClient> backendNotifyClient;
     private FollowUpService self;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -430,7 +432,14 @@ public class FollowUpService {
         String followUpMessage = generateFollowUpMessage(currentStep, conversation);
 
         try {
-            boolean sent = aiAgentService.sendSplitResponse(conversation, followUpMessage);
+            UUID companyId = conversation.getCompany().getId();
+            boolean sent;
+            if (backendNotifyClient.isPresent()) {
+                sent = aiAgentService.sendSplitResponseWithRemotePersist(conversation, followUpMessage,
+                        (convId, content) -> backendNotifyClient.get().persistAndNotify(convId, companyId, content));
+            } else {
+                sent = aiAgentService.sendSplitResponse(conversation, followUpMessage);
+            }
             self.updateFollowUpStatusAfterSend(statusId, configId, sent, stepIndex);
         } catch (Exception e) {
             log.error("Erro ao enviar follow-up para conversa {}: {}", conversationId, e.getMessage(), e);

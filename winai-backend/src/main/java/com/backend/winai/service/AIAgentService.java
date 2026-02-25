@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import jakarta.persistence.EntityManager;
@@ -484,6 +485,45 @@ public class AIAgentService {
             } else {
                 log.error("Falha ao enviar chunk {}/{} do follow-up. Interrompendo sequência para evitar confusão.",
                         i + 1, chunks.size());
+                allSent = false;
+                break;
+            }
+        }
+        return allSent;
+    }
+
+    /**
+     * Envia resposta em chunks para o Uazap e usa o callback para persistir/notificar (ex.: no backend).
+     * Usado pelo follow-up worker para persistir no backend em vez de localmente.
+     */
+    public boolean sendSplitResponseWithRemotePersist(WhatsAppConversation conversation, String fullResponse,
+            BiConsumer<UUID, String> persistNotifier) {
+        if (fullResponse == null || fullResponse.isBlank() || persistNotifier == null) {
+            return false;
+        }
+        List<String> chunks = splitMessage(fullResponse);
+        log.info("Processando envio de resposta longa ({} chunks) para conversa {} [remote persist]", chunks.size(),
+                conversation.getId());
+
+        boolean allSent = true;
+        for (int i = 0; i < chunks.size(); i++) {
+            String chunk = chunks.get(i);
+            log.debug("Enviando chunk {}/{} ({} chars)", i + 1, chunks.size(), chunk.length());
+
+            boolean sent = sendAIResponse(conversation, chunk);
+            if (sent) {
+                persistNotifier.accept(conversation.getId(), chunk);
+                if (i < chunks.size() - 1) {
+                    try {
+                        long delay = Math.min(5000, 1500 + (chunk.length() * 10L));
+                        Thread.sleep(delay);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            } else {
+                log.error("Falha ao enviar chunk {}/{} do follow-up. Interrompendo sequência.", i + 1, chunks.size());
                 allSent = false;
                 break;
             }
