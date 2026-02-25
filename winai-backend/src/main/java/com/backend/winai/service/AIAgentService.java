@@ -551,39 +551,50 @@ public class AIAgentService {
     }
 
     public void persistAndNotify(WhatsAppConversation conversation, String aiResponse) {
+        if (conversation == null || conversation.getId() == null) {
+            log.warn("persistAndNotify: conversation or id null");
+            return;
+        }
+        UUID conversationId = conversation.getId();
+        UUID companyId = conversation.getCompany() != null ? conversation.getCompany().getId() : null;
+        if (companyId == null) {
+            log.warn("persistAndNotify: company null for conversation {}", conversationId);
+            return;
+        }
+        persistAndNotifyByConversationId(conversationId, companyId, aiResponse);
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = false)
+    public void persistAndNotifyByConversationId(UUID conversationId, UUID companyId, String aiResponse) {
         try {
             if (aiResponse == null || aiResponse.trim().isEmpty()) {
-                log.warn("Received empty AI response for conversation: {}", conversation.getId());
+                log.warn("Received empty AI response for conversation: {}", conversationId);
                 return;
             }
-
-            // Salvar a resposta da IA como mensagem
-            WhatsAppMessage aiMessage = WhatsAppMessage.builder().conversation(conversation)
-                    .lead(conversation.getLead()).messageId(UUID.randomUUID().toString()).content(aiResponse)
-                    .fromMe(true).messageType("text").messageTimestamp(System.currentTimeMillis()).status("sent")
-                    .isGroup(false).build();
-
-            log.debug("Before saving - Message content length: {}, content preview: {}", aiResponse.length(),
-                    aiResponse.substring(0, Math.min(100, aiResponse.length())));
-
-            aiMessage = messageRepository.save(aiMessage);
-
-            log.info("AI message persisted successfully with ID: {}, content: {} chars", aiMessage.getId(),
-                    aiMessage.getContent() != null ? aiMessage.getContent().length() : 0);
-
-            // Atualizar conversa
-            conversation
-                    .setLastMessageText(aiResponse.length() > 250 ? aiResponse.substring(0, 247) + "..." : aiResponse);
+            WhatsAppConversation conversation = conversationRepository.findByIdWithCompany(conversationId)
+                    .orElse(null);
+            if (conversation == null) {
+                log.warn("Conversation not found for persistAndNotify: {}", conversationId);
+                return;
+            }
+            WhatsAppMessage aiMessage = WhatsAppMessage.builder()
+                    .conversation(conversation)
+                    .lead(conversation.getLead())
+                    .messageId(UUID.randomUUID().toString())
+                    .content(aiResponse)
+                    .fromMe(true)
+                    .messageType("text")
+                    .messageTimestamp(System.currentTimeMillis())
+                    .status("sent")
+                    .isGroup(false)
+                    .build();
+            aiMessage = messageRepository.saveAndFlush(aiMessage);
+            conversation.setLastMessageText(aiResponse.length() > 250 ? aiResponse.substring(0, 247) + "..." : aiResponse);
             conversation.setLastMessageTimestamp(aiMessage.getMessageTimestamp());
-            conversationRepository.save(conversation);
-
-            log.debug("Conversation updated with last message timestamp: {}", conversation.getLastMessageTimestamp());
-
-            // Enviar atualização WebSocket
-            sendWebSocketUpdate(conversation.getCompany().getId(), aiMessage, conversation);
-
+            conversationRepository.saveAndFlush(conversation);
+            sendWebSocketUpdate(companyId, aiMessage, conversation);
         } catch (Exception e) {
-            log.error("Erro ao persistir/notificar resposta da IA: {}", e.getMessage(), e);
+            log.error("Erro ao persistir/notificar resposta da IA para conversa {}: {}", conversationId, e.getMessage(), e);
         }
     }
 
