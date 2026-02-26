@@ -1,6 +1,7 @@
 package com.backend.winai.service;
 
 import com.backend.winai.dto.request.GlobalNotificationConfigRequest;
+import com.backend.winai.dto.response.GlobalNotificationConfigResponse;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.GlobalNotificationConfig;
 import com.backend.winai.repository.CompanyRepository;
@@ -22,12 +23,13 @@ public class GlobalNotificationService {
     private final CompanyRepository companyRepository;
 
     @Transactional(readOnly = true)
-    public GlobalNotificationConfig getConfig(UUID companyId) {
-        return repository.findByCompanyId(companyId).orElse(null);
+    public GlobalNotificationConfigResponse getConfig(UUID companyId) {
+        GlobalNotificationConfig config = repository.findByCompanyId(companyId).orElse(null);
+        return config == null ? null : toResponse(config, companyId);
     }
 
     @Transactional
-    public GlobalNotificationConfig saveConfig(GlobalNotificationConfigRequest request) {
+    public GlobalNotificationConfigResponse saveConfig(GlobalNotificationConfigRequest request) {
         Company company = companyRepository.findById(request.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
@@ -39,6 +41,20 @@ public class GlobalNotificationService {
         config.setHumanHandoffMessage(request.getHumanHandoffMessage());
         config.setHumanHandoffClientMessage(request.getHumanHandoffClientMessage());
 
-        return repository.save(config);
+        config = repository.save(config);
+        return toResponse(config, config.getCompany().getId());
+    }
+
+    private static GlobalNotificationConfigResponse toResponse(GlobalNotificationConfig config, UUID companyId) {
+        return GlobalNotificationConfigResponse.builder()
+                .id(config.getId())
+                .companyId(companyId)
+                .humanHandoffNotificationEnabled(config.getHumanHandoffNotificationEnabled())
+                .humanHandoffPhone(config.getHumanHandoffPhone())
+                .humanHandoffMessage(config.getHumanHandoffMessage())
+                .humanHandoffClientMessage(config.getHumanHandoffClientMessage())
+                .createdAt(config.getCreatedAt())
+                .updatedAt(config.getUpdatedAt())
+                .build();
     }
 }

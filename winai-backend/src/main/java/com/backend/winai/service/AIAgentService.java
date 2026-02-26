@@ -1000,10 +1000,19 @@ public class AIAgentService {
 
     public boolean isAIEnabledForConversation(WhatsAppConversation conversation) {
         if (!openAiService.isChatEnabled()) {
+            log.info("IA desabilitada para conversa {}: OpenAI não está habilitada (verifique a chave de API).", conversation.getId());
             return false;
         }
 
         KnowledgeBase kb = findKnowledgeBaseForConversation(conversation);
-        return kb != null && Boolean.TRUE.equals(kb.getIsActive());
+        if (kb == null) {
+            log.info("IA desabilitada para conversa {}: nenhuma Base de Conhecimento ativa vinculada à conexão WhatsApp. Vincule uma KB à conexão no painel.", conversation.getId());
+            return false;
+        }
+        if (!Boolean.TRUE.equals(kb.getIsActive())) {
+            log.info("IA desabilitada para conversa {}: Base de Conhecimento '{}' está inativa.", conversation.getId(), kb.getName());
+            return false;
+        }
+        return true;
     }
 }

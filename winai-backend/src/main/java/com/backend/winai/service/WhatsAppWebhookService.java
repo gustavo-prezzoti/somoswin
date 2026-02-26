@@ -196,7 +196,6 @@ public class WhatsAppWebhookService {
                 log.info("IA ignorada: fromMe={} (esperado false), type={} (esperado text, audio transcrito ou imagem)",
                         message.getFromMe(), messageType);
             }
-
         } catch (Exception e) {
             log.error("Erro ao processar webhook", e);
             throw e;
@@ -210,7 +209,8 @@ public class WhatsAppWebhookService {
             String imageUrl) {
         try {
             if (!aiAgentService.isAIEnabledForConversation(conversation)) {
-                log.debug("AI não está habilitada para esta conversa: {}", conversation.getId());
+                log.info("IA não vai responder ao lead: conversa {} (empresa {}). Verifique: 1) Chave OpenAI configurada, 2) Base de Conhecimento ativa vinculada à conexão WhatsApp.",
+                        conversation.getId(), company.getId());
                 return;
             }
 
