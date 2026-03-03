@@ -28,13 +28,12 @@ const Login: React.FC = () => {
          const response = await authService.login({ email, password, rememberMe });
          const next = response.nextAction || 'SUCCESS';
          if (next === 'MUST_CHANGE_PASSWORD') {
-            navigate('/change-password', { replace: true });
-         } else {
-            navigate('/dashboard');
+            window.location.href = '/change-password';
+            return;
          }
+         navigate('/dashboard');
       } catch (err: any) {
          setError(err.message || 'E-mail ou senha inválidos');
-      } finally {
          setIsLoading(false);
       }
    };
