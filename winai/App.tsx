@@ -60,6 +60,7 @@ import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
 import { termsService } from './services/api/terms.service';
+import { authService } from './services/api/auth.service';
 import { useWebSocket } from './hooks/useWebSocket';
 
 import logoLight from './logo_light.png';
@@ -337,29 +338,30 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const user = localStorage.getItem('win_user');
+  const token = localStorage.getItem('win_access_token');
   const location = useLocation();
 
-  // Check for forced password change IMMEDIATELLY (Before terms check)
-  try {
-    const userData = user ? JSON.parse(user) : null;
-    if (userData?.mustChangePassword) {
-      return <Navigate to="/change-password" replace />;
-    }
-  } catch (e) {
-    // ignore
-  }
-
+  const [sessionNextAction, setSessionNextAction] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
   const [needsContractInfo, setNeedsContractInfo] = useState(false);
   const [subscriptionExpired, setSubscriptionExpired] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState<{ planName?: string; endDate?: string }>({});
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
+  // 1) Session status vem do backend (fonte única de verdade) — não usar localStorage para mustChangePassword
   useEffect(() => {
-    if (user) {
+    if (!user || !token) return;
+    authService.getSessionStatus()
+      .then((res) => setSessionNextAction(res.nextAction))
+      .catch(() => setSessionNextAction('SUCCESS'));
+  }, [user, token]);
+
+  // 2) Só checar termos após saber que não precisa trocar senha
+  useEffect(() => {
+    if (user && sessionNextAction != null && sessionNextAction !== 'MUST_CHANGE_PASSWORD') {
       checkTermsStatus();
     }
-  }, [user, location.pathname]);
+  }, [user, sessionNextAction, location.pathname]);
 
   const checkTermsStatus = async () => {
     try {
@@ -381,9 +383,13 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     }
   };
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user || !token) return <Navigate to="/login" replace />;
 
-  if (!initialCheckDone) {
+  if (sessionNextAction === 'MUST_CHANGE_PASSWORD') {
+    return <Navigate to="/change-password" replace />;
+  }
+
+  if (sessionNextAction === null || !initialCheckDone) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-100">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent"></div>
@@ -418,7 +424,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
           <button
             onClick={() => {
               localStorage.removeItem('win_user');
-              localStorage.removeItem('win_token');
+              localStorage.removeItem('win_access_token');
               localStorage.removeItem('win_refresh_token');
               window.location.href = '/login';
             }}
@@ -524,7 +530,7 @@ const App: React.FC = () => {
         <Route path="/oauth-complete" element={<OAuthComplete />} />
 
         <Route path="/change-password" element={
-          localStorage.getItem('win_user') ? <ChangePassword /> : <Navigate to="/login" />
+          localStorage.getItem('win_access_token') ? <ChangePassword /> : <Navigate to="/login" />
         } />
 
         {/* Rotas Admin */}

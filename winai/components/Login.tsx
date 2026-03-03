@@ -26,7 +26,8 @@ const Login: React.FC = () => {
 
       try {
          const response = await authService.login({ email, password, rememberMe });
-         if (response.user?.mustChangePassword) {
+         const next = response.nextAction || 'SUCCESS';
+         if (next === 'MUST_CHANGE_PASSWORD') {
             navigate('/change-password', { replace: true });
          } else {
             navigate('/dashboard');

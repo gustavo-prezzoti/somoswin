@@ -3,6 +3,7 @@ package com.backend.winai.service;
 import com.backend.winai.dto.request.*;
 import com.backend.winai.dto.response.AuthResponse;
 import com.backend.winai.dto.response.MessageResponse;
+import com.backend.winai.dto.response.SessionStatusResponse;
 import com.backend.winai.entity.*;
 import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.RefreshTokenRepository;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZonedDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -30,6 +32,13 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final TermsOfServiceService termsOfServiceService;
+
+    public static final String NEXT_ACTION_MUST_CHANGE_PASSWORD = "MUST_CHANGE_PASSWORD";
+    public static final String NEXT_ACTION_NEEDS_CONTRACT_INFO = "NEEDS_CONTRACT_INFO";
+    public static final String NEXT_ACTION_SUBSCRIPTION_EXPIRED = "SUBSCRIPTION_EXPIRED";
+    public static final String NEXT_ACTION_MUST_ACCEPT_TERMS = "MUST_ACCEPT_TERMS";
+    public static final String NEXT_ACTION_SUCCESS = "SUCCESS";
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -63,7 +72,9 @@ public class AuthService {
 
         user = userRepository.save(user);
 
-        return generateAuthResponse(user);
+        AuthResponse res = generateAuthResponse(user);
+        res.setNextAction(computeNextAction(user));
+        return res;
     }
 
     @Transactional
@@ -84,7 +95,9 @@ public class AuthService {
         user.setLastLogin(ZonedDateTime.now());
         userRepository.save(user);
 
-        return generateAuthResponse(user);
+        AuthResponse res = generateAuthResponse(user);
+        res.setNextAction(computeNextAction(user));
+        return res;
     }
 
     @Transactional
@@ -102,7 +115,9 @@ public class AuthService {
         // Deleta o token antigo
         refreshTokenRepository.delete(refreshToken);
 
-        return generateAuthResponse(user);
+        AuthResponse res = generateAuthResponse(user);
+        res.setNextAction(computeNextAction(user));
+        return res;
     }
 
     @Transactional
@@ -164,6 +179,17 @@ public class AuthService {
                 .ifPresent(refreshTokenRepository::delete);
     }
 
+    /**
+     * Retorna a próxima ação obrigatória do usuário (para validar sessão no frontend).
+     */
+    public SessionStatusResponse getSessionStatus(String userEmail) {
+        User user = userRepository.findByEmailWithCompany(userEmail)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        return SessionStatusResponse.builder()
+                .nextAction(computeNextAction(user))
+                .build();
+    }
+
     private AuthResponse generateAuthResponse(User user) {
         String accessToken = jwtService.generateToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);
@@ -201,6 +227,27 @@ public class AuthService {
                         .mustChangePassword(user.getMustChangePassword())
                         .build())
                 .build();
+    }
+
+    /**
+     * Define a próxima ação obrigatória do usuário (fonte única de verdade no backend).
+     * Ordem de prioridade: trocar senha > dados contrato > assinatura expirada > aceitar termos > sucesso.
+     */
+    private String computeNextAction(User user) {
+        if (Boolean.TRUE.equals(user.getMustChangePassword())) {
+            return NEXT_ACTION_MUST_CHANGE_PASSWORD;
+        }
+        Map<String, Object> status = termsOfServiceService.getAcceptanceStatus(user.getId());
+        if (Boolean.TRUE.equals(status.get("needsContractInfo"))) {
+            return NEXT_ACTION_NEEDS_CONTRACT_INFO;
+        }
+        if (Boolean.TRUE.equals(status.get("subscriptionExpired"))) {
+            return NEXT_ACTION_SUBSCRIPTION_EXPIRED;
+        }
+        if (Boolean.FALSE.equals(status.get("hasAccepted"))) {
+            return NEXT_ACTION_MUST_ACCEPT_TERMS;
+        }
+        return NEXT_ACTION_SUCCESS;
     }
 
     private String extractNameFromEmail(String email) {

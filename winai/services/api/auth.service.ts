@@ -14,6 +14,10 @@ import {
     MessageResponse,
 } from '../types';
 
+export interface SessionStatusResponse {
+    nextAction: string;
+}
+
 export const authService = {
     /**
      * Realiza login do usuário
@@ -101,6 +105,14 @@ export const authService = {
      */
     getCurrentUser() {
         return storageService.getUser();
+    },
+
+    /**
+     * Retorna a próxima ação obrigatória do usuário (backend como fonte de verdade).
+     * Usado pelo ProtectedRoute para redirecionar sem depender de localStorage.
+     */
+    async getSessionStatus(): Promise<SessionStatusResponse> {
+        return httpClient.get<SessionStatusResponse>('/auth/session-status');
     },
 };
 

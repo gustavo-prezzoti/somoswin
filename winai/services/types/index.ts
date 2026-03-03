@@ -12,7 +12,16 @@ export interface AuthResponse {
     tokenType: string;
     expiresIn: number;
     user: UserDTO;
+    /** Próxima ação obrigatória definida pelo backend (fonte única de verdade). */
+    nextAction?: NextAction;
 }
+
+export type NextAction =
+    | 'MUST_CHANGE_PASSWORD'
+    | 'MUST_ACCEPT_TERMS'
+    | 'NEEDS_CONTRACT_INFO'
+    | 'SUBSCRIPTION_EXPIRED'
+    | 'SUCCESS';
 
 export interface UserDTO {
     id: string;

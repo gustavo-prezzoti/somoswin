@@ -19,6 +19,7 @@ public class AuthResponse {
     private String tokenType;
     private Long expiresIn;
     private UserDTO user;
+    private String nextAction;
 
     @Data
     @Builder

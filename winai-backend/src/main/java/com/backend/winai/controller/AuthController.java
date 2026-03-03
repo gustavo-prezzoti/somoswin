@@ -3,6 +3,7 @@ package com.backend.winai.controller;
 import com.backend.winai.dto.request.*;
 import com.backend.winai.dto.response.AuthResponse;
 import com.backend.winai.dto.response.MessageResponse;
+import com.backend.winai.dto.response.SessionStatusResponse;
 import com.backend.winai.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -69,6 +70,19 @@ public class AuthController {
     public ResponseEntity<MessageResponse> changePassword(@RequestBody ChangePasswordRequest request,
             java.security.Principal principal) {
         return ResponseEntity.ok(authService.changePassword(principal.getName(), request.getNewPassword()));
+    }
+
+    /**
+     * GET /api/v1/auth/session-status
+     * Retorna a próxima ação obrigatória (nextAction) para o usuário autenticado.
+     * Usado pelo frontend para redirecionar sem depender de localStorage.
+     */
+    @GetMapping("/session-status")
+    public ResponseEntity<SessionStatusResponse> sessionStatus(java.security.Principal principal) {
+        if (principal == null || principal.getName() == null) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(authService.getSessionStatus(principal.getName()));
     }
 
     /**
