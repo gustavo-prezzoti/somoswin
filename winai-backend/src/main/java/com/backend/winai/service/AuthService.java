@@ -224,7 +224,6 @@ public class AuthService {
                         .role(user.getRole().name())
                         .plan(user.getCompany() != null ? user.getCompany().getPlan().name() : "STARTER")
                         .company(companyDTO)
-                        .mustChangePassword(user.getMustChangePassword())
                         .build())
                 .build();
     }

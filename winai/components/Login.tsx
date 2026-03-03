@@ -25,10 +25,12 @@ const Login: React.FC = () => {
       setIsLoading(true);
 
       try {
-         const response = await authService.login({ email, password, rememberMe });
-         const next = response.nextAction || 'SUCCESS';
+         const res = await authService.login({ email, password, rememberMe });
+         const next = (res.nextAction ?? 'SUCCESS').trim().toUpperCase();
+
          if (next === 'MUST_CHANGE_PASSWORD') {
-            window.location.href = '/change-password';
+            const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '') || '';
+            window.location.replace(`${base}/change-password`.replace(/\/+/g, '/'));
             return;
          }
          navigate('/dashboard');

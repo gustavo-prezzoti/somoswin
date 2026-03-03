@@ -34,7 +34,6 @@ public class AuthResponse {
         private CompanyDTO company;
         private String avatarUrl;
         private String phone;
-        private Boolean mustChangePassword;
     }
 
     @Data

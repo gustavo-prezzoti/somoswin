@@ -12,7 +12,17 @@ import {
     ForgotPasswordRequest,
     ResetPasswordRequest,
     MessageResponse,
+    NextAction,
 } from '../types';
+
+function normalizeNextAction(value: string | undefined): NextAction {
+    const s = String(value ?? '').trim().toUpperCase();
+    if (s === 'MUST_CHANGE_PASSWORD') return 'MUST_CHANGE_PASSWORD';
+    if (s === 'MUST_ACCEPT_TERMS') return 'MUST_ACCEPT_TERMS';
+    if (s === 'NEEDS_CONTRACT_INFO') return 'NEEDS_CONTRACT_INFO';
+    if (s === 'SUBSCRIPTION_EXPIRED') return 'SUBSCRIPTION_EXPIRED';
+    return 'SUCCESS';
+}
 
 export interface SessionStatusResponse {
     nextAction: string;
@@ -20,33 +30,56 @@ export interface SessionStatusResponse {
 
 export const authService = {
     /**
-     * Realiza login do usuário
+     * Realiza login do usuário.
+     * Normaliza a resposta do backend: nextAction é a única fonte de verdade para fluxo pós-login.
      */
     async login(request: LoginRequest): Promise<AuthResponse> {
-        const response = await httpClient.post<AuthResponse>('/auth/login', request, {
+        const raw = await httpClient.post<AuthResponse>('/auth/login', request, {
             skipAuth: true,
         });
 
-        // Salva tokens e dados do usuário
-        storageService.setTokens(response.accessToken, response.refreshToken);
-        storageService.setUser(response.user);
+        const nextAction = normalizeNextAction(raw.nextAction);
+        const user = raw.user
+            ? { ...raw.user, mustChangePassword: nextAction === 'MUST_CHANGE_PASSWORD' }
+            : raw.user;
 
-        return response;
+        storageService.setTokens(raw.accessToken, raw.refreshToken);
+        if (user) storageService.setUser(user);
+
+        return {
+            accessToken: raw.accessToken,
+            refreshToken: raw.refreshToken,
+            tokenType: raw.tokenType ?? 'Bearer',
+            expiresIn: raw.expiresIn ?? 3600,
+            user: raw.user!,
+            nextAction,
+        };
     },
 
     /**
-     * Registra nova empresa e usuário
+     * Registra nova empresa e usuário. Normaliza nextAction como no login.
      */
     async register(request: RegisterRequest): Promise<AuthResponse> {
-        const response = await httpClient.post<AuthResponse>('/auth/register', request, {
+        const raw = await httpClient.post<AuthResponse>('/auth/register', request, {
             skipAuth: true,
         });
 
-        // Salva tokens e dados do usuário
-        storageService.setTokens(response.accessToken, response.refreshToken);
-        storageService.setUser(response.user);
+        const nextAction = normalizeNextAction(raw.nextAction);
+        const user = raw.user
+            ? { ...raw.user, mustChangePassword: nextAction === 'MUST_CHANGE_PASSWORD' }
+            : raw.user;
 
-        return response;
+        storageService.setTokens(raw.accessToken, raw.refreshToken);
+        if (user) storageService.setUser(user);
+
+        return {
+            accessToken: raw.accessToken,
+            refreshToken: raw.refreshToken,
+            tokenType: raw.tokenType ?? 'Bearer',
+            expiresIn: raw.expiresIn ?? 3600,
+            user: raw.user!,
+            nextAction,
+        };
     },
 
     /**
