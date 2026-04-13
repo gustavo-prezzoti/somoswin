@@ -5,10 +5,16 @@ import com.backend.winai.dto.marketing.CampaignsListResponse;
 import com.backend.winai.dto.marketing.CreateCampaignRequest;
 import com.backend.winai.dto.marketing.InstagramMetricsResponse;
 import com.backend.winai.dto.marketing.TrafficMetricsResponse;
+import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficOverviewResponse;
+import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficTargetDTO;
+import com.backend.winai.dto.marketing.paidtraffic.UtmPerformanceResponse;
 import com.backend.winai.entity.User;
 import com.backend.winai.service.MarketingAiRecommendationsService;
 import com.backend.winai.service.MarketingService;
 import com.backend.winai.service.MetaSyncService;
+import com.backend.winai.service.PaidTrafficService;
+import com.backend.winai.service.PaidTrafficTargetService;
+import com.backend.winai.service.PaidTrafficUtmService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +35,9 @@ public class MarketingController {
     private final MarketingService marketingService;
     private final MarketingAiRecommendationsService aiRecommendationsService;
     private final MetaSyncService metaSyncService;
+    private final PaidTrafficService paidTrafficService;
+    private final PaidTrafficTargetService paidTrafficTargetService;
+    private final PaidTrafficUtmService paidTrafficUtmService;
 
     @GetMapping("/metrics")
     public ResponseEntity<TrafficMetricsResponse> getMetrics(
@@ -42,6 +51,40 @@ public class MarketingController {
     @GetMapping("/metrics/date-range")
     public ResponseEntity<java.util.Map<String, String>> getMetricsDateRange(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(marketingService.getTrafficMetricsDateRange(user));
+    }
+
+    @GetMapping("/paid-traffic/overview")
+    public ResponseEntity<PaidTrafficOverviewResponse> getPaidTrafficOverview(
+            @AuthenticationPrincipal User user,
+            @RequestParam(defaultValue = "META") PaidTrafficOverviewResponse.Platform platform,
+            @RequestParam(required = false) java.time.LocalDate startDate,
+            @RequestParam(required = false) java.time.LocalDate endDate,
+            @RequestParam(required = false) String campaignId,
+            @RequestParam(required = false) String adSetId) {
+        return ResponseEntity.ok(
+                paidTrafficService.getOverview(user, platform, startDate, endDate, campaignId, adSetId));
+    }
+
+    @GetMapping("/paid-traffic/utm-performance")
+    public ResponseEntity<UtmPerformanceResponse> getUtmPerformance(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) java.time.LocalDate startDate,
+            @RequestParam(required = false) java.time.LocalDate endDate) {
+        return ResponseEntity.ok(paidTrafficUtmService.getPerformance(user, startDate, endDate));
+    }
+
+    @GetMapping("/paid-traffic/targets")
+    public ResponseEntity<PaidTrafficTargetDTO> getPaidTrafficTargets(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) String yearMonth) {
+        return ResponseEntity.ok(paidTrafficTargetService.getForMonth(user, yearMonth));
+    }
+
+    @PutMapping("/paid-traffic/targets")
+    public ResponseEntity<PaidTrafficTargetDTO> savePaidTrafficTargets(
+            @AuthenticationPrincipal User user,
+            @RequestBody PaidTrafficTargetDTO body) {
+        return ResponseEntity.ok(paidTrafficTargetService.save(user, body));
     }
 
     @GetMapping("/instagram-metrics")

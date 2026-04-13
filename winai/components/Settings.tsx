@@ -19,9 +19,11 @@ import {
   Users,
   AlertCircle,
   CheckCircle,
-  Clock
+  Clock,
+  BarChart2
 } from 'lucide-react';
 import { googleDriveService } from '../services/api/google-drive.service';
+import { googleAdsService } from '../services/api/google-ads.service';
 import { agendamentoService, AgendamentoConfig } from '../services/api/agendamento.service';
 import { userService } from '../services/api/user.service';
 import { marketingService } from '../services/api/marketing.service';
@@ -48,6 +50,9 @@ const Settings: React.FC = () => {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [whatsappConnected, setWhatsappConnected] = useState(false);
   const [metaConnected, setMetaConnected] = useState(false);
+  const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
+  const [googleAdsCustomerId, setGoogleAdsCustomerId] = useState('');
+  const [googleAdsLoginCustomerId, setGoogleAdsLoginCustomerId] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -98,6 +103,7 @@ const Settings: React.FC = () => {
     loadUser();
     checkGoogleConnection();
     checkMetaConnection();
+    checkGoogleAdsConnection();
     checkWhatsAppConnection();
     loadSubscription();
     loadAgendamentoConfig();
@@ -112,6 +118,12 @@ const Settings: React.FC = () => {
       setMetaConnected(true);
       showToast('Meta Ads conectado com sucesso!', 'success');
       window.history.replaceState({}, document.title, window.location.hash.split('?')[0]);
+    }
+    if (window.location.href.includes('google_ads=connected')) {
+      setGoogleAdsConnected(true);
+      showToast('Google Ads conectado. Informe o ID da conta abaixo se necessário.', 'success');
+      window.history.replaceState({}, document.title, window.location.hash.split('?')[0]);
+      checkGoogleAdsConnection();
     }
     if (window.location.href.includes('error=meta_auth_failed')) {
       showToast('Falha na autenticação com a Meta. Tente novamente.', 'error');
@@ -167,6 +179,17 @@ const Settings: React.FC = () => {
       setMetaConnected(status.connected);
     } catch (error) {
       console.error('Failed to check meta connection', error);
+    }
+  };
+
+  const checkGoogleAdsConnection = async () => {
+    try {
+      const s = await googleAdsService.getStatus();
+      setGoogleAdsConnected(!!s.connected);
+      setGoogleAdsCustomerId(s.customerId || '');
+      setGoogleAdsLoginCustomerId(s.loginCustomerId || '');
+    } catch (error) {
+      console.error('Failed to check google ads connection', error);
     }
   };
 
@@ -327,6 +350,53 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('Failed to authorize meta', error);
       showToast('Erro ao iniciar conexão com Meta', 'error');
+    }
+  };
+
+  const handleGoogleAdsConnect = async () => {
+    try {
+      const r = await googleAdsService.getAuthUrl();
+      if (r?.url) window.location.href = r.url;
+    } catch (error) {
+      console.error(error);
+      showToast(getErrorMessage(error) || 'Configure google.client.id, google.client.secret e google.ads.redirect.uri no backend.', 'error');
+    }
+  };
+
+  const handleGoogleAdsDisconnect = () => {
+    setConfirmModalConfig({
+      title: 'Desconectar Google Ads',
+      message: 'Revogar acesso à API de anúncios para esta empresa?',
+      variant: 'danger',
+      confirmLabel: 'Desconectar',
+      action: async () => {
+        try {
+          await googleAdsService.disconnect();
+          setGoogleAdsConnected(false);
+          setGoogleAdsCustomerId('');
+          setGoogleAdsLoginCustomerId('');
+          setConfirmModalOpen(false);
+          showToast('Google Ads desconectado', 'success');
+        } catch (error) {
+          console.error(error);
+          showToast('Erro ao desconectar Google Ads', 'error');
+        }
+      }
+    });
+    setConfirmModalOpen(true);
+  };
+
+  const handleSaveGoogleAdsIds = async () => {
+    try {
+      await googleAdsService.updateCustomerIds(
+        googleAdsCustomerId.trim() || undefined,
+        googleAdsLoginCustomerId.trim() || undefined
+      );
+      showToast('IDs da conta Google Ads salvos', 'success');
+      await checkGoogleAdsConnection();
+    } catch (error) {
+      console.error(error);
+      showToast(getErrorMessage(error) || 'Erro ao salvar IDs', 'error');
     }
   };
 
@@ -1202,6 +1272,15 @@ const Settings: React.FC = () => {
                       icon: Facebook,
                       action: 'Conectar OAuth',
                       color: metaConnected ? 'text-blue-500 bg-blue-50' : 'text-gray-400 bg-gray-100'
+                    },
+                    {
+                      id: 'google_ads',
+                      name: 'Google Ads',
+                      status: googleAdsConnected ? 'connected' : 'disconnected',
+                      desc: 'Métricas e hierarquia na tela Tráfego Pago (escopo adwords).',
+                      icon: BarChart2,
+                      action: 'Conectar OAuth',
+                      color: googleAdsConnected ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 bg-gray-100'
                     }
                   ].map((item) => (
                     <div key={item.id} className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group hover:bg-white hover:shadow-xl transition-all">
@@ -1244,6 +1323,12 @@ const Settings: React.FC = () => {
                               } else {
                                 handleMetaConnect();
                               }
+                            } else if (item.id === 'google_ads') {
+                              if (item.status === 'connected') {
+                                handleGoogleAdsDisconnect();
+                              } else {
+                                handleGoogleAdsConnect();
+                              }
                             }
                           }}
                           disabled={item.id === 'whatsapp' && isConnectingWhatsapp}
@@ -1259,6 +1344,41 @@ const Settings: React.FC = () => {
                     </div>
                   ))}
                 </div>
+
+                {googleAdsConnected && (
+                  <div className="p-6 bg-indigo-50/40 rounded-[32px] border border-indigo-100 space-y-4">
+                    <p className="text-xs font-bold text-indigo-900">
+                      ID da conta de anúncios (somente números) e, se usar MCC, o ID do gestor (login customer).
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Customer ID</label>
+                        <input
+                          value={googleAdsCustomerId}
+                          onChange={(e) => setGoogleAdsCustomerId(e.target.value)}
+                          placeholder="ex: 1234567890"
+                          className="w-full px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Login Customer ID (MCC)</label>
+                        <input
+                          value={googleAdsLoginCustomerId}
+                          onChange={(e) => setGoogleAdsLoginCustomerId(e.target.value)}
+                          placeholder="Opcional"
+                          className="w-full px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveGoogleAdsIds}
+                      className="px-6 py-3 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors"
+                    >
+                      Salvar IDs
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

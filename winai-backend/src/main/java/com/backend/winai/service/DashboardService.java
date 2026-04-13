@@ -10,11 +10,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.backend.winai.dto.request.CreateGoalCheckpointRequest;
+import com.backend.winai.dto.request.CreateGoalTaskRequest;
+import com.backend.winai.dto.request.UpdateGoalTaskRequest;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,6 +37,9 @@ public class DashboardService {
         private final MetricsSyncService metricsSyncService; // Re-added
         private final OpenAiService openAiService;
         private final LeadRepository leadRepository;
+        private final DashboardTaskRepository dashboardTaskRepository;
+        private final GoalTaskRepository goalTaskRepository;
+        private final GoalCheckpointRepository goalCheckpointRepository;
 
         private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM");
 
@@ -42,7 +53,7 @@ public class DashboardService {
         /**
          * Obtém os dados completos do dashboard para um usuário
          */
-        @Transactional
+        @Transactional(readOnly = false)
         public DashboardResponse getDashboardData(User user, int days) {
                 if (user == null || user.getCompany() == null) {
                         throw new RuntimeException("Usuário não possui empresa associada");
@@ -124,12 +135,21 @@ public class DashboardService {
                                 .average().orElse(0.0);
                 int performanceScore = (int) avgScore;
 
+                List<Goal> allYearGoals = goalRepository.findByCompanyAndYearCycleAndStatusOrderByCreatedAtDesc(
+                                company, LocalDate.now().getYear(), GoalStatus.ACTIVE);
+
+                ensureDefaultDashboardTasks(company);
+                List<DashboardResponse.DashboardTaskDTO> taskDtos = buildDashboardTaskDTOs(company);
+
                 // Monta response
                 DashboardResponse response = DashboardResponse.builder()
                                 .user(buildUserSummary(user))
                                 .metrics(buildMetricsSummary(currentSummary, previousSummary))
                                 .chartData(buildChartData(localMetrics, metaMetrics, startDate, days))
                                 .goals(buildGoalDTOs(goals, company))
+                                .goalsOverview(buildGoalDTOs(allYearGoals, company))
+                                .revenueGoal(buildRevenueGoalDto(company))
+                                .weeklyTasks(taskDtos)
                                 .insights(buildInsightDTOs(insights))
                                 .campaigns(buildCampaignSummaries(company))
                                 .recentLeads(buildRecentLeads(company))
@@ -138,6 +158,89 @@ public class DashboardService {
                                 .build();
 
                 return response;
+        }
+
+        private DashboardResponse.RevenueGoalDTO buildRevenueGoalDto(Company company) {
+                Optional<Goal> rev = goalRepository.findActiveGoalByCompanyAndType(company, GoalType.REVENUE,
+                                LocalDate.now());
+                if (rev.isEmpty()) {
+                        return DashboardResponse.RevenueGoalDTO.builder()
+                                        .goalId(null)
+                                        .targetValue(null)
+                                        .currentValue(null)
+                                        .progressPercentage(0)
+                                        .build();
+                }
+                Goal g = rev.get();
+                List<DashboardResponse.GoalDTO> dtos = buildGoalDTOs(List.of(g), company);
+                DashboardResponse.GoalDTO dto = dtos.isEmpty() ? null : dtos.get(0);
+                int progress = dto != null && dto.getProgressPercentage() != null ? dto.getProgressPercentage() : 0;
+                return DashboardResponse.RevenueGoalDTO.builder()
+                                .goalId(g.getId())
+                                .targetValue(g.getTargetValue())
+                                .currentValue(dto != null ? dto.getCurrentValue() : g.getCurrentValue())
+                                .progressPercentage(progress)
+                                .build();
+        }
+
+        @Transactional
+        public void ensureDefaultDashboardTasks(Company company) {
+                if (company == null || dashboardTaskRepository.countByCompany(company) > 0) {
+                        return;
+                }
+                List<DashboardTask> seeds = List.of(
+                                DashboardTask.builder().company(company)
+                                                .title("Ajustar lances de CPC nas campanhas ativas")
+                                                .category("Tráfego").priority("high").sortOrder(0).build(),
+                                DashboardTask.builder().company(company)
+                                                .title("Revisar script de abordagem comercial")
+                                                .category("Vendas").priority("medium").sortOrder(1).build(),
+                                DashboardTask.builder().company(company)
+                                                .title("Subir novos criativos aprovados")
+                                                .category("Tráfego").priority("high").sortOrder(2).build(),
+                                DashboardTask.builder().company(company)
+                                                .title("Analisar taxa de conversão da landing principal")
+                                                .category("Métricas").priority("medium").sortOrder(3).build());
+                dashboardTaskRepository.saveAll(seeds);
+        }
+
+        private List<DashboardResponse.DashboardTaskDTO> buildDashboardTaskDTOs(Company company) {
+                if (company == null) {
+                        return List.of();
+                }
+                return dashboardTaskRepository.findByCompanyOrderBySortOrderAscIdAsc(company).stream()
+                                .map(t -> DashboardResponse.DashboardTaskDTO.builder()
+                                                .id(t.getId())
+                                                .title(t.getTitle())
+                                                .category(t.getCategory())
+                                                .priority(t.getPriority())
+                                                .completed(t.getCompleted())
+                                                .sortOrder(t.getSortOrder())
+                                                .build())
+                                .collect(Collectors.toList());
+        }
+
+        @Transactional
+        public DashboardResponse.DashboardTaskDTO toggleDashboardTask(User user, Long taskId) {
+                Company company = user.getCompany();
+                if (company == null) {
+                        throw new RuntimeException("Usuário não possui empresa associada");
+                }
+                DashboardTask task = dashboardTaskRepository.findById(taskId)
+                                .orElseThrow(() -> new RuntimeException("Tarefa não encontrada"));
+                if (!task.getCompany().getId().equals(company.getId())) {
+                        throw new RuntimeException("Acesso negado");
+                }
+                task.setCompleted(!Boolean.TRUE.equals(task.getCompleted()));
+                task = dashboardTaskRepository.save(task);
+                return DashboardResponse.DashboardTaskDTO.builder()
+                                .id(task.getId())
+                                .title(task.getTitle())
+                                .category(task.getCategory())
+                                .priority(task.getPriority())
+                                .completed(task.getCompleted())
+                                .sortOrder(task.getSortOrder())
+                                .build();
         }
 
         private List<LeadResponse> buildRecentLeads(Company company) {
@@ -271,13 +374,13 @@ public class DashboardService {
                                                 .build(),
                                 AIInsight.builder()
                                                 .company(company)
-                                                .title("Growth Orgânico")
-                                                .description("Seus últimos **Reels de prova social** tiveram **40% mais engajamento**. Gere novos roteiros similares para manter o pico.")
-                                                .suggestionSource("IA Social Media")
+                                                .title("Performance de Campanhas")
+                                                .description("Suas **campanhas de tráfego** mostram oportunidade de escala. Revise criativos e orçamento no painel de Tráfego Pago.")
+                                                .suggestionSource("Agente de Tráfego")
                                                 .insightType(InsightType.SUGGESTION)
                                                 .priority(InsightPriority.MEDIUM)
-                                                .actionUrl("/social")
-                                                .actionLabel("Criar Roteiros")
+                                                .actionUrl("/campanhas")
+                                                .actionLabel("Abrir Tráfego Pago")
                                                 .isRead(false)
                                                 .isDismissed(false)
                                                 .build());
@@ -394,43 +497,72 @@ public class DashboardService {
         }
 
         private List<DashboardResponse.GoalDTO> buildGoalDTOs(List<Goal> goals, Company company) {
+                return buildGoalDTOs(goals, company, null);
+        }
+
+        private List<DashboardResponse.GoalDTO> buildGoalDTOs(List<Goal> goals, Company company,
+                        Integer planningMonth) {
+                if (goals.isEmpty()) {
+                        return List.of();
+                }
+                List<Long> ids = goals.stream().map(Goal::getId).collect(Collectors.toList());
+                Map<Long, List<GoalTask>> tasksByGoal = new HashMap<>();
+                for (GoalTask t : goalTaskRepository.findByGoal_IdIn(ids)) {
+                        Long gid = t.getGoal().getId();
+                        tasksByGoal.computeIfAbsent(gid, k -> new ArrayList<>()).add(t);
+                }
+                Map<Long, List<GoalCheckpoint>> cpByGoal = new HashMap<>();
+                for (GoalCheckpoint c : goalCheckpointRepository.findByGoal_IdIn(ids)) {
+                        Long gid = c.getGoal().getId();
+                        cpByGoal.computeIfAbsent(gid, k -> new ArrayList<>()).add(c);
+                }
+
+                final Integer month = planningMonth != null && planningMonth >= 1 && planningMonth <= 3
+                                ? planningMonth
+                                : null;
+
                 return goals.stream()
                                 .map(g -> {
-                                        // Calculate currentValue dynamically for LEADS goals
                                         int currentValue = g.getCurrentValue() != null ? g.getCurrentValue() : 0;
 
-                                        System.out.println("[DEBUG] Goal ID: " + g.getId() +
-                                                        ", Type: " + g.getGoalType() +
-                                                        ", Company: " + (company != null ? company.getId() : "null"));
-
                                         if (g.getGoalType() == GoalType.LEADS && company != null) {
-                                                // Use DashboardMetrics to count leads (same source as dashboard
-                                                // display)
                                                 LocalDate startDate = g.getStartDate() != null ? g.getStartDate()
                                                                 : LocalDate.now().minusDays(365);
                                                 LocalDate endDate = g.getEndDate() != null ? g.getEndDate()
                                                                 : LocalDate.now();
 
-                                                System.out.println("[DEBUG] Querying leads from " + startDate + " to "
-                                                                + endDate);
-
                                                 Integer leadsSum = metricsRepository
                                                                 .sumLeadsCapturedByCompanyAndDateBetween(
                                                                                 company, startDate, endDate);
 
-                                                System.out.println("[DEBUG] leadsSum result: " + leadsSum);
                                                 currentValue = leadsSum != null ? leadsSum : 0;
-                                        } else {
-                                                System.out.println("[DEBUG] Condition not met: goalType="
-                                                                + g.getGoalType() + ", company=" + (company != null));
                                         }
 
-                                        // Calculate progress percentage
                                         int progressPercentage = 0;
                                         if (g.getTargetValue() != null && g.getTargetValue() > 0) {
                                                 progressPercentage = (int) Math.min(100,
                                                                 (currentValue * 100.0 / g.getTargetValue()));
                                         }
+
+                                        List<GoalTask> taskList = tasksByGoal.getOrDefault(g.getId(), List.of());
+                                        Integer executionPct = computeExecutionProgress(taskList);
+                                        if (executionPct == null) {
+                                                executionPct = progressPercentage;
+                                        }
+
+                                        Integer expectedPct = null;
+                                        if (month != null) {
+                                                expectedPct = (int) Math.min(100,
+                                                                Math.round(month * 100.0 / 3.0));
+                                        }
+
+                                        List<DashboardResponse.GoalTaskDTO> taskDtos = taskList.stream()
+                                                        .map(this::toGoalTaskDto)
+                                                        .collect(Collectors.toList());
+                                        List<DashboardResponse.GoalCheckpointDTO> cpDtos = cpByGoal
+                                                        .getOrDefault(g.getId(), List.of()).stream()
+                                                        .map(this::toGoalCheckpointDto)
+                                                        .collect(Collectors.toList());
 
                                         return DashboardResponse.GoalDTO.builder()
                                                         .id(g.getId())
@@ -444,9 +576,145 @@ public class DashboardService {
                                                         .isHighlighted(g.getIsHighlighted())
                                                         .startDate(g.getStartDate())
                                                         .endDate(g.getEndDate())
+                                                        .yearCycle(g.getYearCycle())
+                                                        .createdAt(g.getCreatedAt())
+                                                        .color(g.getColor())
+                                                        .prazoDias(g.getPrazoDias())
+                                                        .scenario(g.getScenario())
+                                                        .unit(g.getUnit())
+                                                        .progressoResultado(g.getProgressoResultado())
+                                                        .executionProgressPercentage(executionPct)
+                                                        .expectedProgressPercentage(expectedPct)
+                                                        .tasks(taskDtos)
+                                                        .checkpoints(cpDtos)
                                                         .build();
                                 })
                                 .collect(Collectors.toList());
+        }
+
+        private Integer computeExecutionProgress(List<GoalTask> tasks) {
+                if (tasks == null || tasks.isEmpty()) {
+                        return null;
+                }
+                int totalW = tasks.stream().mapToInt(t -> t.getWeight() != null ? t.getWeight() : 1).sum();
+                if (totalW <= 0) {
+                        return null;
+                }
+                int doneW = tasks.stream()
+                                .filter(t -> Boolean.TRUE.equals(t.getCompleted()))
+                                .mapToInt(t -> t.getWeight() != null ? t.getWeight() : 1)
+                                .sum();
+                return (int) Math.min(100, Math.round(doneW * 100.0 / totalW));
+        }
+
+        private DashboardResponse.GoalTaskDTO toGoalTaskDto(GoalTask t) {
+                LocalDateTime ca = t.getCompletedAt();
+                String completedAtStr = ca == null ? null : ca.toString();
+                return DashboardResponse.GoalTaskDTO.builder()
+                                .id(t.getId())
+                                .title(t.getTitle())
+                                .description(t.getDescription())
+                                .week(t.getWeek())
+                                .level(t.getLevel() != null ? t.getLevel().name().toLowerCase() : null)
+                                .weight(t.getWeight())
+                                .completed(t.getCompleted())
+                                .completedAt(completedAtStr)
+                                .deadline(t.getDeadline())
+                                .status(t.getTaskStatus() != null ? t.getTaskStatus().name() : null)
+                                .evidenciaObrigatoria(t.getEvidenciaObrigatoria())
+                                .evidenciaJson(t.getEvidenciaJson())
+                                .sortOrder(t.getSortOrder())
+                                .build();
+        }
+
+        private DashboardResponse.GoalCheckpointDTO toGoalCheckpointDto(GoalCheckpoint c) {
+                return DashboardResponse.GoalCheckpointDTO.builder()
+                                .id(c.getId())
+                                .dataPrevista(c.getDataPrevista())
+                                .dataRealizada(c.getDataRealizada())
+                                .semana(c.getSemana())
+                                .status(c.getStatus())
+                                .analiseIaJson(c.getAnaliseIaJson())
+                                .ajustesSugeridosJson(c.getAjustesSugeridosJson())
+                                .sortOrder(c.getSortOrder())
+                                .build();
+        }
+
+        private void appendTasksFromRequest(Goal goal, List<CreateGoalTaskRequest> requests) {
+                int order = 0;
+                for (CreateGoalTaskRequest r : requests) {
+                        int so = r.getSortOrder() != null ? r.getSortOrder() : order;
+                        GoalTask t = GoalTask.builder()
+                                        .goal(goal)
+                                        .title(r.getTitle())
+                                        .description(r.getDescription())
+                                        .week(r.getWeek())
+                                        .level(r.getLevel())
+                                        .weight(r.getWeight() != null ? r.getWeight() : 1)
+                                        .deadline(r.getDeadline())
+                                        .evidenciaObrigatoria(Boolean.TRUE.equals(r.getEvidenciaObrigatoria()))
+                                        .evidenciaJson(r.getEvidenciaJson())
+                                        .sortOrder(so)
+                                        .build();
+                        goal.getGoalTasks().add(t);
+                        order++;
+                }
+        }
+
+        private void appendCheckpointsFromRequest(Goal goal, List<CreateGoalCheckpointRequest> requests) {
+                int order = 0;
+                for (CreateGoalCheckpointRequest r : requests) {
+                        int so = r.getSortOrder() != null ? r.getSortOrder() : order;
+                        GoalCheckpoint c = GoalCheckpoint.builder()
+                                        .goal(goal)
+                                        .dataPrevista(r.getDataPrevista())
+                                        .dataRealizada(r.getDataRealizada())
+                                        .semana(r.getSemana())
+                                        .status(r.getStatus())
+                                        .analiseIaJson(r.getAnaliseIaJson())
+                                        .ajustesSugeridosJson(r.getAjustesSugeridosJson())
+                                        .sortOrder(so)
+                                        .build();
+                        goal.getGoalCheckpoints().add(c);
+                        order++;
+                }
+        }
+
+        /**
+         * Tarefas padrão alinhadas à UI de Metas e Objetivos (uma meta nova sem payload de tarefas).
+         */
+        private void seedDefaultOperationalTasks(Goal goal) {
+                int y = goal.getYearCycle() != null ? goal.getYearCycle() : LocalDate.now().getYear();
+                String label = goal.getGoalType().name();
+                LocalDate base = goal.getStartDate() != null ? goal.getStartDate() : LocalDate.of(y, 1, 1);
+                int order = 0;
+                addSeedTask(goal, base, order++, "Triagem e alinhamento — " + label, 1, GoalTaskLevel.RAPIDA, 1, false,
+                                3);
+                addSeedTask(goal, base, order++, "Definir indicadores — " + label, 1, GoalTaskLevel.RAPIDA, 1, false,
+                                5);
+                addSeedTask(goal, base, order++, "Execução tática — " + label, 2, GoalTaskLevel.MEDIA, 2, false, 10);
+                addSeedTask(goal, base, order++, "Revisão estratégica do funil", 2, GoalTaskLevel.ESTRATEGICA, 3, true,
+                                12);
+                addSeedTask(goal, base, order++, "Medição e ajuste — " + label, 3, GoalTaskLevel.MEDIA, 2, false, 18);
+                addSeedTask(goal, base, order, "Fechamento do ciclo — " + label, 4, GoalTaskLevel.RAPIDA, 1, false, 22);
+        }
+
+        private void addSeedTask(Goal goal, LocalDate base, int sortOrder, String title, int week,
+                        GoalTaskLevel level, int weight, boolean evidencia, int dayOfMonth) {
+                int dim = Math.min(dayOfMonth, base.lengthOfMonth());
+                LocalDate deadline = base.withDayOfMonth(dim);
+                GoalTask t = GoalTask.builder()
+                                .goal(goal)
+                                .title(title)
+                                .description(goal.getDescription())
+                                .week(week)
+                                .level(level)
+                                .weight(weight)
+                                .deadline(deadline)
+                                .evidenciaObrigatoria(evidencia)
+                                .sortOrder(sortOrder)
+                                .build();
+                goal.getGoalTasks().add(t);
         }
 
         private List<DashboardResponse.InsightDTO> buildInsightDTOs(List<AIInsight> insights) {
@@ -577,14 +845,29 @@ public class DashboardService {
                                 .description(request.getDescription())
                                 .goalType(request.getGoalType())
                                 .targetValue(request.getTargetValue())
-                                .currentValue(0)
+                                .currentValue(request.getCurrentValue() != null ? request.getCurrentValue() : 0)
                                 .yearCycle(request.getYearCycle() != null ? request.getYearCycle()
                                                 : LocalDate.now().getYear())
                                 .startDate(request.getStartDate() != null ? request.getStartDate() : LocalDate.now())
                                 .endDate(request.getEndDate())
                                 .status(GoalStatus.ACTIVE)
+                                .color(request.getColor() != null ? request.getColor() : "bg-emerald-500")
+                                .prazoDias(request.getPrazoDias() != null ? request.getPrazoDias() : 30)
+                                .scenario(request.getScenario())
+                                .unit(request.getUnit() != null ? request.getUnit() : "%")
+                                .progressoResultado(request.getProgressoResultado())
                                 .build();
 
+                goal = goalRepository.save(goal);
+
+                if (request.getTasks() != null && !request.getTasks().isEmpty()) {
+                        appendTasksFromRequest(goal, request.getTasks());
+                } else {
+                        seedDefaultOperationalTasks(goal);
+                }
+                if (request.getCheckpoints() != null && !request.getCheckpoints().isEmpty()) {
+                        appendCheckpointsFromRequest(goal, request.getCheckpoints());
+                }
                 goal = goalRepository.save(goal);
 
                 return buildGoalDTOs(List.of(goal), company).get(0);
@@ -594,13 +877,14 @@ public class DashboardService {
          * Obtém todas as metas de uma empresa
          */
         @Transactional(readOnly = true)
-        public List<DashboardResponse.GoalDTO> getAllGoals(User user) {
+        public List<DashboardResponse.GoalDTO> getAllGoals(User user, Integer year, Integer planningMonth) {
                 Company company = user.getCompany();
                 if (company == null) {
                         return List.of();
                 }
+                int y = year != null ? year : LocalDate.now().getYear();
                 return buildGoalDTOs(goalRepository.findByCompanyAndYearCycleAndStatusOrderByCreatedAtDesc(company,
-                                LocalDate.now().getYear(), GoalStatus.ACTIVE), company);
+                                y, GoalStatus.ACTIVE), company, planningMonth);
         }
 
         /**
@@ -640,6 +924,24 @@ public class DashboardService {
                 if (request.getEndDate() != null) {
                         goal.setEndDate(request.getEndDate());
                 }
+                if (request.getCurrentValue() != null) {
+                        goal.setCurrentValue(request.getCurrentValue());
+                }
+                if (request.getColor() != null) {
+                        goal.setColor(request.getColor());
+                }
+                if (request.getPrazoDias() != null) {
+                        goal.setPrazoDias(request.getPrazoDias());
+                }
+                if (request.getScenario() != null) {
+                        goal.setScenario(request.getScenario());
+                }
+                if (request.getUnit() != null) {
+                        goal.setUnit(request.getUnit());
+                }
+                if (request.getProgressoResultado() != null) {
+                        goal.setProgressoResultado(request.getProgressoResultado());
+                }
 
                 goal = goalRepository.save(goal);
                 return buildGoalDTOs(List.of(goal), user.getCompany()).get(0);
@@ -672,10 +974,12 @@ public class DashboardService {
                         throw new RuntimeException("Acesso negado");
                 }
 
-                // Se estiver tentando destacar, verifica se já existem 3 destacadas
+                // Se estiver tentando destacar, verifica se já existem 3 destacadas no mesmo ciclo
                 if (!Boolean.TRUE.equals(goal.getIsHighlighted())) {
+                        int cycleYear = goal.getYearCycle() != null ? goal.getYearCycle()
+                                        : LocalDate.now().getYear();
                         long count = goalRepository.findByCompanyAndYearCycleAndStatusOrderByCreatedAtDesc(
-                                        user.getCompany(), LocalDate.now().getYear(), GoalStatus.ACTIVE)
+                                        user.getCompany(), cycleYear, GoalStatus.ACTIVE)
                                         .stream()
                                         .filter(g -> Boolean.TRUE.equals(g.getIsHighlighted()))
                                         .count();
@@ -687,6 +991,140 @@ public class DashboardService {
                 goal.setIsHighlighted(!Boolean.TRUE.equals(goal.getIsHighlighted()));
                 goal = goalRepository.save(goal);
                 return buildGoalDTOs(List.of(goal), user.getCompany()).get(0);
+        }
+
+        @Transactional
+        public DashboardResponse.GoalTaskDTO addGoalTask(User user, Long goalId,
+                        CreateGoalTaskRequest request) {
+                Goal goal = goalRepository.findById(goalId)
+                                .orElseThrow(() -> new RuntimeException("Meta não encontrada"));
+                if (!goal.getCompany().getId().equals(user.getCompany().getId())) {
+                        throw new RuntimeException("Acesso negado");
+                }
+                int nextOrder = goal.getGoalTasks().stream()
+                                .mapToInt(t -> t.getSortOrder() != null ? t.getSortOrder() : 0)
+                                .max()
+                                .orElse(-1) + 1;
+                GoalTask t = GoalTask.builder()
+                                .goal(goal)
+                                .title(request.getTitle())
+                                .description(request.getDescription())
+                                .week(request.getWeek())
+                                .level(request.getLevel())
+                                .weight(request.getWeight() != null ? request.getWeight() : 1)
+                                .deadline(request.getDeadline())
+                                .evidenciaObrigatoria(Boolean.TRUE.equals(request.getEvidenciaObrigatoria()))
+                                .evidenciaJson(request.getEvidenciaJson())
+                                .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : nextOrder)
+                                .build();
+                goal.getGoalTasks().add(t);
+                goalRepository.save(goal);
+                return toGoalTaskDto(t);
+        }
+
+        @Transactional
+        public DashboardResponse.GoalTaskDTO updateGoalTask(User user, Long goalId, Long taskId,
+                        UpdateGoalTaskRequest request) {
+                GoalTask t = goalTaskRepository.findById(taskId)
+                                .orElseThrow(() -> new RuntimeException("Tarefa não encontrada"));
+                if (!t.getGoal().getId().equals(goalId)) {
+                        throw new RuntimeException("Tarefa não pertence a esta meta");
+                }
+                if (!t.getGoal().getCompany().getId().equals(user.getCompany().getId())) {
+                        throw new RuntimeException("Acesso negado");
+                }
+                if (request.getTitle() != null) {
+                        t.setTitle(request.getTitle());
+                }
+                if (request.getDescription() != null) {
+                        t.setDescription(request.getDescription());
+                }
+                if (request.getWeek() != null) {
+                        t.setWeek(request.getWeek());
+                }
+                if (request.getLevel() != null) {
+                        t.setLevel(request.getLevel());
+                }
+                if (request.getWeight() != null) {
+                        t.setWeight(request.getWeight());
+                }
+                if (request.getDeadline() != null) {
+                        t.setDeadline(request.getDeadline());
+                }
+                if (request.getEvidenciaObrigatoria() != null) {
+                        t.setEvidenciaObrigatoria(request.getEvidenciaObrigatoria());
+                }
+                if (request.getEvidenciaJson() != null) {
+                        t.setEvidenciaJson(request.getEvidenciaJson());
+                }
+                if (request.getSortOrder() != null) {
+                        t.setSortOrder(request.getSortOrder());
+                }
+                if (request.getCompleted() != null) {
+                        t.setCompleted(request.getCompleted());
+                        if (Boolean.TRUE.equals(request.getCompleted())) {
+                                t.setCompletedAt(LocalDateTime.now());
+                                t.setTaskStatus(GoalTaskStatus.concluido);
+                        } else {
+                                t.setCompletedAt(null);
+                                t.setTaskStatus(GoalTaskStatus.pendente);
+                        }
+                }
+                t = goalTaskRepository.save(t);
+                return toGoalTaskDto(t);
+        }
+
+        @Transactional
+        public void deleteGoalTask(User user, Long goalId, Long taskId) {
+                GoalTask t = goalTaskRepository.findById(taskId)
+                                .orElseThrow(() -> new RuntimeException("Tarefa não encontrada"));
+                if (!t.getGoal().getId().equals(goalId)) {
+                        throw new RuntimeException("Tarefa não pertence a esta meta");
+                }
+                if (!t.getGoal().getCompany().getId().equals(user.getCompany().getId())) {
+                        throw new RuntimeException("Acesso negado");
+                }
+                goalTaskRepository.delete(t);
+        }
+
+        @Transactional
+        public DashboardResponse.GoalCheckpointDTO addGoalCheckpoint(User user, Long goalId,
+                        CreateGoalCheckpointRequest request) {
+                Goal goal = goalRepository.findById(goalId)
+                                .orElseThrow(() -> new RuntimeException("Meta não encontrada"));
+                if (!goal.getCompany().getId().equals(user.getCompany().getId())) {
+                        throw new RuntimeException("Acesso negado");
+                }
+                int nextOrder = goal.getGoalCheckpoints().stream()
+                                .mapToInt(c -> c.getSortOrder() != null ? c.getSortOrder() : 0)
+                                .max()
+                                .orElse(-1) + 1;
+                GoalCheckpoint c = GoalCheckpoint.builder()
+                                .goal(goal)
+                                .dataPrevista(request.getDataPrevista())
+                                .dataRealizada(request.getDataRealizada())
+                                .semana(request.getSemana())
+                                .status(request.getStatus())
+                                .analiseIaJson(request.getAnaliseIaJson())
+                                .ajustesSugeridosJson(request.getAjustesSugeridosJson())
+                                .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : nextOrder)
+                                .build();
+                goal.getGoalCheckpoints().add(c);
+                goalRepository.save(goal);
+                return toGoalCheckpointDto(c);
+        }
+
+        @Transactional
+        public void deleteGoalCheckpoint(User user, Long goalId, Long checkpointId) {
+                GoalCheckpoint c = goalCheckpointRepository.findById(checkpointId)
+                                .orElseThrow(() -> new RuntimeException("Checkpoint não encontrado"));
+                if (!c.getGoal().getId().equals(goalId)) {
+                        throw new RuntimeException("Checkpoint não pertence a esta meta");
+                }
+                if (!c.getGoal().getCompany().getId().equals(user.getCompany().getId())) {
+                        throw new RuntimeException("Acesso negado");
+                }
+                goalCheckpointRepository.delete(c);
         }
 
         /**

@@ -6,6 +6,8 @@ import com.backend.winai.dto.response.SDRAgentStatusResponse;
 import com.backend.winai.dto.response.WhatsAppConversationResponse;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
 import com.backend.winai.entity.User;
+import com.backend.winai.dto.whatsapp.broadcast.CompanyWhatsAppInstanceCardResponse;
+import com.backend.winai.service.WhatsAppCompanyInstancesService;
 import com.backend.winai.service.WhatsAppService;
 import com.backend.winai.service.WhatsAppWebhookService;
 import jakarta.validation.Valid;
@@ -25,11 +27,22 @@ public class WhatsAppController {
 
     private final WhatsAppService whatsAppService;
     private final WhatsAppWebhookService webhookService;
+    private final WhatsAppCompanyInstancesService whatsAppCompanyInstancesService;
 
     /**
      * POST /api/v1/whatsapp/send
      * Envia uma mensagem de texto via WhatsApp
      */
+    /**
+     * GET /api/v1/whatsapp/company-instances
+     * Instâncias WhatsApp da empresa com status enriquecido pela API UaZap (Base Ativa / Aquecedor).
+     */
+    @GetMapping("/company-instances")
+    public ResponseEntity<List<CompanyWhatsAppInstanceCardResponse>> listCompanyInstances(
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(whatsAppCompanyInstancesService.listForUser(user));
+    }
+
     @PostMapping("/send")
     public ResponseEntity<WhatsAppMessageResponse> sendMessage(
             @AuthenticationPrincipal User user,

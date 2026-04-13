@@ -19,6 +19,8 @@ public interface UserWhatsAppConnectionRepository extends JpaRepository<UserWhat
         @Query("SELECT c FROM UserWhatsAppConnection c LEFT JOIN FETCH c.company LEFT JOIN FETCH c.createdBy WHERE c.id = :id")
         Optional<UserWhatsAppConnection> findByIdWithCompanyAndCreatedBy(@Param("id") UUID id);
 
+        Optional<UserWhatsAppConnection> findByIdAndCompany_Id(UUID id, UUID companyId);
+
         /**
          * Busca todas as conexões de uma empresa
          */

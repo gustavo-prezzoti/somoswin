@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "goals", schema = "winai")
@@ -60,6 +62,35 @@ public class Goal {
 
     @Column(name = "end_date")
     private LocalDate endDate;
+
+    /** Classe CSS para o dot / barra (ex.: bg-emerald-500). */
+    @Column(length = 64)
+    private String color;
+
+    @Column(name = "prazo_dias")
+    @Builder.Default
+    private Integer prazoDias = 30;
+
+    @Column(length = 40)
+    private String scenario;
+
+    @Column(length = 16)
+    @Builder.Default
+    private String unit = "%";
+
+    /** Progresso de resultado (KPI) — opcional; o progresso principal continua em progress_percentage. */
+    @Column(name = "progresso_resultado")
+    private Integer progressoResultado;
+
+    @OneToMany(mappedBy = "goal", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC, id ASC")
+    @Builder.Default
+    private List<GoalTask> goalTasks = new ArrayList<>();
+
+    @OneToMany(mappedBy = "goal", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC, id ASC")
+    @Builder.Default
+    private List<GoalCheckpoint> goalCheckpoints = new ArrayList<>();
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

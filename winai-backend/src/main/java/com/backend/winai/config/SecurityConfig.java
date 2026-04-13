@@ -44,6 +44,7 @@ public class SecurityConfig {
                                                                 "/api/v1/webhooks/**",
                                                                 "/api/v1/asaas/webhook",
                                                                 "/api/v1/uazap/**",
+                                                                "/api/v1/google-ads/callback",
                                                                 "/api/v1/marketing/auth/meta/callback",
                                                                 "/api/v1/marketing/auth/meta/deauthorize",
                                                                 "/api/v1/marketing/auth/meta/data-deletion",

@@ -36,6 +36,8 @@ export interface MeetingData {
     googleEventId: string | null;        // ID do evento no Google Calendar
     source: string | null;               // "Google Calendar" ou "Manual"
     attendeesCount: number | null;       // Quantidade de participantes
+    meetingKind?: string | null;
+    topicsPreview?: string | null;
 }
 
 // Função helper para parsear attendees do JSON
@@ -82,6 +84,8 @@ export interface MeetingRequest {
     scheduledBy?: string;
     meetingLink?: string;
     leadId?: string;
+    /** STANDARD | CONSULTANCY */
+    meetingKind?: 'STANDARD' | 'CONSULTANCY';
 }
 
 export interface CalendarData {

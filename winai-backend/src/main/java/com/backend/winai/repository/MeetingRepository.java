@@ -2,6 +2,7 @@ package com.backend.winai.repository;
 
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Meeting;
+import com.backend.winai.entity.MeetingKind;
 import com.backend.winai.entity.MeetingStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -10,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -51,4 +53,21 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
                 @Param("phone") String phone, @Param("today") java.time.LocalDate today);
 
         void deleteByCompany(Company company);
+
+        @Query("SELECT m FROM Meeting m WHERE m.company = :company AND m.meetingKind = :kind "
+                        + "AND m.status IN ('SCHEDULED', 'CONFIRMED') "
+                        + "AND (m.meetingDate > :today OR (m.meetingDate = :today AND m.meetingTime >= :nowTime)) "
+                        + "ORDER BY m.meetingDate ASC, m.meetingTime ASC")
+        List<Meeting> findUpcomingConsultancy(@Param("company") Company company, @Param("kind") MeetingKind kind,
+                        @Param("today") LocalDate today, @Param("nowTime") LocalTime nowTime);
+
+        @Query("SELECT m FROM Meeting m WHERE m.company = :company AND m.meetingKind = :kind "
+                        + "AND m.status <> 'CANCELLED' "
+                        + "AND (m.meetingDate < :today OR m.status IN ('COMPLETED', 'NO_SHOW')) "
+                        + "ORDER BY m.meetingDate DESC, m.meetingTime DESC")
+        List<Meeting> findConsultancyHistory(@Param("company") Company company, @Param("kind") MeetingKind kind,
+                        @Param("today") LocalDate today);
+
+        List<Meeting> findByCompanyAndMeetingKindOrderByMeetingDateDescMeetingTimeDesc(Company company,
+                        MeetingKind kind);
 }

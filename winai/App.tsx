@@ -6,37 +6,33 @@ import {
   MessageCircle,
   TrendingUp,
   Calendar,
-  GraduationCap,
   Settings as SettingsIcon,
-  LifeBuoy,
   Bell,
   ChevronDown,
   ChevronLeft,
   LogOut,
-  Menu,
   X,
   User as UserIcon,
-  Share2,
   ChevronRight,
-  Zap,
   Target,
+  Mic,
+  Layers,
   AlertTriangle,
   ShieldAlert
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Goals from './components/Goals';
-import Agents from './components/Agents';
 import CRM from './components/CRM';
 import WhatsApp from './components/WhatsApp';
 import Campaigns from './components/Campaigns';
 import MeetingCalendar from './components/Calendar';
-import Academy from './components/Academy';
+import VideoMeeting from './components/VideoMeeting';
+import ActiveBase from './components/ActiveBase';
+import Consultancy from './components/Consultancy';
 import Login from './components/Login';
 import Checkout from './components/Checkout';
 import Terms from './components/Terms';
 import LandingPage from './components/LandingPage';
-import SocialMedia from './components/SocialMedia';
-import Support from './components/Support';
 import Settings from './components/Settings';
 import OAuthComplete from './components/OAuthComplete';
 import Notifications from './components/Notifications';
@@ -56,6 +52,7 @@ import AdminSupportChat from './components/Admin/AdminSupportChat';
 import AdminFollowUp from './components/Admin/AdminFollowUp';
 import AdminGlobalNotifications from './components/Admin/AdminGlobalNotifications';
 import AdminTerms from './components/Admin/AdminTerms';
+import AdminConsultancy from './components/Admin/AdminConsultancy';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
@@ -64,7 +61,6 @@ import { authService } from './services/api/auth.service';
 import { useWebSocket } from './hooks/useWebSocket';
 
 import logoLight from './logo_light.png';
-import SupportChatWidget from './components/SupportChatWidget';
 
 const SidebarItem = ({ to, icon: Icon, label, isActive, isCollapsed }: { to: string, icon: any, label: string, isActive: boolean, isCollapsed: boolean }) => (
   <Link
@@ -104,11 +100,6 @@ const SidebarSection = ({ title, isCollapsed }: { title: string, isCollapsed: bo
     </div>
   );
 };
-
-// Feature Flags
-// Features permanently enabled
-const ENABLE_SOCIAL_GROWTH = true;
-const ENABLE_ACADEMY = true;
 
 const Layout = ({ children }: { children?: React.ReactNode }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -198,27 +189,26 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
           <SidebarSection title="Principal" isCollapsed={!isSidebarOpen} />
           <nav className="space-y-1">
             <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" isActive={location.pathname === '/dashboard'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/agentes" icon={Zap} label="Agentes Neurais" isActive={location.pathname === '/agentes'} isCollapsed={!isSidebarOpen} />
           </nav>
 
           <SidebarSection title="Operação Vendas" isCollapsed={!isSidebarOpen} />
           <nav className="space-y-1">
             <SidebarItem to="/crm" icon={Users} label="CRM & Leads" isActive={location.pathname === '/crm'} isCollapsed={!isSidebarOpen} />
             <SidebarItem to="/whatsapp" icon={MessageCircle} label="Atendimento" isActive={location.pathname === '/whatsapp'} isCollapsed={!isSidebarOpen} />
+            <SidebarItem to="/video-chamada" icon={Mic} label="Escuta Inteligente" isActive={location.pathname === '/video-chamada'} isCollapsed={!isSidebarOpen} />
             <SidebarItem to="/calendario" icon={Calendar} label="Agenda Comercial" isActive={location.pathname === '/calendario'} isCollapsed={!isSidebarOpen} />
+            <SidebarItem to="/metas" icon={Target} label="Metas e Objetivos" isActive={location.pathname === '/metas'} isCollapsed={!isSidebarOpen} />
           </nav>
 
           <SidebarSection title="Growth & Escala" isCollapsed={!isSidebarOpen} />
           <nav className="space-y-1">
-            <SidebarItem to="/social" icon={Share2} label="Social Growth" isActive={location.pathname === '/social'} isCollapsed={!isSidebarOpen} />
             <SidebarItem to="/campanhas" icon={TrendingUp} label="Tráfego Pago" isActive={location.pathname === '/campanhas'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/metas" icon={Target} label="Metas & Objetivos" isActive={location.pathname === '/metas'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/academy" icon={GraduationCap} label="Academy" isActive={location.pathname === '/academy'} isCollapsed={!isSidebarOpen} />
+            <SidebarItem to="/base-ativa" icon={Layers} label="Base Ativa" isActive={location.pathname === '/base-ativa'} isCollapsed={!isSidebarOpen} />
+            <SidebarItem to="/mentoria" icon={Target} label="Consultoria Estratégica" isActive={location.pathname === '/mentoria'} isCollapsed={!isSidebarOpen} />
           </nav>
         </div>
 
         <div className="p-3 bg-black/20 border-t border-white/5 space-y-1">
-          <SidebarItem to="/suporte" icon={LifeBuoy} label="Suporte" isActive={location.pathname === '/suporte'} isCollapsed={!isSidebarOpen} />
           <SidebarItem to="/configuracoes" icon={SettingsIcon} label="Configurações" isActive={location.pathname === '/configuracoes'} isCollapsed={!isSidebarOpen} />
 
           <button
@@ -247,6 +237,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-40">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></div>
+            <h2 className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em]">Operação Ativa • Real-Time Core</h2>
           </div>
           <div className="flex items-center gap-6">
             <div className="relative">
@@ -518,14 +509,13 @@ const App: React.FC = () => {
         <Route path="/termos" element={<Terms />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
-        <Route path="/agentes" element={<ProtectedRoute><Agents /></ProtectedRoute>} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
         <Route path="/whatsapp" element={<ProtectedRoute><WhatsApp /></ProtectedRoute>} />
-        <Route path="/social" element={<ProtectedRoute><SocialMedia /></ProtectedRoute>} />
+        <Route path="/video-chamada" element={<ProtectedRoute><VideoMeeting /></ProtectedRoute>} />
+        <Route path="/base-ativa" element={<ProtectedRoute><ActiveBase /></ProtectedRoute>} />
+        <Route path="/mentoria" element={<ProtectedRoute><Consultancy /></ProtectedRoute>} />
         <Route path="/campanhas" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
         <Route path="/calendario" element={<ProtectedRoute><MeetingCalendar /></ProtectedRoute>} />
-        <Route path="/academy" element={<ProtectedRoute><Academy /></ProtectedRoute>} />
-        <Route path="/suporte" element={<ProtectedRoute><Support /></ProtectedRoute>} />
         <Route path="/configuracoes" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/oauth-complete" element={<OAuthComplete />} />
 
@@ -549,10 +539,10 @@ const App: React.FC = () => {
           <Route path="settings" element={<AdminSettings />} />
           <Route path="notifications" element={<AdminGlobalNotifications />} />
           <Route path="terms" element={<AdminTerms />} />
+          <Route path="consultancy" element={<AdminConsultancy />} />
         </Route>
 
       </Routes>
-      <SupportChatWidget />
     </BrowserRouter >
   );
 };

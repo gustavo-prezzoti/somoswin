@@ -1458,6 +1458,25 @@ public class OpenAiService {
         }
     }
 
+    /**
+     * Resumo estruturado de consultoria a partir da transcrição completa (GPT).
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public String summarizeConsultancyTranscription(String transcription) {
+        if (!isChatEnabled() || transcription == null || transcription.isBlank()) {
+            return null;
+        }
+        String system = """
+                Você resume reuniões de consultoria estratégica em português do Brasil.
+                Com base na transcrição completa, produza:
+                1) Um parágrafo executivo (3-5 frases) com decisões e próximos passos.
+                2) Lista de tópicos principais com bullet points (- ).
+                3) Itens de ação se houver.
+                Use markdown leve. Não invente fatos fora da transcrição.
+                """;
+        return generateResponse(system, "Transcrição da reunião:\n\n" + transcription.trim());
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

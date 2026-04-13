@@ -3,6 +3,7 @@ package com.backend.winai.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -47,6 +48,34 @@ public class Lead {
 
     @Column(length = 500)
     private String source; // Origem do lead (campanha, orgânico, etc)
+
+    @Column(name = "track_id", length = 255)
+    private String trackId;
+
+    @Column(name = "track_source", length = 2000)
+    private String trackSource;
+
+    @Column(name = "utm_source", length = 255)
+    private String utmSource;
+
+    @Column(name = "utm_medium", length = 255)
+    private String utmMedium;
+
+    @Column(name = "utm_campaign", length = 255)
+    private String utmCampaign;
+
+    @Column(name = "utm_content", length = 255)
+    private String utmContent;
+
+    @Column(name = "utm_term", length = 255)
+    private String utmTerm;
+
+    @Column(name = "estimated_value", precision = 14, scale = 2)
+    private BigDecimal estimatedValue;
+
+    @Column(name = "lead_score", nullable = false)
+    @Builder.Default
+    private Integer leadScore = 0;
 
     @Column(columnDefinition = "TEXT")
     private String aiSummary; // Memória de longo prazo da IA sobre este lead

@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -23,6 +24,15 @@ public class LeadResponse {
     private String ownerName;
     private String notes;
     private String source;
+    private String trackId;
+    private String trackSource;
+    private String utmSource;
+    private String utmMedium;
+    private String utmCampaign;
+    private String utmContent;
+    private String utmTerm;
+    private BigDecimal estimatedValue;
+    private Integer leadScore;
     private String profilePictureUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

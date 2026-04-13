@@ -154,6 +154,101 @@ export interface MetricsDateRange {
     maxDate: string;
 }
 
+export type PaidTrafficPlatform = 'META' | 'GOOGLE';
+
+export interface PaidTrafficKpiCard {
+    key: string;
+    label: string;
+    value: string;
+    trend: string;
+    trendPositive: boolean;
+    goalLabel?: string;
+    benchmarkLabel?: string;
+}
+
+export interface BudgetPace {
+    spent: number;
+    planned: number;
+    percentageSpent: number;
+    timeElapsed: number;
+    idealDailyRate: number;
+    projectedEndAmount: number;
+    recommendation: string;
+}
+
+export interface PaidTrafficInsightBanner {
+    title: string;
+    description: string;
+    statusLabel: string;
+    statusValue: string;
+    actionTakenLabel: string;
+    actionTakenValue: string;
+    visible: boolean;
+}
+
+export type PaidTrafficAssetLevel = 'CAMPAIGN' | 'ADSET' | 'AD';
+
+export interface PaidTrafficAssetRow {
+    id: string;
+    level: PaidTrafficAssetLevel;
+    name: string;
+    status: string;
+    objective?: string;
+    dailyBudget?: number;
+    spend?: number;
+    impressions?: number;
+    clicks?: number;
+    ctr?: number;
+    conversions?: number;
+    cpl?: number;
+    roas?: number;
+    /** Variação % do ROAS vs período anterior (mesma duração) */
+    roasVariationPct?: number;
+    cplVariationPct?: number;
+    ctrVariationPct?: number;
+    /** melhor | estavel | pior */
+    trend?: string;
+}
+
+export interface PaidTrafficOverview {
+    platform: PaidTrafficPlatform;
+    connected: boolean;
+    connectionMessage?: string;
+    kpis: PaidTrafficKpiCard[];
+    budgetPace: BudgetPace | null;
+    insightBanner: PaidTrafficInsightBanner;
+    tableLevel: string;
+    rows: PaidTrafficAssetRow[];
+    startDate?: string;
+    endDate?: string;
+}
+
+export interface PaidTrafficTargetDTO {
+    yearMonth: string;
+    investmentGoal?: number;
+    roasGoal?: number;
+    cplGoal?: number;
+    ctrGoal?: number;
+}
+
+export interface UtmPerformanceRow {
+    groupKey: string;
+    refLabel: string;
+    subtitle: string;
+    leads: number;
+    cpl: number;
+    roas: number;
+    status: string;
+}
+
+export interface UtmPerformanceResponse {
+    rows: UtmPerformanceRow[];
+    bestRoas: number;
+    startDate?: string;
+    endDate?: string;
+    emptyMessage?: string | null;
+}
+
 export const marketingService = {
     getMetrics: async (campaignId?: string, startDate?: string, endDate?: string): Promise<TrafficMetrics> => {
         const params = new URLSearchParams();
@@ -223,7 +318,36 @@ export const marketingService = {
         const form = new FormData();
         form.append('file', file);
         return api.post<{ url: string }>('/marketing/upload-image', form);
-    }
+    },
+    getPaidTrafficOverview: async (params: {
+        platform: PaidTrafficPlatform;
+        startDate?: string;
+        endDate?: string;
+        campaignId?: string;
+        adSetId?: string;
+    }): Promise<PaidTrafficOverview> => {
+        const q = new URLSearchParams();
+        q.set('platform', params.platform);
+        if (params.startDate) q.set('startDate', params.startDate);
+        if (params.endDate) q.set('endDate', params.endDate);
+        if (params.campaignId) q.set('campaignId', params.campaignId);
+        if (params.adSetId) q.set('adSetId', params.adSetId);
+        return api.get<PaidTrafficOverview>('/marketing/paid-traffic/overview?' + q.toString());
+    },
+    getPaidTrafficTargets: async (yearMonth?: string): Promise<PaidTrafficTargetDTO> => {
+        const q = yearMonth ? '?yearMonth=' + encodeURIComponent(yearMonth) : '';
+        return api.get<PaidTrafficTargetDTO>('/marketing/paid-traffic/targets' + q);
+    },
+    savePaidTrafficTargets: async (body: PaidTrafficTargetDTO): Promise<PaidTrafficTargetDTO> => {
+        return api.put<PaidTrafficTargetDTO>('/marketing/paid-traffic/targets', body);
+    },
+    getUtmPerformance: async (params: { startDate?: string; endDate?: string }): Promise<UtmPerformanceResponse> => {
+        const q = new URLSearchParams();
+        if (params.startDate) q.set('startDate', params.startDate);
+        if (params.endDate) q.set('endDate', params.endDate);
+        const qs = q.toString();
+        return api.get<UtmPerformanceResponse>('/marketing/paid-traffic/utm-performance' + (qs ? '?' + qs : ''));
+    },
 };
 
 export interface InstagramMetrics {

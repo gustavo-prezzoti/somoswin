@@ -74,6 +74,23 @@ public class Meeting {
     @Builder.Default
     private Boolean manualUpdate = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "meeting_kind", nullable = false, length = 32)
+    @Builder.Default
+    private MeetingKind meetingKind = MeetingKind.STANDARD;
+
+    @Column(name = "recording_url", columnDefinition = "TEXT")
+    private String recordingUrl;
+
+    @Column(name = "transcription_full", columnDefinition = "TEXT")
+    private String transcriptionFull;
+
+    @Column(name = "ai_summary", columnDefinition = "TEXT")
+    private String aiSummary;
+
+    @Column(name = "topics_preview", length = 500)
+    private String topicsPreview;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

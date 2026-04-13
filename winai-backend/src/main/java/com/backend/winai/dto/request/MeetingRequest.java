@@ -1,5 +1,6 @@
 package com.backend.winai.dto.request;
 
+import com.backend.winai.entity.MeetingKind;
 import com.backend.winai.entity.MeetingStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -44,4 +45,7 @@ public class MeetingRequest {
     private String meetingLink;
 
     private UUID leadId;
+
+    /** STANDARD ou CONSULTANCY (consultoria estratégica). */
+    private MeetingKind meetingKind;
 }

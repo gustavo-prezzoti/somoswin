@@ -103,6 +103,15 @@ public class Company {
     @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
 
+    @Column(name = "consultant_display_name")
+    private String consultantDisplayName;
+
+    @Column(name = "consultant_role")
+    private String consultantRole;
+
+    @Column(name = "consultant_avatar_url", columnDefinition = "TEXT")
+    private String consultantAvatarUrl;
+
     // Método auxiliar para verificar se os campos obrigatórios estão preenchidos
     public boolean hasRequiredContractFields() {
         return contratante != null && !contratante.trim().isEmpty()

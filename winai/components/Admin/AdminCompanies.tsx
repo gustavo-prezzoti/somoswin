@@ -45,7 +45,7 @@ const AdminCompanies: React.FC = () => {
 
         try {
             const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN') {
+            if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
                 setIsAuthenticated(false);
                 return;
             }

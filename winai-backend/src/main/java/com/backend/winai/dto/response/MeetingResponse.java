@@ -38,4 +38,7 @@ public class MeetingResponse {
     private String googleEventId; // ID do evento no Google Calendar
     private String source; // "Google Calendar" ou "Manual"
     private Integer attendeesCount; // Quantidade total de participantes
+
+    private String meetingKind;
+    private String topicsPreview;
 }

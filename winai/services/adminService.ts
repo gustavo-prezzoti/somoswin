@@ -409,8 +409,70 @@ export const followUpService = {
 
     resetFollowUp: async (conversationId: string): Promise<void> => {
         await httpClient.delete(`/admin/followup/status/${conversationId}`);
+    },
+
+    listConsultancyMeetings: async (companyId: string): Promise<AdminConsultancyHistoryRow[]> => {
+        return await httpClient.get<AdminConsultancyHistoryRow[]>(
+            `/admin/consultancy/companies/${companyId}/meetings`
+        );
+    },
+
+    uploadConsultancyRecording: async (companyId: string, meetingId: string, file: File): Promise<void> => {
+        const fd = new FormData();
+        fd.append('file', file);
+        await httpClient.post(`/admin/consultancy/companies/${companyId}/meetings/${meetingId}/recording`, fd);
+    },
+
+    saveConsultancyTranscription: async (
+        companyId: string,
+        meetingId: string,
+        text: string
+    ): Promise<ConsultancyMeetingDetailAdmin> => {
+        return await httpClient.put<ConsultancyMeetingDetailAdmin>(
+            `/admin/consultancy/companies/${companyId}/meetings/${meetingId}/transcription`,
+            { text }
+        );
+    },
+
+    patchConsultantProfile: async (
+        companyId: string,
+        body: { displayName?: string; role?: string; avatarUrl?: string }
+    ): Promise<ConsultantProfileAdmin> => {
+        return await httpClient.patch<ConsultantProfileAdmin>(
+            `/admin/consultancy/companies/${companyId}/consultant-profile`,
+            body
+        );
     }
 };
+
+export interface AdminConsultancyHistoryRow {
+    id: string;
+    dateLabel: string;
+    typeLabel: string;
+    durationLabel: string;
+    topicsLine: string;
+    hasRecording: boolean;
+    hasSummary: boolean;
+    hasTranscription?: boolean;
+}
+
+export interface ConsultancyMeetingDetailAdmin {
+    id: string;
+    title: string;
+    dateLabel: string;
+    timeLabel: string;
+    durationLabel: string;
+    typeLabel: string;
+    recordingUrl: string | null;
+    aiSummary: string | null;
+    transcriptionFull: string | null;
+}
+
+export interface ConsultantProfileAdmin {
+    displayName: string | null;
+    role: string | null;
+    avatarUrl: string | null;
+}
 
 export interface GlobalNotificationConfig {
     id?: string;

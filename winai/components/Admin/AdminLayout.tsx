@@ -39,8 +39,8 @@ const AdminLayout: React.FC = () => {
         return <Navigate to="/admin/login" state={{ from: location }} replace />;
     }
 
-    // Verifica se o usuário tem role ADMIN
-    if (!user || !user.role || user.role !== 'ADMIN') {
+    // Verifica se o usuário tem role ADMIN ou SUPER_ADMIN
+    if (!user || !user.role || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
         console.log('[AdminLayout] Usuário não é ADMIN - redirecionando para login');
         // Limpa dados pois não é admin
         localStorage.removeItem('win_access_token');

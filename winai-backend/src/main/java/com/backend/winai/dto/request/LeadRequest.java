@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -29,4 +31,8 @@ public class LeadRequest {
     private String notes;
 
     private String source;
+
+    private BigDecimal estimatedValue;
+
+    private Integer leadScore;
 }

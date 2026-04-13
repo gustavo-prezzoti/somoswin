@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -22,6 +23,10 @@ public class DashboardResponse {
     private List<InsightDTO> insights;
     private List<CampaignSummaryDTO> campaigns;
     private List<LeadResponse> recentLeads;
+    /** Todas as metas ativas do ciclo (gráficos / visão mensal). */
+    private List<GoalDTO> goalsOverview;
+    private RevenueGoalDTO revenueGoal;
+    private List<DashboardTaskDTO> weeklyTasks;
     private Integer performanceScore;
     private String operationStatus;
 
@@ -101,6 +106,86 @@ public class DashboardResponse {
         private Boolean isHighlighted;
         private LocalDate startDate;
         private LocalDate endDate;
+        /** Ciclo anual da meta (filtro por ano). */
+        private Integer yearCycle;
+
+        /** Criação (filtro de trimestre quando início/fim ausentes). */
+        private LocalDateTime createdAt;
+
+        /** UI: dot / bar (Tailwind). */
+        private String color;
+        private Integer prazoDias;
+        private String scenario;
+        private String unit;
+        /** Progresso resultado (KPI), quando informado. */
+        private Integer progressoResultado;
+        /** Progresso calculado pelas tarefas (peso). 0–100. */
+        private Integer executionProgressPercentage;
+        /** Planejado esperado para o mês do trimestre (1–3), 0–100. */
+        private Integer expectedProgressPercentage;
+
+        private List<GoalTaskDTO> tasks;
+        private List<GoalCheckpointDTO> checkpoints;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class GoalTaskDTO {
+        private Long id;
+        private String title;
+        private String description;
+        private Integer week;
+        private String level;
+        private Integer weight;
+        private Boolean completed;
+        private String completedAt;
+        private LocalDate deadline;
+        private String status;
+        private Boolean evidenciaObrigatoria;
+        private String evidenciaJson;
+        private Integer sortOrder;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class GoalCheckpointDTO {
+        private Long id;
+        private LocalDate dataPrevista;
+        private LocalDate dataRealizada;
+        private Integer semana;
+        private String status;
+        private String analiseIaJson;
+        private String ajustesSugeridosJson;
+        private Integer sortOrder;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RevenueGoalDTO {
+        /** ID da meta REVENUE ativa, se existir. */
+        private Long goalId;
+        private Integer targetValue;
+        private Integer currentValue;
+        private Integer progressPercentage;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DashboardTaskDTO {
+        private Long id;
+        private String title;
+        private String category;
+        private String priority;
+        private Boolean completed;
+        private Integer sortOrder;
     }
 
     @Data

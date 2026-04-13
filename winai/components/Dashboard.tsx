@@ -1,180 +1,534 @@
-
-import React, { useEffect, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, DollarSign, Percent, Zap, AlertCircle, Calendar, Settings2, CheckCircle2, Loader2, RefreshCw, Target, PlusCircle, X, Download } from 'lucide-react';
-import { dashboardService, DashboardData } from '../services';
-import { marketingService } from '../services/api/marketing.service';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import { Lightbulb, Info, ArrowUpRight, MessageSquare, AlertTriangle, Rocket } from 'lucide-react';
+import {
+  TrendingUp,
+  Users,
+  DollarSign,
+  Zap,
+  AlertCircle,
+  CheckCircle2,
+  ArrowUpRight,
+  ArrowDownRight,
+  ChevronRight,
+  Activity,
+  Edit2,
+  FileDown,
+  Target,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+  dashboardService,
+  DashboardData,
+  DashboardWeeklyTask,
+  GoalDTO,
+  RevenueGoalDTO,
+} from '../services/api/dashboard.service';
 
-interface MetricCardProps {
+type ReportRange = '7' | '30' | '90';
+
+function daysFromRange(r: ReportRange): number {
+  return r === '7' ? 7 : r === '30' ? 30 : 90;
+}
+
+function categoryBucket(type: string): 'Vendas' | 'Tráfego' | 'Operacional' {
+  const t = (type || '').toUpperCase();
+  if (['LEADS', 'APPOINTMENTS', 'SHOWUP'].includes(t)) return 'Vendas';
+  if (['CPL', 'CONVERSION', 'ROI'].includes(t)) return 'Tráfego';
+  return 'Operacional';
+}
+
+function priorityLabel(type: string): string {
+  const t = (type || '').toUpperCase();
+  if (t === 'REVENUE' || t === 'LEADS') return 'Crítica';
+  if (['CPL', 'CONVERSION', 'ROI'].includes(t)) return 'Alta';
+  return 'Média';
+}
+
+function buildMonthlyGoalsWidgetData(goals: GoalDTO[]) {
+  if (!goals.length) {
+    return {
+      overall: [
+        { name: 'Concluído', value: 0, color: '#10b981' },
+        { name: 'Pendente', value: 1, color: '#f1f5f9' },
+      ],
+      categories: [
+        { name: 'Vendas', completed: 0, total: 1, color: 'bg-emerald-500' },
+        { name: 'Tráfego', completed: 0, total: 1, color: 'bg-blue-500' },
+        { name: 'Operacional', completed: 0, total: 1, color: 'bg-amber-500' },
+      ],
+      priorityObjectives: [] as { title: string; status: string; priority: string }[],
+    };
+  }
+
+  const completed = goals.filter((g) => (g.progressPercentage ?? 0) >= 100).length;
+  const pending = Math.max(0, goals.length - completed);
+
+  const buckets: Record<'Vendas' | 'Tráfego' | 'Operacional', { total: number; done: number }> = {
+    Vendas: { total: 0, done: 0 },
+    Tráfego: { total: 0, done: 0 },
+    Operacional: { total: 0, done: 0 },
+  };
+  goals.forEach((g) => {
+    const b = categoryBucket(g.type);
+    buckets[b].total += 1;
+    if ((g.progressPercentage ?? 0) >= 100) buckets[b].done += 1;
+  });
+
+  const categories = (['Vendas', 'Tráfego', 'Operacional'] as const).map((name) => {
+    const { total, done } = buckets[name];
+    const color = name === 'Vendas' ? 'bg-emerald-500' : name === 'Tráfego' ? 'bg-blue-500' : 'bg-amber-500';
+    return {
+      name,
+      completed: done,
+      total: Math.max(total, 1),
+      color,
+    };
+  });
+
+  const priorityObjectives = [...goals]
+    .sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
+    .slice(0, 3)
+    .map((g) => ({
+      title: g.title,
+      status: `${g.progressPercentage ?? 0}%`,
+      priority: priorityLabel(g.type),
+    }));
+
+  return {
+    overall: [
+      { name: 'Concluído', value: completed, color: '#10b981' },
+      { name: 'Pendente', value: pending, color: '#f1f5f9' },
+    ],
+    categories,
+    priorityObjectives,
+  };
+}
+
+const MetricCard = ({
+  icon: Icon,
+  label,
+  value,
+  trend,
+  isNegative,
+  onClick,
+}: {
   icon: React.ElementType;
   label: string;
   value: string;
   trend: string;
-  isPositive: boolean;
-}
-
-const MetricCard: React.FC<MetricCardProps> = ({ icon: Icon, label, value, trend, isPositive }) => (
-  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-    <div className="flex justify-between items-start mb-4">
-      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-        <Icon size={24} />
+  isNegative?: boolean;
+  onClick?: () => void;
+}) => (
+  <motion.div
+    whileHover={{ y: -5 }}
+    onClick={onClick}
+    className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm flex flex-col gap-4 group hover:shadow-xl transition-all duration-500 cursor-pointer relative overflow-hidden"
+  >
+    <div className="flex justify-between items-start">
+      <div
+        className={`p-3 rounded-2xl transition-colors ${isNegative ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}
+      >
+        <Icon size={20} />
       </div>
-      {trend !== "0%" && (
-        <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${isPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-          {isPositive ? '+' : '-'}{trend}
-        </div>
-      )}
+      <div
+        className={`flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full ${
+          isNegative ? 'text-rose-600 bg-rose-50' : 'text-emerald-600 bg-emerald-50'
+        }`}
+      >
+        {isNegative ? <ArrowDownRight size={12} /> : <ArrowUpRight size={12} />}
+        {trend}
+      </div>
     </div>
-    <h3 className="text-gray-400 text-sm font-medium">{label}</h3>
-    <p className="text-3xl font-black text-gray-800 tracking-tighter mt-1">{value}</p>
-    {trend !== "0%" && <p className="text-[10px] text-gray-400 mt-2">em relação ao período anterior</p>}
+    <div className="space-y-1">
+      <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.1em]">{label}</p>
+      <h3 className="text-3xl font-black text-slate-800 tracking-tight">{value}</h3>
+    </div>
+    <div className="absolute bottom-0 left-0 h-1 bg-emerald-500 w-0 group-hover:w-full transition-all duration-500" />
+  </motion.div>
+);
+
+const WeeklyTasksWidget = ({
+  tasks,
+  onToggle,
+  disabled,
+}: {
+  tasks: DashboardWeeklyTask[];
+  onToggle: (id: number) => void;
+  disabled?: boolean;
+}) => (
+  <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm flex flex-col gap-6">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <CheckCircle2 size={20} className="text-emerald-600" />
+        <h2 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Tarefas da Semana</h2>
+      </div>
+      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-full">
+        {tasks.filter((t) => t.completed).length}/{tasks.length || 1} Concluídas
+      </span>
+    </div>
+    <div className="space-y-3">
+      {tasks.map((task) => (
+        <div
+          key={task.id}
+          onClick={() => !disabled && onToggle(task.id)}
+          className={`p-4 rounded-2xl border transition-all flex items-center justify-between group ${
+            task.completed
+              ? 'bg-emerald-50 border-emerald-200'
+              : 'bg-white border-gray-100 hover:border-emerald-200 hover:shadow-md'
+          } ${disabled ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}
+        >
+          <div className="flex items-center gap-4">
+            <div
+              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                task.completed
+                  ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                  : 'border-gray-200 group-hover:border-emerald-400'
+              }`}
+            >
+              {task.completed && <CheckCircle2 size={14} />}
+            </div>
+            <div>
+              <p
+                className={`text-xs font-black transition-all ${
+                  task.completed ? 'text-emerald-600 line-through decoration-emerald-600 decoration-2' : 'text-gray-800'
+                }`}
+              >
+                {task.title}
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <span
+                  className={`text-[9px] font-black uppercase tracking-widest ${
+                    task.completed ? 'text-emerald-400' : 'text-gray-400'
+                  }`}
+                >
+                  {task.category}
+                </span>
+                {task.priority === 'high' && !task.completed && (
+                  <span className="flex items-center gap-0.5 text-[8px] font-black uppercase tracking-widest text-rose-500">
+                    <AlertCircle size={8} /> Prioridade Alta
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <ChevronRight size={14} className="text-gray-300 group-hover:text-emerald-500 transition-colors" />
+        </div>
+      ))}
+    </div>
+    <button
+      type="button"
+      onClick={() => {}}
+      className="w-full py-3 border-2 border-dashed border-gray-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:border-emerald-200 hover:text-emerald-600 transition-all"
+    >
+      Acompanhe o plano completo em Metas
+    </button>
   </div>
 );
 
-const InsightCard: React.FC<{ insight: any; onAction: (url: string) => void }> = ({ insight, onAction }) => {
-  const isScale = insight.insightType === 'SCALE_BUDGET';
-  const isStalling = insight.insightType === 'LEAD_STALLING';
-  const isGrowth = insight.insightType === 'GROWTH_ORGANIC';
+const MonthlyGoalsWidget = ({ data }: { data: ReturnType<typeof buildMonthlyGoalsWidgetData> }) => {
+  const total = data.overall.reduce((acc, curr) => acc + curr.value, 0) || 1;
+  const completed = data.overall.find((d) => d.name === 'Concluído')?.value || 0;
+  const percentage = Math.round((completed / total) * 100);
 
   return (
-    <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm hover:shadow-xl hover:translate-y-[-4px] transition-all duration-300 group flex flex-col justify-between">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className={`p-3 rounded-2xl ${isScale ? 'bg-blue-50 text-blue-600' :
-            isStalling ? 'bg-rose-50 text-rose-600' :
-              isGrowth ? 'bg-amber-50 text-amber-600' :
-                'bg-gray-50 text-gray-600'
-            }`}>
-            {isScale ? <TrendingUp size={24} /> :
-              isStalling ? <AlertTriangle size={24} /> :
-                isGrowth ? <Rocket size={24} /> :
-                  <Zap size={24} />}
+    <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm flex flex-col gap-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Target size={24} className="text-emerald-600" />
+          <div>
+            <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic">Metas do Mês</h2>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              Ciclo {new Date().getFullYear()} • dados da sua conta
+            </p>
           </div>
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{insight.suggestionSource}</span>
         </div>
-
-        <div className="space-y-2">
-          <h3 className="text-xl font-black text-gray-800 tracking-tighter italic uppercase">{insight.title}</h3>
-          <div className="prose prose-sm prose-slate max-w-none text-gray-500 font-medium leading-relaxed">
-            <ReactMarkdown>{insight.description}</ReactMarkdown>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Progresso Geral</p>
+            <p className="text-xl font-black text-emerald-600">{percentage}%</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <TrendingUp size={24} />
           </div>
         </div>
       </div>
 
-      <button
-        onClick={() => onAction(insight.actionUrl)}
-        className="mt-8 group/btn flex items-center justify-center gap-3 w-full bg-gray-50 hover:bg-emerald-600 hover:text-white text-gray-800 font-black py-4 rounded-[24px] border border-transparent hover:shadow-2xl hover:shadow-emerald-600/20 transition-all uppercase text-[10px] tracking-widest italic"
-      >
-        {insight.actionLabel}
-        <ArrowUpRight size={16} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
-      </button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="flex flex-col items-center justify-center bg-gray-50/50 rounded-[32px] p-6 relative">
+          <div className="h-[200px] w-full relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data.overall}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={65}
+                  outerRadius={85}
+                  paddingAngle={8}
+                  dataKey="value"
+                  stroke="none"
+                  startAngle={90}
+                  endAngle={450}
+                >
+                  {data.overall.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    borderRadius: '16px',
+                    border: '1px solid #f1f5f9',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-4xl font-black text-gray-900 tracking-tighter">{completed}</span>
+              <span className="text-[10px] uppercase font-black text-gray-400 tracking-widest">Concluídos</span>
+            </div>
+          </div>
+          <div className="mt-4 flex gap-6">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-emerald-500" />
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Executadas</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-gray-200" />
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Restantes</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Performance por Categoria</h3>
+          {data.categories.map((cat, idx) => (
+            <div key={idx} className="space-y-2">
+              <div className="flex justify-between items-end">
+                <span className="text-xs font-black text-gray-700 uppercase tracking-wider">{cat.name}</span>
+                <span className="text-[10px] font-black text-gray-400">
+                  {cat.completed}/{cat.total}
+                </span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(100, (cat.completed / cat.total) * 100)}%` }}
+                  className={`h-full ${cat.color} rounded-full`}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Objetivos Prioritários</h3>
+          {data.priorityObjectives.length === 0 ? (
+            <p className="text-sm text-gray-400 font-medium">Cadastre metas em &quot;Metas&quot; para preencher esta visão.</p>
+          ) : (
+            data.priorityObjectives.map((obj, idx) => (
+              <div
+                key={idx}
+                className="p-4 rounded-2xl border border-gray-50 bg-white hover:border-emerald-100 hover:shadow-sm transition-all group"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-xs font-black text-gray-800 leading-tight group-hover:text-emerald-600 transition-colors">
+                    {obj.title}
+                  </p>
+                  <span
+                    className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                      obj.priority === 'Crítica'
+                        ? 'bg-rose-50 text-rose-600'
+                        : obj.priority === 'Alta'
+                          ? 'bg-amber-50 text-amber-600'
+                          : 'bg-blue-50 text-blue-600'
+                    }`}
+                  >
+                    {obj.priority}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Status Atual</span>
+                  <span className="text-[10px] font-black text-emerald-600">{obj.status}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 };
 
-const EmptyState: React.FC<{ title: string; description: string; actionLabel?: string; onAction?: () => void; disabled?: boolean; disabledReason?: string }> = ({ title, description, actionLabel, onAction, disabled, disabledReason }) => (
-  <div className="flex flex-col items-center justify-center py-8 text-center">
-    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-      <Target size={24} className="text-gray-400" />
-    </div>
-    <h3 className="font-bold text-gray-700 mb-1">{title}</h3>
-    <p className="text-sm text-gray-400 max-w-xs">{description}</p>
-    {disabled && disabledReason && (
-      <div className="mt-3 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg">
-        <p className="text-xs font-semibold text-amber-700">{disabledReason}</p>
-      </div>
-    )}
-    {actionLabel && onAction && (
-      <button
-        onClick={onAction}
-        disabled={disabled}
-        className={`mt-4 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${disabled
-          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          : 'bg-emerald-600 text-white hover:bg-emerald-700'
-          }`}
-      >
-        <PlusCircle size={14} /> {actionLabel}
-      </button>
-    )}
-  </div>
-);
-
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [reportRange, setReportRange] = useState<ReportRange>('30');
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [revenue, setRevenue] = useState<RevenueGoalDTO | null>(null);
+  const [tasks, setTasks] = useState<DashboardWeeklyTask[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPeriod, setSelectedPeriod] = useState(7);
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [isExportingReport, setIsExportingReport] = useState(false);
-  const [metaConnected, setMetaConnected] = useState(false);
-  const [reportFilters, setReportFilters] = useState({
-    startDate: '',
-    endDate: '',
-    status: ''
-  });
+  const [taskBusy, setTaskBusy] = useState(false);
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [tempGoal, setTempGoal] = useState('100000');
+  const [tempRevenue, setTempRevenue] = useState('0');
+
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const d = await dashboardService.getDashboard(daysFromRange(reportRange));
+      setData(d);
+      setRevenue(d.revenueGoal ?? null);
+      setTasks(d.weeklyTasks ?? []);
+      const rg = d.revenueGoal;
+      if (rg?.targetValue != null) setTempGoal(String(rg.targetValue));
+      if (rg?.currentValue != null) setTempRevenue(String(rg.currentValue));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar dashboard';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [reportRange]);
 
   useEffect(() => {
     loadDashboard();
-    checkMetaConnection();
-  }, [selectedPeriod]);
+  }, [loadDashboard]);
 
-  const checkMetaConnection = async () => {
-    try {
-      const status = await marketingService.getStatus();
-      setMetaConnected(status.connected);
-    } catch (error) {
-      console.error('Failed to check Meta connection', error);
-      setMetaConnected(false);
-    }
-  };
+  const goalsOverview = data?.goalsOverview ?? data?.goals ?? [];
+  const monthlyData = useMemo(() => buildMonthlyGoalsWidgetData(goalsOverview), [goalsOverview]);
 
-  const loadDashboard = async () => {
-    setIsLoading(true);
-    setError(null);
+  const currentRevenue = revenue?.currentValue ?? 0;
+  const revenueTarget = Math.max(revenue?.targetValue ?? 1, 1);
+  const progressPct = Math.min(100, Math.round((currentRevenue / revenueTarget) * 100));
+
+  const toggleTask = async (id: number) => {
+    if (taskBusy) return;
+    setTaskBusy(true);
     try {
-      const data = await dashboardService.getDashboard(selectedPeriod);
-      setDashboardData(data);
-    } catch (err: any) {
-      setError(err.message || 'Erro ao carregar dashboard');
+      const updated = await dashboardService.toggleWeeklyTask(id);
+      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    } catch (e) {
+      console.error(e);
     } finally {
-      setIsLoading(false);
+      setTaskBusy(false);
     }
   };
 
-  const handleExportReport = async () => {
-    setIsExportingReport(true);
+  const handleSaveMetrics = async () => {
+    const targetVal = parseInt(tempGoal, 10) || 0;
+    const curVal = parseInt(tempRevenue, 10) || 0;
     try {
-      const blob = await dashboardService.exportLeadsReport(
-        reportFilters.startDate || undefined,
-        reportFilters.endDate || undefined,
-        reportFilters.status || undefined
-      );
-
-      // Criar link de download
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `relatorio_leads_${new Date().toISOString().split('T')[0]}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      setIsReportModalOpen(false);
-      setReportFilters({ startDate: '', endDate: '', status: '' });
-    } catch (err: any) {
-      console.error('Erro ao exportar relatório:', err);
-      alert('Erro ao exportar relatório. Tente novamente.');
-    } finally {
-      setIsExportingReport(false);
+      if (revenue?.goalId) {
+        await dashboardService.updateGoal(revenue.goalId, {
+          title: 'Meta de faturamento',
+          type: 'REVENUE',
+          goalType: 'REVENUE',
+          targetValue: targetVal,
+          currentValue: curVal,
+        });
+      } else {
+        await dashboardService.createGoal({
+          title: 'Meta de faturamento',
+          description: 'Acompanhamento de faturamento mensal',
+          type: 'REVENUE',
+          goalType: 'REVENUE',
+          targetValue: targetVal,
+          currentValue: curVal,
+        });
+      }
+      setIsEditingGoal(false);
+      await loadDashboard();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Erro ao salvar meta');
     }
   };
 
-  if (isLoading) {
+  const generateReport = () => {
+    if (!data) return;
+    const docPdf = new jsPDF();
+    const timestamp = new Date().toLocaleString('pt-BR');
+    const rangeText =
+      reportRange === '7' ? 'Últimos 7 Dias' : reportRange === '30' ? 'Últimos 30 Dias' : 'Últimos 90 Dias';
+
+    docPdf.setFillColor(15, 23, 42);
+    docPdf.rect(0, 0, 210, 50, 'F');
+    docPdf.setTextColor(16, 185, 129);
+    docPdf.setFontSize(32);
+    docPdf.setFont('helvetica', 'bold');
+    docPdf.text('WIN.AI', 15, 25);
+    docPdf.setTextColor(255, 255, 255);
+    docPdf.setFontSize(10);
+    docPdf.setFont('helvetica', 'normal');
+    docPdf.text('ALTA PERFORMANCE & CONVERSÃO', 15, 32);
+    docPdf.setFontSize(18);
+    docPdf.setFont('helvetica', 'bold');
+    docPdf.text('RELATÓRIO DE PERFORMANCE OPERACIONAL', 210 - 15, 25, { align: 'right' });
+    docPdf.setFontSize(9);
+    docPdf.setFont('helvetica', 'normal');
+    docPdf.text(`GERADO EM: ${timestamp.toUpperCase()}`, 210 - 15, 32, { align: 'right' });
+    docPdf.text(`PERÍODO: ${rangeText.toUpperCase()}`, 210 - 15, 37, { align: 'right' });
+
+    const leads = data.metrics.leadsCaptured.value;
+    const cpl = data.metrics.cplAverage.value;
+    const inv = data.metrics.investment?.value ?? '—';
+    const revFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentRevenue);
+    const goalFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(revenueTarget);
+
+    docPdf.setTextColor(15, 23, 42);
+    docPdf.setFontSize(14);
+    docPdf.setFont('helvetica', 'bold');
+    docPdf.text('1. RESUMO EXECUTIVO', 15, 65);
+
+    autoTable(docPdf, {
+      startY: 70,
+      head: [['Métrica', 'Valor', 'Obs.']],
+      body: [
+        ['Leads (período)', leads, 'CRM + mídia'],
+        ['CPL médio', cpl, data.metrics.cplAverage.isPositive ? 'Favorável' : 'Atenção'],
+        ['Investimento (Meta)', inv, '—'],
+        ['Faturamento (meta REVENUE)', revFmt, `${progressPct}% da meta`],
+        ['Meta de faturamento', goalFmt, '—'],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 4 },
+    });
+
+    const campaigns = data.campaigns ?? [];
+    if (campaigns.length > 0) {
+      docPdf.setFontSize(14);
+      docPdf.setFont('helvetica', 'bold');
+      docPdf.text('2. CAMPANHAS (META)', 15, (docPdf as any).lastAutoTable.finalY + 15);
+      autoTable(docPdf, {
+        startY: (docPdf as any).lastAutoTable.finalY + 20,
+        head: [['Campanha', 'Leads', 'CPL', 'Conv.', 'ROAS']],
+        body: campaigns.map((c) => [c.name, String(c.leads), c.cpl, c.conversion, c.roas]),
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255] },
+        styles: { fontSize: 9, cellPadding: 4 },
+      });
+    }
+
+    docPdf.save(`Relatorio_WINAI_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  if (loading && !data) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
@@ -185,7 +539,7 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (error || !dashboardData) {
+  if (error || !data) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="bg-white p-12 rounded-[40px] border border-gray-100 shadow-sm text-center max-w-md">
@@ -193,9 +547,10 @@ const Dashboard: React.FC = () => {
             <AlertCircle size={32} className="text-red-500" />
           </div>
           <h2 className="text-2xl font-black text-gray-800 mb-2">Erro ao carregar</h2>
-          <p className="text-gray-500 mb-6">{error || 'Não foi possível carregar os dados do dashboard'}</p>
+          <p className="text-gray-500 mb-6">{error}</p>
           <button
-            onClick={loadDashboard}
+            type="button"
+            onClick={() => loadDashboard()}
             className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center gap-2 mx-auto hover:bg-emerald-700 transition-colors"
           >
             <RefreshCw size={18} /> Tentar novamente
@@ -205,306 +560,262 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  const data = dashboardData;
-  const hasMetrics = data.metrics.leadsCaptured.value !== "0" || (data.metrics.investment && data.metrics.investment.value !== "R$ 0,00") || data.chartData.some(d => d.atual > 0);
-  const hasGoals = data.goals.length > 0;
-
+  const campaigns = data.campaigns ?? [];
 
   return (
-    <>
-      <div className="space-y-8 max-w-7xl mx-auto">
-        <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
-            <div className="relative flex flex-col items-center justify-center bg-gray-50/50 p-4 rounded-[32px] border border-gray-100">
-              <div className="relative w-32 h-32 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="44" stroke="#e2e8f0" strokeWidth="8" fill="transparent" />
-                  <circle
-                    cx="50" cy="50" r="44"
-                    stroke="#10b981" strokeWidth="8"
-                    strokeDasharray="276.46"
-                    strokeDashoffset={276.46 - (276.46 * data.performanceScore / 100)}
-                    fill="transparent" strokeLinecap="round"
-                    className="transition-all duration-1000 ease-out"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-3xl font-black text-gray-900 tracking-tighter">{data.performanceScore}</span>
-                  <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest">Score</span>
-                </div>
-              </div>
+    <div className="space-y-8 max-w-7xl mx-auto pb-12">
+      <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-8">
+        <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+          <div className="max-w-md">
+            <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+              <Zap size={14} className="text-emerald-500 fill-emerald-500" />
+              <span className="text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em]">Painel Operacional • {new Date().getFullYear()}</span>
             </div>
-
-            <div className="max-w-md">
-              <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-                <Zap size={14} className="text-emerald-500 fill-emerald-500" />
-                <span className="text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em]">Painel Operacional • 2026</span>
-              </div>
-              <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none truncate">
-                BEM-VINDO, <br />
-                <span className="text-emerald-600 text-2xl md:text-3xl block mt-1">{data.user.name}</span>
-              </h1>
-              <p className="text-gray-500 mt-2 font-medium">Status da Operação: <span className={`font-black italic underline underline-offset-4 ${data.performanceScore > 0 ? 'text-emerald-600 decoration-emerald-200' : 'text-gray-400 decoration-gray-200'}`}>{data.operationStatus}</span></p>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(Number(e.target.value))}
-              className="w-full sm:w-auto bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
-            >
-              <option value={7}>Últimos 7 dias</option>
-              <option value={30}>Últimos 30 dias</option>
-            </select>
-            <button
-              onClick={() => setIsReportModalOpen(true)}
-              type="button"
-              className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 active:scale-95 cursor-pointer"
-            >
-              <Download size={16} />
-              Extrair Relatório
-            </button>
+            <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none truncate">
+              BEM-VINDO, <br />
+              <span className="text-emerald-600 text-2xl md:text-3xl block mt-1">{data.user.name}</span>
+            </h1>
+            <p className="text-gray-500 mt-2 font-medium">
+              Status da Operação:{' '}
+              <span className="text-emerald-600 font-black italic underline decoration-emerald-200 underline-offset-4">{data.operationStatus}</span>
+            </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard icon={Users} label="Leads Captados" value={data.metrics.leadsCaptured.value} trend={data.metrics.leadsCaptured.trend} isPositive={data.metrics.leadsCaptured.isPositive} />
-          <MetricCard icon={DollarSign} label="CPL Médio" value={data.metrics.cplAverage.value} trend={data.metrics.cplAverage.trend} isPositive={data.metrics.cplAverage.isPositive} />
-          <MetricCard icon={Percent} label="Conversão" value={data.metrics.conversionRate.value} trend={data.metrics.conversionRate.trend} isPositive={data.metrics.conversionRate.isPositive} />
-          <MetricCard icon={TrendingUp} label="ROI Estimado" value={data.metrics.roi.value} trend={data.metrics.roi.trend} isPositive={data.metrics.roi.isPositive} />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Fluxo de Aquisição</h2>
-              <div className="flex gap-4">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full"></div><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ATUAL</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-200 rounded-full"></div><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ANTERIOR</span></div>
-              </div>
-            </div>
-            {hasMetrics ? (
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data.chartData}>
-                    <defs><linearGradient id="colorAtual" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.2} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#9ca3af' }} />
-                    <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '16px' }} />
-                    <Area type="monotone" dataKey="atual" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorAtual)" />
-                    <Area type="monotone" dataKey="anterior" stroke="#e5e7eb" strokeWidth={2} strokeDasharray="5 5" fill="none" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <EmptyState
-                title={metaConnected ? "Sem dados de aquisição" : "Meta não conectado"}
-                description={metaConnected ? "Conecte suas campanhas para começar a visualizar o fluxo de leads." : "Conecte sua conta Meta (Facebook/Instagram) nas configurações para acessar campanhas."}
-                actionLabel={metaConnected ? "Conectar Campanhas" : "Ir para Configurações"}
-                onAction={() => navigate(metaConnected ? '/campanhas' : '/configuracoes')}
-                disabled={!metaConnected}
-                disabledReason={!metaConnected ? "Conecte Meta nas Configurações primeiro" : undefined}
-              />
-            )}
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+          <div className="flex bg-gray-50 p-1 rounded-2xl border border-gray-100 w-full sm:w-auto">
+            {(['7', '30', '90'] as const).map((range) => (
+              <button
+                key={range}
+                type="button"
+                onClick={() => setReportRange(range)}
+                className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  reportRange === range ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {range === '7' ? '7D' : range === '30' ? '30D' : '90D'}
+              </button>
+            ))}
           </div>
-
-          {/* Metas Ciclo 2026 */}
-          <div className="bg-[#003d2b] p-8 rounded-[40px] shadow-2xl flex flex-col justify-between overflow-hidden border border-emerald-900 relative">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full -mr-24 -mt-24 blur-3xl"></div>
-
-            <div className="space-y-6 relative z-10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <TrendingUp size={20} />
-                  <h2 className="font-black text-white tracking-[0.2em] uppercase text-xs italic">Metas Ciclo 2026</h2>
-                </div>
-                {hasGoals && (
-                  <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-500/30 uppercase tracking-widest">Foco Ativo</span>
-                )}
-              </div>
-
-              {hasGoals ? (
-                <>
-                  <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-3">
-                    <p className="text-[10px] font-black text-emerald-500/60 uppercase tracking-widest">Objetivos Estratégicos:</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {data.goals.map((goal) => (
-                        <div key={goal.id} className="flex items-center gap-2 text-[11px] font-bold text-gray-200 italic">
-                          <CheckCircle2 size={12} className="text-emerald-400" /> {goal.title}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-8 mt-4">
-                    {data.goals.slice(0, 3).map((goal, index) => (
-                      <div key={goal.id} className="space-y-3">
-                        <div className="flex justify-between items-end px-1">
-                          <div className="flex items-center gap-2">
-                            <div className={`p-2 ${index === 0 ? 'bg-emerald-500/20 text-emerald-400' :
-                              index === 1 ? 'bg-orange-500/20 text-orange-400' :
-                                'bg-sky-500/20 text-sky-400'
-                              } rounded-xl`}>
-                              {index === 0 ? <Users size={16} /> : index === 1 ? <Calendar size={16} /> : <Target size={16} />}
-                            </div>
-                            <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{goal.type}</span>
-                          </div>
-                          <span className="text-2xl font-black text-white italic tracking-tighter">{goal.progressPercentage}%</span>
-                        </div>
-                        <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${index === 0 ? 'bg-emerald-500 shadow-[0_0_15px_#10b981]' :
-                              index === 1 ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]' :
-                                'bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.5)]'
-                              } rounded-full transition-all duration-1000`}
-                            style={{ width: `${goal.progressPercentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Target size={32} className="text-emerald-500/40 mb-3" />
-                  <p className="text-emerald-100/60 text-sm font-medium">Nenhuma meta definida</p>
-                  <p className="text-emerald-100/40 text-xs mt-1">Defina suas metas para acompanhar o progresso</p>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => navigate('/metas')}
-              type="button"
-              className="w-full mt-8 bg-white/10 hover:bg-white/20 text-white font-black py-4 rounded-2xl border border-white/10 transition-all flex items-center justify-center gap-2 uppercase text-[10px] tracking-widest group relative z-10 cursor-pointer"
-            >
-              <Settings2 size={16} className="group-hover:rotate-45 transition-transform" />
-              {hasGoals ? 'GERENCIAR METAS' : 'CRIAR METAS'}
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-8">
-          <div className="flex items-center justify-between px-2">
-            <div className="space-y-1">
-              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em]">IA Operations Center</span>
-              <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase italic">Insights da Operação</h2>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {data.insights && data.insights.length > 0 ? (
-              data.insights
-                .filter((i) => i.actionUrl && i.actionLabel)
-                .slice(0, 3)
-                .map((insight) => (
-                  <InsightCard
-                    key={insight.id}
-                    insight={insight}
-                    onAction={(url) => navigate(url)}
-                  />
-                ))
-            ) : (
-              <div className="col-span-full bg-white p-12 rounded-[48px] border border-gray-100 shadow-sm text-center">
-                <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Zap size={24} className="text-emerald-500" />
-                </div>
-                <h3 className="text-lg font-black text-gray-800 uppercase italic">Aguardando Processamento Neural</h3>
-                <p className="text-gray-400 mt-2 max-w-sm mx-auto">Nossos agentes estão analisando seus dados para gerar sugestões de escala estratégica.</p>
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={generateReport}
+            className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 active:scale-95"
+          >
+            <FileDown size={16} />
+            Extrair Relatório PDF
+          </button>
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <MetricCard
+          icon={Users}
+          label="leads captados"
+          value={data.metrics.leadsCaptured.value}
+          trend={data.metrics.leadsCaptured.trend}
+          isNegative={!data.metrics.leadsCaptured.isPositive}
+          onClick={() => navigate('/metas')}
+        />
+        <MetricCard
+          icon={TrendingUp}
+          label="custo por lead"
+          value={data.metrics.cplAverage.value}
+          trend={data.metrics.cplAverage.trend}
+          isNegative={!data.metrics.cplAverage.isPositive}
+          onClick={() => navigate('/campanhas')}
+        />
+        <MetricCard
+          icon={DollarSign}
+          label="investimento (mídia)"
+          value={data.metrics.investment?.value ?? '—'}
+          trend={data.metrics.investment?.trend ?? '0%'}
+          isNegative={data.metrics.investment ? !data.metrics.investment.isPositive : false}
+          onClick={() => navigate('/campanhas')}
+        />
+      </div>
 
-      {/* Report Export Modal */}
-      {isReportModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50" onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setIsReportModalOpen(false);
-          }
-        }}>
-          <div className="bg-white w-full max-w-2xl rounded-[48px] shadow-2xl overflow-hidden border border-emerald-900/10" onClick={(e) => e.stopPropagation()}>
-            <div className="p-8 pb-4 flex justify-between items-center border-b border-gray-50">
-              <div className="space-y-1">
-                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em]">Exportar Relatório</span>
-                <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic">Filtros do Relatório</h2>
-              </div>
-              <button onClick={() => setIsReportModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
-                <X size={24} />
-              </button>
+      <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <DollarSign size={20} className="text-emerald-600" />
+            <h2 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Meta de Faturamento</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditingGoal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+          >
+            <Edit2 size={12} />
+            Editar Meta
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex justify-between items-end">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alcançado</p>
+              <h3 className="text-2xl font-black text-emerald-600 tracking-tight">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentRevenue)}
+              </h3>
             </div>
-
-            <div className="p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data Inicial</label>
-                  <input
-                    type="date"
-                    value={reportFilters.startDate}
-                    onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                    className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data Final</label>
-                  <input
-                    type="date"
-                    value={reportFilters.endDate}
-                    onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                    className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Status</label>
-                <select
-                  value={reportFilters.status}
-                  onChange={(e) => setReportFilters(prev => ({ ...prev, status: e.target.value }))}
-                  className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                >
-                  <option value="">Todos os Status</option>
-                  <option value="NEW">Novo</option>
-                  <option value="CONTACTED">Contactado</option>
-                  <option value="QUALIFIED">Qualificado</option>
-                  <option value="MEETING_SCHEDULED">Reunião Agendada</option>
-                  <option value="WON">Ganho</option>
-                  <option value="LOST">Perdido</option>
-                </select>
-              </div>
-
-              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-                <p className="text-xs text-emerald-700 font-medium">
-                  <strong>Nota:</strong> O relatório será exportado em formato Excel (.xlsx) contendo todos os leads que correspondem aos filtros selecionados, incluindo métricas e estatísticas.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-8 border-t border-gray-50 flex justify-end gap-4">
-              <button
-                onClick={() => setIsReportModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 font-bold text-xs uppercase tracking-widest px-6 py-3"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleExportReport}
-                disabled={isExportingReport}
-                className="bg-emerald-600 text-white font-black px-8 py-4 rounded-xl shadow-xl shadow-emerald-600/30 hover:bg-emerald-700 transition-all uppercase tracking-widest text-xs flex items-center gap-2 disabled:opacity-70 disabled:grayscale"
-              >
-                {isExportingReport ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-                {isExportingReport ? 'Exportando...' : 'Exportar Excel'}
-              </button>
+            <div className="text-right space-y-1">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Meta</p>
+              <h3 className="text-2xl font-black text-gray-800 tracking-tight">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(revenueTarget)}
+              </h3>
             </div>
           </div>
+
+          <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 1, ease: 'easeOut' }}
+              className="h-full bg-emerald-500 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+            />
+          </div>
+
+          <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">
+            <span>0%</span>
+            <span>{progressPct}% concluído</span>
+            <span>100%</span>
+          </div>
+          {!revenue?.goalId && (
+            <p className="text-xs text-amber-700 font-medium bg-amber-50 border border-amber-100 rounded-xl px-4 py-2">
+              Nenhuma meta de faturamento (tipo REVENUE) ativa. Clique em &quot;Editar Meta&quot; para criar e passar a acompanhar no banco de dados.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isEditingGoal && (
+          <div className="fixed inset-0 z-[999] overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[40px] w-full max-w-md shadow-2xl border border-gray-100 relative my-auto flex flex-col max-h-[90vh] overflow-hidden"
+            >
+              <div className="p-8 border-b border-gray-50 shrink-0">
+                <h3 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Ajustar faturamento</h3>
+                <p className="text-xs text-gray-500 mt-2">Persistido como meta REVENUE no backend (PostgreSQL).</p>
+              </div>
+              <div className="p-8 space-y-6 overflow-y-auto flex-1">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Faturamento atual (R$)</label>
+                  <input
+                    type="number"
+                    value={tempRevenue}
+                    onChange={(e) => setTempRevenue(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Meta de faturamento (R$)</label>
+                  <input
+                    type="number"
+                    value={tempGoal}
+                    onChange={(e) => setTempGoal(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingGoal(false)}
+                    className="flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-gray-50 transition-all border border-gray-100"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveMetrics}
+                    className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
+                  >
+                    Salvar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm h-full">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-2">
+                <Activity size={20} className="text-emerald-600" />
+                <h2 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Análise de Eficiência</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/campanhas')}
+                className="text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:underline"
+              >
+                Campanhas
+              </button>
+            </div>
+            {campaigns.length === 0 ? (
+              <p className="text-sm text-gray-500 font-medium">
+                Sem campanhas Meta no período. Conecte o Meta em Configurações e sincronize em Campanhas para preencher esta tabela com dados reais.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-50">
+                      <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Canal</th>
+                      <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Leads</th>
+                      <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CPL</th>
+                      <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Conv.</th>
+                      <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">ROAS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {campaigns.map((item, idx) => (
+                      <tr key={`${item.name}-${idx}`} className="group hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => navigate('/campanhas')}>
+                        <td className="py-4">
+                          <span className="text-xs font-bold text-gray-800">{item.name}</span>
+                        </td>
+                        <td className="py-4 text-center">
+                          <span className="text-xs font-black text-gray-600">{item.leads}</span>
+                        </td>
+                        <td className="py-4 text-center">
+                          <span className="text-xs font-black text-emerald-600">{item.cpl}</span>
+                        </td>
+                        <td className="py-4 text-center">
+                          <span className="text-xs font-black text-gray-600">{item.conversion}</span>
+                        </td>
+                        <td className="py-4 text-right">
+                          <span className="text-xs font-black text-gray-800">{item.roas}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="lg:col-span-1">
+          <WeeklyTasksWidget tasks={tasks} onToggle={(id) => void toggleTask(id)} disabled={taskBusy} />
+        </div>
+      </div>
+
+      <MonthlyGoalsWidget data={monthlyData} />
+
+      {loading && data && (
+        <div className="fixed bottom-6 right-6 flex items-center gap-2 bg-white/90 border border-gray-200 rounded-full px-4 py-2 shadow-lg text-xs font-bold text-gray-600">
+          <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+          Atualizando…
         </div>
       )}
-    </>
+    </div>
   );
 };
 

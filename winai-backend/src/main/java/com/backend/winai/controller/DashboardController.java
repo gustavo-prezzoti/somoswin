@@ -1,7 +1,11 @@
 package com.backend.winai.controller;
 
+import com.backend.winai.dto.request.CreateGoalCheckpointRequest;
 import com.backend.winai.dto.request.CreateGoalRequest;
+import com.backend.winai.dto.request.CreateGoalTaskRequest;
+import com.backend.winai.dto.request.UpdateGoalTaskRequest;
 import com.backend.winai.dto.response.DashboardResponse;
+import com.backend.winai.dto.response.DashboardResponse.DashboardTaskDTO;
 import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.entity.User;
 import com.backend.winai.repository.UserRepository;
@@ -90,10 +94,66 @@ public class DashboardController {
         }
 
         @GetMapping("/goals")
-        public ResponseEntity<List<DashboardResponse.GoalDTO>> getAllGoals(@AuthenticationPrincipal User user) {
+        public ResponseEntity<List<DashboardResponse.GoalDTO>> getAllGoals(
+                        @AuthenticationPrincipal User user,
+                        @RequestParam(required = false) Integer year,
+                        @RequestParam(required = false) Integer planningMonth) {
                 User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
                                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
-                return ResponseEntity.ok(dashboardService.getAllGoals(userWithCompany));
+                return ResponseEntity.ok(dashboardService.getAllGoals(userWithCompany, year, planningMonth));
+        }
+
+        @PostMapping("/goals/{goalId}/tasks")
+        public ResponseEntity<DashboardResponse.GoalTaskDTO> addGoalTask(
+                        @AuthenticationPrincipal User user,
+                        @PathVariable Long goalId,
+                        @Valid @RequestBody CreateGoalTaskRequest request) {
+                User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
+                                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                return ResponseEntity.ok(dashboardService.addGoalTask(userWithCompany, goalId, request));
+        }
+
+        @PutMapping("/goals/{goalId}/tasks/{taskId}")
+        public ResponseEntity<DashboardResponse.GoalTaskDTO> updateGoalTask(
+                        @AuthenticationPrincipal User user,
+                        @PathVariable Long goalId,
+                        @PathVariable Long taskId,
+                        @RequestBody UpdateGoalTaskRequest request) {
+                User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
+                                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                return ResponseEntity.ok(dashboardService.updateGoalTask(userWithCompany, goalId, taskId, request));
+        }
+
+        @DeleteMapping("/goals/{goalId}/tasks/{taskId}")
+        public ResponseEntity<Void> deleteGoalTask(
+                        @AuthenticationPrincipal User user,
+                        @PathVariable Long goalId,
+                        @PathVariable Long taskId) {
+                User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
+                                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                dashboardService.deleteGoalTask(userWithCompany, goalId, taskId);
+                return ResponseEntity.noContent().build();
+        }
+
+        @PostMapping("/goals/{goalId}/checkpoints")
+        public ResponseEntity<DashboardResponse.GoalCheckpointDTO> addGoalCheckpoint(
+                        @AuthenticationPrincipal User user,
+                        @PathVariable Long goalId,
+                        @Valid @RequestBody CreateGoalCheckpointRequest request) {
+                User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
+                                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                return ResponseEntity.ok(dashboardService.addGoalCheckpoint(userWithCompany, goalId, request));
+        }
+
+        @DeleteMapping("/goals/{goalId}/checkpoints/{checkpointId}")
+        public ResponseEntity<Void> deleteGoalCheckpoint(
+                        @AuthenticationPrincipal User user,
+                        @PathVariable Long goalId,
+                        @PathVariable Long checkpointId) {
+                User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
+                                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                dashboardService.deleteGoalCheckpoint(userWithCompany, goalId, checkpointId);
+                return ResponseEntity.noContent().build();
         }
 
         @PutMapping("/goals/{id}")
@@ -121,6 +181,18 @@ public class DashboardController {
                 User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
                                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
                 return ResponseEntity.ok(dashboardService.toggleGoalHighlight(userWithCompany, id));
+        }
+
+        /**
+         * Alterna conclusão de uma tarefa semanal do dashboard (persistida por empresa).
+         */
+        @PatchMapping("/tasks/{taskId}/toggle")
+        public ResponseEntity<DashboardTaskDTO> toggleDashboardTask(
+                        @AuthenticationPrincipal User user,
+                        @PathVariable Long taskId) {
+                User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
+                                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                return ResponseEntity.ok(dashboardService.toggleDashboardTask(userWithCompany, taskId));
         }
 
         /**

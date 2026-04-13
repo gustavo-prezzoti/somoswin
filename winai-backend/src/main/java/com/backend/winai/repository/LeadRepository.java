@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,9 +36,17 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     long countByCompany(Company company);
 
+    long countByCompany_IdAndPhoneIsNotNull(UUID companyId);
+
     long countByCompanyAndStatus(Company company, LeadStatus status);
 
     long countByCompanyAndCreatedAtBetween(Company company, java.time.LocalDateTime start, java.time.LocalDateTime end);
+
+    @Query("SELECT l FROM Lead l WHERE l.company = :company AND l.createdAt >= :start AND l.createdAt < :end")
+    List<Lead> findByCompanyAndCreatedAtRange(
+            @Param("company") Company company,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 
     // Método removido - usando CriteriaBuilder no serviço para evitar problemas com
     // tipos null no PostgreSQL

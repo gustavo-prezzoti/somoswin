@@ -17,6 +17,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,13 +34,20 @@ public class LeadService {
     private final MeetingRepository meetingRepository;
     private final ChatMemoryService chatMemoryService;
 
-    private static final Map<LeadStatus, String> STATUS_LABELS = Map.of(
-            LeadStatus.NEW, "Novo",
-            LeadStatus.CONTACTED, "Contactado",
-            LeadStatus.QUALIFIED, "Qualificado",
-            LeadStatus.MEETING_SCHEDULED, "Reunião Agendada",
-            LeadStatus.WON, "Ganho",
-            LeadStatus.LOST, "Perdido");
+    private static final Map<LeadStatus, String> STATUS_LABELS = createStatusLabels();
+
+    private static Map<LeadStatus, String> createStatusLabels() {
+        Map<LeadStatus, String> m = new HashMap<>();
+        m.put(LeadStatus.NEW, "Novos Leads");
+        m.put(LeadStatus.CONTACTED, "Em Contato");
+        m.put(LeadStatus.QUALIFIED, "Qualificados");
+        m.put(LeadStatus.MEETING_SCHEDULED, "Reunião");
+        m.put(LeadStatus.PROPOSAL_SENT, "Proposta");
+        m.put(LeadStatus.NEGOTIATION, "Negociação");
+        m.put(LeadStatus.WON, "Ganhos");
+        m.put(LeadStatus.LOST, "Perdidos");
+        return m;
+    }
 
     /**
      * Lista todos os leads da empresa
@@ -96,6 +104,8 @@ public class LeadService {
                 .ownerName(request.getOwnerName())
                 .notes(request.getNotes())
                 .source(request.getSource())
+                .estimatedValue(request.getEstimatedValue())
+                .leadScore(request.getLeadScore() != null ? request.getLeadScore() : 0)
                 .build();
 
         lead = leadRepository.save(lead);
@@ -123,6 +133,12 @@ public class LeadService {
         lead.setOwnerName(request.getOwnerName());
         lead.setNotes(request.getNotes());
         lead.setSource(request.getSource());
+        if (request.getEstimatedValue() != null) {
+            lead.setEstimatedValue(request.getEstimatedValue());
+        }
+        if (request.getLeadScore() != null) {
+            lead.setLeadScore(request.getLeadScore());
+        }
 
         lead = leadRepository.save(lead);
         return toResponse(lead);
@@ -160,6 +176,15 @@ public class LeadService {
                 .ownerName(lead.getOwnerName())
                 .notes(lead.getNotes())
                 .source(lead.getSource())
+                .trackId(lead.getTrackId())
+                .trackSource(lead.getTrackSource())
+                .utmSource(lead.getUtmSource())
+                .utmMedium(lead.getUtmMedium())
+                .utmCampaign(lead.getUtmCampaign())
+                .utmContent(lead.getUtmContent())
+                .utmTerm(lead.getUtmTerm())
+                .estimatedValue(lead.getEstimatedValue())
+                .leadScore(lead.getLeadScore() != null ? lead.getLeadScore() : 0)
                 .profilePictureUrl(lead.getProfilePictureUrl())
                 .createdAt(lead.getCreatedAt())
                 .updatedAt(lead.getUpdatedAt())

@@ -32,13 +32,15 @@ public class ReportService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    private static final Map<LeadStatus, String> STATUS_LABELS = Map.of(
-            LeadStatus.NEW, "Novo",
-            LeadStatus.CONTACTED, "Contactado",
-            LeadStatus.QUALIFIED, "Qualificado",
-            LeadStatus.MEETING_SCHEDULED, "Reunião Agendada",
-            LeadStatus.WON, "Ganho",
-            LeadStatus.LOST, "Perdido");
+    private static final Map<LeadStatus, String> STATUS_LABELS = Map.ofEntries(
+            Map.entry(LeadStatus.NEW, "Novo"),
+            Map.entry(LeadStatus.CONTACTED, "Contactado"),
+            Map.entry(LeadStatus.QUALIFIED, "Qualificado"),
+            Map.entry(LeadStatus.MEETING_SCHEDULED, "Reunião Agendada"),
+            Map.entry(LeadStatus.PROPOSAL_SENT, "Proposta"),
+            Map.entry(LeadStatus.NEGOTIATION, "Negociação"),
+            Map.entry(LeadStatus.WON, "Ganho"),
+            Map.entry(LeadStatus.LOST, "Perdido"));
 
     /**
      * Gera relatório Excel de leads com filtros

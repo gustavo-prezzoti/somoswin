@@ -10,6 +10,7 @@ import com.backend.winai.entity.WhatsAppMessage;
 import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
+import com.backend.winai.util.UtmParseUtil;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import com.backend.winai.entity.UserWhatsAppConnection;
@@ -107,7 +108,8 @@ public class WhatsAppWebhookService {
 
             // Buscar ou criar lead
             // Buscar ou criar lead
-            Lead lead = findOrCreateLead(phoneNumber, contactName, company, messageText);
+            Lead lead = findOrCreateLead(phoneNumber, contactName, company, messageText,
+                    extractTrackSource(webhook), extractTrackId(webhook));
 
             // Sincronizar foto de perfil da conversa com o lead
             if (conversation.getProfilePictureUrl() != null &&
@@ -251,39 +253,116 @@ public class WhatsAppWebhookService {
     }
 
     /**
-     * Busca ou cria um lead baseado no telefone
+     * Busca ou cria um lead baseado no telefone; preenche track/UTM quando disponíveis (primeira mensagem / webhook).
      */
-    private Lead findOrCreateLead(String phoneNumber, String contactName, Company company, String messageText) {
-        // Buscar lead existente por telefone
+    private Lead findOrCreateLead(String phoneNumber, String contactName, Company company, String messageText,
+            String trackSource, String trackId) {
         Optional<Lead> existingLead = leadRepository.findByCompanyOrderByCreatedAtDesc(company).stream()
                 .filter(lead -> phoneNumber.equals(lead.getPhone()))
                 .findFirst();
 
+        Optional<UtmParseUtil.UtmSnapshot> utmFromText = UtmParseUtil.parseFromText(messageText);
+
         if (existingLead.isPresent()) {
             Lead lead = existingLead.get();
-            // Atualizar nome se não tiver ou se o novo nome for mais completo
+            boolean save = false;
             if (contactName != null && !contactName.isEmpty()) {
                 if (lead.getName() == null || lead.getName().isEmpty() ||
                         contactName.length() > lead.getName().length()) {
                     lead.setName(contactName);
-                    leadRepository.save(lead);
+                    save = true;
                 }
+            }
+            if (trackSource != null && (lead.getTrackSource() == null || lead.getTrackSource().isBlank())) {
+                lead.setTrackSource(trackSource);
+                save = true;
+            }
+            if (trackId != null && lead.getTrackId() == null) {
+                lead.setTrackId(trackId);
+                save = true;
+            }
+            if (utmFromText.isPresent()) {
+                save |= mergeUtmIfEmpty(lead, utmFromText.get());
+            }
+            if (save) {
+                leadRepository.save(lead);
             }
             return lead;
         }
 
-        // Criar novo lead
-        Lead newLead = Lead.builder()
+        Lead.LeadBuilder lb = Lead.builder()
                 .company(company)
                 .name(contactName != null && !contactName.isEmpty() ? contactName : "Lead WhatsApp")
-                .email("") // Será preenchido depois se disponível
+                .email("")
                 .phone(phoneNumber)
                 .status(LeadStatus.NEW)
                 .source("WhatsApp")
                 .notes("Lead criado automaticamente via WhatsApp")
-                .build();
+                .trackSource(trackSource)
+                .trackId(trackId);
 
+        Lead newLead = lb.build();
+        utmFromText.ifPresent(u -> applyUtmToLead(newLead, u));
         return leadRepository.save(newLead);
+    }
+
+    private static boolean mergeUtmIfEmpty(Lead lead, UtmParseUtil.UtmSnapshot u) {
+        boolean changed = false;
+        if (lead.getUtmSource() == null && u.getUtmSource() != null) {
+            lead.setUtmSource(u.getUtmSource());
+            changed = true;
+        }
+        if (lead.getUtmMedium() == null && u.getUtmMedium() != null) {
+            lead.setUtmMedium(u.getUtmMedium());
+            changed = true;
+        }
+        if (lead.getUtmCampaign() == null && u.getUtmCampaign() != null) {
+            lead.setUtmCampaign(u.getUtmCampaign());
+            changed = true;
+        }
+        if (lead.getUtmContent() == null && u.getUtmContent() != null) {
+            lead.setUtmContent(u.getUtmContent());
+            changed = true;
+        }
+        if (lead.getUtmTerm() == null && u.getUtmTerm() != null) {
+            lead.setUtmTerm(u.getUtmTerm());
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static void applyUtmToLead(Lead lead, UtmParseUtil.UtmSnapshot u) {
+        if (u.getUtmSource() != null) {
+            lead.setUtmSource(u.getUtmSource());
+        }
+        if (u.getUtmMedium() != null) {
+            lead.setUtmMedium(u.getUtmMedium());
+        }
+        if (u.getUtmCampaign() != null) {
+            lead.setUtmCampaign(u.getUtmCampaign());
+        }
+        if (u.getUtmContent() != null) {
+            lead.setUtmContent(u.getUtmContent());
+        }
+        if (u.getUtmTerm() != null) {
+            lead.setUtmTerm(u.getUtmTerm());
+        }
+    }
+
+    private String extractTrackSource(UazapWebhookRequest webhook) {
+        if (webhook.getMessage() == null) {
+            return null;
+        }
+        String s = webhook.getMessage().getTrackSource();
+        return s != null && !s.isBlank() ? s.trim() : null;
+    }
+
+    private String extractTrackId(UazapWebhookRequest webhook) {
+        if (webhook.getMessage() == null) {
+            return null;
+        }
+        String s = webhook.getMessage().getTrackId();
+        return s != null && !s.isBlank() ? s.trim() : null;
     }
 
     /**

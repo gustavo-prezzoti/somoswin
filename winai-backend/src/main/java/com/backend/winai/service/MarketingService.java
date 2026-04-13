@@ -5,6 +5,7 @@ import com.backend.winai.dto.marketing.CampaignsListResponse;
 import com.backend.winai.dto.marketing.AdItemRequest;
 import com.backend.winai.dto.marketing.CreateCampaignRequest;
 import com.backend.winai.dto.marketing.InstagramMetricsResponse;
+import com.backend.winai.dto.marketing.AccountInsightTotals;
 import com.backend.winai.dto.marketing.TrafficMetricsResponse;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.MetaCampaign;
@@ -491,6 +492,36 @@ public class MarketingService {
                         company.getId(), level, externalId, start, end);
 
         return mapInsightsToResponse(insights);
+    }
+
+    /**
+     * KPIs da conta no mesmo período da Graph API (tabela de campanhas), com tendência vs. período anterior.
+     */
+    public TrafficMetricsResponse buildTrafficMetricsFromGraphTotals(AccountInsightTotals current, AccountInsightTotals previous) {
+        Objects.requireNonNull(current);
+        if (previous == null) {
+            previous = AccountInsightTotals.empty();
+        }
+        double cSpend = current.getSpend();
+        long cImp = current.getImpressions();
+        long cClk = current.getClicks();
+        long cConv = current.getConversions();
+        double cRoas = cSpend > 0 ? (cConv * 100.0) / cSpend : 0;
+
+        double pSpend = previous.getSpend();
+        long pImp = previous.getImpressions();
+        long pClk = previous.getClicks();
+        long pConv = previous.getConversions();
+        double pRoas = pSpend > 0 ? (pConv * 100.0) / pSpend : 0;
+
+        return TrafficMetricsResponse.builder()
+                .investment(createTrendDetail(cSpend, pSpend, String.format(Locale.US, "R$ %.2f", cSpend), true))
+                .impressions(createTrendDetail((double) cImp, (double) pImp, formatNumber(cImp), true))
+                .clicks(createTrendDetail((double) cClk, (double) pClk, String.valueOf(cClk), true))
+                .conversations(createTrendDetail((double) cConv, (double) pConv, String.valueOf(cConv), true))
+                .roas(createTrendDetail(cRoas, pRoas, String.format(Locale.US, "%.1fx", cRoas), true))
+                .performanceHistory(new ArrayList<>())
+                .build();
     }
 
     public InstagramMetricsResponse getInstagramMetrics(User user) {

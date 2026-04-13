@@ -6,6 +6,7 @@ import com.backend.winai.dto.response.MeetingResponse;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Lead;
 import com.backend.winai.entity.Meeting;
+import com.backend.winai.entity.MeetingKind;
 import com.backend.winai.entity.MeetingStatus;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.MeetingRepository;
@@ -132,6 +133,7 @@ public class MeetingService {
                 .scheduledBy(request.getScheduledBy() != null ? request.getScheduledBy() : "Usuário")
                 .meetingLink(request.getMeetingLink())
                 .attendeesJson(attendeesJson)
+                .meetingKind(request.getMeetingKind() != null ? request.getMeetingKind() : MeetingKind.STANDARD)
                 .build();
 
         meeting = meetingRepository.save(meeting);
@@ -186,6 +188,9 @@ public class MeetingService {
         if (request.getLeadId() != null) {
             Lead lead = leadRepository.findByIdAndCompany(request.getLeadId(), company).orElse(null);
             meeting.setLead(lead);
+        }
+        if (request.getMeetingKind() != null) {
+            meeting.setMeetingKind(request.getMeetingKind());
         }
 
         // Atualizar attendeesJson se o email do contato mudou ou se não existe
@@ -314,6 +319,8 @@ public class MeetingService {
                 .googleEventId(meeting.getGoogleEventId())
                 .source(source)
                 .attendeesCount(attendeesCount)
+                .meetingKind(meeting.getMeetingKind() != null ? meeting.getMeetingKind().name() : MeetingKind.STANDARD.name())
+                .topicsPreview(meeting.getTopicsPreview())
                 .build();
     }
 }

@@ -70,5 +70,12 @@ public class UazapWebhookRequest {
         private Boolean wasSentByApi;
         private Boolean isGroup;
         private String owner;
+
+        /** Rastreamento (provedor / Meta Click to WhatsApp) */
+        @JsonProperty("track_source")
+        private String trackSource;
+
+        @JsonProperty("track_id")
+        private String trackId;
     }
 }
