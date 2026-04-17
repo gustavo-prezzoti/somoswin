@@ -62,10 +62,13 @@ public class UazapWebhookService {
 
             log.info("[WEBHOOK] EventType: {}, Instance: {}, Owner: {}, type: {}", eventType, instanceName, owner, rawType);
 
-            // Ignorar eventos que não são mensagens novas
-            if (eventType != null && !eventType.equalsIgnoreCase("messages")) {
-                log.debug("[WEBHOOK] Evento não é mensagem ({}). Ignorando.", eventType);
-                return;
+            // Ignorar eventos que não são mensagens novas (UaZap pode enviar "messages" ou "Message")
+            if (eventType != null && !eventType.isBlank()) {
+                String et = eventType.trim().toLowerCase();
+                if (!"messages".equals(et) && !"message".equals(et)) {
+                    log.debug("[WEBHOOK] Evento não é mensagem ({}). Ignorando.", eventType);
+                    return;
+                }
             }
 
             // O UaZap envia dados em 'message' e 'chat' (não em 'event')

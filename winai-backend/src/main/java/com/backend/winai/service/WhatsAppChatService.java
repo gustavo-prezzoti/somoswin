@@ -70,18 +70,23 @@ public class WhatsAppChatService {
                 List<String> companyInstanceNames = userWhatsAppConnectionRepository
                                 .findInstanceNamesByCompanyId(companyId);
 
-                // Se o usuário não tem nenhuma conexão, retorna lista vazia
-                if (companyInstanceNames.isEmpty()) {
-                        return List.of();
-                }
-
                 // Busca todas as conversas da empresa (já ordenadas)
                 List<WhatsAppConversation> allConversations = conversationRepository
                                 .findByCompanyOrderByLastMessageTimestampDesc(company);
 
-                // Filtra apenas as conversas das instâncias que o usuário tem acesso
+                // Sem conexão cadastrada (ex.: QR antes do fix), não filtrar — evita lista vazia indevida
+                if (companyInstanceNames.isEmpty()) {
+                        log.debug("Nenhuma UserWhatsAppConnection para empresa {}. Listando todas as conversas da empresa.",
+                                        companyId);
+                        return allConversations.stream()
+                                        .map(conv -> mapToConversationResponse(conv, includeMessages))
+                                        .collect(Collectors.toList());
+                }
+
+                // Filtra apenas as conversas das instâncias vinculadas à empresa
                 return allConversations.stream()
-                                .filter(conv -> companyInstanceNames.contains(conv.getUazapInstance()))
+                                .filter(conv -> conv.getUazapInstance() != null
+                                                && companyInstanceNames.contains(conv.getUazapInstance()))
                                 .map(conv -> mapToConversationResponse(conv, includeMessages))
                                 .collect(Collectors.toList());
         }

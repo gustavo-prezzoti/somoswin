@@ -801,6 +801,8 @@ public class WhatsAppService {
             if (result != null) {
                 uazapService.ensureInstanceWebhookConfigured(instanceName);
             }
+            // Sempre registrar instância no banco; sem isso getConversationsByUserConnections retorna vazio
+            ensureUserWhatsAppConnectionForCompany(company, instanceName);
             return result;
         } catch (RuntimeException e) {
             if (e.getMessage() != null && e.getMessage().contains("Instância não encontrada")) {
@@ -808,6 +810,25 @@ public class WhatsAppService {
                 return createAndConnectInstance(company, instanceName);
             }
             throw e;
+        }
+    }
+
+    /**
+     * Garante linha em user_whatsapp_connection após conectar pelo QR (ou instância já existente no Uazap).
+     * Sem isso, a listagem filtrada por instância fica vazia mesmo com conversas no banco.
+     */
+    private void ensureUserWhatsAppConnectionForCompany(Company company, String instanceName) {
+        if (instanceName == null || instanceName.isBlank()) {
+            return;
+        }
+        if (connectionRepository.findByCompanyIdAndInstanceName(company.getId(), instanceName).isEmpty()) {
+            com.backend.winai.entity.UserWhatsAppConnection conn = new com.backend.winai.entity.UserWhatsAppConnection();
+            conn.setCompany(company);
+            conn.setInstanceName(instanceName);
+            conn.setInstanceBaseUrl(defaultBaseUrl != null && !defaultBaseUrl.isEmpty() ? defaultBaseUrl : null);
+            conn.setIsActive(true);
+            connectionRepository.save(conn);
+            log.info("UserWhatsAppConnection registrada para empresa {} instância {}", company.getId(), instanceName);
         }
     }
 
@@ -823,15 +844,7 @@ public class WhatsAppService {
         uazapService.createInstance(createRequest);
         uazapService.ensureInstanceWebhookConfigured(instanceName);
 
-        // Vincular empresa à nova instância para evitar duplicação futura
-        if (connectionRepository.findByCompanyIdAndInstanceName(company.getId(), instanceName).isEmpty()) {
-            com.backend.winai.entity.UserWhatsAppConnection conn = new com.backend.winai.entity.UserWhatsAppConnection();
-            conn.setCompany(company);
-            conn.setInstanceName(instanceName);
-            conn.setInstanceBaseUrl(defaultBaseUrl != null && !defaultBaseUrl.isEmpty() ? defaultBaseUrl : null);
-            conn.setIsActive(true);
-            connectionRepository.save(conn);
-        }
+        ensureUserWhatsAppConnectionForCompany(company, instanceName);
 
         return uazapService.connectInstance(instanceName);
     }
