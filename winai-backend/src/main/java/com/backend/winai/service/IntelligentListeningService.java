@@ -40,6 +40,9 @@ public class IntelligentListeningService {
 
     private static final DateTimeFormatter CRM_TS = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
+    /** Taxa de referência USD→BRL quando a IA informa só valor_mencionado_usd ou para conferência. */
+    private static final BigDecimal USD_BRL_REFERENCE_RATE = new BigDecimal("5.50");
+
     private final MeetingRepository meetingRepository;
     private final LeadRepository leadRepository;
     private final OpenAiService openAiService;
@@ -233,7 +236,8 @@ public class IntelligentListeningService {
     }
 
     /**
-     * Extrai valor_mencionado_brl do JSON de análise (gerado pela IA).
+     * Extrai valor em BRL do JSON de análise: prioriza {@code valor_mencionado_brl};
+     * se ausente e houver {@code valor_mencionado_usd}, converte com taxa USD→BRL de referência.
      */
     private BigDecimal extractNegotiatedValueBrl(String aiSummaryJson) {
         if (aiSummaryJson == null || aiSummaryJson.isBlank()) {
@@ -242,23 +246,34 @@ public class IntelligentListeningService {
         try {
             String clean = sanitizeJsonBlock(aiSummaryJson).trim();
             JsonNode root = objectMapper.readTree(clean);
-            JsonNode v = root.get("valor_mencionado_brl");
-            if (v == null || v.isNull()) {
-                return null;
+            BigDecimal brl = parseMoneyNode(root.get("valor_mencionado_brl"));
+            if (brl != null) {
+                return brl;
             }
-            if (v.isNumber()) {
-                return BigDecimal.valueOf(v.asDouble()).setScale(2, RoundingMode.HALF_UP);
-            }
-            if (v.isTextual()) {
-                String s = v.asText().replace(".", "").replace(",", ".");
-                s = s.replaceAll("[^0-9.]", "");
-                if (s.isBlank()) {
-                    return null;
-                }
-                return new BigDecimal(s).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal usd = parseMoneyNode(root.get("valor_mencionado_usd"));
+            if (usd != null) {
+                return usd.multiply(USD_BRL_REFERENCE_RATE).setScale(2, RoundingMode.HALF_UP);
             }
         } catch (Exception e) {
             log.debug("Não foi possível extrair valor_mencionado_brl: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private static BigDecimal parseMoneyNode(JsonNode v) {
+        if (v == null || v.isNull()) {
+            return null;
+        }
+        if (v.isNumber()) {
+            return BigDecimal.valueOf(v.asDouble()).setScale(2, RoundingMode.HALF_UP);
+        }
+        if (v.isTextual()) {
+            String s = v.asText().replace(".", "").replace(",", ".");
+            s = s.replaceAll("[^0-9.]", "");
+            if (s.isBlank()) {
+                return null;
+            }
+            return new BigDecimal(s).setScale(2, RoundingMode.HALF_UP);
         }
         return null;
     }

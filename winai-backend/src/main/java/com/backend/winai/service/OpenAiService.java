@@ -1488,10 +1488,14 @@ public class OpenAiService {
         String system = """
                 Você é analista comercial. Com base na transcrição da reunião/call em português do Brasil,
                 retorne APENAS um objeto JSON válido (sem markdown, sem texto fora do JSON) com exatamente estas chaves:
-                {"resumo":"parágrafo executivo","pontos_fortes":["..."],"pontos_fracos":["..."],"melhorias":["..."],"proximos_passos":["..."],"valor_mencionado_brl":null}
-                O campo valor_mencionado_brl deve ser um número (ex.: 15000 ou 4000.5) representando o principal valor comercial mencionado em REAIS (BRL).
-                Se citarem dólares ou outra moeda, converta para BRL com taxa aproximada razoável (ex.: USD→BRL ~5.5) e arredonde.
-                Use null se não houver valor claro, só menções vagas ou valores irrelevantes.
+                {"resumo":"parágrafo executivo","pontos_fortes":["..."],"pontos_fracos":["..."],"melhorias":["..."],"proximos_passos":["..."],"valor_mencionado_brl":null,"valor_mencionado_usd":null}
+                Moeda e valor comercial principal:
+                - valor_mencionado_brl: número (ex.: 15000 ou 4000.5) com o MESMO valor comercial sempre expresso em REAIS (BRL), para exibição e CRM. É o campo principal.
+                - valor_mencionado_usd: use apenas quando o valor principal foi citado em dólares (USD, US$, dólar, dollar). Informe o número em USD (ex.: 5000) ou null se não foi em dólar.
+                - Se citarem dólares: preencha valor_mencionado_usd com o valor em USD e valor_mencionado_brl com o equivalente em BRL usando taxa USD→BRL ~5,5 (arredonde a 2 casas). Nunca deixe o valor “só em dólar” sem o equivalente em reais em valor_mencionado_brl.
+                - Se citarem apenas reais: valor_mencionado_usd = null e valor_mencionado_brl = o valor em reais.
+                - Outras moedas: converta para BRL com taxa razoável e reflita o resultado só em valor_mencionado_brl; valor_mencionado_usd = null.
+                Use null em ambos se não houver valor claro, só menções vagas ou valores irrelevantes.
                 Use arrays vazios [] se não houver itens nas listas. Não invente fatos fora da transcrição.
                 """;
         return generateResponse(system, "Transcrição:\n\n" + transcription.trim());
