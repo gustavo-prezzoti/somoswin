@@ -322,6 +322,13 @@ public class UazapService {
         throw new RuntimeException("Erro ao enviar mensagem via Uazap: 401 Unauthorized");
     }
 
+    private static String resolveDefaultSupportMode(Company company) {
+        if (company == null || company.getDefaultSupportMode() == null || company.getDefaultSupportMode().isBlank()) {
+            return "HUMAN";
+        }
+        return company.getDefaultSupportMode();
+    }
+
     /**
      * Busca ou cria uma conversa
      */
@@ -341,6 +348,7 @@ public class UazapService {
                                 .uazapBaseUrl(uazapConfig.get("baseUrl"))
                                 .uazapToken(uazapConfig.get("token"))
                                 .uazapInstance(instanceName)
+                                .supportMode(resolveDefaultSupportMode(company))
                                 .unreadCount(0)
                                 .isArchived(false)
                                 .isBlocked(false)
@@ -359,6 +367,7 @@ public class UazapService {
                             .uazapBaseUrl(uazapConfig.get("baseUrl"))
                             .uazapToken(uazapConfig.get("token"))
                             .uazapInstance(uazapConfig.get("instance"))
+                            .supportMode(resolveDefaultSupportMode(company))
                             .unreadCount(0)
                             .isArchived(false)
                             .isBlocked(false)

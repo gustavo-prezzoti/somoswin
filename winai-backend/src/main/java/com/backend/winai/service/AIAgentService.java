@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.backend.winai.dto.ai.AIContext;
+import com.backend.winai.entity.Company;
 import com.backend.winai.entity.KnowledgeBase;
 import com.backend.winai.entity.KnowledgeBaseConnection;
 import com.backend.winai.entity.UserWhatsAppConnection;
@@ -999,6 +1000,26 @@ public class AIAgentService {
     }
 
     public boolean isAIEnabledForConversation(WhatsAppConversation conversation) {
+        if (conversation == null || conversation.getId() == null) {
+            return false;
+        }
+        WhatsAppConversation conv = conversationRepository.findByIdWithCompany(conversation.getId()).orElse(conversation);
+        Company company = conv.getCompany();
+        if (company == null) {
+            log.info("IA desabilitada para conversa {}: empresa não encontrada.", conversation.getId());
+            return false;
+        }
+        String companyDefault = company.getDefaultSupportMode();
+        if (companyDefault == null || !"IA".equalsIgnoreCase(companyDefault.trim())) {
+            log.info("IA desabilitada para conversa {}: modo padrão da empresa não é IA (habilite no admin).", conversation.getId());
+            return false;
+        }
+        String sm = conv.getSupportMode();
+        if (sm == null || !"IA".equalsIgnoreCase(sm.trim())) {
+            log.info("IA desabilitada para conversa {}: conversa em modo humano.", conversation.getId());
+            return false;
+        }
+
         if (!openAiService.isChatEnabled()) {
             log.info("IA desabilitada para conversa {}: OpenAI não está habilitada (verifique a chave de API).", conversation.getId());
             return false;

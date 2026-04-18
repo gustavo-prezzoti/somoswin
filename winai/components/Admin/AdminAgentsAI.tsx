@@ -102,7 +102,7 @@ const AdminAgentsAI = () => {
         const ModalBody = () => {
             const [data, setData] = useState(currentData);
             const [isCustom, setIsCustom] = useState(!!data.agentPrompt);
-            const [compMode, setCompMode] = useState(currentCompany?.defaultSupportMode || 'IA');
+            const [compMode, setCompMode] = useState(currentCompany?.defaultSupportMode || 'HUMAN');
 
             const toggleCompanyMode = async (mode: string) => {
                 setCompMode(mode);
@@ -142,7 +142,7 @@ const AdminAgentsAI = () => {
                         <div className="flex bg-white rounded-lg p-1 border border-gray-200">
                             <button
                                 onClick={() => toggleCompanyMode('IA')}
-                                className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'IA' || !compMode ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'IA' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 IA (Auto)
                             </button>

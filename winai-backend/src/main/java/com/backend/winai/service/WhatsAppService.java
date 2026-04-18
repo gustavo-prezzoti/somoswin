@@ -888,7 +888,7 @@ public class WhatsAppService {
     public String getDefaultSupportMode(User user) {
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
-        return company.getDefaultSupportMode() != null ? company.getDefaultSupportMode() : "IA";
+        return company.getDefaultSupportMode() != null ? company.getDefaultSupportMode() : "HUMAN";
     }
 
     /**

@@ -65,7 +65,7 @@ public class Company {
 
     @Column(name = "default_support_mode")
     @Builder.Default
-    private String defaultSupportMode = "IA"; // IA ou HUMAN
+    private String defaultSupportMode = "HUMAN"; // IA só após habilitar no admin
 
     // Asaas Integration
     @Column(name = "asaas_customer_id")

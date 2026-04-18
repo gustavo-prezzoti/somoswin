@@ -393,7 +393,7 @@ public class AdminService {
                 .emailContratante(request.getEmailContratante())
                 .plan(com.backend.winai.entity.UserPlan.STARTER) // Garante plano padrão
                 .status(com.backend.winai.entity.AccountStatus.ACTIVE)
-                .defaultSupportMode("IA")
+                .defaultSupportMode("HUMAN")
                 .subscriptionStatus("PENDING")
                 .subscriptionStartDate(java.time.LocalDate.now())
                 .subscriptionEndDate(java.time.LocalDate.now().plusDays(30))

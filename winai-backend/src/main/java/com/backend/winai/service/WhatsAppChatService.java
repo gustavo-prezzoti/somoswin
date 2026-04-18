@@ -330,6 +330,16 @@ public class WhatsAppChatService {
                         throw new IllegalArgumentException("Modo inválido. Use 'IA' ou 'HUMAN'");
                 }
 
+                Company company = companyRepository.findById(conversation.getCompany().getId())
+                                .orElseThrow(() -> new RuntimeException("Company not found"));
+                if ("IA".equals(mode)) {
+                        String dm = company.getDefaultSupportMode();
+                        if (dm == null || !"IA".equalsIgnoreCase(dm.trim())) {
+                                throw new IllegalArgumentException(
+                                                "A IA só pode ser ativada depois de habilitada no painel administrativo (Agentes / modo da empresa).");
+                        }
+                }
+
                 conversation.setSupportMode(mode);
                 conversationRepository.save(conversation);
 

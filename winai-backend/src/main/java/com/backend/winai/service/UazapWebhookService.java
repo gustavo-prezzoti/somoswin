@@ -389,6 +389,10 @@ public class UazapWebhookService {
             return conv;
         }
 
+        String supportMode = company.getDefaultSupportMode() != null && !company.getDefaultSupportMode().isBlank()
+                ? company.getDefaultSupportMode()
+                : "HUMAN";
+
         // Criar nova conversa
         WhatsAppConversation newConversation = WhatsAppConversation.builder()
                 .company(company)
@@ -399,6 +403,7 @@ public class UazapWebhookService {
                 .isArchived(false)
                 .isBlocked(false)
                 .uazapInstance(instance)
+                .supportMode(supportMode)
                 .build();
 
         return conversationRepository.save(newConversation);

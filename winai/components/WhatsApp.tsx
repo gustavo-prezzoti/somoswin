@@ -26,6 +26,7 @@ const WhatsApp: React.FC = () => {
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [totalContacts, setTotalContacts] = useState(0);
+  const [companyDefaultSupportMode, setCompanyDefaultSupportMode] = useState<'IA' | 'HUMAN' | null>(null);
   const [searchParams] = useSearchParams();
   const chatId = searchParams.get('chatId');
 
@@ -50,12 +51,33 @@ const WhatsApp: React.FC = () => {
   const loadConversationsRef = useRef<(silent?: boolean) => Promise<void>>(() => Promise.resolve());
   const activeConversationRef = useRef<WhatsAppConversation | null>(null);
 
-  // Modo de suporte vem da conversa ativa
-  const supportMode = activeConversation?.supportMode || 'IA';
+  // IA só existe no chat se o admin tiver definido modo padrão IA na empresa
+  const iaEnabledAtCompany = companyDefaultSupportMode === 'IA';
+  const effectiveSupportMode: 'IA' | 'HUMAN' = !iaEnabledAtCompany
+    ? 'HUMAN'
+    : (activeConversation?.supportMode === 'IA' ? 'IA' : 'HUMAN');
 
   useEffect(() => {
     loadUser();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { mode } = await whatsappService.getDefaultSupportMode();
+        if (!cancelled) {
+          setCompanyDefaultSupportMode(mode === 'IA' ? 'IA' : 'HUMAN');
+        }
+      } catch {
+        if (!cancelled) setCompanyDefaultSupportMode('HUMAN');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -1047,28 +1069,37 @@ const WhatsApp: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="flex bg-gray-100 p-1 rounded-xl">
-                <button
-                  onClick={() => handleToggleSupportMode('IA')}
-                  disabled={supportMode === 'IA'}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${supportMode === 'IA'
-                    ? 'bg-white text-emerald-600 shadow-sm cursor-not-allowed'
-                    : 'text-gray-400 hover:bg-white/50'
-                    }`}
-                >
-                  <Bot size={12} /> IA
-                </button>
-                <button
-                  onClick={() => handleToggleSupportMode('HUMAN')}
-                  disabled={supportMode === 'HUMAN'}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${supportMode === 'HUMAN'
-                    ? 'bg-white text-rose-500 shadow-sm cursor-not-allowed'
-                    : 'text-gray-400 hover:bg-white/50'
-                    }`}
-                >
-                  <UserCheck size={12} /> Humano
-                </button>
-              </div>
+              {iaEnabledAtCompany ? (
+                <div className="flex bg-gray-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSupportMode('IA')}
+                    disabled={effectiveSupportMode === 'IA'}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${effectiveSupportMode === 'IA'
+                      ? 'bg-white text-emerald-600 shadow-sm cursor-not-allowed'
+                      : 'text-gray-400 hover:bg-white/50'
+                      }`}
+                  >
+                    <Bot size={12} /> IA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSupportMode('HUMAN')}
+                    disabled={effectiveSupportMode === 'HUMAN'}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${effectiveSupportMode === 'HUMAN'
+                      ? 'bg-white text-rose-500 shadow-sm cursor-not-allowed'
+                      : 'text-gray-400 hover:bg-white/50'
+                      }`}
+                  >
+                    <UserCheck size={12} /> Humano
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-50 border border-rose-100 text-rose-700">
+                  <UserCheck size={14} className="shrink-0" />
+                  <span className="text-[9px] font-black uppercase tracking-widest">Atendimento humano</span>
+                </div>
+              )}
               <div className="h-8 w-px bg-gray-100"></div>
               <div className="flex items-center gap-1">
                 {/* Botão Limpar Chat */}
@@ -1156,7 +1187,7 @@ const WhatsApp: React.FC = () => {
               </>
             )}
 
-            {supportMode === 'IA' && isSending && (
+            {effectiveSupportMode === 'IA' && isSending && (
               <div className="flex justify-start items-center gap-2 mt-4 text-emerald-500/50">
                 <div className="flex gap-1">
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></span>
@@ -1169,7 +1200,7 @@ const WhatsApp: React.FC = () => {
           </div>
 
           {/* Aviso de IA Ativa */}
-          {supportMode === 'IA' && (
+          {effectiveSupportMode === 'IA' && (
             <div className="px-6 py-2 bg-emerald-50/50 border-t border-emerald-100/50">
               <div className="max-w-4xl mx-auto flex items-center gap-2 text-emerald-600">
                 <Bot size={14} className="animate-pulse" />
@@ -1239,8 +1270,8 @@ const WhatsApp: React.FC = () => {
 
                   <button
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    disabled={supportMode === 'IA' || isSending}
-                    className={`p-3 transition-colors ${supportMode === 'IA' || isSending
+                    disabled={effectiveSupportMode === 'IA' || isSending}
+                    className={`p-3 transition-colors ${effectiveSupportMode === 'IA' || isSending
                       ? 'text-gray-300 cursor-not-allowed'
                       : 'text-gray-400 hover:text-yellow-500'
                       }`}
@@ -1251,12 +1282,12 @@ const WhatsApp: React.FC = () => {
 
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={supportMode === 'IA' || isSending}
-                    className={`p-3 transition-colors ${supportMode === 'IA' || isSending
+                    disabled={effectiveSupportMode === 'IA' || isSending}
+                    className={`p-3 transition-colors ${effectiveSupportMode === 'IA' || isSending
                       ? 'text-gray-300 cursor-not-allowed'
                       : 'text-gray-400 hover:text-emerald-600'
                       }`}
-                    title={supportMode === 'IA' ? 'Desative a IA para enviar arquivos' : 'Anexar arquivo'}
+                    title={effectiveSupportMode === 'IA' ? 'Desative a IA para enviar arquivos' : 'Anexar arquivo'}
                   >
                     <Paperclip size={20} />
                   </button>
@@ -1265,34 +1296,34 @@ const WhatsApp: React.FC = () => {
                     <input
                       type="text"
                       placeholder={
-                        supportMode === 'IA'
+                        effectiveSupportMode === 'IA'
                           ? "IA está respondendo automaticamente..."
                           : "Digite sua mensagem..."
                       }
-                      className={`w-full px-6 py-3.5 border-none rounded-2xl focus:ring-1 focus:ring-emerald-500 outline-none transition-all text-sm font-medium ${supportMode === 'IA'
+                      className={`w-full px-6 py-3.5 border-none rounded-2xl focus:ring-1 focus:ring-emerald-500 outline-none transition-all text-sm font-medium ${effectiveSupportMode === 'IA'
                         ? 'bg-gray-100 cursor-not-allowed text-gray-400'
                         : 'bg-gray-50'
                         }`}
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey && supportMode === 'HUMAN') {
+                        if (e.key === 'Enter' && !e.shiftKey && effectiveSupportMode === 'HUMAN') {
                           e.preventDefault();
                           handleSendMessage();
                         }
                       }}
-                      disabled={isSending || supportMode === 'IA'}
-                      readOnly={supportMode === 'IA'}
+                      disabled={isSending || effectiveSupportMode === 'IA'}
+                      readOnly={effectiveSupportMode === 'IA'}
                     />
                   </div>
 
                   {message.trim() ? (
                     <button
                       onClick={handleSendMessage}
-                      disabled={!message.trim() || isSending || supportMode === 'IA'}
-                      className={`p-3.5 rounded-2xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${supportMode === 'IA'
+                      disabled={!message.trim() || isSending || effectiveSupportMode === 'IA'}
+                      className={`p-3.5 rounded-2xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${effectiveSupportMode === 'IA'
                         ? 'bg-gray-300 text-gray-500'
-                        : supportMode === 'HUMAN'
+                        : effectiveSupportMode === 'HUMAN'
                           ? 'bg-rose-500 text-white shadow-rose-500/20'
                           : 'bg-emerald-600 text-white shadow-emerald-600/20'
                         }`}
@@ -1302,10 +1333,10 @@ const WhatsApp: React.FC = () => {
                   ) : (
                     <button
                       onClick={startRecording}
-                      disabled={supportMode === 'IA' || isSending}
-                      className={`p-3.5 rounded-2xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${supportMode === 'IA'
+                      disabled={effectiveSupportMode === 'IA' || isSending}
+                      className={`p-3.5 rounded-2xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${effectiveSupportMode === 'IA'
                         ? 'bg-gray-300 text-gray-500'
-                        : supportMode === 'HUMAN'
+                        : effectiveSupportMode === 'HUMAN'
                           ? 'bg-rose-500 text-white shadow-rose-500/20'
                           : 'bg-emerald-600 text-white shadow-emerald-600/20'
                         }`}

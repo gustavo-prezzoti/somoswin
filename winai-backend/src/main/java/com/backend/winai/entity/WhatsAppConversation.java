@@ -70,7 +70,7 @@ public class WhatsAppConversation {
 
     @Column(name = "support_mode")
     @Builder.Default
-    private String supportMode = "IA"; // IA ou HUMAN
+    private String supportMode = "HUMAN"; // IA só quando empresa e conversa permitirem
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

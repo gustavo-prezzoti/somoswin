@@ -421,7 +421,7 @@ public class WhatsAppWebhookService {
                     .uazapBaseUrl(webhook.getBaseUrl())
                     .uazapToken(webhook.getToken())
                     .uazapInstance(instanceName)
-                    .supportMode(company.getDefaultSupportMode() != null ? company.getDefaultSupportMode() : "IA")
+                    .supportMode(company.getDefaultSupportMode() != null ? company.getDefaultSupportMode() : "HUMAN")
                     .build();
             isNew = true;
         }
