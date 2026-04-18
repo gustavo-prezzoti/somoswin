@@ -62,7 +62,8 @@ public class GoogleAdsService {
             String campaignResourceName, String adGroupId) {
         Company company = user.getCompany();
         if (developerToken == null || developerToken.isBlank()) {
-            return emptyGoogleOverview("Defina o developer token do Google Ads (google.ads.developer-token).");
+            return emptyGoogleOverview(
+                    "O Google Ads não está disponível no momento. Entre em contato com o suporte se o problema continuar.");
         }
         Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(company.getId());
         if (connOpt.isEmpty() || !connOpt.get().isConnected()
