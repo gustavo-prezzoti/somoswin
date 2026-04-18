@@ -43,7 +43,7 @@ interface MeetingAnalysis {
 
 /** Botões da área Escuta Inteligente (Transcrição / Análise): mesma largura e altura. */
 const ESCUTA_ACTION_BTN =
-  'inline-flex h-11 w-full min-[400px]:w-[240px] min-[400px]:min-w-[240px] shrink-0 items-center justify-center gap-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all disabled:opacity-50';
+  'inline-flex h-11 w-full sm:w-[240px] sm:min-w-[240px] shrink-0 items-center justify-center gap-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all disabled:opacity-50';
 
 /** Mensagens da API de transcrição podem soar técnicas — exibimos texto humano no app. */
 /** Remove suplemento "ao vivo" da transcrição exibida (evita repetir o mesmo texto duas vezes na tela). */
