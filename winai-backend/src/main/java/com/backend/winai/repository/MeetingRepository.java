@@ -70,4 +70,7 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
 
         List<Meeting> findByCompanyAndMeetingKindOrderByMeetingDateDescMeetingTimeDesc(Company company,
                         MeetingKind kind);
+
+        List<Meeting> findByCompanyAndLead_IdAndMeetingKindOrderByCreatedAtDesc(Company company, UUID leadId,
+                        MeetingKind kind);
 }

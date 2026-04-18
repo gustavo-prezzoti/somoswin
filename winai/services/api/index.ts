@@ -14,6 +14,8 @@ export { googleDriveService } from './google-drive.service';
 export { whatsappService } from './whatsapp.service';
 export { whatsappBroadcastService } from './whatsapp-broadcast.service';
 export { consultancyService } from './consultancy.service';
+export { intelligentListeningService } from './intelligent-listening.service';
+export type { IntelligentListeningSession } from './intelligent-listening.service';
 export type { DashboardData, MetricCard, ChartDataPoint, GoalDTO, InsightDTO, CreateGoalRequest } from './dashboard.service';
 export type { LeadData, LeadRequest, LeadStatusType, PagedResponse } from './lead.service';
 export type { MeetingData, MeetingRequest, MeetingStatusType, CalendarData, CalendarStats, MeetingAttendee } from './meeting.service';

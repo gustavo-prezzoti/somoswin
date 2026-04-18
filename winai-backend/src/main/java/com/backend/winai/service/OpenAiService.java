@@ -1477,6 +1477,23 @@ public class OpenAiService {
         return generateResponse(system, "Transcrição da reunião:\n\n" + transcription.trim());
     }
 
+    /**
+     * Análise estruturada para Escuta Inteligente (JSON para o CRM).
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public String analyzeIntelligentListeningTranscript(String transcription) {
+        if (!isChatEnabled() || transcription == null || transcription.isBlank()) {
+            return null;
+        }
+        String system = """
+                Você é analista comercial. Com base na transcrição da reunião/call em português do Brasil,
+                retorne APENAS um objeto JSON válido (sem markdown, sem texto fora do JSON) com exatamente estas chaves:
+                {"resumo":"parágrafo executivo","pontos_fortes":["..."],"pontos_fracos":["..."],"melhorias":["..."],"proximos_passos":["..."]}
+                Use arrays vazios [] se não houver itens. Não invente fatos fora da transcrição.
+                """;
+        return generateResponse(system, "Transcrição:\n\n" + transcription.trim());
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

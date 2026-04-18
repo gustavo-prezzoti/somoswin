@@ -175,7 +175,10 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-['Inter'] w-full">
+    <div
+      className="flex h-screen bg-gray-50 overflow-hidden font-['Inter'] w-full"
+      style={{ ['--app-sidebar-width' as string]: isSidebarOpen ? '16rem' : '5rem' }}
+    >
       <aside
         className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-[#002a1e] flex flex-col transition-all duration-500 relative z-50 shadow-[10px_0_50px_rgba(0,0,0,0.2)] border-r border-white/5`}
       >
@@ -234,7 +237,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-40">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-[200] shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></div>
             <h2 className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em]">Operação Ativa • Real-Time Core</h2>

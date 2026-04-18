@@ -518,6 +518,18 @@ const CRM: React.FC = () => {
                                     {column.label}
                                   </button>
                                 ))}
+                                <div className="border-t border-gray-100 my-1 mx-2" />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDeleteConfirm(lead);
+                                    setShowMoveMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2.5 text-[10px] font-black text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-2 rounded-b-xl"
+                                >
+                                  <Trash2 size={14} /> Excluir lead
+                                </button>
                               </div>
                             )}
                           </div>
@@ -627,7 +639,10 @@ const CRM: React.FC = () => {
 
       <AnimatePresence>
         {selectedLead && (
-          <div className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-md flex justify-end">
+          <div
+            className="fixed top-16 right-0 bottom-0 z-[100] flex justify-end bg-black/60 backdrop-blur-md"
+            style={{ left: 'var(--app-sidebar-width, 16rem)' }}
+          >
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
@@ -739,37 +754,46 @@ const CRM: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-8 border-t border-gray-100 bg-gray-50/30 flex gap-4 relative">
-                <button
-                  type="button"
-                  onClick={() => handleEdit(selectedLead)}
-                  className="flex-1 py-4 bg-white border border-gray-200 text-gray-800 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
-                >
-                  <Edit2 size={16} /> Editar Lead
-                </button>
-                <div className="flex-1 relative group/move">
+              <div className="p-8 border-t border-gray-100 bg-gray-50/30 flex flex-col gap-3 relative">
+                <div className="flex gap-4">
                   <button
                     type="button"
-                    className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-2"
+                    onClick={() => handleEdit(selectedLead)}
+                    className="flex-1 py-4 bg-white border border-gray-200 text-gray-800 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
                   >
-                    Mover Pipeline <ChevronRight size={16} />
+                    <Edit2 size={16} /> Editar Lead
                   </button>
-                  <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 opacity-0 invisible group-hover/move:opacity-100 group-hover/move:visible transition-all z-[80]">
-                    {kanbanColumns.map((column) => (
-                      <button
-                        type="button"
-                        key={column.id}
-                        onClick={() => moveLead(selectedLead.id, column.id)}
-                        className={`w-full text-left px-6 py-3 text-[10px] font-bold hover:bg-emerald-50 transition-colors flex items-center gap-3 ${
-                          selectedLead.status === column.id ? 'text-emerald-600 bg-emerald-50/50' : 'text-gray-600'
-                        }`}
-                      >
-                        <div className={`w-2 h-2 rounded-full ${column.color}`} />
-                        {column.label}
-                      </button>
-                    ))}
+                  <div className="flex-1 relative group/move">
+                    <button
+                      type="button"
+                      className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-2"
+                    >
+                      Mover Pipeline <ChevronRight size={16} />
+                    </button>
+                    <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 opacity-0 invisible group-hover/move:opacity-100 group-hover/move:visible transition-all z-[80]">
+                      {kanbanColumns.map((column) => (
+                        <button
+                          type="button"
+                          key={column.id}
+                          onClick={() => moveLead(selectedLead.id, column.id)}
+                          className={`w-full text-left px-6 py-3 text-[10px] font-bold hover:bg-emerald-50 transition-colors flex items-center gap-3 ${
+                            selectedLead.status === column.id ? 'text-emerald-600 bg-emerald-50/50' : 'text-gray-600'
+                          }`}
+                        >
+                          <div className={`w-2 h-2 rounded-full ${column.color}`} />
+                          {column.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => openDeleteConfirm(selectedLead)}
+                  className="w-full py-3.5 border border-rose-200 bg-white text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={16} /> Remover lead
+                </button>
               </div>
             </motion.div>
           </div>
@@ -778,7 +802,10 @@ const CRM: React.FC = () => {
 
       <AnimatePresence>
         {showNewLeadModal && (
-          <div className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div
+            className="fixed top-16 right-0 bottom-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+            style={{ left: 'var(--app-sidebar-width, 16rem)' }}
+          >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -947,7 +974,10 @@ const CRM: React.FC = () => {
       </AnimatePresence>
 
       {editingLead && (
-        <div className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+          className="fixed top-16 right-0 bottom-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+          style={{ left: 'var(--app-sidebar-width, 16rem)' }}
+        >
           <div className="bg-white w-full max-w-lg rounded-[48px] shadow-2xl overflow-hidden border border-emerald-800/10 relative flex flex-col max-h-[90vh] my-auto">
             <div className="p-8 md:p-12 pb-4 flex justify-between items-center shrink-0">
               <div className="space-y-1">

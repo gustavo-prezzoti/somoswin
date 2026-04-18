@@ -28,7 +28,10 @@ export const Modal: React.FC<ModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-emerald-950/20 backdrop-blur-sm">
+        <div
+            className="fixed top-16 right-0 bottom-0 z-[9999] flex items-center justify-center p-4 bg-emerald-950/20 backdrop-blur-sm"
+            style={{ left: 'var(--app-sidebar-width, 0px)' }}
+        >
             <div className={`bg-white w-full ${sizeClasses[size]} rounded-3xl shadow-2xl border border-emerald-800/10 max-h-[90vh] flex flex-col`}>
                 {/* Header fixo */}
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center shrink-0">
@@ -86,7 +89,10 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-6 bg-emerald-950/30 backdrop-blur-sm">
+        <div
+            className="fixed top-16 right-0 bottom-0 z-[9999] flex items-center justify-center p-6 bg-emerald-950/30 backdrop-blur-sm"
+            style={{ left: 'var(--app-sidebar-width, 0px)' }}
+        >
             <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden border border-gray-100">
                 <div className="p-8 space-y-6">
                     <div className="text-center space-y-2">

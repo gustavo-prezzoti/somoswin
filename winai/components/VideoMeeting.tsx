@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Mic,
   MicOff,
@@ -15,31 +14,21 @@ import {
   Loader2,
   ArrowLeft,
   User,
+  Users,
+  Headphones,
+  Calendar,
+  ChevronRight,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { leadService, LeadData, LEAD_STATUS_LABELS } from '../services';
-
-const DEMO_LEAD_ID = '00000000-0000-0000-0000-000000000001';
-
-function buildDemoLead(): LeadData {
-  const now = new Date().toISOString();
-  return {
-    id: DEMO_LEAD_ID,
-    name: 'Lead demonstração',
-    email: 'demo@amplia.local',
-    phone: null,
-    status: 'NEW',
-    statusLabel: LEAD_STATUS_LABELS.NEW,
-    ownerName: null,
-    notes: null,
-    source: 'Demonstração',
-    estimatedValue: 15000,
-    leadScore: 50,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
+import {
+  leadService,
+  LeadData,
+  LEAD_STATUS_LABELS,
+  intelligentListeningService,
+  IntelligentListeningSession,
+} from '../services';
 
 interface MeetingAnalysis {
   resumo: string;
@@ -49,107 +38,337 @@ interface MeetingAnalysis {
   proximos_passos: string[];
 }
 
-const FALLBACK_ANALYSIS: MeetingAnalysis = {
-  resumo:
-    'Lead qualificado com alto potencial de fechamento. Foco em redução de CAC e escala operacional.',
-  pontos_fortes: [
-    'Identificação clara do problema',
-    'Alinhamento de expectativas',
-    'Demonstração de autoridade técnica',
-  ],
-  pontos_fracos: [
-    'Falta de detalhamento sobre integração de CRM',
-    'Tempo de implementação não foi fechado',
-  ],
-  melhorias: ['Apresentar fluxo de integração na próxima call', 'Trazer cronograma de 90 dias'],
-  proximos_passos: [
-    'Enviar proposta comercial personalizada',
-    'Agendar reunião técnica com o CTO do cliente',
-  ],
-};
+function parseAiSummary(json: string | null | undefined): MeetingAnalysis | null {
+  if (!json?.trim()) return null;
+  try {
+    const o = JSON.parse(json) as Record<string, unknown>;
+    return {
+      resumo: typeof o.resumo === 'string' ? o.resumo : '',
+      pontos_fortes: Array.isArray(o.pontos_fortes) ? (o.pontos_fortes as string[]) : [],
+      pontos_fracos: Array.isArray(o.pontos_fracos) ? (o.pontos_fracos as string[]) : [],
+      melhorias: Array.isArray(o.melhorias) ? (o.melhorias as string[]) : [],
+      proximos_passos: Array.isArray(o.proximos_passos) ? (o.proximos_passos as string[]) : [],
+    };
+  } catch {
+    return null;
+  }
+}
 
 const VideoMeeting: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const leadFromCrm = location.state?.lead as LeadData | undefined;
-  const lead = leadFromCrm ?? buildDemoLead();
-  const isDemoLead = !leadFromCrm || lead.id === DEMO_LEAD_ID;
 
-  const [isListening, setIsListening] = useState(false);
-  const [transcription, setTranscription] = useState<string>('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<MeetingAnalysis | null>(null);
-  const [timer, setTimer] = useState(0);
+  const [leads, setLeads] = useState<LeadData[]>([]);
+  const [leadsLoading, setLeadsLoading] = useState(true);
+  const [leadSearch, setLeadSearch] = useState('');
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(leadFromCrm?.id ?? null);
+
+  const [sessions, setSessions] = useState<IntelligentListeningSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [activeSession, setActiveSession] = useState<IntelligentListeningSession | null>(null);
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [localTranscript, setLocalTranscript] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const displayStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
   const [audioData, setAudioData] = useState<Uint8Array>(new Uint8Array(0));
+  const localTranscriptRef = useRef('');
+  const recordingSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isListening) {
-      timerRef.current = setInterval(() => {
-        setTimer((prev) => prev + 1);
-      }, 1000);
-      startAudioVisualizer();
+    localTranscriptRef.current = localTranscript;
+  }, [localTranscript]);
 
-      const interval = setInterval(() => {
-        const lines = [
-          '[00:05] Consultor: Olá, bom dia! Vamos entender os desafios da sua operação hoje.',
-          '[00:15] Cliente: No momento, nossa maior dificuldade é a escala do time comercial.',
-          '[00:45] Consultor: Entendo. A AMPLIA atua justamente na automação dessa primeira abordagem.',
-          '[01:10] Cliente: Isso reduziria muito o nosso CAC, certo?',
-          '[01:30] Consultor: Exatamente. Além de aumentar a taxa de conversão final.',
-        ];
-        const currentLineIndex = Math.floor(timer / 10) % lines.length;
-        if (timer % 10 === 0 && timer > 0) {
-          setTranscription((prev) => prev + '\n' + lines[currentLineIndex]);
-        }
-      }, 1000);
-      return () => {
-        clearInterval(interval);
-        if (timerRef.current) clearInterval(timerRef.current);
-      };
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-      stopAudioVisualizer();
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      stopAudioVisualizer();
-    };
-  }, [isListening, timer]);
+  const selectedLead = useMemo(
+    () => (selectedLeadId ? leads.find((l) => l.id === selectedLeadId) ?? null : null),
+    [leads, selectedLeadId]
+  );
 
-  const startAudioVisualizer = async () => {
+  const analysis = useMemo(() => parseAiSummary(activeSession?.aiSummary), [activeSession?.aiSummary]);
+
+  const loadLeads = useCallback(async () => {
+    setLeadsLoading(true);
+    setErrorMsg(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
+      const data = await leadService.getAllLeads();
+      setLeads(data);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Erro ao carregar leads');
+    } finally {
+      setLeadsLoading(false);
+    }
+  }, []);
+
+  const loadSessions = useCallback(async (leadId: string) => {
+    setSessionsLoading(true);
+    setErrorMsg(null);
+    try {
+      const list = await intelligentListeningService.listByLead(leadId);
+      setSessions(list);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Erro ao listar escutas');
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLeads();
+  }, [loadLeads]);
+
+  useEffect(() => {
+    if (leadFromCrm?.id) {
+      setSelectedLeadId(leadFromCrm.id);
+    }
+  }, [leadFromCrm?.id]);
+
+  useEffect(() => {
+    if (selectedLeadId) {
+      void loadSessions(selectedLeadId);
+      setActiveSession(null);
+    } else {
+      setSessions([]);
+    }
+  }, [selectedLeadId, loadSessions]);
+
+  const filteredLeads = useMemo(() => {
+    const q = leadSearch.trim().toLowerCase();
+    if (!q) return leads;
+    return leads.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        l.email.toLowerCase().includes(q) ||
+        (l.phone && l.phone.includes(q))
+    );
+  }, [leads, leadSearch]);
+
+  const startNewSession = async () => {
+    if (!selectedLeadId) return;
+    setErrorMsg(null);
+    try {
+      const s = await intelligentListeningService.startSession(selectedLeadId);
+      setActiveSession(s);
+      await loadSessions(selectedLeadId);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Falha ao criar sessão');
+    }
+  };
+
+  const openSession = async (id: string) => {
+    setErrorMsg(null);
+    try {
+      const s = await intelligentListeningService.getSession(id);
+      setActiveSession(s);
+      setLocalTranscript('');
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Falha ao abrir sessão');
+    }
+  };
+
+  const stopStreams = () => {
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
+    micStreamRef.current = null;
+    displayStreamRef.current?.getTracks().forEach((t) => t.stop());
+    displayStreamRef.current = null;
+    void audioContextRef.current?.close();
+    audioContextRef.current = null;
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    setAudioData(new Uint8Array(0));
+  };
+
+  const runVisualizer = (stream: MediaStream, ctx: AudioContext) => {
+    try {
+      const source = ctx.createMediaStreamSource(stream);
+      analyserRef.current = ctx.createAnalyser();
       analyserRef.current.fftSize = 256;
       source.connect(analyserRef.current);
-
       const bufferLength = analyserRef.current.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
-
-      const update = () => {
+      const tick = () => {
         if (analyserRef.current) {
           analyserRef.current.getByteFrequencyData(dataArray);
           setAudioData(new Uint8Array(dataArray));
-          animationFrameRef.current = requestAnimationFrame(update);
+          animationFrameRef.current = requestAnimationFrame(tick);
         }
       };
-      update();
-    } catch (err) {
-      console.error('Microphone access denied:', err);
+      tick();
+    } catch {
+      /* ignore */
     }
   };
 
-  const stopAudioVisualizer = () => {
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    if (audioContextRef.current) void audioContextRef.current.close();
-    setAudioData(new Uint8Array(0));
+  const startSpeechRecognition = () => {
+    const SR =
+      (window as unknown as { SpeechRecognition?: new () => unknown; webkitSpeechRecognition?: new () => unknown })
+        .SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: new () => unknown }).webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = 'pt-BR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (ev: { resultIndex: number; results: { [k: number]: { [j: number]: { transcript: string } } } }) => {
+      let text = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        text += ev.results[i][0].transcript;
+      }
+      if (text.trim()) {
+        setLocalTranscript((prev) => (prev ? `${prev}\n${text.trim()}` : text.trim()));
+      }
+    };
+    rec.onerror = () => {};
+    try {
+      rec.start();
+      recognitionRef.current = rec;
+    } catch {
+      /* */
+    }
   };
+
+  const stopRecording = () => {
+    if (!isRecording) return;
+    setIsRecording(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* */
+    }
+    recognitionRef.current = null;
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== 'inactive') {
+      rec.stop();
+    } else {
+      stopStreams();
+      mediaRecorderRef.current = null;
+      recordingSessionIdRef.current = null;
+    }
+  };
+
+  const startRecording = async () => {
+    if (!activeSession) {
+      setErrorMsg('Selecione ou crie uma sessão de escuta primeiro.');
+      return;
+    }
+    if (activeSession.status === 'COMPLETED') {
+      setErrorMsg('Esta sessão já foi concluída. Crie uma nova escuta.');
+      return;
+    }
+
+    setErrorMsg(null);
+    chunksRef.current = [];
+    setRecordSeconds(0);
+    setLocalTranscript('');
+    recordingSessionIdRef.current = activeSession.id;
+
+    try {
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = mic;
+
+      let display: MediaStream | null = null;
+      try {
+        display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        displayStreamRef.current = display;
+      } catch {
+        setErrorMsg(
+          'Compartilhamento de tela cancelado. Para capturar o áudio do Meet, escolha a aba do navegador e marque "Compartilhar áudio da guia".'
+        );
+      }
+
+      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      audioContextRef.current = ctx;
+      const dest = ctx.createMediaStreamDestination();
+      ctx.createMediaStreamSource(mic).connect(dest);
+
+      if (display) {
+        const aTracks = display.getAudioTracks();
+        if (aTracks.length > 0) {
+          ctx.createMediaStreamSource(new MediaStream(aTracks)).connect(dest);
+        }
+      }
+
+      const mixed = dest.stream;
+      runVisualizer(mixed, ctx);
+      startSpeechRecognition();
+
+      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      const mediaRec = new MediaRecorder(mixed, { mimeType: mime });
+      mediaRecorderRef.current = mediaRec;
+      mediaRec.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      mediaRec.onerror = () => setErrorMsg('Erro na gravação.');
+      mediaRec.onstop = () => {
+        const mimeType = mediaRec.mimeType || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        chunksRef.current = [];
+        stopStreams();
+        mediaRecorderRef.current = null;
+        const sessionId = recordingSessionIdRef.current;
+        recordingSessionIdRef.current = null;
+        if (!sessionId) return;
+        if (blob.size < 2000) {
+          setErrorMsg('Gravação muito curta. Tente novamente.');
+          return;
+        }
+        void (async () => {
+          setUploading(true);
+          setErrorMsg(null);
+          try {
+            const updated = await intelligentListeningService.uploadAudio(sessionId, blob, 'escuta.webm');
+            setActiveSession(updated);
+            const live = localTranscriptRef.current.trim();
+            if (live) {
+              const merged = `${updated.transcriptionFull || ''}\n\n[Notas por voz do microfone — tempo real]\n${live}`;
+              const patched = await intelligentListeningService.patchTranscription(sessionId, merged);
+              setActiveSession(patched);
+            }
+          } catch (e: unknown) {
+            setErrorMsg(e instanceof Error ? e.message : 'Falha ao enviar áudio para transcrição');
+          } finally {
+            setUploading(false);
+          }
+        })();
+      };
+
+      mediaRec.start(2000);
+      setIsRecording(true);
+      timerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+    } catch (e: unknown) {
+      recordingSessionIdRef.current = null;
+      stopStreams();
+      setErrorMsg(e instanceof Error ? e.message : 'Microfone ou tela não autorizados.');
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      stopStreams();
+    };
+  }, []);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -157,358 +376,424 @@ const VideoMeeting: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const toggleListening = () => {
-    if (isListening) {
-      setIsListening(false);
-      setTranscription((prev) => prev + '\n[Sessão finalizada às ' + new Date().toLocaleTimeString() + ']');
-    } else {
-      setIsListening(true);
-      setTranscription('Iniciando Escuta Inteligente...\n[Aguardando áudio...]');
-      setAnalysis(null);
-      setTimer(0);
-    }
-  };
-
-  const generateAIAnalysis = async () => {
-    setIsAnalyzing(true);
+  const runAnalyze = async () => {
+    if (!activeSession) return;
+    setAnalyzing(true);
+    setErrorMsg(null);
     try {
-      await new Promise((r) => setTimeout(r, 900));
-      setAnalysis(FALLBACK_ANALYSIS);
+      const s = await intelligentListeningService.analyze(activeSession.id);
+      setActiveSession(s);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Falha na análise IA');
     } finally {
-      setIsAnalyzing(false);
+      setAnalyzing(false);
     }
   };
 
-  const saveToCRM = async () => {
-    if (!lead) return;
-    const summary = analysis?.resumo || 'Análise de reunião estratégica.';
-    const noteBlock = `\n\n--- Escuta Inteligente (${new Date().toLocaleString('pt-BR')}) ---\n${summary}`;
-
-    if (isDemoLead) {
-      alert('Conecte um lead real a partir do CRM (detalhes do lead → Escuta Inteligente) para gravar no pipeline.');
-      navigate('/crm');
-      return;
-    }
-
+  const runComplete = async () => {
+    if (!activeSession) return;
+    setCompleting(true);
+    setErrorMsg(null);
     try {
-      const existing = lead.notes || '';
-      await leadService.updateLead(lead.id, {
-        name: lead.name,
-        email: lead.email,
-        phone: lead.phone || undefined,
-        status: lead.status,
-        ownerName: lead.ownerName || undefined,
-        notes: existing + noteBlock,
-        source: lead.source || undefined,
-        estimatedValue: lead.estimatedValue ?? undefined,
-        leadScore: lead.leadScore ?? undefined,
-      });
-      alert(`Resumo da escuta anexado às notas de ${lead.name}.`);
+      const s = await intelligentListeningService.completeToCrm(activeSession.id);
+      setActiveSession(s);
+      if (selectedLeadId) await loadSessions(selectedLeadId);
+      alert('Resumo anexado às notas do lead no CRM.');
       navigate('/crm');
-    } catch (e) {
-      console.error(e);
-      alert('Não foi possível salvar no CRM. Tente novamente.');
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Falha ao salvar no CRM');
+    } finally {
+      setCompleting(false);
     }
   };
 
-  const statusLabel = LEAD_STATUS_LABELS[lead.status] || lead.status;
-  const valueDisplay =
-    lead.estimatedValue != null ? Number(lead.estimatedValue).toLocaleString('pt-BR') : '—';
+  const statusLabel = selectedLead ? LEAD_STATUS_LABELS[selectedLead.status] || selectedLead.status : '';
+  const valueDisplay = selectedLead?.estimatedValue != null
+    ? Number(selectedLead.estimatedValue).toLocaleString('pt-BR')
+    : '—';
+
+  const displayTranscript =
+    activeSession?.transcriptionFull ||
+    (localTranscript && !activeSession?.transcriptionFull ? localTranscript : '') ||
+    '';
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700">
-      {isDemoLead && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-[11px] font-bold text-amber-900">
-          Modo demonstração: abra um lead no CRM e use &quot;Escuta Inteligente&quot; para vincular um lead real e gravar notas na API.
+      {errorMsg && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-[11px] font-bold text-rose-900">
+          {errorMsg}
         </div>
       )}
+
       <div className="flex items-center justify-between bg-white/50 backdrop-blur-sm p-4 rounded-3xl border border-gray-100">
         <div className="flex items-center gap-4">
           <button type="button" onClick={() => navigate('/crm')} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
             <ArrowLeft size={20} />
           </button>
           <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm">
-            {lead.name.charAt(0)}
+            {selectedLead ? selectedLead.name.charAt(0) : '?'}
           </div>
           <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead Conectado</p>
-            <h4 className="text-sm font-black text-gray-900 tracking-tight">{lead.name}</h4>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead para escuta</p>
+            <h4 className="text-sm font-black text-gray-900 tracking-tight">
+              {selectedLead ? selectedLead.name : 'Selecione um lead abaixo'}
+            </h4>
           </div>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="text-right">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor Estimado</p>
-            <p className="text-sm font-black text-emerald-600">R$ {valueDisplay}</p>
+        {selectedLead && (
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor Estimado</p>
+              <p className="text-sm font-black text-emerald-600">R$ {valueDisplay}</p>
+            </div>
+            <div className="h-8 w-px bg-gray-100" />
+            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-xl border border-emerald-100">
+              <User size={14} className="text-emerald-600" />
+              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest max-w-[140px] truncate">
+                {statusLabel}
+              </span>
+            </div>
           </div>
-          <div className="h-8 w-px bg-gray-100" />
-          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-xl border border-emerald-100">
-            <User size={14} className="text-emerald-600" />
-            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest max-w-[140px] truncate">
-              {statusLabel}
-            </span>
-          </div>
-        </div>
+        )}
       </div>
 
-      <div className="bg-white rounded-[40px] p-10 border border-gray-100 shadow-2xl shadow-emerald-900/5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full -mr-32 -mt-32 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/5 rounded-full -ml-32 -mb-32 blur-3xl" />
-
-        <div className="relative z-10 flex flex-col items-center text-center space-y-8">
-          <div className="space-y-3">
-            <div className="flex items-center justify-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'} shadow-lg`} />
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">
-                {isListening ? 'Sessão em Andamento' : 'Pronto para Escutar'}
-              </span>
-            </div>
-            <h1 className="text-5xl font-black text-gray-900 uppercase italic tracking-tighter leading-none">
-              Escuta Inteligente <span className="text-emerald-500">AMPLIA</span>
-            </h1>
-            <p className="text-gray-500 font-medium italic text-base max-w-xl mx-auto">
-              Capture cada detalhe da sua reunião. Nossa IA analisa em tempo real para gerar insights estratégicos e enviar direto ao seu CRM.
-            </p>
+      {/* 1 — Escolher lead */}
+      <div className="bg-white rounded-[32px] p-6 border border-gray-100 shadow-sm space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Users size={18} className="text-emerald-600" />
+            <h2 className="text-lg font-black text-gray-900 uppercase italic tracking-tight">1. Selecionar lead</h2>
           </div>
-
-          <div className="w-full max-w-2xl bg-[#0a0a0a] rounded-[32px] p-8 border-4 border-white shadow-2xl relative">
-            <div className="absolute top-4 left-6 flex items-center gap-2">
-              <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-rose-500 animate-pulse' : 'bg-gray-700'}`} />
-              <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">
-                {isListening ? formatTime(timer) : 'Standby'}
-              </span>
-            </div>
-
-            <div className="flex flex-col items-center justify-center min-h-[120px] py-4">
-              {isListening ? (
-                <div className="flex items-center gap-1.5 h-16">
-                  {Array.from(audioData)
-                    .filter((_, i) => i % 8 === 0)
-                    .map((val, i) => (
-                      <motion.div
-                        key={i}
-                        animate={{ height: Math.max(4, (val / 255) * 60) }}
-                        className="w-1.5 bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.5)]"
-                      />
-                    ))}
-                </div>
-              ) : (
-                <div className="text-emerald-500/20">
-                  <Mic size={48} strokeWidth={1.5} />
-                </div>
-              )}
-            </div>
-
-            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => void loadLeads()}
+            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-800"
+          >
+            <RefreshCw size={14} /> Atualizar lista
+          </button>
+        </div>
+        <input
+          type="search"
+          placeholder="Buscar nome, e-mail ou telefone..."
+          className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-sm font-medium"
+          value={leadSearch}
+          onChange={(e) => setLeadSearch(e.target.value)}
+        />
+        {leadsLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="animate-spin text-emerald-600" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[220px] overflow-y-auto custom-scrollbar">
+            {filteredLeads.map((l) => (
               <button
+                key={l.id}
                 type="button"
-                onClick={toggleListening}
-                className={`flex items-center gap-3 px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-2xl hover:scale-105 active:scale-95 ${
-                  isListening ? 'bg-rose-500 text-white shadow-rose-500/40' : 'bg-emerald-500 text-white shadow-emerald-500/40'
+                onClick={() => setSelectedLeadId(l.id)}
+                className={`text-left p-4 rounded-2xl border transition-all ${
+                  selectedLeadId === l.id
+                    ? 'border-emerald-500 bg-emerald-50/80 shadow-md'
+                    : 'border-gray-100 hover:border-emerald-200 bg-gray-50/50'
                 }`}
               >
-                {isListening ? (
-                  <>
-                    <Square size={18} className="fill-white" />
-                    Encerrar Sessão
-                  </>
-                ) : (
-                  <>
-                    <Play size={18} className="fill-white" />
-                    Iniciar Escuta
-                  </>
-                )}
+                <p className="font-black text-gray-900 text-sm truncate">{l.name}</p>
+                <p className="text-[10px] text-gray-400 truncate">{l.email}</p>
               </button>
-            </div>
+            ))}
           </div>
-
-          <div className="pt-8 flex flex-wrap justify-center items-center gap-8 text-gray-400">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-emerald-500" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Transcrição Real-time</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-emerald-500" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Análise Estratégica IA</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-emerald-500" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Integração CRM</span>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-6">
-          <div className="flex items-center justify-between px-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100">
-                <MessageSquare size={20} className="text-emerald-500" />
-              </div>
-              <h3 className="text-xl font-black text-gray-900 uppercase italic tracking-tighter">Transcrição Viva</h3>
+      {/* 2 — Sessões do lead */}
+      {selectedLeadId && (
+        <div className="bg-white rounded-[32px] p-6 border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Headphones size={18} className="text-emerald-600" />
+              <h2 className="text-lg font-black text-gray-900 uppercase italic tracking-tight">2. Escutas inteligentes deste lead</h2>
             </div>
+            <button
+              type="button"
+              onClick={() => void startNewSession()}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
+            >
+              <Sparkles size={14} /> Nova escuta
+            </button>
+          </div>
+          {sessionsLoading ? (
+            <Loader2 className="animate-spin text-emerald-600 mx-auto block py-6" />
+          ) : sessions.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">Nenhuma escuta ainda. Clique em &quot;Nova escuta&quot; para associar uma sessão a este lead.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 max-h-[240px] overflow-y-auto custom-scrollbar">
+              {sessions.map((s) => (
+                <li key={s.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-900 text-sm truncate">{s.title}</p>
+                    <div className="flex items-center gap-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                      <Calendar size={12} />
+                      {s.createdAt?.slice(0, 16)?.replace('T', ' ') ?? '—'}
+                      <span className="text-emerald-600">{s.statusLabel}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void openSession(s.id)}
+                    className="shrink-0 flex items-center gap-1 text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-800"
+                  >
+                    Abrir <ChevronRight size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
-            {!isListening && transcription && !analysis && (
-              <button
-                type="button"
-                onClick={generateAIAnalysis}
-                disabled={isAnalyzing}
-                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20"
-              >
-                {isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                Gerar Inteligência
-              </button>
+      {/* 3 — Sessão ativa: gravação + transcrição + IA */}
+      {activeSession && selectedLead && (
+        <div className="space-y-8">
+          <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-bold text-emerald-900">
+              Sessão: <span className="font-black">{activeSession.title}</span> · {activeSession.statusLabel}
+            </p>
+            {uploading && (
+              <span className="text-[10px] font-black uppercase text-emerald-700 flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" /> Enviando áudio e transcrevendo (Whisper)…
+              </span>
             )}
           </div>
 
-          <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm min-h-[400px] max-h-[600px] overflow-y-auto custom-scrollbar relative">
-            {transcription ? (
-              <div className="space-y-4">
-                {transcription.split('\n').map((line, i) => (
-                  <motion.p
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    key={i}
-                    className={`text-sm font-medium leading-relaxed ${
-                      line.startsWith('[')
-                        ? 'text-emerald-500 font-black italic text-[10px] uppercase tracking-wider mt-4'
-                        : 'text-gray-600'
-                    }`}
-                  >
-                    {line}
-                  </motion.p>
-                ))}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-gray-300 space-y-4 py-20">
-                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
-                  <MicOff size={32} className="opacity-20" />
+          <div className="bg-white rounded-[40px] p-10 border border-gray-100 shadow-2xl shadow-emerald-900/5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full -mr-32 -mt-32 blur-3xl" />
+            <div className="relative z-10 flex flex-col items-center text-center space-y-8">
+              <div className="space-y-3">
+                <div className="flex items-center justify-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'} shadow-lg`} />
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">
+                    {isRecording ? 'Gravando microfone + áudio do sistema' : 'Pronto para gravar'}
+                  </span>
                 </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] italic text-center max-w-[150px]">
-                  Aguardando início da sessão para transcrever
+                <h1 className="text-4xl md:text-5xl font-black text-gray-900 uppercase italic tracking-tighter leading-none">
+                  Escuta Inteligente <span className="text-emerald-500">AMPLIA</span>
+                </h1>
+                <p className="text-gray-500 font-medium italic text-sm max-w-2xl mx-auto">
+                  Inicie a gravação: autorize o microfone e, na janela seguinte, escolha a aba do Google Meet (ou outra call) e marque{' '}
+                  <strong>compartilhar áudio da guia</strong> para capturar voz e som do computador. O arquivo é enviado ao servidor para
+                  transcrição (OpenAI Whisper) e análise.
                 </p>
               </div>
-            )}
-          </div>
-        </div>
 
-        <div className="space-y-6">
-          <div className="flex items-center justify-between px-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100">
-                <Sparkles size={20} className="text-emerald-500" />
+              <div className="w-full max-w-2xl bg-[#0a0a0a] rounded-[32px] p-8 border-4 border-white shadow-2xl relative">
+                <div className="absolute top-4 left-6 flex items-center gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isRecording ? 'bg-rose-500 animate-pulse' : 'bg-gray-700'}`} />
+                  <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">
+                    {isRecording ? formatTime(recordSeconds) : 'Standby'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col items-center justify-center min-h-[120px] py-4">
+                  {isRecording ? (
+                    <div className="flex items-center gap-1.5 h-16">
+                      {Array.from(audioData)
+                        .filter((_, i) => i % 8 === 0)
+                        .map((val, i) => (
+                          <motion.div
+                            key={i}
+                            animate={{ height: Math.max(4, (val / 255) * 60) }}
+                            className="w-1.5 bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+                          />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-emerald-500/20">
+                      <Mic size={48} strokeWidth={1.5} />
+                    </div>
+                  )}
+                </div>
+
+                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isRecording) stopRecording();
+                      else void startRecording();
+                    }}
+                    disabled={activeSession.status === 'COMPLETED' || uploading}
+                    className={`flex items-center gap-3 px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-2xl hover:scale-105 active:scale-95 disabled:opacity-50 ${
+                      isRecording ? 'bg-rose-500 text-white shadow-rose-500/40' : 'bg-emerald-500 text-white shadow-emerald-500/40'
+                    }`}
+                  >
+                    {isRecording ? (
+                      <>
+                        <Square size={18} className="fill-white" />
+                        Encerrar e enviar
+                      </>
+                    ) : (
+                      <>
+                        <Play size={18} className="fill-white" />
+                        Iniciar escuta
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-              <h3 className="text-xl font-black text-gray-900 uppercase italic tracking-tighter">Análise Estratégica</h3>
+
+              <div className="pt-8 flex flex-wrap justify-center items-center gap-8 text-gray-400">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-500" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Transcrição Whisper</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-500" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Análise IA</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-500" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Integração CRM</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100">
+                    <MessageSquare size={20} className="text-emerald-500" />
+                  </div>
+                  <h3 className="text-xl font-black text-gray-900 uppercase italic tracking-tighter">Transcrição</h3>
+                </div>
+                {!isRecording && displayTranscript && activeSession.status !== 'COMPLETED' && (
+                  <button
+                    type="button"
+                    onClick={() => void runAnalyze()}
+                    disabled={analyzing || uploading}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+                  >
+                    {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    Gerar inteligência
+                  </button>
+                )}
+              </div>
+
+              <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm min-h-[320px] max-h-[520px] overflow-y-auto custom-scrollbar relative">
+                {displayTranscript ? (
+                  <div className="space-y-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{displayTranscript}</div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-300 space-y-4 py-16">
+                    <MicOff size={32} className="opacity-20" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-center max-w-[200px]">
+                      Grave a reunião para gerar a transcrição no servidor
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {analysis && (
-              <button
-                type="button"
-                onClick={saveToCRM}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#002a1e] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10"
-              >
-                <Save size={14} />
-                Enviar para CRM
-              </button>
-            )}
-          </div>
-
-          <AnimatePresence mode="wait">
-            {isAnalyzing ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-[32px] p-12 border border-gray-100 shadow-sm flex flex-col items-center justify-center space-y-8 min-h-[400px]"
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full animate-pulse" />
-                  <Loader2 className="w-16 h-16 text-emerald-500 animate-spin relative z-10" />
-                </div>
-                <div className="text-center space-y-3">
-                  <h4 className="text-2xl font-black text-gray-900 uppercase italic tracking-tighter">Processando Insights</h4>
-                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest leading-relaxed max-w-[250px] mx-auto">
-                    Nossa IA está extraindo as melhores oportunidades da sua conversa
-                  </p>
-                </div>
-              </motion.div>
-            ) : analysis ? (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <div className="bg-[#002a1e] text-white rounded-[32px] p-8 shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-8 opacity-5">
-                    <Sparkles size={120} />
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100">
+                    <Sparkles size={20} className="text-emerald-500" />
                   </div>
-                  <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 mb-4">Resumo Executivo</h4>
-                  <p className="text-sm font-medium text-emerald-50/80 leading-relaxed relative z-10">{analysis.resumo}</p>
+                  <h3 className="text-xl font-black text-gray-900 uppercase italic tracking-tighter">Análise Estratégica</h3>
                 </div>
-
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm">
-                    <div className="flex items-center gap-2 text-emerald-500 mb-6">
-                      <TrendingUp size={18} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Pontos Fortes</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {analysis.pontos_fortes.map((p, i) => (
-                        <span
-                          key={i}
-                          className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-bold border border-emerald-100"
-                        >
-                          {p}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm">
-                    <div className="flex items-center gap-2 text-rose-500 mb-6">
-                      <TrendingDown size={18} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Pontos Fracos</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {analysis.pontos_fracos.map((p, i) => (
-                        <span
-                          key={i}
-                          className="px-4 py-2 bg-rose-50 text-rose-700 rounded-full text-[11px] font-bold border border-rose-100"
-                        >
-                          {p}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm">
-                    <div className="flex items-center gap-2 text-amber-500 mb-6">
-                      <Lightbulb size={18} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Próximos Passos</span>
-                    </div>
-                    <ul className="space-y-3">
-                      {analysis.proximos_passos.map((p, i) => (
-                        <li key={i} className="flex items-start gap-3 text-xs font-bold text-gray-600">
-                          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 shrink-0 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                          {p}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <div className="bg-white rounded-[32px] p-12 border border-gray-100 shadow-sm flex flex-col items-center justify-center space-y-6 min-h-[400px] text-center">
-                <div className="w-20 h-20 bg-gray-50 rounded-[32px] flex items-center justify-center text-gray-200">
-                  <Sparkles size={40} />
-                </div>
-                <div className="space-y-2">
-                  <h4 className="text-xl font-black text-gray-900 uppercase italic tracking-tighter">Inteligência Estratégica</h4>
-                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest leading-relaxed max-w-[200px] mx-auto">
-                    Finalize a escuta para transformar sua reunião em dados acionáveis.
-                  </p>
-                </div>
+                {analysis && (
+                  <button
+                    type="button"
+                    onClick={() => void runComplete()}
+                    disabled={completing}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-[#002a1e] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10 disabled:opacity-50"
+                  >
+                    {completing ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    Enviar para CRM
+                  </button>
+                )}
               </div>
-            )}
-          </AnimatePresence>
+
+              <AnimatePresence mode="wait">
+                {analyzing ? (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="bg-white rounded-[32px] p-12 border border-gray-100 shadow-sm flex flex-col items-center justify-center space-y-8 min-h-[320px]"
+                  >
+                    <Loader2 className="w-16 h-16 text-emerald-500 animate-spin" />
+                    <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Gerando análise…</p>
+                  </motion.div>
+                ) : analysis ? (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    <div className="bg-[#002a1e] text-white rounded-[32px] p-8 shadow-xl relative overflow-hidden">
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 mb-4">Resumo Executivo</h4>
+                      <p className="text-sm font-medium text-emerald-50/80 leading-relaxed relative z-10">{analysis.resumo}</p>
+                    </div>
+                    <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm">
+                      <div className="flex items-center gap-2 text-emerald-500 mb-6">
+                        <TrendingUp size={18} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Pontos Fortes</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.pontos_fortes.map((p, i) => (
+                          <span
+                            key={i}
+                            className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-bold border border-emerald-100"
+                          >
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm">
+                      <div className="flex items-center gap-2 text-rose-500 mb-6">
+                        <TrendingDown size={18} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Pontos Fracos</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.pontos_fracos.map((p, i) => (
+                          <span
+                            key={i}
+                            className="px-4 py-2 bg-rose-50 text-rose-700 rounded-full text-[11px] font-bold border border-rose-100"
+                          >
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm">
+                      <div className="flex items-center gap-2 text-amber-500 mb-6">
+                        <Lightbulb size={18} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Próximos Passos</span>
+                      </div>
+                      <ul className="space-y-3">
+                        {analysis.proximos_passos.map((p, i) => (
+                          <li key={i} className="flex items-start gap-3 text-xs font-bold text-gray-600">
+                            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 shrink-0 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+                            {p}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <div className="bg-white rounded-[32px] p-12 border border-gray-100 shadow-sm flex flex-col items-center justify-center space-y-6 min-h-[320px] text-center">
+                    <Sparkles size={40} className="text-gray-200" />
+                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest max-w-[220px] mx-auto">
+                      Após a transcrição, clique em Gerar inteligência
+                    </p>
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {!selectedLeadId && !leadsLoading && (
+        <p className="text-center text-sm text-gray-500">Selecione um lead para criar ou listar escutas inteligentes.</p>
+      )}
     </div>
   );
 };
