@@ -40,6 +40,24 @@ interface MeetingAnalysis {
   proximos_passos: string[];
 }
 
+/** Mensagens da API de transcrição podem soar técnicas — exibimos texto humano no app. */
+function friendlyTranscriptionError(raw: string): string {
+  const m = raw.toLowerCase();
+  if (
+    m.includes('transcrição vazia') ||
+    m.includes('chave') ||
+    m.includes('openai') ||
+    m.includes('api key') ||
+    m.includes('não foi possível obter texto')
+  ) {
+    return 'Não conseguimos extrair texto do áudio. Grave um trecho um pouco mais longo (pelo menos ~10 segundos), fale perto do microfone e use o compartilhamento da aba do Meet com áudio da guia ativado.';
+  }
+  if (m.includes('falha ao processar áudio')) {
+    return 'Não foi possível processar este áudio. Grave novamente em ambiente silencioso.';
+  }
+  return raw;
+}
+
 function parseAiSummary(json: string | null | undefined): MeetingAnalysis | null {
   if (!json?.trim()) return null;
   try {
@@ -75,6 +93,7 @@ const VideoMeeting: React.FC = () => {
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [crmSuccessOpen, setCrmSuccessOpen] = useState(false);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -386,7 +405,9 @@ const VideoMeeting: React.FC = () => {
         recordingSessionIdRef.current = null;
         if (!sessionId) return;
         if (blob.size < 2000) {
-          setErrorMsg('Gravação muito curta. Tente novamente.');
+          setErrorMsg(
+            'A gravação ficou muito curta para gerar transcrição. Fale pelo menos uns 10 segundos e só então encerre a escuta.'
+          );
           return;
         }
         void (async () => {
@@ -402,7 +423,8 @@ const VideoMeeting: React.FC = () => {
               setActiveSession(patched);
             }
           } catch (e: unknown) {
-            setErrorMsg(e instanceof Error ? e.message : 'Falha ao enviar áudio para transcrição');
+            const msg = e instanceof Error ? e.message : 'Falha ao enviar áudio para transcrição';
+            setErrorMsg(friendlyTranscriptionError(msg));
           } finally {
             setUploading(false);
           }
@@ -477,8 +499,7 @@ const VideoMeeting: React.FC = () => {
       const s = await intelligentListeningService.completeToCrm(activeSession.id);
       setActiveSession(s);
       if (selectedLeadId) await loadSessions(selectedLeadId);
-      alert('Resumo anexado às notas do lead no CRM.');
-      navigate('/crm');
+      setCrmSuccessOpen(true);
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Falha ao salvar no CRM');
     } finally {
@@ -1067,6 +1088,58 @@ const VideoMeeting: React.FC = () => {
                     Remover
                   </button>
                 </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {crmSuccessOpen && (
+            <motion.div
+              key="crm-ok"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="crm-success-title"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/45 backdrop-blur-sm"
+              onClick={() => setCrmSuccessOpen(false)}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md rounded-2xl border border-emerald-100 bg-white p-6 shadow-2xl text-center"
+              >
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="h-8 w-8" strokeWidth={2.5} />
+                </div>
+                <h2 id="crm-success-title" className="text-lg font-black text-slate-900">
+                  Nota salva no CRM
+                </h2>
+                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                  O resumo da Escuta Inteligente foi adicionado às notas deste lead. Você já pode revisar no painel do CRM.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCrmSuccessOpen(false);
+                    navigate('/crm');
+                  }}
+                  className="mt-6 w-full rounded-xl bg-emerald-600 py-3.5 text-[11px] font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 transition-colors"
+                >
+                  Ir para o CRM
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCrmSuccessOpen(false)}
+                  className="mt-3 w-full rounded-xl py-2.5 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800"
+                >
+                  Continuar aqui
+                </button>
               </motion.div>
             </motion.div>
           )}

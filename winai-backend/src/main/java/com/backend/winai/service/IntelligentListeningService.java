@@ -10,6 +10,8 @@ import com.backend.winai.entity.MeetingKind;
 import com.backend.winai.entity.MeetingStatus;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.MeetingRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,9 +33,12 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class IntelligentListeningService {
 
+    private static final DateTimeFormatter CRM_TS = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
     private final MeetingRepository meetingRepository;
     private final LeadRepository leadRepository;
     private final OpenAiService openAiService;
+    private final ObjectMapper objectMapper;
 
     private static final Map<MeetingStatus, String> STATUS_LABELS = Map.of(
             MeetingStatus.SCHEDULED, "Agendada",
@@ -113,7 +119,8 @@ public class IntelligentListeningService {
             String text = openAiService.transcribeAudio(bytes, filename);
             if (text == null || text.isBlank()) {
                 throw new RuntimeException(
-                        "Transcrição vazia. Verifique a chave OpenAI e o formato do áudio (webm/opus/wav).");
+                        "Não foi possível obter texto deste áudio. Grave pelo menos alguns segundos com fala audível, "
+                                + "verifique o microfone e, no Meet, ative o compartilhamento de áudio da guia.");
             }
             m.setTranscriptionFull(text);
             m = meetingRepository.save(m);
@@ -156,17 +163,16 @@ public class IntelligentListeningService {
         if (lead != null) {
             lead = leadRepository.findByIdAndCompany(lead.getId(), company).orElse(lead);
             String summaryPart = m.getAiSummary() != null && !m.getAiSummary().isBlank()
-                    ? m.getAiSummary()
+                    ? formatAiSummaryForCrmNotes(m.getAiSummary())
                     : (m.getTranscriptionFull() != null
-                            ? "[Transcrição sem análise IA]\n" + m.getTranscriptionFull()
+                            ? "**Transcrição (sem análise IA)**\n\n" + m.getTranscriptionFull().trim()
                             : "");
             if (!summaryPart.isEmpty()) {
-                String block = "\n\n--- Escuta Inteligente (" + LocalDateTime.now() + ") — sessão "
-                        + m.getId() + " ---\n" + summaryPart;
+                String ref = m.getId().toString();
+                String shortRef = ref.length() > 8 ? ref.substring(0, 8) : ref;
+                String block = "\n\n--- Escuta Inteligente · " + CRM_TS.format(LocalDateTime.now()) + " · ref. "
+                        + shortRef + " ---\n\n" + summaryPart;
                 String merged = (lead.getNotes() != null ? lead.getNotes() : "") + block;
-                if (merged.length() > 2000) {
-                    merged = merged.substring(0, 1997) + "...";
-                }
                 lead.setNotes(merged);
                 leadRepository.save(lead);
             }
@@ -200,6 +206,59 @@ public class IntelligentListeningService {
                 .transcriptionFull(m.getTranscriptionFull())
                 .aiSummary(m.getAiSummary())
                 .build();
+    }
+
+    /**
+     * Converte o JSON de análise da IA em texto legível (Markdown leve) para as notas do lead.
+     */
+    private String formatAiSummaryForCrmNotes(String rawJson) {
+        if (rawJson == null || rawJson.isBlank()) {
+            return "";
+        }
+        String json = sanitizeJsonBlock(rawJson).trim();
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            StringBuilder sb = new StringBuilder();
+            appendMarkdownSection(sb, "Resumo", root.path("resumo").asText("").trim());
+            appendMarkdownBulletSection(sb, "Pontos fortes", root.path("pontos_fortes"));
+            appendMarkdownBulletSection(sb, "Pontos de atenção", root.path("pontos_fracos"));
+            appendMarkdownBulletSection(sb, "Melhorias sugeridas", root.path("melhorias"));
+            appendMarkdownBulletSection(sb, "Próximos passos", root.path("proximos_passos"));
+            return sb.toString().trim();
+        } catch (Exception e) {
+            log.warn("Não foi possível formatar análise JSON para CRM: {}", e.getMessage());
+            return json;
+        }
+    }
+
+    private static void appendMarkdownSection(StringBuilder sb, String title, String body) {
+        if (body == null || body.isBlank()) {
+            return;
+        }
+        if (sb.length() > 0) {
+            sb.append("\n\n");
+        }
+        sb.append("**").append(title).append("**\n\n").append(body);
+    }
+
+    private static void appendMarkdownBulletSection(StringBuilder sb, String title, JsonNode arr) {
+        if (arr == null || !arr.isArray() || arr.isEmpty()) {
+            return;
+        }
+        StringBuilder lines = new StringBuilder();
+        for (JsonNode n : arr) {
+            String line = n.asText("").trim();
+            if (!line.isEmpty()) {
+                lines.append("• ").append(line).append("\n");
+            }
+        }
+        if (lines.length() == 0) {
+            return;
+        }
+        if (sb.length() > 0) {
+            sb.append("\n\n");
+        }
+        sb.append("**").append(title).append("**\n\n").append(lines.toString().trim());
     }
 
     private static String sanitizeJsonBlock(String raw) {

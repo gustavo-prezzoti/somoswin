@@ -26,6 +26,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
 import { useNavigate } from 'react-router-dom';
 import {
   leadService,
@@ -747,9 +748,15 @@ const CRM: React.FC = () => {
                     <Edit2 size={12} /> Notas
                   </label>
                   <div className="bg-gray-50 p-6 rounded-[32px] border border-gray-100 min-h-[100px]">
-                    <p className="text-sm text-gray-600 leading-relaxed italic">
-                      {selectedLead.notes || 'Nenhuma nota registrada para este lead até o momento.'}
-                    </p>
+                    {selectedLead.notes ? (
+                      <div className="text-sm text-gray-700 leading-relaxed space-y-3 [&_strong]:font-black [&_strong]:text-gray-900 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-1">
+                        <ReactMarkdown>{selectedLead.notes}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 leading-relaxed italic">
+                        Nenhuma nota registrada para este lead até o momento.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

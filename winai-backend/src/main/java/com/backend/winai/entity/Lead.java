@@ -43,7 +43,7 @@ public class Lead {
     @Column(name = "owner_name")
     private String ownerName;
 
-    @Column(length = 2000)
+    @Column(columnDefinition = "TEXT")
     private String notes;
 
     @Column(length = 500)
