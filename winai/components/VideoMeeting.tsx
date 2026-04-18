@@ -41,6 +41,10 @@ interface MeetingAnalysis {
   proximos_passos: string[];
 }
 
+/** Botões da área Escuta Inteligente (Transcrição / Análise): mesma largura e altura. */
+const ESCUTA_ACTION_BTN =
+  'inline-flex h-11 w-full min-[400px]:w-[240px] min-[400px]:min-w-[240px] shrink-0 items-center justify-center gap-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all disabled:opacity-50';
+
 /** Mensagens da API de transcrição podem soar técnicas — exibimos texto humano no app. */
 /** Remove suplemento "ao vivo" da transcrição exibida (evita repetir o mesmo texto duas vezes na tela). */
 function stripLiveSpeechSupplement(text: string): string {
@@ -1040,7 +1044,7 @@ const VideoMeeting: React.FC = () => {
               <div className="pt-8 flex flex-wrap justify-center items-center gap-8 text-gray-400">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 size={16} className="text-emerald-500" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">Transcrição Whisper</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Transcrição</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 size={16} className="text-emerald-500" />
@@ -1069,7 +1073,7 @@ const VideoMeeting: React.FC = () => {
                       type="button"
                       onClick={() => setPendingClear('transcript')}
                       disabled={clearingContent}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+                      className={`${ESCUTA_ACTION_BTN} border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300`}
                     >
                       <Eraser size={14} />
                       Limpar
@@ -1080,7 +1084,7 @@ const VideoMeeting: React.FC = () => {
                       type="button"
                       onClick={() => void runAnalyze()}
                       disabled={analyzing || uploading}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+                      className={`${ESCUTA_ACTION_BTN} bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20`}
                     >
                       {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                       Gerar inteligência
@@ -1117,7 +1121,7 @@ const VideoMeeting: React.FC = () => {
                       type="button"
                       onClick={() => setPendingClear('analysis')}
                       disabled={clearingContent}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+                      className={`${ESCUTA_ACTION_BTN} border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300`}
                     >
                       <Eraser size={14} />
                       Limpar
@@ -1128,7 +1132,7 @@ const VideoMeeting: React.FC = () => {
                       type="button"
                       onClick={() => void runComplete()}
                       disabled={completing}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-[#002a1e] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10 disabled:opacity-50"
+                      className={`${ESCUTA_ACTION_BTN} bg-[#002a1e] text-white hover:bg-black shadow-lg shadow-black/10`}
                     >
                       {completing ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                       Enviar para CRM
