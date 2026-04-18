@@ -19,11 +19,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -189,6 +193,10 @@ public class IntelligentListeningService {
                         + shortRef + " ---\n\n" + summaryPart;
                 String merged = (lead.getNotes() != null ? lead.getNotes() : "") + block;
                 lead.setNotes(merged);
+                BigDecimal fromEscuta = extractNegotiatedValueBrl(m.getAiSummary());
+                if (fromEscuta != null && lead.getEstimatedValue() == null) {
+                    lead.setEstimatedValue(fromEscuta);
+                }
                 leadRepository.save(lead);
             }
         }
@@ -220,7 +228,39 @@ public class IntelligentListeningService {
                 .createdAt(m.getCreatedAt())
                 .transcriptionFull(m.getTranscriptionFull())
                 .aiSummary(m.getAiSummary())
+                .negotiatedValueBrl(extractNegotiatedValueBrl(m.getAiSummary()))
                 .build();
+    }
+
+    /**
+     * Extrai valor_mencionado_brl do JSON de análise (gerado pela IA).
+     */
+    private BigDecimal extractNegotiatedValueBrl(String aiSummaryJson) {
+        if (aiSummaryJson == null || aiSummaryJson.isBlank()) {
+            return null;
+        }
+        try {
+            String clean = sanitizeJsonBlock(aiSummaryJson).trim();
+            JsonNode root = objectMapper.readTree(clean);
+            JsonNode v = root.get("valor_mencionado_brl");
+            if (v == null || v.isNull()) {
+                return null;
+            }
+            if (v.isNumber()) {
+                return BigDecimal.valueOf(v.asDouble()).setScale(2, RoundingMode.HALF_UP);
+            }
+            if (v.isTextual()) {
+                String s = v.asText().replace(".", "").replace(",", ".");
+                s = s.replaceAll("[^0-9.]", "");
+                if (s.isBlank()) {
+                    return null;
+                }
+                return new BigDecimal(s).setScale(2, RoundingMode.HALF_UP);
+            }
+        } catch (Exception e) {
+            log.debug("Não foi possível extrair valor_mencionado_brl: {}", e.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -234,6 +274,11 @@ public class IntelligentListeningService {
         try {
             JsonNode root = objectMapper.readTree(json);
             StringBuilder sb = new StringBuilder();
+            BigDecimal neg = extractNegotiatedValueBrl(rawJson);
+            if (neg != null) {
+                NumberFormat br = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+                appendMarkdownSection(sb, "Valor mencionado na reunião (est.)", br.format(neg));
+            }
             appendMarkdownSection(sb, "Resumo", root.path("resumo").asText("").trim());
             appendMarkdownBulletSection(sb, "Pontos fortes", root.path("pontos_fortes"));
             appendMarkdownBulletSection(sb, "Pontos de atenção", root.path("pontos_fracos"));

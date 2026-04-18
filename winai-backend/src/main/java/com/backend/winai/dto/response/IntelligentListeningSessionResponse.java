@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
@@ -27,4 +28,6 @@ public class IntelligentListeningSessionResponse {
     private LocalDateTime createdAt;
     private String transcriptionFull;
     private String aiSummary;
+    /** Valor em BRL inferido pela IA a partir da transcrição (pode ser null). */
+    private BigDecimal negotiatedValueBrl;
 }

@@ -16,6 +16,8 @@ export interface IntelligentListeningSession {
   createdAt: string;
   transcriptionFull: string | null;
   aiSummary: string | null;
+  /** Valor em BRL inferido pela IA na análise (após "Gerar inteligência"). */
+  negotiatedValueBrl?: number | null;
 }
 
 export const intelligentListeningService = {

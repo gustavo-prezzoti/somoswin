@@ -626,10 +626,22 @@ const VideoMeeting: React.FC = () => {
   };
 
   const statusLabel = displayLead ? LEAD_STATUS_LABELS[displayLead.status] || displayLead.status : '';
-  const valueDisplay =
+  const crmValueNum =
     displayLead?.estimatedValue != null && !Number.isNaN(Number(displayLead.estimatedValue))
-      ? Number(displayLead.estimatedValue).toLocaleString('pt-BR')
-      : '—';
+      ? Number(displayLead.estimatedValue)
+      : null;
+  const escutaValueNum =
+    activeSession?.negotiatedValueBrl != null &&
+    !Number.isNaN(Number(activeSession.negotiatedValueBrl))
+      ? Number(activeSession.negotiatedValueBrl)
+      : null;
+  const valueDisplay =
+    crmValueNum != null
+      ? crmValueNum.toLocaleString('pt-BR')
+      : escutaValueNum != null
+        ? escutaValueNum.toLocaleString('pt-BR')
+        : '—';
+  const valueFromEscutaOnly = crmValueNum == null && escutaValueNum != null;
 
   const displayTranscript = useMemo(() => {
     const fromServer = activeSession?.transcriptionFull;
@@ -721,7 +733,16 @@ const VideoMeeting: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3 sm:gap-5 pl-1 sm:pl-0">
               <div className="text-left sm:text-right">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor est.</p>
-                <p className="text-sm font-black text-emerald-600">R$ {valueDisplay}</p>
+                <p
+                  className="text-sm font-black text-emerald-600"
+                  title={
+                    valueFromEscutaOnly
+                      ? 'Valor citado na reunião (IA). Ao enviar ao CRM, pode preencher o campo do lead se estiver vazio.'
+                      : undefined
+                  }
+                >
+                  R$ {valueDisplay}
+                </p>
               </div>
               <div className="h-8 w-px bg-slate-100 hidden sm:block" />
               <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 rounded-xl border border-emerald-100/80">
