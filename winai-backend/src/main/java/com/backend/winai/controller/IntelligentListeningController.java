@@ -1,5 +1,6 @@
 package com.backend.winai.controller;
 
+import com.backend.winai.dto.request.IntelligentListeningAiSummaryRequest;
 import com.backend.winai.dto.request.IntelligentListeningStartRequest;
 import com.backend.winai.dto.request.IntelligentListeningTranscriptRequest;
 import com.backend.winai.dto.response.IntelligentListeningSessionResponse;
@@ -62,6 +63,15 @@ public class IntelligentListeningController {
             @RequestBody IntelligentListeningTranscriptRequest body) {
         var u = getUserWithCompany(user);
         return ResponseEntity.ok(intelligentListeningService.patchTranscription(u.getCompany(), id, body));
+    }
+
+    @PatchMapping("/sessions/{id}/ai-summary")
+    public ResponseEntity<IntelligentListeningSessionResponse> patchAiSummary(
+            @AuthenticationPrincipal User user,
+            @PathVariable UUID id,
+            @RequestBody IntelligentListeningAiSummaryRequest body) {
+        var u = getUserWithCompany(user);
+        return ResponseEntity.ok(intelligentListeningService.patchAiSummary(u.getCompany(), id, body));
     }
 
     @PostMapping(value = "/sessions/{id}/audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

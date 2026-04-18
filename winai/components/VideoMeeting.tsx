@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Check,
   Trash2,
+  Eraser,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -41,6 +42,22 @@ interface MeetingAnalysis {
 }
 
 /** Mensagens da API de transcrição podem soar técnicas — exibimos texto humano no app. */
+/** Remove suplemento "ao vivo" da transcrição exibida (evita repetir o mesmo texto duas vezes na tela). */
+function stripLiveSpeechSupplement(text: string): string {
+  const markers = [
+    '\n\n[Notas por voz do microfone — tempo real]',
+    '\n\n**Anotações ao vivo (microfone)**',
+    '\n[Notas por voz do microfone — tempo real]',
+    '\n**Anotações ao vivo (microfone)**',
+  ];
+  let t = text;
+  for (const m of markers) {
+    const idx = t.indexOf(m);
+    if (idx >= 0) t = t.slice(0, idx);
+  }
+  return t.trim();
+}
+
 function friendlyTranscriptionError(raw: string): string {
   const m = raw.toLowerCase();
   if (
@@ -94,6 +111,8 @@ const VideoMeeting: React.FC = () => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [crmSuccessOpen, setCrmSuccessOpen] = useState(false);
+  const [pendingClear, setPendingClear] = useState<null | 'transcript' | 'analysis'>(null);
+  const [clearingContent, setClearingContent] = useState(false);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -115,16 +134,49 @@ const VideoMeeting: React.FC = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const [audioData, setAudioData] = useState<Uint8Array>(new Uint8Array(0));
   const localTranscriptRef = useRef('');
+  /** Só trechos finais do reconhecimento de voz (evita repetir frases parciais linha a linha). */
+  const speechCommittedRef = useRef('');
   const recordingSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     localTranscriptRef.current = localTranscript;
   }, [localTranscript]);
 
-  const selectedLead = useMemo(
-    () => (selectedLeadId ? leads.find((l) => l.id === selectedLeadId) ?? null : null),
-    [leads, selectedLeadId]
-  );
+  const selectedLead = useMemo(() => {
+    if (!selectedLeadId) return null;
+    const fromList = leads.find((l) => l.id === selectedLeadId);
+    const fromCrm = leadFromCrm?.id === selectedLeadId ? leadFromCrm : null;
+    if (fromList && fromCrm) {
+      return {
+        ...fromList,
+        estimatedValue: fromList.estimatedValue ?? fromCrm.estimatedValue ?? null,
+      };
+    }
+    return fromList ?? fromCrm ?? null;
+  }, [leads, selectedLeadId, leadFromCrm]);
+
+  const [leadHydrated, setLeadHydrated] = useState<LeadData | null>(null);
+
+  useEffect(() => {
+    if (!selectedLeadId) {
+      setLeadHydrated(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const full = await leadService.getLeadById(selectedLeadId);
+        if (!cancelled) setLeadHydrated(full);
+      } catch {
+        if (!cancelled) setLeadHydrated(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLeadId]);
+
+  const displayLead = leadHydrated ?? selectedLead;
 
   const analysis = useMemo(() => parseAiSummary(activeSession?.aiSummary), [activeSession?.aiSummary]);
 
@@ -299,14 +351,23 @@ const VideoMeeting: React.FC = () => {
     rec.lang = 'pt-BR';
     rec.continuous = true;
     rec.interimResults = true;
-    rec.onresult = (ev: { resultIndex: number; results: Array<{ 0: { transcript: string } }> }) => {
-      let text = '';
+    rec.onresult = (ev: { resultIndex: number; results: Array<{ isFinal: boolean; 0: { transcript: string } }> }) => {
+      let interim = '';
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
-        text += ev.results[i][0].transcript;
+        const alt = ev.results[i][0];
+        const piece = alt?.transcript ?? '';
+        if (ev.results[i].isFinal) {
+          const t = piece.trim();
+          if (t) {
+            speechCommittedRef.current += (speechCommittedRef.current ? ' ' : '') + t;
+          }
+        } else {
+          interim += piece;
+        }
       }
-      if (text.trim()) {
-        setLocalTranscript((prev) => (prev ? `${prev}\n${text.trim()}` : text.trim()));
-      }
+      const interimTrim = interim.trim();
+      const base = speechCommittedRef.current;
+      setLocalTranscript(base + (interimTrim ? (base ? ' ' : '') + interimTrim : ''));
     };
     rec.onerror = () => {};
     try {
@@ -354,6 +415,7 @@ const VideoMeeting: React.FC = () => {
     chunksRef.current = [];
     setRecordSeconds(0);
     setLocalTranscript('');
+    speechCommittedRef.current = '';
     recordingSessionIdRef.current = activeSession.id;
 
     try {
@@ -416,9 +478,16 @@ const VideoMeeting: React.FC = () => {
           try {
             const updated = await intelligentListeningService.uploadAudio(sessionId, blob, 'escuta.webm');
             setActiveSession(updated);
-            const live = localTranscriptRef.current.trim();
+            const whisper = (updated.transcriptionFull || '').trim();
+            const live = speechCommittedRef.current.trim();
             if (live) {
-              const merged = `${updated.transcriptionFull || ''}\n\n[Notas por voz do microfone — tempo real]\n${live}`;
+              const whisperLooksOk = whisper.length >= 80;
+              if (whisperLooksOk) {
+                return;
+              }
+              const merged = whisper
+                ? `${whisper}\n\n**Anotações ao vivo (microfone)**\n${live}`
+                : live;
               const patched = await intelligentListeningService.patchTranscription(sessionId, merged);
               setActiveSession(patched);
             }
@@ -507,15 +576,68 @@ const VideoMeeting: React.FC = () => {
     }
   };
 
-  const statusLabel = selectedLead ? LEAD_STATUS_LABELS[selectedLead.status] || selectedLead.status : '';
-  const valueDisplay = selectedLead?.estimatedValue != null
-    ? Number(selectedLead.estimatedValue).toLocaleString('pt-BR')
-    : '—';
+  const canClearTranscript =
+    !!activeSession &&
+    activeSession.status !== 'COMPLETED' &&
+    !isRecording &&
+    !uploading &&
+    !clearingContent &&
+    (Boolean(activeSession.transcriptionFull?.trim()) || Boolean(localTranscript.trim()));
 
-  const displayTranscript =
-    activeSession?.transcriptionFull ||
-    (localTranscript && !activeSession?.transcriptionFull ? localTranscript : '') ||
-    '';
+  const canClearAnalysis =
+    !!activeSession &&
+    activeSession.status !== 'COMPLETED' &&
+    !analyzing &&
+    !clearingContent &&
+    Boolean(activeSession.aiSummary?.trim());
+
+  const confirmClearTranscript = async () => {
+    if (!activeSession) return;
+    setClearingContent(true);
+    setErrorMsg(null);
+    try {
+      if (activeSession.transcriptionFull?.trim()) {
+        const s = await intelligentListeningService.patchTranscription(activeSession.id, '');
+        setActiveSession(s);
+      }
+      setLocalTranscript('');
+      speechCommittedRef.current = '';
+      setPendingClear(null);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Falha ao limpar transcrição');
+    } finally {
+      setClearingContent(false);
+    }
+  };
+
+  const confirmClearAnalysis = async () => {
+    if (!activeSession) return;
+    setClearingContent(true);
+    setErrorMsg(null);
+    try {
+      const s = await intelligentListeningService.patchAiSummary(activeSession.id, '');
+      setActiveSession(s);
+      setPendingClear(null);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Falha ao limpar análise');
+    } finally {
+      setClearingContent(false);
+    }
+  };
+
+  const statusLabel = displayLead ? LEAD_STATUS_LABELS[displayLead.status] || displayLead.status : '';
+  const valueDisplay =
+    displayLead?.estimatedValue != null && !Number.isNaN(Number(displayLead.estimatedValue))
+      ? Number(displayLead.estimatedValue).toLocaleString('pt-BR')
+      : '—';
+
+  const displayTranscript = useMemo(() => {
+    const fromServer = activeSession?.transcriptionFull;
+    if (fromServer) {
+      return stripLiveSpeechSupplement(fromServer);
+    }
+    return localTranscript || '';
+  }, [activeSession?.transcriptionFull, localTranscript]);
 
   const stepMeta = [
     { n: 1 as const, label: 'Lead', hint: 'Cliente' },
@@ -586,16 +708,16 @@ const VideoMeeting: React.FC = () => {
               <ArrowLeft size={20} />
             </button>
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white flex items-center justify-center font-black text-sm shadow-md shadow-emerald-600/20 shrink-0">
-              {selectedLead ? selectedLead.name.charAt(0) : '?'}
+              {displayLead ? displayLead.name.charAt(0) : '?'}
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Escuta inteligente</p>
               <h4 className="text-sm sm:text-base font-black text-slate-900 tracking-tight truncate">
-                {selectedLead ? selectedLead.name : 'Escolha um lead'}
+                {displayLead ? displayLead.name : 'Escolha um lead'}
               </h4>
             </div>
           </div>
-          {selectedLead && wizardStep >= 2 && (
+          {displayLead && wizardStep >= 2 && (
             <div className="flex flex-wrap items-center gap-3 sm:gap-5 pl-1 sm:pl-0">
               <div className="text-left sm:text-right">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor est.</p>
@@ -777,7 +899,7 @@ const VideoMeeting: React.FC = () => {
             </motion.div>
           )}
 
-          {wizardStep === 3 && activeSession && selectedLead && (
+          {wizardStep === 3 && activeSession && displayLead && (
             <motion.div
               key="step3"
               initial={{ opacity: 0, y: 12 }}
@@ -901,24 +1023,37 @@ const VideoMeeting: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-6">
-              <div className="flex items-center justify-between px-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100">
                     <MessageSquare size={20} className="text-emerald-500" />
                   </div>
                   <h3 className="text-xl font-black text-gray-900 uppercase italic tracking-tighter">Transcrição</h3>
                 </div>
-                {!isRecording && displayTranscript && activeSession.status !== 'COMPLETED' && (
-                  <button
-                    type="button"
-                    onClick={() => void runAnalyze()}
-                    disabled={analyzing || uploading}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20"
-                  >
-                    {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                    Gerar inteligência
-                  </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2 justify-start sm:justify-end">
+                  {canClearTranscript && (
+                    <button
+                      type="button"
+                      onClick={() => setPendingClear('transcript')}
+                      disabled={clearingContent}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+                    >
+                      <Eraser size={14} />
+                      Limpar
+                    </button>
+                  )}
+                  {!isRecording && displayTranscript && activeSession.status !== 'COMPLETED' && (
+                    <button
+                      type="button"
+                      onClick={() => void runAnalyze()}
+                      disabled={analyzing || uploading}
+                      className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+                    >
+                      {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      Gerar inteligência
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm min-h-[320px] max-h-[520px] overflow-y-auto custom-scrollbar relative">
@@ -936,24 +1071,37 @@ const VideoMeeting: React.FC = () => {
             </div>
 
             <div className="space-y-6">
-              <div className="flex items-center justify-between px-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100">
                     <Sparkles size={20} className="text-emerald-500" />
                   </div>
                   <h3 className="text-xl font-black text-gray-900 uppercase italic tracking-tighter">Análise Estratégica</h3>
                 </div>
-                {analysis && (
-                  <button
-                    type="button"
-                    onClick={() => void runComplete()}
-                    disabled={completing}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-[#002a1e] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10 disabled:opacity-50"
-                  >
-                    {completing ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                    Enviar para CRM
-                  </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2 justify-start sm:justify-end">
+                  {canClearAnalysis && (
+                    <button
+                      type="button"
+                      onClick={() => setPendingClear('analysis')}
+                      disabled={clearingContent}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+                    >
+                      <Eraser size={14} />
+                      Limpar
+                    </button>
+                  )}
+                  {analysis && (
+                    <button
+                      type="button"
+                      onClick={() => void runComplete()}
+                      disabled={completing}
+                      className="flex items-center gap-2 px-6 py-2.5 bg-[#002a1e] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10 disabled:opacity-50"
+                    >
+                      {completing ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                      Enviar para CRM
+                    </button>
+                  )}
+                </div>
               </div>
 
               <AnimatePresence mode="wait">
@@ -1086,6 +1234,63 @@ const VideoMeeting: React.FC = () => {
                   >
                     {deletingId ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                     Remover
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {pendingClear && (
+            <motion.div
+              key="clear-content"
+              role="dialog"
+              aria-modal="true"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/45 backdrop-blur-sm"
+              onClick={() => {
+                if (!clearingContent) setPendingClear(null);
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 16 }}
+                transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl"
+              >
+                <h2 className="text-lg font-black text-slate-900">
+                  {pendingClear === 'transcript' ? 'Limpar transcrição?' : 'Limpar análise estratégica?'}
+                </h2>
+                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                  {pendingClear === 'transcript'
+                    ? 'Todo o texto da transcrição desta sessão será apagado. Você pode gravar de novo depois. Esta ação não pode ser desfeita.'
+                    : 'A análise gerada pela IA será removida. A transcrição permanece; você pode gerar uma nova análise quando quiser.'}
+                </p>
+                <div className="mt-6 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    disabled={clearingContent}
+                    onClick={() => setPendingClear(null)}
+                    className="px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={clearingContent}
+                    onClick={() => {
+                      if (pendingClear === 'transcript') void confirmClearTranscript();
+                      else void confirmClearAnalysis();
+                    }}
+                    className="px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-white bg-amber-600 hover:bg-amber-700 shadow-lg shadow-amber-600/20 disabled:opacity-50 inline-flex items-center justify-center gap-2 min-h-[44px]"
+                  >
+                    {clearingContent ? <Loader2 size={16} className="animate-spin" /> : <Eraser size={16} />}
+                    Limpar
                   </button>
                 </div>
               </motion.div>

@@ -108,33 +108,52 @@ export const KANBAN_COLUMN_COLORS: Record<LeadStatusType, string> = {
     LOST: 'bg-rose-500',
 };
 
+/** Garante número em estimatedValue (API pode enviar string ou snake_case em alguns ambientes). */
+export function normalizeLeadData(raw: LeadData): LeadData {
+    const r = raw as LeadData & { estimated_value?: unknown };
+    const candidate = r.estimatedValue ?? r.estimated_value;
+    if (candidate === undefined || candidate === null || candidate === '') {
+        return { ...raw, estimatedValue: raw.estimatedValue ?? null };
+    }
+    const n = typeof candidate === 'number' ? candidate : Number(candidate);
+    if (Number.isNaN(n)) {
+        return { ...raw, estimatedValue: raw.estimatedValue ?? null };
+    }
+    return { ...raw, estimatedValue: n };
+}
+
 // ============================================
 // Service
 // ============================================
 
 export const leadService = {
     async getAllLeads(): Promise<LeadData[]> {
-        return httpClient.get<LeadData[]>('/leads');
+        const data = await httpClient.get<LeadData[]>('/leads');
+        return data.map(normalizeLeadData);
     },
 
     async getLeadsPaged(page: number = 0, size: number = 20): Promise<PagedResponse<LeadData>> {
-        return httpClient.get<PagedResponse<LeadData>>(`/leads/paged?page=${page}&size=${size}`);
+        const p = await httpClient.get<PagedResponse<LeadData>>(`/leads/paged?page=${page}&size=${size}`);
+        return { ...p, content: p.content.map(normalizeLeadData) };
     },
 
     async searchLeads(query: string, page: number = 0, size: number = 20): Promise<PagedResponse<LeadData>> {
-        return httpClient.get<PagedResponse<LeadData>>(`/leads/search?q=${encodeURIComponent(query)}&page=${page}&size=${size}`);
+        const p = await httpClient.get<PagedResponse<LeadData>>(
+            `/leads/search?q=${encodeURIComponent(query)}&page=${page}&size=${size}`
+        );
+        return { ...p, content: p.content.map(normalizeLeadData) };
     },
 
     async getLeadById(id: string): Promise<LeadData> {
-        return httpClient.get<LeadData>(`/leads/${id}`);
+        return normalizeLeadData(await httpClient.get<LeadData>(`/leads/${id}`));
     },
 
     async createLead(lead: LeadRequest): Promise<LeadData> {
-        return httpClient.post<LeadData>('/leads', lead);
+        return normalizeLeadData(await httpClient.post<LeadData>('/leads', lead));
     },
 
     async updateLead(id: string, lead: LeadRequest): Promise<LeadData> {
-        return httpClient.put<LeadData>(`/leads/${id}`, lead);
+        return normalizeLeadData(await httpClient.put<LeadData>(`/leads/${id}`, lead));
     },
 
     async deleteLead(id: string): Promise<void> {

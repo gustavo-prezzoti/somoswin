@@ -40,6 +40,12 @@ export const intelligentListeningService = {
     });
   },
 
+  async patchAiSummary(sessionId: string, aiSummary: string): Promise<IntelligentListeningSession> {
+    return httpClient.patch<IntelligentListeningSession>(`/intelligent-listening/sessions/${sessionId}/ai-summary`, {
+      aiSummary,
+    });
+  },
+
   async uploadAudio(sessionId: string, blob: Blob, filename = 'gravacao.webm'): Promise<IntelligentListeningSession> {
     const fd = new FormData();
     fd.append('file', blob, filename);

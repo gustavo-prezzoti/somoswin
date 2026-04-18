@@ -1,5 +1,6 @@
 package com.backend.winai.service;
 
+import com.backend.winai.dto.request.IntelligentListeningAiSummaryRequest;
 import com.backend.winai.dto.request.IntelligentListeningStartRequest;
 import com.backend.winai.dto.request.IntelligentListeningTranscriptRequest;
 import com.backend.winai.dto.response.IntelligentListeningSessionResponse;
@@ -100,8 +101,22 @@ public class IntelligentListeningService {
             IntelligentListeningTranscriptRequest body) {
         Meeting m = loadIntelligentListening(company, sessionId);
         if (body.getTranscriptionFull() != null) {
-            m.setTranscriptionFull(body.getTranscriptionFull().trim());
+            String t = body.getTranscriptionFull().trim();
+            m.setTranscriptionFull(t.isEmpty() ? null : t);
         }
+        m = meetingRepository.save(m);
+        return toResponse(m);
+    }
+
+    @Transactional
+    public IntelligentListeningSessionResponse patchAiSummary(Company company, UUID sessionId,
+            IntelligentListeningAiSummaryRequest body) {
+        Meeting m = loadIntelligentListening(company, sessionId);
+        if (body == null || body.getAiSummary() == null) {
+            return toResponse(m);
+        }
+        String s = body.getAiSummary().trim();
+        m.setAiSummary(s.isEmpty() ? null : s);
         m = meetingRepository.save(m);
         return toResponse(m);
     }
