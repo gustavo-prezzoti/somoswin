@@ -38,6 +38,8 @@ const WhatsApp: React.FC = () => {
   // Estados para Modais de Confirmação
   const [showClearChatModal, setShowClearChatModal] = useState(false);
   const [showDeleteLeadModal, setShowDeleteLeadModal] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
+  const [isDeletingLead, setIsDeletingLead] = useState(false);
 
   const { toasts, showToast, removeToast } = useToast();
 
@@ -145,7 +147,7 @@ const WhatsApp: React.FC = () => {
 
       // Se houver um chatId na URL, prioridade para ele
       if (chatId) {
-        selectedConv = data.find(c => c.id === chatId) || null;
+        selectedConv = data.find(c => String(c.id) === String(chatId)) || null;
       }
 
       // Se não encontrou pelo chatId ou não tinha chatId, pega a primeira se não tiver ativa
@@ -153,9 +155,17 @@ const WhatsApp: React.FC = () => {
         selectedConv = data[0];
       }
 
-      if (selectedConv) {
+      // Sempre alinhar a conversa aberta com o servidor (ex.: leadId após excluir lead)
+      const currentId = activeConversationRef.current?.id;
+      if (currentId) {
+        const fresh = data.find(c => String(c.id) === String(currentId));
+        if (fresh) {
+          setActiveConversation(fresh);
+        } else if (!silent) {
+          setActiveConversation(null);
+        }
+      } else if (selectedConv) {
         setActiveConversation(selectedConv);
-        // Limpar o chatId da URL se quiser (opcional)
       }
     } catch (error) {
       console.error('Erro ao carregar conversas', error);
@@ -1111,16 +1121,19 @@ const WhatsApp: React.FC = () => {
                   <Trash2 size={18} />
                 </button>
 
-                {/* Botão Excluir Lead (Somente se for Lead) */}
-                {activeConversation.leadId && (
-                  <button
-                    onClick={() => setShowDeleteLeadModal(true)}
-                    className="p-2.5 rounded-lg transition-all text-gray-400 hover:bg-rose-50 hover:text-rose-600"
-                    title="Excluir Lead"
-                  >
-                    <UserMinus size={18} />
-                  </button>
-                )}
+                {/* Slot fixo evita o botão de limpar “subir” quando some o lead */}
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  {activeConversation.leadId ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteLeadModal(true)}
+                      className="p-2.5 rounded-lg transition-all text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+                      title="Excluir Lead"
+                    >
+                      <UserMinus size={18} />
+                    </button>
+                  ) : null}
+                </div>
 
                 <button
                   onClick={() => setIsDetailsOpen(!isDetailsOpen)}
@@ -1443,7 +1456,7 @@ const WhatsApp: React.FC = () => {
                   onClick={async () => {
                     if (!activeConversation) return;
                     try {
-                      setIsLoading(true);
+                      setIsClearingChat(true);
                       await whatsappService.clearMessages(activeConversation.id);
                       setMessages([]);
                       setHasMore(false); // Reset pagination
@@ -1456,12 +1469,12 @@ const WhatsApp: React.FC = () => {
                     } catch (error) {
                       console.error('Erro ao limpar chat:', error);
                     } finally {
-                      setIsLoading(false);
+                      setIsClearingChat(false);
                     }
                   }}
                   className="flex-1 py-3 px-4 rounded-xl bg-rose-500 text-white font-bold hover:bg-rose-600 shadow-lg shadow-rose-500/20 transition-all"
                 >
-                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Sim, Limpar'}
+                  {isClearingChat ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Sim, Limpar'}
                 </button>
               </div>
             </div>
@@ -1500,13 +1513,27 @@ const WhatsApp: React.FC = () => {
                   onClick={async () => {
                     if (!activeConversation?.leadId) return;
                     const leadIdToDelete = activeConversation.leadId;
+                    const conversationId = activeConversation.id;
                     try {
-                      setIsLoading(true);
+                      setIsDeletingLead(true);
                       const { leadService } = await import('../services/api/lead.service');
                       await leadService.deleteLead(leadIdToDelete);
                       setShowDeleteLeadModal(false);
-                      setActiveConversation(prev => prev ? { ...prev, leadId: null } : null);
-                      setConversations(prev => prev.map(c => c.id === activeConversation.id ? { ...c, leadId: null } : c));
+                      setConversations(prev =>
+                        prev.map(c =>
+                          String(c.id) === String(conversationId) || c.leadId === leadIdToDelete
+                            ? { ...c, leadId: null }
+                            : c
+                        )
+                      );
+                      setActiveConversation(prev =>
+                        prev && (prev.leadId === leadIdToDelete || String(prev.id) === String(conversationId))
+                          ? { ...prev, leadId: null }
+                          : prev
+                      );
+                      setMessages(prev =>
+                        prev.map(m => (m.leadId === leadIdToDelete ? { ...m, leadId: null } : m))
+                      );
                       await loadConversations(true);
                       showToast('Lead excluído com sucesso.', 'success');
                     } catch (error) {
@@ -1514,12 +1541,12 @@ const WhatsApp: React.FC = () => {
                       const msg = (error as { message?: string })?.message || 'Erro ao excluir lead. Tente novamente.';
                       showToast(msg, 'error');
                     } finally {
-                      setIsLoading(false);
+                      setIsDeletingLead(false);
                     }
                   }}
                   className="flex-1 py-3 px-4 rounded-xl bg-rose-500 text-white font-bold hover:bg-rose-600 shadow-lg shadow-rose-500/20 transition-all"
                 >
-                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Sim, Excluir'}
+                  {isDeletingLead ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Sim, Excluir'}
                 </button>
               </div>
             </div>
