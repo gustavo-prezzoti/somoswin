@@ -19,6 +19,8 @@ import {
   Calendar,
   ChevronRight,
   RefreshCw,
+  Check,
+  Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -67,6 +69,12 @@ const VideoMeeting: React.FC = () => {
   const [sessions, setSessions] = useState<IntelligentListeningSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [activeSession, setActiveSession] = useState<IntelligentListeningSession | null>(null);
+
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(() => (leadFromCrm?.id ? 2 : 1));
+  const [creatingSession, setCreatingSession] = useState(false);
+  const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -134,17 +142,22 @@ const VideoMeeting: React.FC = () => {
   useEffect(() => {
     if (leadFromCrm?.id) {
       setSelectedLeadId(leadFromCrm.id);
+      setWizardStep(2);
     }
   }, [leadFromCrm?.id]);
 
   useEffect(() => {
-    if (selectedLeadId) {
-      void loadSessions(selectedLeadId);
-      setActiveSession(null);
-    } else {
+    if (!selectedLeadId) {
       setSessions([]);
+      return;
     }
-  }, [selectedLeadId, loadSessions]);
+    if (wizardStep >= 2) {
+      void loadSessions(selectedLeadId);
+      if (wizardStep === 2) {
+        setActiveSession(null);
+      }
+    }
+  }, [selectedLeadId, wizardStep, loadSessions]);
 
   const filteredLeads = useMemo(() => {
     const q = leadSearch.trim().toLowerCase();
@@ -157,26 +170,68 @@ const VideoMeeting: React.FC = () => {
     );
   }, [leads, leadSearch]);
 
+  const proceedToEscutas = () => {
+    if (!selectedLeadId || leadsLoading) return;
+    setErrorMsg(null);
+    setWizardStep(2);
+  };
+
+  const backToLeadStep = () => {
+    if (isRecording) {
+      setErrorMsg('Encerre a gravação antes de voltar.');
+      return;
+    }
+    if (uploading) {
+      setErrorMsg('Aguarde o envio do áudio terminar.');
+      return;
+    }
+    setWizardStep(1);
+    setActiveSession(null);
+  };
+
+  const backToSessionsList = () => {
+    if (isRecording) {
+      setErrorMsg('Encerre a gravação antes de voltar à lista.');
+      return;
+    }
+    if (uploading) {
+      setErrorMsg('Aguarde o envio do áudio terminar.');
+      return;
+    }
+    setWizardStep(2);
+    setActiveSession(null);
+  };
+
   const startNewSession = async () => {
-    if (!selectedLeadId) return;
+    if (!selectedLeadId || creatingSession) return;
+    setCreatingSession(true);
     setErrorMsg(null);
     try {
       const s = await intelligentListeningService.startSession(selectedLeadId);
       setActiveSession(s);
+      setLocalTranscript('');
       await loadSessions(selectedLeadId);
+      setWizardStep(3);
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Falha ao criar sessão');
+    } finally {
+      setCreatingSession(false);
     }
   };
 
   const openSession = async (id: string) => {
+    if (openingSessionId) return;
+    setOpeningSessionId(id);
     setErrorMsg(null);
     try {
       const s = await intelligentListeningService.getSession(id);
       setActiveSession(s);
       setLocalTranscript('');
+      setWizardStep(3);
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Falha ao abrir sessão');
+    } finally {
+      setOpeningSessionId(null);
     }
   };
 
@@ -220,11 +275,12 @@ const VideoMeeting: React.FC = () => {
         .SpeechRecognition ||
       (window as unknown as { webkitSpeechRecognition?: new () => unknown }).webkitSpeechRecognition;
     if (!SR) return;
-    const rec = new SR();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rec: any = new SR();
     rec.lang = 'pt-BR';
     rec.continuous = true;
     rec.interimResults = true;
-    rec.onresult = (ev: { resultIndex: number; results: { [k: number]: { [j: number]: { transcript: string } } } }) => {
+    rec.onresult = (ev: { resultIndex: number; results: Array<{ 0: { transcript: string } }> }) => {
       let text = '';
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         text += ev.results[i][0].transcript;
@@ -370,6 +426,29 @@ const VideoMeeting: React.FC = () => {
     };
   }, []);
 
+  const removeSession = async (id: string) => {
+    if (isRecording && activeSession?.id === id) {
+      setErrorMsg('Encerre a gravação antes de remover esta escuta.');
+      setConfirmDeleteId(null);
+      return;
+    }
+    setDeletingId(id);
+    setErrorMsg(null);
+    try {
+      await intelligentListeningService.deleteSession(id);
+      if (activeSession?.id === id) {
+        setActiveSession(null);
+        setWizardStep(2);
+      }
+      if (selectedLeadId) await loadSessions(selectedLeadId);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Falha ao remover escuta');
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -417,48 +496,111 @@ const VideoMeeting: React.FC = () => {
     (localTranscript && !activeSession?.transcriptionFull ? localTranscript : '') ||
     '';
 
-  return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700">
-      {errorMsg && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-[11px] font-bold text-rose-900">
-          {errorMsg}
-        </div>
-      )}
+  const stepMeta = [
+    { n: 1 as const, label: 'Lead', hint: 'Cliente' },
+    { n: 2 as const, label: 'Escutas', hint: 'Sessões' },
+    { n: 3 as const, label: 'Gravação', hint: 'IA & CRM' },
+  ];
 
-      <div className="flex items-center justify-between bg-white/50 backdrop-blur-sm p-4 rounded-3xl border border-gray-100">
-        <div className="flex items-center gap-4">
-          <button type="button" onClick={() => navigate('/crm')} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
-            <ArrowLeft size={20} />
-          </button>
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm">
-            {selectedLead ? selectedLead.name.charAt(0) : '?'}
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead para escuta</p>
-            <h4 className="text-sm font-black text-gray-900 tracking-tight">
-              {selectedLead ? selectedLead.name : 'Selecione um lead abaixo'}
-            </h4>
-          </div>
-        </div>
-        {selectedLead && (
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor Estimado</p>
-              <p className="text-sm font-black text-emerald-600">R$ {valueDisplay}</p>
-            </div>
-            <div className="h-8 w-px bg-gray-100" />
-            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-xl border border-emerald-100">
-              <User size={14} className="text-emerald-600" />
-              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest max-w-[140px] truncate">
-                {statusLabel}
-              </span>
-            </div>
+  return (
+    <div className="min-h-[calc(100vh-5rem)] bg-gradient-to-b from-emerald-50/35 via-white to-slate-50/90 px-3 sm:px-5 py-6 sm:py-10 animate-in fade-in duration-500">
+      <div className="max-w-5xl mx-auto space-y-5 sm:space-y-7">
+        {errorMsg && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-[11px] font-bold text-rose-900 shadow-sm">
+            {errorMsg}
           </div>
         )}
-      </div>
 
-      {/* 1 — Escolher lead */}
-      <div className="bg-white rounded-[32px] p-6 border border-gray-100 shadow-sm space-y-4">
+        <nav
+          className="rounded-2xl sm:rounded-[28px] border border-emerald-100/90 bg-white/90 backdrop-blur-md px-3 py-4 sm:px-6 sm:py-5 shadow-sm shadow-emerald-900/5"
+          aria-label="Etapas da escuta inteligente"
+        >
+          <div className="flex items-center justify-between gap-2 max-w-md mx-auto sm:max-w-none sm:justify-center sm:gap-4">
+            {stepMeta.map((s, idx) => {
+              const done = wizardStep > s.n;
+              const current = wizardStep === s.n;
+              return (
+                <React.Fragment key={s.n}>
+                  <div className="flex flex-col items-center min-w-0 flex-1 sm:flex-none sm:min-w-[88px]">
+                    <div
+                      className={`flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full border-2 text-[11px] sm:text-sm font-black transition-all ${
+                        current
+                          ? 'border-emerald-600 bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 scale-105'
+                          : done
+                            ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                            : 'border-slate-200 bg-slate-50 text-slate-400'
+                      }`}
+                    >
+                      {done ? <Check className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={3} /> : s.n}
+                    </div>
+                    <span
+                      className={`mt-1.5 text-[8px] sm:text-[10px] font-black uppercase tracking-tight text-center leading-tight ${
+                        current ? 'text-emerald-800' : done ? 'text-emerald-600/90' : 'text-slate-400'
+                      }`}
+                    >
+                      <span className="hidden sm:inline">{s.label}</span>
+                      <span className="sm:hidden">{s.hint}</span>
+                    </span>
+                  </div>
+                  {idx < 2 && (
+                    <div
+                      className={`h-0.5 flex-1 max-w-[40px] sm:max-w-[72px] min-w-[12px] rounded-full transition-colors ${done ? 'bg-emerald-400' : 'bg-slate-200'}`}
+                      aria-hidden
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl sm:rounded-3xl border border-white/80 bg-white/70 backdrop-blur-sm p-4 sm:p-5 shadow-sm">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate('/crm')}
+              className="shrink-0 p-2 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+              aria-label="Voltar ao CRM"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white flex items-center justify-center font-black text-sm shadow-md shadow-emerald-600/20 shrink-0">
+              {selectedLead ? selectedLead.name.charAt(0) : '?'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Escuta inteligente</p>
+              <h4 className="text-sm sm:text-base font-black text-slate-900 tracking-tight truncate">
+                {selectedLead ? selectedLead.name : 'Escolha um lead'}
+              </h4>
+            </div>
+          </div>
+          {selectedLead && wizardStep >= 2 && (
+            <div className="flex flex-wrap items-center gap-3 sm:gap-5 pl-1 sm:pl-0">
+              <div className="text-left sm:text-right">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor est.</p>
+                <p className="text-sm font-black text-emerald-600">R$ {valueDisplay}</p>
+              </div>
+              <div className="h-8 w-px bg-slate-100 hidden sm:block" />
+              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 rounded-xl border border-emerald-100/80">
+                <User size={14} className="text-emerald-600 shrink-0" />
+                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest max-w-[120px] sm:max-w-[160px] truncate">
+                  {statusLabel}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <AnimatePresence mode="wait">
+          {wizardStep === 1 && (
+            <motion.div
+              key="step1"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              className="bg-white rounded-[28px] sm:rounded-[32px] p-5 sm:p-8 border border-slate-100 shadow-lg shadow-slate-900/5 space-y-5"
+            >
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <Users size={18} className="text-emerald-600" />
@@ -466,10 +608,11 @@ const VideoMeeting: React.FC = () => {
           </div>
           <button
             type="button"
+            disabled={leadsLoading}
             onClick={() => void loadLeads()}
-            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-800"
+            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-800 disabled:opacity-45"
           >
-            <RefreshCw size={14} /> Atualizar lista
+            {leadsLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Atualizar lista
           </button>
         </div>
         <input
@@ -502,67 +645,146 @@ const VideoMeeting: React.FC = () => {
             ))}
           </div>
         )}
-      </div>
+              <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-slate-100 mt-2">
+                <button
+                  type="button"
+                  disabled={!selectedLeadId || leadsLoading}
+                  onClick={() => proceedToEscutas()}
+                  className="w-full sm:w-auto sm:ml-auto flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl bg-emerald-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-lg shadow-emerald-600/25 disabled:opacity-45 disabled:cursor-not-allowed transition-all"
+                >
+                  Continuar para escutas
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </motion.div>
+          )}
 
-      {/* 2 — Sessões do lead */}
-      {selectedLeadId && (
-        <div className="bg-white rounded-[32px] p-6 border border-gray-100 shadow-sm space-y-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Headphones size={18} className="text-emerald-600" />
-              <h2 className="text-lg font-black text-gray-900 uppercase italic tracking-tight">2. Escutas inteligentes deste lead</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => void startNewSession()}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
+          {wizardStep === 2 && selectedLeadId && (
+            <motion.div
+              key="step2"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              className="bg-white rounded-[28px] sm:rounded-[32px] p-5 sm:p-8 border border-slate-100 shadow-lg shadow-slate-900/5 space-y-5"
             >
-              <Sparkles size={14} /> Nova escuta
-            </button>
-          </div>
-          {sessionsLoading ? (
-            <Loader2 className="animate-spin text-emerald-600 mx-auto block py-6" />
-          ) : sessions.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-6">Nenhuma escuta ainda. Clique em &quot;Nova escuta&quot; para associar uma sessão a este lead.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100 max-h-[240px] overflow-y-auto custom-scrollbar">
-              {sessions.map((s) => (
-                <li key={s.id} className="py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-bold text-gray-900 text-sm truncate">{s.title}</p>
-                    <div className="flex items-center gap-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                      <Calendar size={12} />
-                      {s.createdAt?.slice(0, 16)?.replace('T', ' ') ?? '—'}
-                      <span className="text-emerald-600">{s.statusLabel}</span>
-                    </div>
-                  </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => backToLeadStep()}
+                  className="flex items-center gap-2 self-start text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-700"
+                >
+                  <ArrowLeft size={14} /> Trocar lead
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void startNewSession()}
+                  disabled={creatingSession || sessionsLoading || !!openingSessionId}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 disabled:opacity-55 disabled:cursor-wait min-h-[44px]"
+                >
+                  {creatingSession ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Criando escuta…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} /> Nova escuta
+                    </>
+                  )}
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Headphones size={18} className="text-emerald-600 shrink-0" />
+                <h2 className="text-base sm:text-lg font-black text-slate-900 uppercase italic tracking-tight leading-tight">
+                  Escutas deste lead
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Cada escuta é uma sessão no CRM. Aguarde a criação terminar antes de abrir outra — assim nada se perde no servidor.
+              </p>
+              {sessionsLoading ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 rounded-2xl bg-slate-50/80 border border-slate-100">
+                  <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Carregando escutas…</p>
+                </div>
+              ) : sessions.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-12 px-4 text-center">
+                  <p className="text-sm text-slate-600 font-medium">Nenhuma escuta ainda.</p>
+                  <p className="text-xs text-slate-400 mt-2">Use &quot;Nova escuta&quot; para criar — você verá o progresso no botão.</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100 max-h-[min(52vh,420px)] overflow-y-auto custom-scrollbar rounded-2xl border border-slate-100">
+                  {sessions.map((s) => (
+                    <li key={s.id} className="py-3.5 px-3 sm:px-4 flex items-stretch justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-900 text-sm truncate">{s.title}</p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+                          <Calendar size={12} className="shrink-0" />
+                          {s.createdAt?.slice(0, 16)?.replace('T', ' ') ?? '—'}
+                          <span className="text-emerald-600">{s.statusLabel}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => void openSession(s.id)}
+                          disabled={openingSessionId !== null || creatingSession || (isRecording && activeSession?.id === s.id)}
+                          className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 disabled:opacity-45 min-h-[40px]"
+                        >
+                          {openingSessionId === s.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <>
+                              Abrir <ChevronRight size={14} />
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(s.id)}
+                          disabled={deletingId !== null || creatingSession || (isRecording && activeSession?.id === s.id)}
+                          className="flex items-center justify-center p-2.5 rounded-xl text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100 disabled:opacity-40"
+                          aria-label="Remover escuta"
+                        >
+                          {deletingId === s.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </motion.div>
+          )}
+
+          {wizardStep === 3 && activeSession && selectedLead && (
+            <motion.div
+              key="step3"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-6 sm:space-y-8"
+            >
+              <div className="rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50/95 to-white px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm shadow-emerald-900/5">
+                <div className="flex flex-wrap items-center gap-3 min-w-0">
                   <button
                     type="button"
-                    onClick={() => void openSession(s.id)}
-                    className="shrink-0 flex items-center gap-1 text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-800"
+                    onClick={() => backToSessionsList()}
+                    className="shrink-0 flex items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-900 bg-white/80 border border-emerald-100 hover:bg-emerald-50 transition-colors"
                   >
-                    Abrir <ChevronRight size={14} />
+                    <ArrowLeft size={14} /> Voltar às escutas
                   </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {/* 3 — Sessão ativa: gravação + transcrição + IA */}
-      {activeSession && selectedLead && (
-        <div className="space-y-8">
-          <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[11px] font-bold text-emerald-900">
-              Sessão: <span className="font-black">{activeSession.title}</span> · {activeSession.statusLabel}
-            </p>
-            {uploading && (
-              <span className="text-[10px] font-black uppercase text-emerald-700 flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" /> Enviando áudio e transcrevendo (Whisper)…
-              </span>
-            )}
-          </div>
+                  <p className="text-[11px] font-bold text-emerald-950 min-w-0">
+                    <span className="font-black truncate block sm:inline">{activeSession.title}</span>
+                    <span className="text-emerald-600/90"> · {activeSession.statusLabel}</span>
+                  </p>
+                </div>
+                {uploading && (
+                  <span className="text-[10px] font-black uppercase text-emerald-700 flex items-center gap-2 shrink-0">
+                    <Loader2 size={14} className="animate-spin" /> Enviando e transcrevendo (Whisper)…
+                  </span>
+                )}
+              </div>
 
           <div className="bg-white rounded-[40px] p-10 border border-gray-100 shadow-2xl shadow-emerald-900/5 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full -mr-32 -mt-32 blur-3xl" />
@@ -788,12 +1010,72 @@ const VideoMeeting: React.FC = () => {
               </AnimatePresence>
             </div>
           </div>
-        </div>
+            </motion.div>
       )}
+        </AnimatePresence>
 
-      {!selectedLeadId && !leadsLoading && (
-        <p className="text-center text-sm text-gray-500">Selecione um lead para criar ou listar escutas inteligentes.</p>
-      )}
+        <AnimatePresence>
+          {confirmDeleteId && (
+            <motion.div
+              key="del"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirm-delete-title"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/45 backdrop-blur-sm"
+              onClick={() => {
+                if (!deletingId) setConfirmDeleteId(null);
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 16 }}
+                transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 shadow-2xl"
+              >
+                <h2 id="confirm-delete-title" className="text-lg font-black text-slate-900">
+                  Remover escuta inteligente?
+                </h2>
+                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                  A sessão será excluída permanentemente. Esta ação não pode ser desfeita.
+                </p>
+                {confirmDeleteId && (
+                  <p className="mt-3 text-xs font-bold text-slate-400 truncate">
+                    {sessions.find((x) => x.id === confirmDeleteId)?.title ?? ''}
+                  </p>
+                )}
+                <div className="mt-6 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    disabled={deletingId !== null}
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingId !== null}
+                    onClick={() => confirmDeleteId && void removeSession(confirmDeleteId)}
+                    className="px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-white bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-600/20 disabled:opacity-50 inline-flex items-center justify-center gap-2 min-h-[44px]"
+                  >
+                    {deletingId ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                    Remover
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {!selectedLeadId && !leadsLoading && wizardStep === 1 && (
+          <p className="text-center text-sm text-slate-500 px-2">Selecione um lead na lista acima para continuar.</p>
+        )}
+      </div>
     </div>
   );
 };

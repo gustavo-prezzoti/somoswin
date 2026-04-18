@@ -56,6 +56,10 @@ export const intelligentListeningService = {
   async completeToCrm(sessionId: string): Promise<IntelligentListeningSession> {
     return httpClient.post<IntelligentListeningSession>(`/intelligent-listening/sessions/${sessionId}/complete`, {});
   },
+
+  async deleteSession(sessionId: string): Promise<void> {
+    await httpClient.delete<void>(`/intelligent-listening/sessions/${sessionId}`);
+  },
 };
 
 export default intelligentListeningService;

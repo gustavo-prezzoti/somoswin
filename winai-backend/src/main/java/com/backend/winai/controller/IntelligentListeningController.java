@@ -89,6 +89,15 @@ public class IntelligentListeningController {
         return ResponseEntity.ok(intelligentListeningService.completeToCrm(u.getCompany(), id));
     }
 
+    @DeleteMapping("/sessions/{id}")
+    public ResponseEntity<Void> deleteSession(
+            @AuthenticationPrincipal User user,
+            @PathVariable UUID id) {
+        var u = getUserWithCompany(user);
+        intelligentListeningService.deleteSession(u.getCompany(), id);
+        return ResponseEntity.noContent().build();
+    }
+
     private User getUserWithCompany(User user) {
         return userRepository.findByEmailWithCompany(user.getEmail())
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));

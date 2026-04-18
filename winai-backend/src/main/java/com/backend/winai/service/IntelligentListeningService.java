@@ -141,6 +141,13 @@ public class IntelligentListeningService {
     }
 
     @Transactional
+    public void deleteSession(Company company, UUID sessionId) {
+        Meeting m = loadIntelligentListening(company, sessionId);
+        meetingRepository.delete(m);
+        log.info("Escuta inteligente removida: {}", sessionId);
+    }
+
+    @Transactional
     public IntelligentListeningSessionResponse completeToCrm(Company company, UUID sessionId) {
         Meeting m = loadIntelligentListening(company, sessionId);
         m.setStatus(MeetingStatus.COMPLETED);
