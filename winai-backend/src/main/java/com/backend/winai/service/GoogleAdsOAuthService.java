@@ -50,7 +50,10 @@ public class GoogleAdsOAuthService {
 
     public String getAuthorizationUrl(User user) {
         if (clientId.isEmpty() || clientSecret.isEmpty() || redirectUri.isEmpty()) {
-            throw new IllegalStateException("Google Ads OAuth: configure google.client.id, google.client.secret e google.ads.redirect.uri.");
+            log.warn(
+                    "Google Ads OAuth indisponível: defina GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET e GOOGLE_ADS_REDIRECT_URI (ou google.ads.redirect.uri).");
+            throw new IllegalStateException(
+                    "Não foi possível conectar o Google Ads. Tente mais tarde ou entre em contato com o suporte.");
         }
         try {
             NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
