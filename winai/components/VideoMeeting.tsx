@@ -477,19 +477,31 @@ const VideoMeeting: React.FC = () => {
           setErrorMsg(null);
           try {
             const updated = await intelligentListeningService.uploadAudio(sessionId, blob, 'escuta.webm');
+            let session = updated;
             setActiveSession(updated);
             const whisper = (updated.transcriptionFull || '').trim();
             const live = speechCommittedRef.current.trim();
             if (live) {
               const whisperLooksOk = whisper.length >= 80;
-              if (whisperLooksOk) {
-                return;
+              if (!whisperLooksOk) {
+                const merged = whisper
+                  ? `${whisper}\n\n**Anotações ao vivo (microfone)**\n${live}`
+                  : live;
+                session = await intelligentListeningService.patchTranscription(sessionId, merged);
+                setActiveSession(session);
               }
-              const merged = whisper
-                ? `${whisper}\n\n**Anotações ao vivo (microfone)**\n${live}`
-                : live;
-              const patched = await intelligentListeningService.patchTranscription(sessionId, merged);
-              setActiveSession(patched);
+            }
+            const text = (session.transcriptionFull || '').trim();
+            if (text) {
+              setAnalyzing(true);
+              try {
+                const analyzed = await intelligentListeningService.analyze(sessionId);
+                setActiveSession(analyzed);
+              } catch (e: unknown) {
+                setErrorMsg(e instanceof Error ? e.message : 'Falha na análise IA');
+              } finally {
+                setAnalyzing(false);
+              }
             }
           } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Falha ao enviar áudio para transcrição';
@@ -1192,8 +1204,9 @@ const VideoMeeting: React.FC = () => {
                 ) : (
                   <div className="bg-white rounded-[32px] p-12 border border-gray-100 shadow-sm flex flex-col items-center justify-center space-y-6 min-h-[320px] text-center">
                     <Sparkles size={40} className="text-gray-200" />
-                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest max-w-[220px] mx-auto">
-                      Após a transcrição, clique em Gerar inteligência
+                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest max-w-[260px] mx-auto leading-relaxed">
+                      Ao terminar a gravação, a análise (e o valor estimado) são gerados automaticamente. Use
+                      &quot;Gerar inteligência&quot; para refazer após editar a transcrição.
                     </p>
                   </div>
                 )}
