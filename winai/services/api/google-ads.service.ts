@@ -10,6 +10,8 @@ export interface GoogleAdsAccessibleAccount {
     customerId: string;
     descriptiveName: string;
     manager: boolean;
+    /** Conta gestora (login-customer-id) quando a consulta à API deve ser feita via MCC */
+    managerCustomerId?: string | null;
 }
 
 export const googleAdsService = {
@@ -25,7 +27,7 @@ export const googleAdsService = {
     updateCustomerIds: async (customerId?: string, loginCustomerId?: string): Promise<void> => {
         const q = new URLSearchParams();
         if (customerId) q.set('customerId', customerId);
-        if (loginCustomerId) q.set('loginCustomerId', loginCustomerId);
+        if (loginCustomerId !== undefined) q.set('loginCustomerId', loginCustomerId);
         await api.patch('/google-ads/customer-ids?' + q.toString(), {});
     },
 

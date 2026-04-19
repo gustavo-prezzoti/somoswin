@@ -16,4 +16,9 @@ public class GoogleAdsAccessibleAccountDTO {
     private String descriptiveName;
     /** true = conta gestora (MCC); campanhas costumam estar em contas filhas. */
     private boolean manager;
+    /**
+     * Conta gestora (MCC) a usar em {@code login-customer-id} ao consultar esta conta na API
+     * (contas filhas listadas via {@code customer_client}). Nulo para contas acessadas diretamente.
+     */
+    private String managerCustomerId;
 }

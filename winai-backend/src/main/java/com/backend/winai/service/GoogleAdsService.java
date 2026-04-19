@@ -29,6 +29,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.AbstractMap.SimpleImmutableEntry;
 
 /**
  * Google Ads API via REST (googleAds:search). Requer developer token e OAuth refresh token.
@@ -482,35 +483,130 @@ public class GoogleAdsService {
     }
 
     /**
-     * Contas que o OAuth pode acessar (listAccessibleCustomers + nome / tipo).
+     * Contas Google Ads acessíveis: {@code listAccessibleCustomers} + expansão de MCC via {@code customer_client}
+     * (hierarquia conforme documentação Google).
      */
     public List<GoogleAdsAccessibleAccountDTO> listAccessibleAccounts(User user) {
-        List<GoogleAdsAccessibleAccountDTO> out = new ArrayList<>();
         if (developerToken == null || developerToken.isBlank()) {
-            return out;
+            return Collections.emptyList();
         }
         Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(user.getCompany().getId());
         if (connOpt.isEmpty() || !connOpt.get().isConnected()
                 || connOpt.get().getRefreshToken() == null || connOpt.get().getRefreshToken().isBlank()) {
-            return out;
+            return Collections.emptyList();
         }
         try {
             String accessToken = refreshAccessToken(connOpt.get().getRefreshToken());
-            for (String rn : fetchAccessibleCustomerResourceNames(accessToken)) {
-                String id = parseCustomerIdFromResourceName(rn);
-                if (id != null) {
-                    out.add(fetchAccountMeta(accessToken, id));
-                }
-            }
-            out.sort(Comparator.comparing(GoogleAdsAccessibleAccountDTO::getDescriptiveName, String.CASE_INSENSITIVE_ORDER));
+            List<GoogleAdsAccessibleAccountDTO> list = buildAccessibleAccountList(accessToken);
+            list.sort(Comparator.comparing(GoogleAdsAccessibleAccountDTO::getDescriptiveName, String.CASE_INSENSITIVE_ORDER));
+            return list;
         } catch (Exception e) {
             log.warn("[GoogleAds] list accessible accounts: {}", e.getMessage());
+            return Collections.emptyList();
         }
-        return out;
     }
 
     /**
-     * Após OAuth, escolhe automaticamente uma conta (prioriza contas não gestoras).
+     * Monta lista: clientes diretos do OAuth + contas filhas obtidas com {@code customer_client} em cada MCC
+     * (e sub-MCCs com {@code login-customer-id} adequado).
+     */
+    private List<GoogleAdsAccessibleAccountDTO> buildAccessibleAccountList(String accessToken) throws Exception {
+        Map<String, GoogleAdsAccessibleAccountDTO> byId = new LinkedHashMap<>();
+        for (String rn : fetchAccessibleCustomerResourceNames(accessToken)) {
+            String id = parseCustomerIdFromResourceName(rn);
+            if (id == null) {
+                continue;
+            }
+            GoogleAdsAccessibleAccountDTO meta = fetchAccountMeta(accessToken, id, null);
+            byId.putIfAbsent(meta.getCustomerId(), meta);
+        }
+
+        Deque<SimpleImmutableEntry<String, String>> managersToExpand = new ArrayDeque<>();
+        for (GoogleAdsAccessibleAccountDTO m : new ArrayList<>(byId.values())) {
+            if (m.isManager()) {
+                managersToExpand.add(new SimpleImmutableEntry<>(m.getCustomerId(), null));
+            }
+        }
+
+        Set<String> expanded = new HashSet<>();
+        while (!managersToExpand.isEmpty()) {
+            SimpleImmutableEntry<String, String> entry = managersToExpand.removeFirst();
+            String managerId = entry.getKey();
+            String loginHeader = entry.getValue();
+            String expandKey = managerId + "|" + (loginHeader == null ? "" : loginHeader);
+            if (expanded.contains(expandKey)) {
+                continue;
+            }
+            expanded.add(expandKey);
+
+            List<GoogleAdsAccessibleAccountDTO> children = fetchCustomerClients(accessToken, managerId, loginHeader);
+            String loginForChildren = loginHeader != null ? loginHeader : managerId;
+
+            for (GoogleAdsAccessibleAccountDTO child : children) {
+                if (child.getManagerCustomerId() == null || child.getManagerCustomerId().isBlank()) {
+                    child.setManagerCustomerId(loginForChildren);
+                }
+                byId.putIfAbsent(child.getCustomerId(), child);
+                if (child.isManager()) {
+                    String nextLogin = loginHeader != null ? loginHeader : managerId;
+                    managersToExpand.add(new SimpleImmutableEntry<>(child.getCustomerId(), nextLogin));
+                }
+            }
+        }
+
+        return new ArrayList<>(byId.values());
+    }
+
+    /**
+     * Filhas de um MCC (ou sub-MCC com {@code loginHeader} = gestor de topo).
+     */
+    private List<GoogleAdsAccessibleAccountDTO> fetchCustomerClients(String accessToken, String managerCustomerId,
+            String loginCustomerId) {
+        List<GoogleAdsAccessibleAccountDTO> rows = new ArrayList<>();
+        try {
+            String q = "SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.manager "
+                    + "FROM customer_client";
+            JsonNode root = search(accessToken, managerCustomerId, loginCustomerId, q);
+            JsonNode results = root.path("results");
+            if (!results.isArray()) {
+                return rows;
+            }
+            for (JsonNode r : results) {
+                JsonNode cc = r.path("customerClient");
+                if (cc.isMissingNode() || cc.isNull()) {
+                    cc = r.path("customer_client");
+                }
+                String resource = cc.path("clientCustomer").asText("");
+                if (resource.isBlank()) {
+                    resource = cc.path("client_customer").asText("");
+                }
+                String childId = parseCustomerIdFromResourceName(resource);
+                if (childId == null) {
+                    continue;
+                }
+                String name = cc.path("descriptiveName").asText("");
+                if (name.isBlank()) {
+                    name = cc.path("descriptive_name").asText("");
+                }
+                if (name.isBlank()) {
+                    name = "Conta " + childId;
+                }
+                boolean isMgr = cc.path("manager").asBoolean(false);
+                rows.add(GoogleAdsAccessibleAccountDTO.builder()
+                        .customerId(childId)
+                        .descriptiveName(name)
+                        .manager(isMgr)
+                        .managerCustomerId(null)
+                        .build());
+            }
+        } catch (Exception e) {
+            log.debug("[GoogleAds] customer_client for {}: {}", managerCustomerId, e.getMessage());
+        }
+        return rows;
+    }
+
+    /**
+     * Após OAuth, escolhe automaticamente uma conta (prioriza contas não gestoras) e define login MCC se necessário.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
     public void tryAutoSelectCustomerAfterOAuth(Company company) {
@@ -530,20 +626,15 @@ public class GoogleAdsService {
         }
         try {
             String accessToken = refreshAccessToken(conn.getRefreshToken());
-            List<GoogleAdsAccessibleAccountDTO> accounts = new ArrayList<>();
-            for (String rn : fetchAccessibleCustomerResourceNames(accessToken)) {
-                String id = parseCustomerIdFromResourceName(rn);
-                if (id != null) {
-                    accounts.add(fetchAccountMeta(accessToken, id));
-                }
-            }
+            List<GoogleAdsAccessibleAccountDTO> accounts = buildAccessibleAccountList(accessToken);
             GoogleAdsAccessibleAccountDTO best = pickPreferredAccount(accounts);
             if (best != null) {
                 conn.setCustomerId(best.getCustomerId());
-                conn.setLoginCustomerId(null);
+                String login = best.getManagerCustomerId();
+                conn.setLoginCustomerId(login != null && !login.isBlank() ? login.replace("-", "").trim() : null);
                 googleAdsConnectionRepository.save(conn);
-                log.info("[GoogleAds] Conta padrão selecionada automaticamente: {} ({})",
-                        best.getDescriptiveName(), best.getCustomerId());
+                log.info("[GoogleAds] Conta padrão selecionada automaticamente: {} ({}) loginMcc={}",
+                        best.getDescriptiveName(), best.getCustomerId(), conn.getLoginCustomerId());
             }
         } catch (Exception e) {
             log.warn("[GoogleAds] auto-select customer: {}", e.getMessage());
@@ -591,15 +682,21 @@ public class GoogleAdsService {
     }
 
     private GoogleAdsAccessibleAccountDTO fetchAccountMeta(String accessToken, String customerIdDigits) {
+        return fetchAccountMeta(accessToken, customerIdDigits, null);
+    }
+
+    private GoogleAdsAccessibleAccountDTO fetchAccountMeta(String accessToken, String customerIdDigits,
+            String loginCustomerId) {
         try {
             String q = "SELECT customer.id, customer.descriptive_name, customer.manager FROM customer";
-            JsonNode root = search(accessToken, customerIdDigits, null, q);
+            JsonNode root = search(accessToken, customerIdDigits, loginCustomerId, q);
             JsonNode results = root.path("results");
             if (!results.isArray() || results.isEmpty()) {
                 return GoogleAdsAccessibleAccountDTO.builder()
                         .customerId(customerIdDigits)
                         .descriptiveName("Conta " + customerIdDigits)
                         .manager(false)
+                        .managerCustomerId(null)
                         .build();
             }
             JsonNode c = results.get(0).path("customer");
@@ -621,6 +718,7 @@ public class GoogleAdsService {
                     .customerId(idStr)
                     .descriptiveName(name)
                     .manager(manager)
+                    .managerCustomerId(null)
                     .build();
         } catch (Exception e) {
             log.debug("[GoogleAds] meta for {}: {}", customerIdDigits, e.getMessage());
@@ -628,6 +726,7 @@ public class GoogleAdsService {
                     .customerId(customerIdDigits)
                     .descriptiveName("Conta " + customerIdDigits)
                     .manager(false)
+                    .managerCustomerId(null)
                     .build();
         }
     }
