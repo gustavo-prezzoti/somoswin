@@ -1,6 +1,6 @@
 package com.backend.winai.controller;
 
-import com.backend.winai.dto.marketing.GoogleAdsAccessibleAccountDTO;
+import com.backend.winai.dto.marketing.GoogleAdsAccessibleAccountsResponse;
 import com.backend.winai.entity.User;
 import com.backend.winai.service.GoogleAdsOAuthService;
 import com.backend.winai.service.GoogleAdsService;
@@ -48,7 +48,7 @@ public class GoogleAdsController {
 
     /** Contas Google Ads acessíveis ao usuário (após OAuth), para seleção sem digitar ID. */
     @GetMapping("/accessible-accounts")
-    public ResponseEntity<java.util.List<GoogleAdsAccessibleAccountDTO>> accessibleAccounts(
+    public ResponseEntity<GoogleAdsAccessibleAccountsResponse> accessibleAccounts(
             @AuthenticationPrincipal User user) {
         return ResponseEntity.ok(googleAdsService.listAccessibleAccounts(user));
     }

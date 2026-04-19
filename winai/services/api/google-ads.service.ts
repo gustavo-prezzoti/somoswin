@@ -14,6 +14,14 @@ export interface GoogleAdsAccessibleAccount {
     managerCustomerId?: string | null;
 }
 
+export type GoogleAdsAccessibleAccountsStatus = 'OK' | 'NOT_CONNECTED' | 'MAINTENANCE';
+
+export interface GoogleAdsAccessibleAccountsResponse {
+    accounts: GoogleAdsAccessibleAccount[];
+    status: GoogleAdsAccessibleAccountsStatus;
+    message?: string | null;
+}
+
 export const googleAdsService = {
     getAuthUrl: async (): Promise<{ url: string }> => {
         return api.get<{ url: string }>('/google-ads/auth');
@@ -31,7 +39,7 @@ export const googleAdsService = {
         await api.patch('/google-ads/customer-ids?' + q.toString(), {});
     },
 
-    getAccessibleAccounts: async (): Promise<GoogleAdsAccessibleAccount[]> => {
-        return api.get<GoogleAdsAccessibleAccount[]>('/google-ads/accessible-accounts');
+    getAccessibleAccounts: async (): Promise<GoogleAdsAccessibleAccountsResponse> => {
+        return api.get<GoogleAdsAccessibleAccountsResponse>('/google-ads/accessible-accounts');
     },
 };

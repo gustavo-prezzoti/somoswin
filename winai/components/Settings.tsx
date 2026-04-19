@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Settings as SettingsIcon,
   User,
@@ -23,7 +23,7 @@ import {
   BarChart2
 } from 'lucide-react';
 import { googleDriveService } from '../services/api/google-drive.service';
-import { googleAdsService, GoogleAdsAccessibleAccount } from '../services/api/google-ads.service';
+import { googleAdsService } from '../services/api/google-ads.service';
 import { agendamentoService, AgendamentoConfig } from '../services/api/agendamento.service';
 import { userService } from '../services/api/user.service';
 import { marketingService } from '../services/api/marketing.service';
@@ -51,10 +51,6 @@ const Settings: React.FC = () => {
   const [whatsappConnected, setWhatsappConnected] = useState(false);
   const [metaConnected, setMetaConnected] = useState(false);
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
-  const [googleAdsCustomerId, setGoogleAdsCustomerId] = useState('');
-  const [googleAdsLoginCustomerId, setGoogleAdsLoginCustomerId] = useState('');
-  const [googleAdsAccounts, setGoogleAdsAccounts] = useState<GoogleAdsAccessibleAccount[]>([]);
-  const [googleAdsAccountsLoading, setGoogleAdsAccountsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -123,7 +119,7 @@ const Settings: React.FC = () => {
     }
     if (window.location.href.includes('google_ads=connected')) {
       setGoogleAdsConnected(true);
-      showToast('Google Ads conectado. Estamos carregando suas contas…', 'success');
+      showToast('Google Ads conectado. Em Tráfego Pago, abra a aba Google Ads e escolha a conta.', 'success');
       window.history.replaceState({}, document.title, window.location.hash.split('?')[0]);
       void checkGoogleAdsConnection();
     }
@@ -184,7 +180,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  /** Para ver no console do navegador: `localStorage.setItem('DEBUG_GOOGLE_ADS','1')` e recarregar. */
+  /** Só status de conexão OAuth; escolha da conta fica em Tráfego Pago → Google Ads. */
   const checkGoogleAdsConnection = async () => {
     try {
       const s = await googleAdsService.getStatus();
@@ -192,75 +188,10 @@ const Settings: React.FC = () => {
         console.info('[GoogleAds UI] GET /google-ads/status', s);
       }
       setGoogleAdsConnected(!!s.connected);
-      const cid = (s.customerId || '').replace(/\D/g, '');
-      const lid = (s.loginCustomerId || '').replace(/\D/g, '');
-      setGoogleAdsCustomerId(cid);
-      setGoogleAdsLoginCustomerId(lid);
-      if (s.connected) {
-        setGoogleAdsAccountsLoading(true);
-        try {
-          const raw = await googleAdsService.getAccessibleAccounts();
-          if (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_GOOGLE_ADS') === '1') {
-            console.info('[GoogleAds UI] GET /google-ads/accessible-accounts', {
-              count: raw?.length,
-              raw,
-            });
-          }
-          const list: GoogleAdsAccessibleAccount[] = (raw || []).map((a: Record<string, unknown>) => {
-            const id = String(a.customerId ?? a.customer_id ?? '')
-              .replace(/\D/g, '');
-            const name =
-              (a.descriptiveName as string) ||
-              (a.descriptive_name as string) ||
-              (id ? `Conta ${id}` : '');
-            const rawMgr = a.managerCustomerId ?? a.manager_customer_id;
-            const mgrDigits =
-              rawMgr != null && String(rawMgr).replace(/\D/g, '').length > 0
-                ? String(rawMgr).replace(/\D/g, '')
-                : undefined;
-            return {
-              customerId: id,
-              descriptiveName: name || `Conta ${id}`,
-              manager: Boolean(a.manager),
-              managerCustomerId: mgrDigits,
-            };
-          }).filter((a) => a.customerId.length > 0);
-          if (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_GOOGLE_ADS') === '1') {
-            console.info('[GoogleAds UI] contas normalizadas para o select', list);
-          }
-          setGoogleAdsAccounts(list);
-        } catch {
-          setGoogleAdsAccounts([]);
-        } finally {
-          setGoogleAdsAccountsLoading(false);
-        }
-      } else {
-        setGoogleAdsAccounts([]);
-      }
     } catch (error) {
       console.error('Failed to check google ads connection', error);
     }
   };
-
-  /** Lista da API ou, se vazia, conta já salva no backend (com login gestor vindo do status). */
-  const googleAdsDisplayAccounts = useMemo((): GoogleAdsAccessibleAccount[] => {
-    if (googleAdsAccounts.length > 0) {
-      return googleAdsAccounts;
-    }
-    const id = googleAdsCustomerId.replace(/\D/g, '');
-    if (!id) {
-      return [];
-    }
-    const mgr = googleAdsLoginCustomerId.replace(/\D/g, '');
-    return [
-      {
-        customerId: id,
-        descriptiveName: 'Conta vinculada à Amplia',
-        manager: false,
-        managerCustomerId: mgr || undefined,
-      },
-    ];
-  }, [googleAdsAccounts, googleAdsCustomerId, googleAdsLoginCustomerId]);
 
   const checkWhatsAppConnection = async () => {
     try {
@@ -442,8 +373,6 @@ const Settings: React.FC = () => {
         try {
           await googleAdsService.disconnect();
           setGoogleAdsConnected(false);
-          setGoogleAdsCustomerId('');
-          setGoogleAdsLoginCustomerId('');
           setConfirmModalOpen(false);
           showToast('Google Ads desconectado', 'success');
         } catch (error) {
@@ -453,27 +382,6 @@ const Settings: React.FC = () => {
       }
     });
     setConfirmModalOpen(true);
-  };
-
-  const handleGoogleAdsAccountSelect = async (customerId: string) => {
-    const digits = customerId.replace(/\D/g, '');
-    if (!digits) {
-      return;
-    }
-    const acc = googleAdsDisplayAccounts.find((a) => a.customerId.replace(/\D/g, '') === digits);
-    const mgr =
-      acc?.managerCustomerId != null && String(acc.managerCustomerId).replace(/\D/g, '').length > 0
-        ? String(acc.managerCustomerId).replace(/\D/g, '')
-        : '';
-    setGoogleAdsCustomerId(digits);
-    setGoogleAdsLoginCustomerId(mgr);
-    try {
-      await googleAdsService.updateCustomerIds(digits, mgr);
-      showToast('Conta Google Ads selecionada', 'success');
-      await checkGoogleAdsConnection();
-    } catch (error) {
-      showToast(getErrorMessage(error) || 'Erro ao salvar conta', 'error');
-    }
   };
 
   const handleMetaDisconnect = () => {
@@ -1353,7 +1261,7 @@ const Settings: React.FC = () => {
                       id: 'google_ads',
                       name: 'Google Ads',
                       status: googleAdsConnected ? 'connected' : 'disconnected',
-                      desc: 'Métricas e hierarquia na tela Tráfego Pago (escopo adwords).',
+                      desc: 'Métricas na tela Tráfego Pago. Depois de conectar, escolha a conta na aba Google Ads.',
                       icon: BarChart2,
                       action: 'Conectar OAuth',
                       color: googleAdsConnected ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 bg-gray-100'
@@ -1420,66 +1328,6 @@ const Settings: React.FC = () => {
                     </div>
                   ))}
                 </div>
-
-                {googleAdsConnected && (
-                  <div className="p-6 bg-indigo-50/40 rounded-[32px] border border-indigo-100 space-y-4">
-                    <p className="text-xs font-bold text-indigo-900">
-                      Escolha a conta Google Ads para métricas e tráfego pago. A lista vem da sua conexão — não é
-                      necessário digitar o ID da conta.
-                    </p>
-                    {googleAdsAccountsLoading ? (
-                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Carregando contas…</p>
-                    ) : googleAdsDisplayAccounts.length > 0 ? (
-                      <>
-                        <div>
-                          <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">
-                            Conta Google Ads
-                          </label>
-                          <select
-                            value={googleAdsCustomerId.replace(/\D/g, '')}
-                            onChange={(e) => void handleGoogleAdsAccountSelect(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm"
-                          >
-                            <option value="">Selecione…</option>
-                            {googleAdsDisplayAccounts.map((a) => (
-                              <option key={a.customerId} value={a.customerId.replace(/\D/g, '')}>
-                                {a.descriptiveName}
-                                {a.manager ? ' (gestor)' : ''} · {a.customerId.replace(/\D/g, '')}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        {googleAdsAccounts.length === 0 && googleAdsCustomerId.replace(/\D/g, '').length > 0 && (
-                          <p className="text-[10px] text-indigo-600/90 font-medium">
-                            Lista completa indisponível no momento; exibindo a conta já vinculada. Use &quot;Atualizar
-                            contas&quot; para tentar carregar todas do Google.
-                          </p>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => void checkGoogleAdsConnection()}
-                          className="text-[10px] font-black uppercase text-indigo-600 hover:underline"
-                        >
-                          Atualizar contas do Google
-                        </button>
-                      </>
-                    ) : (
-                      <div className="space-y-3">
-                        <p className="text-[11px] font-medium text-indigo-800">
-                          Não foi possível listar suas contas no Google Ads. Verifique o developer token, tente de novo
-                          ou desconecte e conecte o Google Ads no cartão acima para renovar o acesso.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void checkGoogleAdsConnection()}
-                          className="px-6 py-3 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors"
-                        >
-                          Tentar novamente
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             )}
           </div>

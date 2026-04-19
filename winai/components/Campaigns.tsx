@@ -5,7 +5,11 @@ import {
 } from 'lucide-react';
 import { marketingService, CreateCampaignRequest, AdItemRequest, PagePost, CampaignListItem } from '../services';
 import type { MetricsDateRange, PaidTrafficOverview, PaidTrafficPlatform, UtmPerformanceResponse } from '../services/api/marketing.service';
-import { googleAdsService } from '../services/api/google-ads.service';
+import {
+  googleAdsService,
+  type GoogleAdsAccessibleAccount,
+  type GoogleAdsAccessibleAccountsStatus,
+} from '../services/api/google-ads.service';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
 import { META_LIMITS, parseApiErrorMessage } from '../utils/metaAdsLimits';
@@ -89,6 +93,13 @@ const Campaigns: React.FC = () => {
   const [drillAdSetId, setDrillAdSetId] = useState<string | null>(null);
   const [showBudgetPace, setShowBudgetPace] = useState(false);
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
+  const [googleAdsCustomerId, setGoogleAdsCustomerId] = useState('');
+  const [googleAdsLoginCustomerId, setGoogleAdsLoginCustomerId] = useState('');
+  const [googleAdsAccounts, setGoogleAdsAccounts] = useState<GoogleAdsAccessibleAccount[]>([]);
+  const [googleAdsAccountsLoading, setGoogleAdsAccountsLoading] = useState(false);
+  const [googleAdsAccountsStatus, setGoogleAdsAccountsStatus] =
+    useState<GoogleAdsAccessibleAccountsStatus | null>(null);
+  const [googleAdsAccountsMessage, setGoogleAdsAccountsMessage] = useState<string | null>(null);
   const [utmPerformance, setUtmPerformance] = useState<UtmPerformanceResponse | null>(null);
   const [utmLoading, setUtmLoading] = useState(false);
 
@@ -311,6 +322,112 @@ const Campaigns: React.FC = () => {
   useEffect(() => {
     googleAdsService.getStatus().then((s) => setGoogleAdsConnected(!!s.connected)).catch(() => setGoogleAdsConnected(false));
   }, []);
+
+  /** Lista da API ou conta já salva no backend (para o valor do select). */
+  const googleAdsDisplayAccounts = useMemo((): GoogleAdsAccessibleAccount[] => {
+    if (googleAdsAccounts.length > 0) {
+      return googleAdsAccounts;
+    }
+    const id = googleAdsCustomerId.replace(/\D/g, '');
+    if (!id) {
+      return [];
+    }
+    const mgr = googleAdsLoginCustomerId.replace(/\D/g, '');
+    return [
+      {
+        customerId: id,
+        descriptiveName: 'Conta já vinculada',
+        manager: false,
+        managerCustomerId: mgr || undefined,
+      },
+    ];
+  }, [googleAdsAccounts, googleAdsCustomerId, googleAdsLoginCustomerId]);
+
+  const loadGoogleAdsAccountPicker = useCallback(async () => {
+    try {
+      const s = await googleAdsService.getStatus();
+      setGoogleAdsConnected(!!s.connected);
+      const cid = (s.customerId || '').replace(/\D/g, '');
+      const lid = (s.loginCustomerId || '').replace(/\D/g, '');
+      setGoogleAdsCustomerId(cid);
+      setGoogleAdsLoginCustomerId(lid);
+      if (!s.connected) {
+        setGoogleAdsAccounts([]);
+        setGoogleAdsAccountsStatus(null);
+        setGoogleAdsAccountsMessage(null);
+        return;
+      }
+      setGoogleAdsAccountsLoading(true);
+      try {
+        const resp = await googleAdsService.getAccessibleAccounts();
+        const rawAccounts = (resp?.accounts || []) as unknown as Record<string, unknown>[];
+        const list: GoogleAdsAccessibleAccount[] = rawAccounts.map((a) => {
+          const id = String(a.customerId ?? a.customer_id ?? '').replace(/\D/g, '');
+          const name =
+            (a.descriptiveName as string) ||
+            (a.descriptive_name as string) ||
+            (id ? `Conta ${id}` : '');
+          const rawMgr = a.managerCustomerId ?? a.manager_customer_id;
+          const mgrDigits =
+            rawMgr != null && String(rawMgr).replace(/\D/g, '').length > 0
+              ? String(rawMgr).replace(/\D/g, '')
+              : undefined;
+          return {
+            customerId: id,
+            descriptiveName: name || `Conta ${id}`,
+            manager: Boolean(a.manager),
+            managerCustomerId: mgrDigits,
+          };
+        }).filter((a) => a.customerId.length > 0);
+        setGoogleAdsAccounts(list);
+        setGoogleAdsAccountsStatus(resp?.status ?? null);
+        setGoogleAdsAccountsMessage(resp?.message ?? null);
+      } catch (e) {
+        console.error('[Tráfego Pago] erro ao listar contas Google Ads', e);
+        setGoogleAdsAccounts([]);
+        setGoogleAdsAccountsStatus('MAINTENANCE');
+        setGoogleAdsAccountsMessage(
+          'A integração com Google Ads está temporariamente em manutenção. Tente novamente mais tarde.',
+        );
+      } finally {
+        setGoogleAdsAccountsLoading(false);
+      }
+    } catch (e) {
+      console.error('[Tráfego Pago] status Google Ads', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activePlatform !== 'GOOGLE') {
+      return;
+    }
+    void loadGoogleAdsAccountPicker();
+  }, [activePlatform, loadGoogleAdsAccountPicker]);
+
+  const handleGoogleAdsAccountSelect = async (customerId: string) => {
+    const digits = customerId.replace(/\D/g, '');
+    if (!digits) {
+      return;
+    }
+    const acc = googleAdsDisplayAccounts.find((a) => a.customerId.replace(/\D/g, '') === digits);
+    const mgr =
+      acc?.managerCustomerId != null && String(acc.managerCustomerId).replace(/\D/g, '').length > 0
+        ? String(acc.managerCustomerId).replace(/\D/g, '')
+        : '';
+    try {
+      await googleAdsService.updateCustomerIds(digits, mgr);
+      setGoogleAdsCustomerId(digits);
+      setGoogleAdsLoginCustomerId(mgr);
+      showToast('Conta Google Ads selecionada', 'success');
+      await loadPaidOverview();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message?: string }).message)
+          : 'Erro ao salvar conta';
+      showToast(msg, 'error');
+    }
+  };
 
   useEffect(() => {
     setDrillCampaignId(null);
@@ -810,6 +927,75 @@ const Campaigns: React.FC = () => {
                         Google Ads
                       </button>
                     </div>
+                    {activePlatform === 'GOOGLE' && googleAdsConnected && (
+                      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">
+                              Conta Google Ads
+                            </p>
+                            <p className="text-xs font-bold text-indigo-950 mt-1">
+                              Escolha qual conta usar para métricas e hierarquia (como na Meta, mas aqui na aba Google).
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void loadGoogleAdsAccountPicker()}
+                            disabled={googleAdsAccountsLoading}
+                            className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-indigo-200 text-[10px] font-black uppercase tracking-widest text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                          >
+                            <RefreshCw size={14} className={googleAdsAccountsLoading ? 'animate-spin' : ''} />
+                            Atualizar lista
+                          </button>
+                        </div>
+                        {googleAdsAccountsStatus && googleAdsAccountsStatus !== 'OK' && googleAdsAccountsMessage && (
+                          <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 space-y-2">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-800">
+                              {googleAdsAccountsStatus === 'NOT_CONNECTED'
+                                ? 'Conexão necessária'
+                                : 'Integração em manutenção'}
+                            </p>
+                            <p className="text-[11px] font-medium text-amber-950">{googleAdsAccountsMessage}</p>
+                          </div>
+                        )}
+                        {googleAdsAccountsLoading ? (
+                          <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                            Carregando contas…
+                          </p>
+                        ) : googleAdsDisplayAccounts.length > 0 ? (
+                          <div>
+                            <label className="sr-only" htmlFor="google-ads-account-select">
+                              Conta Google Ads
+                            </label>
+                            <select
+                              id="google-ads-account-select"
+                              value={googleAdsCustomerId.replace(/\D/g, '')}
+                              onChange={(e) => void handleGoogleAdsAccountSelect(e.target.value)}
+                              className="w-full max-w-xl px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500/30 outline-none"
+                            >
+                              <option value="">Selecione a conta…</option>
+                              {googleAdsDisplayAccounts.map((a) => (
+                                <option key={a.customerId} value={a.customerId.replace(/\D/g, '')}>
+                                  {a.descriptiveName}
+                                  {a.manager ? ' (gestor)' : ''} · {a.customerId.replace(/\D/g, '')}
+                                </option>
+                              ))}
+                            </select>
+                            {googleAdsAccounts.length === 0 && googleAdsCustomerId.replace(/\D/g, '').length > 0 && (
+                              <p className="text-[10px] text-indigo-700 font-medium mt-2">
+                                Lista completa indisponível; exibindo a conta já vinculada. Use &quot;Atualizar lista&quot;
+                                para tentar de novo.
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] font-medium text-indigo-900">
+                            Nenhuma conta encontrada. Verifique a API no Google Cloud ou reconecte em Configurações →
+                            Integrações.
+                          </p>
+                        )}
+                      </div>
+                    )}
                     {paidOverview.connected && !paidOverviewLoading && (
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                         <div className="flex flex-col lg:flex-row lg:items-center gap-6 flex-1 min-w-0">

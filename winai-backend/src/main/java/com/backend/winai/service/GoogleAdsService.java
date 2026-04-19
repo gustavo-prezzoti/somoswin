@@ -1,6 +1,8 @@
 package com.backend.winai.service;
 
 import com.backend.winai.dto.marketing.GoogleAdsAccessibleAccountDTO;
+import com.backend.winai.dto.marketing.GoogleAdsAccessibleAccountsResponse;
+import com.backend.winai.dto.marketing.GoogleAdsAccessibleAccountsResponse.Status;
 import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficAssetRowDTO;
 import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficInsightBannerDTO;
 import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficKpiCardDTO;
@@ -41,6 +43,10 @@ import java.util.AbstractMap.SimpleImmutableEntry;
 @Transactional(readOnly = true)
 public class GoogleAdsService {
 
+    /** Nunca incluir detalhes técnicos (HTTP, JSON do Google, developer token, etc.). */
+    private static final String GOOGLE_ADS_USER_MAINTENANCE =
+            "A integração com Google Ads está temporariamente em manutenção. Tente novamente mais tarde.";
+
     @Value("${google.client.id:}")
     private String clientId;
 
@@ -67,25 +73,26 @@ public class GoogleAdsService {
             String campaignResourceName, String adGroupId) {
         Company company = user.getCompany();
         if (developerToken == null || developerToken.isBlank()) {
-            return emptyGoogleOverview(
-                    "O Google Ads não está disponível no momento. Entre em contato com o suporte se o problema continuar.");
+            log.warn("[GoogleAds] overview: developer token não configurado (usuário vê manutenção)");
+            return emptyGoogleOverview(GOOGLE_ADS_USER_MAINTENANCE);
         }
         Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(company.getId());
         if (connOpt.isEmpty() || !connOpt.get().isConnected()
                 || connOpt.get().getRefreshToken() == null || connOpt.get().getRefreshToken().isBlank()) {
-            return emptyGoogleOverview("Conecte o Google Ads em Configurações.");
+            return emptyGoogleOverview("Conecte o Google Ads em Configurações → Integrações.");
         }
         GoogleAdsConnection conn = connOpt.get();
         if (conn.getCustomerId() == null || conn.getCustomerId().isBlank()) {
-            return emptyGoogleOverview("Selecione a conta Google Ads em Configurações.");
+            return emptyGoogleOverview("Selecione a conta Google Ads na aba Google Ads em Tráfego Pago.");
         }
 
         String accessToken;
         try {
             accessToken = refreshAccessToken(conn.getRefreshToken());
         } catch (Exception e) {
-            log.warn("[GoogleAds] refresh token failed: {}", e.getMessage());
-            return emptyGoogleOverview("Falha ao renovar token do Google. Reconecte em Configurações.");
+            log.warn("[GoogleAds] refresh token failed (detalhe interno)", e);
+            return emptyGoogleOverview(
+                    "Não foi possível renovar o acesso ao Google Ads. Reconecte em Configurações → Integrações.");
         }
 
         String cid = conn.getCustomerId().replace("-", "").trim();
@@ -107,8 +114,8 @@ public class GoogleAdsService {
             }
             return overviewCampaigns(user, accessToken, cid, loginHeader, start, end, monthTarget);
         } catch (Exception e) {
-            log.warn("[GoogleAds] overview error: {}", e.getMessage());
-            return emptyGoogleOverview("Erro ao consultar Google Ads: " + e.getMessage());
+            log.warn("[GoogleAds] overview error (usuário vê apenas manutenção)", e);
+            return emptyGoogleOverview(GOOGLE_ADS_USER_MAINTENANCE);
         }
     }
 
@@ -488,20 +495,28 @@ public class GoogleAdsService {
      * Contas Google Ads acessíveis: {@code listAccessibleCustomers} + expansão de MCC via {@code customer_client}
      * (hierarquia conforme documentação Google).
      */
-    public List<GoogleAdsAccessibleAccountDTO> listAccessibleAccounts(User user) {
+    public GoogleAdsAccessibleAccountsResponse listAccessibleAccounts(User user) {
         UUID companyId = user.getCompany().getId();
         if (developerToken == null || developerToken.isBlank()) {
-            log.info("[GoogleAds][contas] companyId={} lista vazia: developer token não configurado", companyId);
-            return Collections.emptyList();
+            log.warn("[GoogleAds][contas] companyId={} sem developer token (usuário vê manutenção)", companyId);
+            return GoogleAdsAccessibleAccountsResponse.builder()
+                    .accounts(Collections.emptyList())
+                    .status(Status.MAINTENANCE)
+                    .message(GOOGLE_ADS_USER_MAINTENANCE)
+                    .build();
         }
         Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(companyId);
         if (connOpt.isEmpty() || !connOpt.get().isConnected()
                 || connOpt.get().getRefreshToken() == null || connOpt.get().getRefreshToken().isBlank()) {
             log.info(
-                    "[GoogleAds][contas] companyId={} lista vazia: conexão ausente ou sem refresh (connected={})",
+                    "[GoogleAds][contas] companyId={} sem conexão (connected={})",
                     companyId,
                     connOpt.map(GoogleAdsConnection::isConnected).orElse(false));
-            return Collections.emptyList();
+            return GoogleAdsAccessibleAccountsResponse.builder()
+                    .accounts(Collections.emptyList())
+                    .status(Status.NOT_CONNECTED)
+                    .message("Conecte sua conta Google Ads em Configurações → Integrações para listar as contas.")
+                    .build();
         }
         try {
             log.info("[GoogleAds][contas] companyId={} renovando access token…", companyId);
@@ -513,11 +528,24 @@ public class GoogleAdsService {
                     companyId,
                     list.size(),
                     summarizeAccountsForLog(list));
-            return list;
+            return GoogleAdsAccessibleAccountsResponse.builder()
+                    .accounts(list)
+                    .status(Status.OK)
+                    .build();
         } catch (Exception e) {
             log.warn("[GoogleAds][contas] companyId={} falha ao listar: {}", companyId, e.getMessage(), e);
-            return Collections.emptyList();
+            return classifyGoogleAdsError(e);
         }
+    }
+
+    /** Erro da API: log completo; resposta ao cliente só mensagem genérica de manutenção. */
+    private GoogleAdsAccessibleAccountsResponse classifyGoogleAdsError(Exception e) {
+        log.warn("[GoogleAds][contas] falha ao listar (detalhe técnico apenas no log)", e);
+        return GoogleAdsAccessibleAccountsResponse.builder()
+                .accounts(Collections.emptyList())
+                .status(Status.MAINTENANCE)
+                .message(GOOGLE_ADS_USER_MAINTENANCE)
+                .build();
     }
 
     /** Resumo curto para log (IDs e nomes são dados operacionais da conta, não segredos). */
