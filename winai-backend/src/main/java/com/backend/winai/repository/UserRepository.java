@@ -1,6 +1,7 @@
 package com.backend.winai.repository;
 
 import com.backend.winai.entity.User;
+import com.backend.winai.entity.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -33,4 +34,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     List<User> findByCompanyId(UUID companyId);
 
     long countByCompany_Id(UUID companyId);
+
+    long countByCompany_IdAndRoleAndIsActiveTrue(UUID companyId, UserRole role);
+
+    /** Primeiro usuário da empresa (responsável financeiro / dono da conta). */
+    Optional<User> findFirstByCompany_IdOrderByCreatedAtAscIdAsc(UUID companyId);
 }

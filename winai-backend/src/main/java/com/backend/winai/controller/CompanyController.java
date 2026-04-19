@@ -60,4 +60,12 @@ public class CompanyController {
         companyTeamService.revokeInvitation(user, id);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/members/{userId}")
+    public ResponseEntity<Void> removeMember(
+            @AuthenticationPrincipal User user,
+            @PathVariable UUID userId) {
+        companyTeamService.removeMember(user, userId);
+        return ResponseEntity.noContent().build();
+    }
 }

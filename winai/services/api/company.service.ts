@@ -49,6 +49,10 @@ export const companyService = {
     async revokeInvitation(id: string): Promise<void> {
         await httpClient.delete(`/company/invitations/${id}`);
     },
+
+    async removeMember(userId: string): Promise<void> {
+        await httpClient.delete(`/company/members/${userId}`);
+    },
 };
 
 export default companyService;

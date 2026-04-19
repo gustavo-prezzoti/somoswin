@@ -131,6 +131,31 @@ public class CompanyTeamService {
     }
 
     @Transactional
+    public void removeMember(User admin, UUID memberUserId) {
+        if (admin.getRole() != UserRole.ADMIN) {
+            throw new RuntimeException("Apenas administradores podem remover membros");
+        }
+        if (admin.getId().equals(memberUserId)) {
+            throw new RuntimeException("Você não pode remover a si mesmo da equipe");
+        }
+        Company company = requireCompany(admin);
+        User member = userRepository.findByIdWithCompany(memberUserId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        if (member.getCompany() == null || !member.getCompany().getId().equals(company.getId())) {
+            throw new RuntimeException("Este usuário não pertence à sua empresa");
+        }
+        if (member.getRole() == UserRole.ADMIN) {
+            long admins = userRepository.countByCompany_IdAndRoleAndIsActiveTrue(company.getId(), UserRole.ADMIN);
+            if (admins <= 1) {
+                throw new RuntimeException("Não é possível remover o único administrador da empresa");
+            }
+        }
+        member.setCompany(null);
+        member.setIsActive(false);
+        userRepository.save(member);
+    }
+
+    @Transactional
     public void revokeInvitation(User admin, UUID invitationId) {
         if (admin.getRole() != UserRole.ADMIN) {
             throw new RuntimeException("Apenas administradores podem revogar convites");

@@ -494,6 +494,34 @@ const Settings: React.FC = () => {
     }
   };
 
+  const openRemoveMemberConfirm = (membro: CompanyMemberDTO) => {
+    const label = membro.name?.trim() ? `${membro.name} (${membro.email})` : membro.email;
+    setConfirmModalConfig({
+      title: 'Remover da equipe',
+      message: `${label} perderá o acesso a esta operação na SomosWin. A conta será desativada e não poderá entrar com este e-mail até um novo convite.`,
+      variant: 'danger',
+      confirmLabel: 'Sim, remover',
+      action: async () => {
+        try {
+          await companyService.removeMember(membro.id);
+          setConfirmModalOpen(false);
+          showToast('Membro removido da equipe', 'success');
+          await loadTeamData();
+        } catch (e: any) {
+          showToast(getErrorMessage(e) || 'Erro ao remover membro', 'error');
+        }
+      }
+    });
+    setConfirmModalOpen(true);
+  };
+
+  const canRemoveMember = (membro: CompanyMemberDTO) => {
+    if (!isCompanyAdmin || !user?.id || membro.id === user.id) return false;
+    const admins = teamMembers.filter((m) => m.role === 'ADMIN');
+    if (membro.role === 'ADMIN' && admins.length <= 1) return false;
+    return true;
+  };
+
   const openRevokeInviteConfirm = (inv: AccessInvitationDTO) => {
     const label = inv.invitedName ? `${inv.invitedName} (${inv.email})` : inv.email;
     setConfirmModalConfig({
@@ -999,18 +1027,23 @@ const Settings: React.FC = () => {
                           <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
                           <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Nível</th>
                           <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                          {isCompanyAdmin && (
+                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">
+                              Ações
+                            </th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {teamLoading ? (
                           <tr>
-                            <td colSpan={4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
+                            <td colSpan={isCompanyAdmin ? 5 : 4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
                               <RefreshCw className="inline animate-spin mr-2" size={16} /> Carregando...
                             </td>
                           </tr>
                         ) : teamMembers.length === 0 ? (
                           <tr>
-                            <td colSpan={4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
+                            <td colSpan={isCompanyAdmin ? 5 : 4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
                               Nenhum membro encontrado.
                             </td>
                           </tr>
@@ -1055,6 +1088,22 @@ const Settings: React.FC = () => {
                                   </span>
                                 </div>
                               </td>
+                              {isCompanyAdmin && (
+                                <td className="px-6 py-5 text-right">
+                                  {canRemoveMember(membro) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openRemoveMemberConfirm(membro)}
+                                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-rose-200 bg-white text-rose-700 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-colors"
+                                    >
+                                      <Trash2 size={14} className="shrink-0" aria-hidden />
+                                      Excluir
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] font-medium text-gray-300">—</span>
+                                  )}
+                                </td>
+                              )}
                             </tr>
                           ))
                         )}

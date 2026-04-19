@@ -4,10 +4,12 @@ import com.backend.winai.dto.asaas.AsaasSubscriptionResponse;
 import com.backend.winai.dto.asaas.AsaasWebhookPayload;
 import com.backend.winai.entity.User;
 import com.backend.winai.service.AsaasService;
+import com.backend.winai.service.SubscriptionBillingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -28,6 +30,7 @@ public class AsaasController {
 
     private final AsaasService asaasService;
     private final PlanRepository planRepository;
+    private final SubscriptionBillingService subscriptionBillingService;
 
     // ========== ADMIN ENDPOINTS (autenticados) ==========
 
@@ -94,6 +97,11 @@ public class AsaasController {
         if (user.getCompany() == null) {
             return ResponseEntity.ok(Map.of("subscriptionStatus", "NO_COMPANY"));
         }
+        if (!subscriptionBillingService.isBillingOwner(user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "FORBIDDEN",
+                            "message", "Apenas o responsável financeiro da conta pode ver assinatura e pagamentos."));
+        }
         return ResponseEntity.ok(asaasService.getSubscriptionDetails(user.getCompany().getId()));
     }
 
@@ -106,6 +114,11 @@ public class AsaasController {
         if (user.getCompany() == null) {
             return ResponseEntity.ok(Map.of("data", List.of(), "totalCount", 0, "page", page, "limit", limit));
         }
+        if (!subscriptionBillingService.isBillingOwner(user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "FORBIDDEN", "message",
+                            "Apenas o responsável financeiro pode ver o histórico de pagamentos."));
+        }
         return ResponseEntity.ok(asaasService.getPaymentHistory(user.getCompany().getId(), page, limit));
     }
 
@@ -115,13 +128,26 @@ public class AsaasController {
         if (user.getCompany() == null) {
             return ResponseEntity.ok(Map.of("invoiceUrl", ""));
         }
+        if (!subscriptionBillingService.isBillingOwner(user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Apenas o responsável financeiro pode acessar o link de pagamento."));
+        }
         String link = asaasService.getPaymentLink(user.getCompany().getId());
         return ResponseEntity.ok(Map.of("invoiceUrl", link != null ? link : ""));
     }
 
     @Operation(summary = "Listar planos", description = "Retorna todos os planos disponíveis para o usuário")
     @GetMapping("/plans")
-    public ResponseEntity<List<Map<String, Object>>> getAvailablePlans() {
+    public ResponseEntity<?> getAvailablePlans(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "Faça login para ver os planos."));
+        }
+        if (!subscriptionBillingService.isBillingOwner(user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "FORBIDDEN",
+                            "message", "Apenas o responsável financeiro pode ver planos e valores."));
+        }
         List<Plan> plans = planRepository.findAll();
         List<Map<String, Object>> result = plans.stream()
                 .filter(Plan::getActive)
@@ -150,6 +176,11 @@ public class AsaasController {
         if (user.getCompany() == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Usuário sem empresa associada"));
         }
+        if (!subscriptionBillingService.isBillingOwner(user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "FORBIDDEN",
+                            "message", "Apenas o responsável financeiro pode alterar o plano."));
+        }
         String planIdStr = request.get("planId");
         if (planIdStr == null || planIdStr.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "planId é obrigatório"));
@@ -165,6 +196,11 @@ public class AsaasController {
             @RequestBody Map<String, String> request) {
         if (user.getCompany() == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Usuário sem empresa associada"));
+        }
+        if (!subscriptionBillingService.isBillingOwner(user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "FORBIDDEN",
+                            "message", "Apenas o responsável financeiro pode alterar o plano."));
         }
 
         String planIdStr = request.get("planId");

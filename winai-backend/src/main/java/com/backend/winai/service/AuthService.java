@@ -40,6 +40,8 @@ public class AuthService {
     public static final String NEXT_ACTION_MUST_CHANGE_PASSWORD = "MUST_CHANGE_PASSWORD";
     public static final String NEXT_ACTION_NEEDS_CONTRACT_INFO = "NEEDS_CONTRACT_INFO";
     public static final String NEXT_ACTION_SUBSCRIPTION_EXPIRED = "SUBSCRIPTION_EXPIRED";
+    /** Membro convidado: assinatura inativa — não acessa o app (só o dono regulariza). */
+    public static final String NEXT_ACTION_SUBSCRIPTION_INACTIVE_MEMBER = "SUBSCRIPTION_INACTIVE_MEMBER";
     public static final String NEXT_ACTION_MUST_ACCEPT_TERMS = "MUST_ACCEPT_TERMS";
     public static final String NEXT_ACTION_SUCCESS = "SUCCESS";
 
@@ -94,6 +96,8 @@ public class AuthService {
         User user = userRepository.findByEmailWithCompany(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
+        assertMemberMayAccessAfterAuth(user);
+
         // Atualiza último login
         user.setLastLogin(ZonedDateTime.now());
         userRepository.save(user);
@@ -114,6 +118,10 @@ public class AuthService {
         }
 
         User user = refreshToken.getUser();
+        user = userRepository.findByIdWithCompany(user.getId())
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        assertMemberMayAccessAfterAuth(user);
 
         // Deleta o token antigo
         refreshTokenRepository.delete(refreshToken);
@@ -253,6 +261,7 @@ public class AuthService {
 
         User reloaded = userRepository.findByEmailWithCompany(user.getEmail())
                 .orElseThrow(() -> new RuntimeException("Erro ao carregar usuário"));
+        assertMemberMayAccessAfterAuth(reloaded);
         AuthResponse res = generateAuthResponse(reloaded);
         res.setNextAction(computeNextAction(reloaded));
         return res;
@@ -312,12 +321,31 @@ public class AuthService {
             return NEXT_ACTION_NEEDS_CONTRACT_INFO;
         }
         if (Boolean.TRUE.equals(status.get("subscriptionExpired"))) {
+            if (!Boolean.TRUE.equals(status.get("isBillingOwner"))) {
+                return NEXT_ACTION_SUBSCRIPTION_INACTIVE_MEMBER;
+            }
             return NEXT_ACTION_SUBSCRIPTION_EXPIRED;
         }
         if (Boolean.FALSE.equals(status.get("hasAccepted"))) {
             return NEXT_ACTION_MUST_ACCEPT_TERMS;
         }
         return NEXT_ACTION_SUCCESS;
+    }
+
+    /**
+     * Membros que não são o responsável financeiro não podem usar o app enquanto a assinatura
+     * da empresa estiver inativa (dono deve regularizar no login dele).
+     */
+    private void assertMemberMayAccessAfterAuth(User user) {
+        if (user.getRole() != null && user.getRole().name().equals("SUPER_ADMIN")) {
+            return;
+        }
+        Map<String, Object> st = termsOfServiceService.getAcceptanceStatus(user.getId());
+        if (Boolean.TRUE.equals(st.get("subscriptionExpired")) && !Boolean.TRUE.equals(st.get("isBillingOwner"))) {
+            throw new RuntimeException(
+                    "Assinatura inativa. Somente o responsável pela conta pode acessar para regularizar o pagamento. "
+                            + "Entre em contato com quem administra a empresa.");
+        }
     }
 
     private String extractNameFromEmail(String email) {

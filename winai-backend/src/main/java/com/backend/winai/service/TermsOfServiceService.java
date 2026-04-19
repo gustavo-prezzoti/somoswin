@@ -14,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -27,6 +26,7 @@ public class TermsOfServiceService {
     private final TermsOfServiceRepository termsRepository;
     private final UserTermsAcceptanceRepository acceptanceRepository;
     private final UserRepository userRepository;
+    private final SubscriptionBillingService subscriptionBillingService;
 
     public Optional<TermsOfServiceResponse> getActiveTerms() {
         return termsRepository.findByActiveTrue()
@@ -138,6 +138,9 @@ public class TermsOfServiceService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
+        boolean billingOwner = subscriptionBillingService.isBillingOwner(user);
+        response.put("isBillingOwner", billingOwner);
+
         // Verificar se a empresa tem os campos obrigatórios preenchidos
         boolean hasRequiredFields = user.getCompany() != null
                 && user.getCompany().hasRequiredContractFields();
@@ -171,16 +174,7 @@ public class TermsOfServiceService {
 
         if (!isSuperAdmin && user.getCompany() != null) {
             var company = user.getCompany();
-            LocalDate endDate = company.getSubscriptionEndDate();
-            String subStatus = company.getSubscriptionStatus();
-            String subId = company.getAsaasSubscriptionId();
-
-            boolean expired = endDate != null && endDate.isBefore(LocalDate.now());
-            boolean noActiveSubscription = subId == null || subId.isBlank();
-            boolean statusNotActive = !"ACTIVE".equals(subStatus);
-
-            // Bloqueia se: vigência expirou OU não tem assinatura recorrente ativa
-            boolean blocked = expired || (noActiveSubscription && statusNotActive);
+            boolean blocked = subscriptionBillingService.isCompanySubscriptionBlocked(company);
 
             response.put("subscriptionExpired", blocked);
 
@@ -188,7 +182,7 @@ public class TermsOfServiceService {
                 response.put("subscriptionPlanName",
                         company.getPlanEntity() != null ? company.getPlanEntity().getDisplayName() : "Sem plano");
                 response.put("subscriptionEndDate",
-                        endDate != null ? endDate.toString() : null);
+                        company.getSubscriptionEndDate() != null ? company.getSubscriptionEndDate().toString() : null);
             }
         } else {
             response.put("subscriptionExpired", false);
