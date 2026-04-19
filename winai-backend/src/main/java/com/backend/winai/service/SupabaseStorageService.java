@@ -251,6 +251,40 @@ public class SupabaseStorageService {
         }
     }
 
+    /**
+     * Remove objeto do Storage quando a URL pública é deste projeto Supabase (qualquer bucket).
+     * Ignora URLs externas ou formatos não reconhecidos.
+     */
+    public void tryDeletePublicStorageObject(String publicUrl) {
+        if (publicUrl == null || publicUrl.isEmpty() || !publicUrl.startsWith(supabaseUrl)) {
+            return;
+        }
+        String marker = "/storage/v1/object/public/";
+        int idx = publicUrl.indexOf(marker);
+        if (idx < 0) {
+            return;
+        }
+        String bucketAndPath = publicUrl.substring(idx + marker.length());
+        int slash = bucketAndPath.indexOf('/');
+        if (slash <= 0 || slash >= bucketAndPath.length() - 1) {
+            return;
+        }
+        String bucket = bucketAndPath.substring(0, slash);
+        String path = bucketAndPath.substring(slash + 1);
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(supabaseServiceRoleKey);
+            headers.set("apikey", supabaseServiceRoleKey);
+            headers.set("Authorization", "Bearer " + supabaseServiceRoleKey);
+            HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+            String deleteUrl = supabaseUrl + "/storage/v1/object/" + bucket + "/" + path;
+            restTemplate.exchange(deleteUrl, HttpMethod.DELETE, requestEntity, Void.class);
+            log.info("Storage object deleted: {}/{}", bucket, path);
+        } catch (Exception e) {
+            log.debug("Could not delete storage object for URL {}: {}", publicUrl, e.getMessage());
+        }
+    }
+
     private String getFileExtension(String filename) {
         if (filename == null || filename.isEmpty()) {
             return ".jpg";

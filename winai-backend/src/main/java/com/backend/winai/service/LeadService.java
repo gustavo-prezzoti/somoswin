@@ -5,10 +5,13 @@ import com.backend.winai.dto.response.LeadResponse;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Lead;
 import com.backend.winai.entity.LeadStatus;
+import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.MeetingRepository;
+import com.backend.winai.repository.WhatsAppBroadcastRecipientRepository;
+import com.backend.winai.repository.FollowUpStatusRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,8 +21,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -32,7 +38,10 @@ public class LeadService {
     private final WhatsAppMessageRepository messageRepository;
     private final WhatsAppConversationRepository conversationRepository;
     private final MeetingRepository meetingRepository;
+    private final WhatsAppBroadcastRecipientRepository broadcastRecipientRepository;
+    private final FollowUpStatusRepository followUpStatusRepository;
     private final ChatMemoryService chatMemoryService;
+    private final SupabaseStorageService supabaseStorageService;
 
     private static final Map<LeadStatus, String> STATUS_LABELS = createStatusLabels();
 
@@ -149,17 +158,58 @@ public class LeadService {
      */
     @Transactional
     public void deleteLead(Company company, UUID id) {
-        leadRepository.findByIdAndCompany(id, company)
+        Lead lead = leadRepository.findByIdAndCompany(id, company)
                 .orElseThrow(() -> new RuntimeException("Lead não encontrado"));
 
         chatMemoryService.clearHistory(id.toString());
 
-        // Limpar referências em outras tabelas para evitar violação de chave estrangeira
-        messageRepository.clearLeadReference(id);
-        conversationRepository.clearLeadReference(id);
+        purgeWhatsAppThreadForLead(company, id);
+
         meetingRepository.clearLeadReference(id);
+        broadcastRecipientRepository.clearLeadReference(id);
+
+        if (lead.getProfilePictureUrl() != null && !lead.getProfilePictureUrl().isEmpty()) {
+            supabaseStorageService.tryDeletePublicStorageObject(lead.getProfilePictureUrl());
+        }
 
         leadRepository.deleteById(id);
+    }
+
+    /**
+     * Remove completamente o atendimento WhatsApp do lead: follow-up, mensagens, mídia no Storage
+     * e a conversa (some da lista).
+     */
+    private void purgeWhatsAppThreadForLead(Company company, UUID leadId) {
+        Set<UUID> convIds = new LinkedHashSet<>();
+        for (WhatsAppConversation c : conversationRepository.findByLead_Id(leadId)) {
+            if (c.getCompany() != null && Objects.equals(c.getCompany().getId(), company.getId())) {
+                convIds.add(c.getId());
+            }
+        }
+        for (UUID cid : messageRepository.findDistinctConversationIdsByLeadId(leadId)) {
+            conversationRepository.findById(cid).ifPresent(conv -> {
+                if (conv.getCompany() != null && Objects.equals(conv.getCompany().getId(), company.getId())) {
+                    convIds.add(cid);
+                }
+            });
+        }
+        for (UUID cid : convIds) {
+            WhatsAppConversation conv = conversationRepository.findById(cid).orElse(null);
+            if (conv == null) {
+                continue;
+            }
+            for (String mediaUrl : messageRepository.findMediaUrlsByConversationId(conv.getId())) {
+                supabaseStorageService.tryDeletePublicStorageObject(mediaUrl);
+            }
+            if (conv.getProfilePictureUrl() != null && !conv.getProfilePictureUrl().isEmpty()) {
+                supabaseStorageService.tryDeletePublicStorageObject(conv.getProfilePictureUrl());
+            }
+            messageRepository.deleteByConversation(conv);
+            followUpStatusRepository.findByConversationId(conv.getId()).ifPresent(followUpStatusRepository::delete);
+            chatMemoryService.clearHistory(conv.getId().toString());
+            conversationRepository.delete(conv);
+        }
+        messageRepository.deleteByLead_Id(leadId);
     }
 
     /**

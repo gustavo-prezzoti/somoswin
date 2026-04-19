@@ -46,4 +46,6 @@ public interface WhatsAppConversationRepository extends JpaRepository<WhatsAppCo
 
         @Query("SELECT c FROM WhatsAppConversation c LEFT JOIN FETCH c.company LEFT JOIN FETCH c.lead WHERE c.id = :id")
         Optional<WhatsAppConversation> findByIdWithCompany(@Param("id") UUID id);
+
+        List<WhatsAppConversation> findByLead_Id(UUID leadId);
 }

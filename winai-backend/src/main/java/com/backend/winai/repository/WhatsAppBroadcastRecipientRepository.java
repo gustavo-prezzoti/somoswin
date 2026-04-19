@@ -5,6 +5,7 @@ import com.backend.winai.entity.WhatsAppBroadcastRecipient;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -39,4 +40,8 @@ public interface WhatsAppBroadcastRecipientRepository extends JpaRepository<What
     List<WhatsAppBroadcastRecipient> findTop20ByStatusAndCampaign_StatusOrderByCreatedAtAsc(
             WhatsAppBroadcastRecipient.Status status,
             WhatsAppBroadcastCampaign.Status campaignStatus);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE WhatsAppBroadcastRecipient r SET r.lead = null WHERE r.lead.id = :leadId")
+    void clearLeadReference(@Param("leadId") UUID leadId);
 }

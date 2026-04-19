@@ -27,7 +27,7 @@ const WhatsApp: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [totalContacts, setTotalContacts] = useState(0);
   const [companyDefaultSupportMode, setCompanyDefaultSupportMode] = useState<'IA' | 'HUMAN' | null>(null);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const chatId = searchParams.get('chatId');
 
   // Novos estados para Emoji e Áudio
@@ -161,7 +161,8 @@ const WhatsApp: React.FC = () => {
         const fresh = data.find(c => String(c.id) === String(currentId));
         if (fresh) {
           setActiveConversation(fresh);
-        } else if (!silent) {
+        } else {
+          // Conversa removida no servidor (ex.: exclusão total do lead) — não manter estado fantasma
           setActiveConversation(null);
         }
       } else if (selectedConv) {
@@ -1499,7 +1500,7 @@ const WhatsApp: React.FC = () => {
               </div>
               <h3 className="text-xl font-black text-gray-900">Excluir Lead?</h3>
               <p className="text-gray-500 text-sm leading-relaxed">
-                Deseja realmente remover este lead da sua base? Todos os dados associados serão perdidos.
+                Isso exclui o lead e apaga por completo a conversa do WhatsApp (mensagens, mídias e o contato na lista de atendimento). Não dá para desfazer.
               </p>
 
               <div className="flex gap-3 w-full mt-4">
@@ -1519,21 +1520,25 @@ const WhatsApp: React.FC = () => {
                       const { leadService } = await import('../services/api/lead.service');
                       await leadService.deleteLead(leadIdToDelete);
                       setShowDeleteLeadModal(false);
+                      setMessages([]);
+                      setHasMore(false);
+                      setPage(0);
                       setConversations(prev =>
-                        prev.map(c =>
-                          String(c.id) === String(conversationId) || c.leadId === leadIdToDelete
-                            ? { ...c, leadId: null }
-                            : c
-                        )
+                        prev.filter(c => String(c.id) !== String(conversationId) && c.leadId !== leadIdToDelete)
                       );
-                      setActiveConversation(prev =>
-                        prev && (prev.leadId === leadIdToDelete || String(prev.id) === String(conversationId))
-                          ? { ...prev, leadId: null }
-                          : prev
-                      );
-                      setMessages(prev =>
-                        prev.map(m => (m.leadId === leadIdToDelete ? { ...m, leadId: null } : m))
-                      );
+                      setActiveConversation(prev => {
+                        if (!prev) return null;
+                        if (String(prev.id) === String(conversationId) || prev.leadId === leadIdToDelete) {
+                          activeConversationRef.current = null;
+                          return null;
+                        }
+                        return prev;
+                      });
+                      if (chatId && String(chatId) === String(conversationId)) {
+                        const next = new URLSearchParams(searchParams);
+                        next.delete('chatId');
+                        setSearchParams(next, { replace: true });
+                      }
                       await loadConversations(true);
                       showToast('Lead excluído com sucesso.', 'success');
                     } catch (error) {
