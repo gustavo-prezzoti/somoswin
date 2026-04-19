@@ -6,6 +6,7 @@ import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.ConsultancyCallRequestRepository;
 import com.backend.winai.repository.MeetingRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +29,7 @@ public class ConsultancyService {
     private static final DateTimeFormatter DATE_PT = DateTimeFormatter.ofPattern("d MMMM yyyy", new Locale("pt", "BR"));
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter TABLE_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter REQUEST_TS = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     private final MeetingRepository meetingRepository;
     private final CompanyRepository companyRepository;
@@ -64,11 +66,19 @@ public class ConsultancyService {
                 .map(this::toHistoryRow)
                 .collect(Collectors.toList());
 
+        List<ConsultancyClientCallRequestDto> recentRequests = consultancyCallRequestRepository
+                .findByCompany_IdOrderByCreatedAtDesc(company.getId(), PageRequest.of(0, 8))
+                .stream()
+                .map(this::toClientCallRequestDto)
+                .collect(Collectors.toList());
+
         return ConsultancyDashboardResponse.builder()
                 .consultant(consultant)
                 .planDisplayName(planName)
+                .pageCopy(buildPageCopyForClient(company))
                 .nextMeeting(next)
                 .history(history)
+                .recentCallRequests(recentRequests)
                 .build();
     }
 
@@ -148,6 +158,97 @@ public class ConsultancyService {
         return toDetail(meetingRepository.findById(m.getId()).orElse(m));
     }
 
+    @Transactional(readOnly = true)
+    public ConsultancyClientAppearanceDto adminGetClientAppearance(UUID companyId) {
+        Company c = companyRepository.findById(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Empresa não encontrada"));
+        return ConsultancyClientAppearanceDto.builder()
+                .consultant(ConsultantProfileDto.builder()
+                        .displayName(blankToNull(c.getConsultantDisplayName()))
+                        .role(blankToNull(c.getConsultantRole()))
+                        .avatarUrl(blankToNull(c.getConsultantAvatarUrl()))
+                        .build())
+                .pageCopy(ConsultancyPageCopyDto.builder()
+                        .kicker(blankToNull(c.getConsultancyClientKicker()))
+                        .headlinePrefix(blankToNull(c.getConsultancyClientHeadlinePrefix()))
+                        .headlineAccent(blankToNull(c.getConsultancyClientHeadlineAccent()))
+                        .nextSectionCaption(blankToNull(c.getConsultancyNextSectionCaption()))
+                        .requestCardTitle(blankToNull(c.getConsultancyRequestCardTitle()))
+                        .requestCardDescription(blankToNull(c.getConsultancyRequestCardDescription()))
+                        .build())
+                .build();
+    }
+
+    @Transactional
+    public ConsultancyClientAppearanceDto adminPatchClientAppearance(UUID companyId,
+            ConsultancyClientAppearancePatchRequest req) {
+        Company c = companyRepository.findById(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Empresa não encontrada"));
+        if (req.getDisplayName() != null) {
+            c.setConsultantDisplayName(emptyToNull(req.getDisplayName()));
+        }
+        if (req.getRole() != null) {
+            c.setConsultantRole(emptyToNull(req.getRole()));
+        }
+        if (req.getAvatarUrl() != null) {
+            c.setConsultantAvatarUrl(emptyToNull(req.getAvatarUrl()));
+        }
+        if (req.getKicker() != null) {
+            c.setConsultancyClientKicker(emptyToNull(req.getKicker()));
+        }
+        if (req.getHeadlinePrefix() != null) {
+            c.setConsultancyClientHeadlinePrefix(emptyToNull(req.getHeadlinePrefix()));
+        }
+        if (req.getHeadlineAccent() != null) {
+            c.setConsultancyClientHeadlineAccent(emptyToNull(req.getHeadlineAccent()));
+        }
+        if (req.getNextSectionCaption() != null) {
+            c.setConsultancyNextSectionCaption(emptyToNull(req.getNextSectionCaption()));
+        }
+        if (req.getRequestCardTitle() != null) {
+            c.setConsultancyRequestCardTitle(emptyToNull(req.getRequestCardTitle()));
+        }
+        if (req.getRequestCardDescription() != null) {
+            c.setConsultancyRequestCardDescription(emptyToNull(req.getRequestCardDescription()));
+        }
+        companyRepository.save(c);
+        return adminGetClientAppearance(companyId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ConsultancyCallRequestAdminRowDto> adminListAllCallRequests() {
+        return consultancyCallRequestRepository.findAllForAdmin().stream()
+                .map(this::toAdminCallRequestRow)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ConsultancyCallRequestAdminRowDto adminPatchCallRequest(UUID requestId,
+            ConsultancyCallRequestPatchRequest body) {
+        ConsultancyCallRequest r = consultancyCallRequestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Pedido não encontrado"));
+        if (body.getMeetLink() != null) {
+            String ml = body.getMeetLink().trim();
+            r.setMeetLink(ml.isEmpty() ? null : ml);
+            if (ml.isEmpty() && r.getStatus() == ConsultancyRequestStatus.SCHEDULED) {
+                r.setStatus(ConsultancyRequestStatus.PENDING);
+            } else if (!ml.isEmpty() && r.getStatus() == ConsultancyRequestStatus.PENDING) {
+                r.setStatus(ConsultancyRequestStatus.SCHEDULED);
+            }
+        }
+        if (body.getStatus() != null && !body.getStatus().isBlank()) {
+            try {
+                r.setStatus(ConsultancyRequestStatus.valueOf(body.getStatus().trim().toUpperCase()));
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("Status inválido: use PENDING, SCHEDULED, DONE ou CANCELLED");
+            }
+        }
+        consultancyCallRequestRepository.save(r);
+        ConsultancyCallRequest detailed = consultancyCallRequestRepository.findDetailedById(requestId)
+                .orElse(r);
+        return toAdminCallRequestRow(detailed);
+    }
+
     @Transactional
     public ConsultantProfileDto adminPatchConsultantProfile(UUID companyId, ConsultantProfilePatchRequest req) {
         Company c = companyRepository.findById(companyId)
@@ -224,6 +325,75 @@ public class ConsultancyService {
                 .aiSummary(m.getAiSummary())
                 .transcriptionFull(m.getTranscriptionFull())
                 .build();
+    }
+
+    private ConsultancyPageCopyDto buildPageCopyForClient(Company c) {
+        return ConsultancyPageCopyDto.builder()
+                .kicker(firstNonBlank(c.getConsultancyClientKicker(), "Consultoria Estratégica"))
+                .headlinePrefix(firstNonBlank(c.getConsultancyClientHeadlinePrefix(), "Seu Painel de "))
+                .headlineAccent(firstNonBlank(c.getConsultancyClientHeadlineAccent(), "Performance"))
+                .nextSectionCaption(
+                        firstNonBlank(c.getConsultancyNextSectionCaption(), "Sua próxima análise estratégica"))
+                .requestCardTitle(firstNonBlank(c.getConsultancyRequestCardTitle(), "Solicitar novo encontro"))
+                .requestCardDescription(firstNonBlank(c.getConsultancyRequestCardDescription(),
+                        "Envie uma solicitação para a equipe de consultoria."))
+                .build();
+    }
+
+    private ConsultancyClientCallRequestDto toClientCallRequestDto(ConsultancyCallRequest r) {
+        return ConsultancyClientCallRequestDto.builder()
+                .id(r.getId())
+                .subject(r.getSubject())
+                .urgency(r.getUrgency())
+                .status(r.getStatus().name())
+                .statusLabel(translateRequestStatus(r.getStatus()))
+                .meetLink(blankToNull(r.getMeetLink()))
+                .createdAtLabel(
+                        r.getCreatedAt() != null ? REQUEST_TS.format(r.getCreatedAt().withZoneSameInstant(BRAZIL)) : "")
+                .build();
+    }
+
+    private ConsultancyCallRequestAdminRowDto toAdminCallRequestRow(ConsultancyCallRequest r) {
+        User u = r.getRequestedBy();
+        return ConsultancyCallRequestAdminRowDto.builder()
+                .id(r.getId())
+                .companyId(r.getCompany().getId())
+                .companyName(r.getCompany().getName())
+                .requestedByName(u != null ? u.getName() : null)
+                .requestedByEmail(u != null ? u.getEmail() : null)
+                .subject(r.getSubject())
+                .urgency(r.getUrgency())
+                .topics(r.getTopics())
+                .status(r.getStatus().name())
+                .statusLabel(translateRequestStatus(r.getStatus()))
+                .meetLink(blankToNull(r.getMeetLink()))
+                .createdAtLabel(
+                        r.getCreatedAt() != null ? REQUEST_TS.format(r.getCreatedAt().withZoneSameInstant(BRAZIL)) : "")
+                .build();
+    }
+
+    private static String translateRequestStatus(ConsultancyRequestStatus s) {
+        if (s == null) {
+            return "";
+        }
+        return switch (s) {
+            case PENDING -> "Aguardando agendamento";
+            case SCHEDULED -> "Link disponível";
+            case DONE -> "Concluído";
+            case CANCELLED -> "Cancelado";
+        };
+    }
+
+    private static String firstNonBlank(String v, String def) {
+        return v != null && !v.isBlank() ? v.trim() : def;
+    }
+
+    private static String emptyToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
     }
 
     private static String resolvePlanDisplayName(Company company) {

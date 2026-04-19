@@ -43,6 +43,10 @@ public class ConsultancyCallRequest {
     @Builder.Default
     private ConsultancyRequestStatus status = ConsultancyRequestStatus.PENDING;
 
+    /** Link da videoconferência (Meet etc.) definido pelo admin. */
+    @Column(name = "meet_link", columnDefinition = "TEXT")
+    private String meetLink;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private ZonedDateTime createdAt;

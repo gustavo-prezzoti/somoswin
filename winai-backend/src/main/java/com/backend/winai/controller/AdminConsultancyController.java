@@ -25,6 +25,30 @@ public class AdminConsultancyController {
 
     private final ConsultancyService consultancyService;
 
+    @GetMapping("/companies/{companyId}/client-appearance")
+    public ResponseEntity<ConsultancyClientAppearanceDto> getClientAppearance(@PathVariable UUID companyId) {
+        return ResponseEntity.ok(consultancyService.adminGetClientAppearance(companyId));
+    }
+
+    @PatchMapping("/companies/{companyId}/client-appearance")
+    public ResponseEntity<ConsultancyClientAppearanceDto> patchClientAppearance(
+            @PathVariable UUID companyId,
+            @RequestBody ConsultancyClientAppearancePatchRequest body) {
+        return ResponseEntity.ok(consultancyService.adminPatchClientAppearance(companyId, body));
+    }
+
+    @GetMapping("/requests")
+    public ResponseEntity<List<ConsultancyCallRequestAdminRowDto>> listCallRequests() {
+        return ResponseEntity.ok(consultancyService.adminListAllCallRequests());
+    }
+
+    @PatchMapping("/requests/{requestId}")
+    public ResponseEntity<ConsultancyCallRequestAdminRowDto> patchCallRequest(
+            @PathVariable UUID requestId,
+            @RequestBody ConsultancyCallRequestPatchRequest body) {
+        return ResponseEntity.ok(consultancyService.adminPatchCallRequest(requestId, body));
+    }
+
     @GetMapping("/companies/{companyId}/meetings")
     public ResponseEntity<List<ConsultancyHistoryRowDto>> listMeetings(@PathVariable UUID companyId) {
         return ResponseEntity.ok(consultancyService.adminListConsultancyMeetings(companyId));

@@ -5,18 +5,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
+/** Painel admin: aparência da tela + perfil do consultor (uma resposta). */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ConsultancyDashboardResponse {
-
+public class ConsultancyClientAppearanceDto {
     private ConsultantProfileDto consultant;
-    private String planDisplayName;
     private ConsultancyPageCopyDto pageCopy;
-    private ConsultancyNextMeetingDto nextMeeting;
-    private List<ConsultancyHistoryRowDto> history;
-    private List<ConsultancyClientCallRequestDto> recentCallRequests;
 }

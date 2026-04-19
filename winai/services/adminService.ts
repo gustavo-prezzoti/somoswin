@@ -411,6 +411,36 @@ export const followUpService = {
         await httpClient.delete(`/admin/followup/status/${conversationId}`);
     },
 
+    getConsultancyClientAppearance: async (companyId: string): Promise<ConsultancyClientAppearanceAdmin> => {
+        return await httpClient.get<ConsultancyClientAppearanceAdmin>(
+            `/admin/consultancy/companies/${companyId}/client-appearance`
+        );
+    },
+
+    patchConsultancyClientAppearance: async (
+        companyId: string,
+        body: ConsultancyClientAppearancePatch
+    ): Promise<ConsultancyClientAppearanceAdmin> => {
+        return await httpClient.patch<ConsultancyClientAppearanceAdmin>(
+            `/admin/consultancy/companies/${companyId}/client-appearance`,
+            body
+        );
+    },
+
+    listConsultancyCallRequests: async (): Promise<ConsultancyCallRequestAdminRow[]> => {
+        return await httpClient.get<ConsultancyCallRequestAdminRow[]>(`/admin/consultancy/requests`);
+    },
+
+    patchConsultancyCallRequest: async (
+        requestId: string,
+        body: ConsultancyCallRequestPatch
+    ): Promise<ConsultancyCallRequestAdminRow> => {
+        return await httpClient.patch<ConsultancyCallRequestAdminRow>(
+            `/admin/consultancy/requests/${requestId}`,
+            body
+        );
+    },
+
     listConsultancyMeetings: async (companyId: string): Promise<AdminConsultancyHistoryRow[]> => {
         return await httpClient.get<AdminConsultancyHistoryRow[]>(
             `/admin/consultancy/companies/${companyId}/meetings`
@@ -444,6 +474,52 @@ export const followUpService = {
         );
     }
 };
+
+export interface ConsultancyPageCopyAdmin {
+    kicker: string | null;
+    headlinePrefix: string | null;
+    headlineAccent: string | null;
+    nextSectionCaption: string | null;
+    requestCardTitle: string | null;
+    requestCardDescription: string | null;
+}
+
+export interface ConsultancyClientAppearanceAdmin {
+    consultant: ConsultantProfileAdmin;
+    pageCopy: ConsultancyPageCopyAdmin;
+}
+
+export interface ConsultancyClientAppearancePatch {
+    displayName?: string;
+    role?: string;
+    avatarUrl?: string;
+    kicker?: string;
+    headlinePrefix?: string;
+    headlineAccent?: string;
+    nextSectionCaption?: string;
+    requestCardTitle?: string;
+    requestCardDescription?: string;
+}
+
+export interface ConsultancyCallRequestAdminRow {
+    id: string;
+    companyId: string;
+    companyName: string;
+    requestedByName: string | null;
+    requestedByEmail: string | null;
+    subject: string;
+    urgency: string;
+    topics: string;
+    status: string;
+    statusLabel: string;
+    meetLink: string | null;
+    createdAtLabel: string;
+}
+
+export interface ConsultancyCallRequestPatch {
+    meetLink?: string;
+    status?: 'PENDING' | 'SCHEDULED' | 'DONE' | 'CANCELLED';
+}
 
 export interface AdminConsultancyHistoryRow {
     id: string;

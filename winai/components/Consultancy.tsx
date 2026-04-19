@@ -25,8 +25,12 @@ import { ApiError } from '../services/api/http-client';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
 
-const DEFAULT_AVATAR =
-  'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop';
+function initialsFromName(name: string): string {
+  const p = name.trim().split(/\s+/).filter(Boolean);
+  if (p.length === 0) return '?';
+  if (p.length === 1) return p[0].substring(0, 2).toUpperCase();
+  return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+}
 
 const Consultancy: React.FC = () => {
   const [dashboard, setDashboard] = useState<ConsultancyDashboard | null>(null);
@@ -101,12 +105,13 @@ const Consultancy: React.FC = () => {
     }
   };
 
-  const consultantName = dashboard?.consultant?.displayName?.trim() || 'Consultor';
-  const consultantRole = dashboard?.consultant?.role?.trim() || 'Estratégia';
-  const avatarSrc = dashboard?.consultant?.avatarUrl?.trim() || DEFAULT_AVATAR;
+  const consultantName = dashboard?.consultant?.displayName?.trim() || 'Equipe de consultoria';
+  const consultantRole = dashboard?.consultant?.role?.trim() || '';
+  const avatarSrc = dashboard?.consultant?.avatarUrl?.trim() || '';
+  const pageCopy = dashboard?.pageCopy;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-24 animate-in fade-in duration-700">
+    <div className="max-w-7xl mx-auto space-y-8 pb-24 px-4 sm:px-6 animate-in fade-in duration-700">
       <div className="fixed bottom-4 right-4 z-[1000] flex flex-col gap-2">
         {toasts.map((toast) => (
           <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
@@ -127,7 +132,9 @@ const Consultancy: React.FC = () => {
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/30">
                   <Calendar size={20} />
                 </div>
-                <h3 className="text-2xl font-black italic tracking-tight">Solicitar call estratégica</h3>
+                <h3 className="text-2xl font-black italic tracking-tight">
+                {pageCopy?.requestCardTitle?.trim() || 'Solicitar call estratégica'}
+              </h3>
               </div>
               <p className="text-emerald-50/60 text-xs font-medium uppercase tracking-widest">
                 Preencha os detalhes — a equipe retornará em breve
@@ -274,33 +281,45 @@ const Consultancy: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
-        <div className="space-y-1">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white p-6 sm:p-8 rounded-[32px] border border-gray-100 shadow-sm">
+        <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em]">
-            <Target size={14} /> Consultoria Estratégica
+            <Target size={14} className="shrink-0" />
+            <span className="truncate">{pageCopy?.kicker ?? 'Consultoria Estratégica'}</span>
           </div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tighter italic">
-            Seu Painel de <span className="text-emerald-500">Performance</span>
+          <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tighter italic leading-tight">
+            {pageCopy?.headlinePrefix ?? 'Seu Painel de '}
+            <span className="text-emerald-500">{pageCopy?.headlineAccent ?? 'Performance'}</span>
           </h1>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-4 pr-6 border-r border-gray-100">
-            <div className="text-right">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 shrink-0">
+          <div className="flex items-center gap-4 sm:pr-6 sm:border-r border-gray-100">
+            <div className="text-left sm:text-right min-w-0 flex-1">
               <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Seu Consultor</p>
-              <p className="text-sm font-bold text-gray-900">{consultantName}</p>
-              <p className="text-[10px] font-medium text-emerald-600">{consultantRole}</p>
+              <p className="text-sm font-bold text-gray-900 truncate">{consultantName}</p>
+              {consultantRole ? (
+                <p className="text-[10px] font-medium text-emerald-600 truncate">{consultantRole}</p>
+              ) : null}
             </div>
-            <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-lg shadow-emerald-500/10 bg-gray-100">
-              <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
+            <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-lg shadow-emerald-500/10 bg-emerald-50 shrink-0">
+              {avatarSrc ? (
+                <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-emerald-700 font-black text-sm">
+                  {initialsFromName(consultantName)}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="flex flex-col items-center px-6 py-2 bg-emerald-50 rounded-2xl border border-emerald-100">
-            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Plano atual</span>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <Award size={14} className="text-emerald-600" />
-              <span className="text-sm font-black text-gray-900 tracking-tight">
+          <div className="flex flex-col items-stretch sm:items-center px-6 py-2 bg-emerald-50 rounded-2xl border border-emerald-100">
+            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest text-center">
+              Plano atual
+            </span>
+            <div className="flex items-center justify-center gap-1.5 mt-0.5">
+              <Award size={14} className="text-emerald-600 shrink-0" />
+              <span className="text-sm font-black text-gray-900 tracking-tight text-center">
                 {loading ? '…' : dashboard?.planDisplayName ?? '—'}
               </span>
             </div>
@@ -321,7 +340,7 @@ const Consultancy: React.FC = () => {
                 <div>
                   <h2 className="text-xl font-black text-gray-900 tracking-tight italic">Próximo encontro</h2>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">
-                    Sua próxima análise estratégica
+                    {pageCopy?.nextSectionCaption ?? 'Sua próxima análise estratégica'}
                   </p>
                 </div>
               </div>
@@ -388,9 +407,12 @@ const Consultancy: React.FC = () => {
                     <Calendar size={32} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-gray-900 tracking-tight italic">Solicitar novo encontro</h3>
-                    <p className="text-xs font-medium text-gray-500 leading-relaxed max-w-[240px]">
-                      Envie uma solicitação para a equipe de consultoria.
+                    <h3 className="text-lg font-black text-gray-900 tracking-tight italic">
+                      {pageCopy?.requestCardTitle ?? 'Solicitar novo encontro'}
+                    </h3>
+                    <p className="text-xs font-medium text-gray-500 leading-relaxed max-w-[280px] mx-auto">
+                      {pageCopy?.requestCardDescription ??
+                        'Envie uma solicitação para a equipe de consultoria.'}
                     </p>
                   </div>
                   <button
@@ -401,6 +423,44 @@ const Consultancy: React.FC = () => {
                     <Plus size={16} /> Solicitar call
                   </button>
                 </div>
+              </div>
+            )}
+
+            {!loading && dashboard?.recentCallRequests && dashboard.recentCallRequests.length > 0 && (
+              <div className="mt-8 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-5 sm:p-6">
+                <h3 className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-4">
+                  Seus pedidos de call
+                </h3>
+                <ul className="space-y-3">
+                  {dashboard.recentCallRequests.map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl bg-white/90 border border-emerald-100/80 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-gray-900 truncate">{r.subject}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">
+                          {r.statusLabel}
+                          {r.createdAtLabel ? ` · ${r.createdAtLabel}` : ''}
+                        </p>
+                      </div>
+                      {r.meetLink ? (
+                        <a
+                          href={r.meetLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center gap-2 shrink-0 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700"
+                        >
+                          <ExternalLink size={14} /> Abrir videoconferência
+                        </a>
+                      ) : (
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center sm:text-right">
+                          Link em breve
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>

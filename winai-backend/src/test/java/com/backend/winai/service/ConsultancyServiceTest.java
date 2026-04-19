@@ -13,6 +13,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import org.springframework.data.domain.Pageable;
+
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -73,6 +76,8 @@ class ConsultancyServiceTest {
                 .thenReturn(List.of());
         when(meetingRepository.findConsultancyHistory(eq(company), eq(MeetingKind.CONSULTANCY), any(LocalDate.class)))
                 .thenReturn(List.of(past));
+        when(consultancyCallRequestRepository.findByCompany_IdOrderByCreatedAtDesc(eq(companyId), any(Pageable.class)))
+                .thenReturn(Collections.emptyList());
 
         var dash = consultancyService.getDashboard(user);
 

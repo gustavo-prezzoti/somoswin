@@ -1,10 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Building2, Loader2, Upload, FileText, Save, User } from 'lucide-react';
+import {
+  Building2,
+  Loader2,
+  Upload,
+  FileText,
+  Save,
+  User,
+  LayoutTemplate,
+  Link2,
+  RefreshCw,
+  ExternalLink,
+} from 'lucide-react';
 import adminService, {
+  followUpService,
   Company,
   AdminConsultancyHistoryRow,
   ConsultancyMeetingDetailAdmin,
+  ConsultancyCallRequestAdminRow,
 } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 
@@ -19,9 +32,26 @@ const AdminConsultancy: React.FC = () => {
   const [savingTx, setSavingTx] = useState(false);
   const [transcription, setTranscription] = useState('');
   const [lastDetail, setLastDetail] = useState<ConsultancyMeetingDetailAdmin | null>(null);
-  const [profile, setProfile] = useState({ displayName: '', role: '', avatarUrl: '' });
-  const [savingProfile, setSavingProfile] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const [requests, setRequests] = useState<ConsultancyCallRequestAdminRow[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [savingRequestId, setSavingRequestId] = useState<string | null>(null);
+  const [editMeetById, setEditMeetById] = useState<Record<string, string>>({});
+
+  const [appearanceLoading, setAppearanceLoading] = useState(false);
+  const [savingAppearance, setSavingAppearance] = useState(false);
+  const [appearanceForm, setAppearanceForm] = useState({
+    displayName: '',
+    role: '',
+    avatarUrl: '',
+    kicker: '',
+    headlinePrefix: '',
+    headlineAccent: '',
+    nextSectionCaption: '',
+    requestCardTitle: '',
+    requestCardDescription: '',
+  });
 
   useEffect(() => {
     const token = localStorage.getItem('win_access_token');
@@ -38,6 +68,7 @@ const AdminConsultancy: React.FC = () => {
       }
       setAuth(true);
       void loadCompanies();
+      void loadAllRequests();
     } catch {
       setAuth(false);
     }
@@ -52,6 +83,24 @@ const AdminConsultancy: React.FC = () => {
     }
   };
 
+  const loadAllRequests = async () => {
+    setLoadingRequests(true);
+    try {
+      const list = await followUpService.listConsultancyCallRequests();
+      setRequests(list || []);
+      const next: Record<string, string> = {};
+      (list || []).forEach((r) => {
+        next[r.id] = r.meetLink ?? '';
+      });
+      setEditMeetById(next);
+    } catch (e) {
+      setMessage(getErrorMessage(e));
+      setRequests([]);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
   const loadMeetings = async (cid: string) => {
     if (!cid) {
       setMeetings([]);
@@ -59,7 +108,7 @@ const AdminConsultancy: React.FC = () => {
     }
     setLoadingList(true);
     try {
-      const list = await adminService.listConsultancyMeetings(cid);
+      const list = await followUpService.listConsultancyMeetings(cid);
       setMeetings(list);
       setMeetingId(list[0]?.id ?? '');
     } catch (e) {
@@ -70,11 +119,48 @@ const AdminConsultancy: React.FC = () => {
     }
   };
 
+  const loadAppearance = useCallback(async (cid: string) => {
+    if (!cid) {
+      setAppearanceForm({
+        displayName: '',
+        role: '',
+        avatarUrl: '',
+        kicker: '',
+        headlinePrefix: '',
+        headlineAccent: '',
+        nextSectionCaption: '',
+        requestCardTitle: '',
+        requestCardDescription: '',
+      });
+      return;
+    }
+    setAppearanceLoading(true);
+    try {
+      const data = await followUpService.getConsultancyClientAppearance(cid);
+      setAppearanceForm({
+        displayName: data.consultant.displayName ?? '',
+        role: data.consultant.role ?? '',
+        avatarUrl: data.consultant.avatarUrl ?? '',
+        kicker: data.pageCopy.kicker ?? '',
+        headlinePrefix: data.pageCopy.headlinePrefix ?? '',
+        headlineAccent: data.pageCopy.headlineAccent ?? '',
+        nextSectionCaption: data.pageCopy.nextSectionCaption ?? '',
+        requestCardTitle: data.pageCopy.requestCardTitle ?? '',
+        requestCardDescription: data.pageCopy.requestCardDescription ?? '',
+      });
+    } catch (e) {
+      setMessage(getErrorMessage(e));
+    } finally {
+      setAppearanceLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (companyId) {
       void loadMeetings(companyId);
+      void loadAppearance(companyId);
     }
-  }, [companyId]);
+  }, [companyId, loadAppearance]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -82,7 +168,7 @@ const AdminConsultancy: React.FC = () => {
     setUploading(true);
     setMessage(null);
     try {
-      await adminService.uploadConsultancyRecording(companyId, meetingId, file);
+      await followUpService.uploadConsultancyRecording(companyId, meetingId, file);
       setMessage('Gravação enviada com sucesso.');
       await loadMeetings(companyId);
     } catch (err) {
@@ -101,7 +187,7 @@ const AdminConsultancy: React.FC = () => {
     setSavingTx(true);
     setMessage(null);
     try {
-      const detail = await adminService.saveConsultancyTranscription(companyId, meetingId, transcription.trim());
+      const detail = await followUpService.saveConsultancyTranscription(companyId, meetingId, transcription.trim());
       setLastDetail(detail);
       setMessage('Transcrição salva e resumo GPT gerado (se a API estiver ativa).');
       setTranscription('');
@@ -113,21 +199,42 @@ const AdminConsultancy: React.FC = () => {
     }
   };
 
-  const handleSaveProfile = async () => {
+  const handleSaveAppearance = async () => {
     if (!companyId) return;
-    setSavingProfile(true);
+    setSavingAppearance(true);
     setMessage(null);
     try {
-      await adminService.patchConsultantProfile(companyId, {
-        displayName: profile.displayName || undefined,
-        role: profile.role || undefined,
-        avatarUrl: profile.avatarUrl || undefined,
+      await followUpService.patchConsultancyClientAppearance(companyId, {
+        displayName: appearanceForm.displayName || undefined,
+        role: appearanceForm.role || undefined,
+        avatarUrl: appearanceForm.avatarUrl || undefined,
+        kicker: appearanceForm.kicker || undefined,
+        headlinePrefix: appearanceForm.headlinePrefix || undefined,
+        headlineAccent: appearanceForm.headlineAccent || undefined,
+        nextSectionCaption: appearanceForm.nextSectionCaption || undefined,
+        requestCardTitle: appearanceForm.requestCardTitle || undefined,
+        requestCardDescription: appearanceForm.requestCardDescription || undefined,
       });
-      setMessage('Perfil do consultor atualizado.');
+      setMessage('Aparência da consultoria salva.');
     } catch (err) {
       setMessage(getErrorMessage(err));
     } finally {
-      setSavingProfile(false);
+      setSavingAppearance(false);
+    }
+  };
+
+  const handleSaveMeetLink = async (row: ConsultancyCallRequestAdminRow) => {
+    const link = (editMeetById[row.id] ?? '').trim();
+    setSavingRequestId(row.id);
+    setMessage(null);
+    try {
+      const updated = await followUpService.patchConsultancyCallRequest(row.id, { meetLink: link });
+      setRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      setMessage('Link atualizado.');
+    } catch (err) {
+      setMessage(getErrorMessage(err));
+    } finally {
+      setSavingRequestId(null);
     }
   };
 
@@ -144,11 +251,11 @@ const AdminConsultancy: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 p-6">
+    <div className="max-w-6xl mx-auto space-y-8 p-4 sm:p-6 pb-16">
       <div>
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Consultoria estratégica</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Envio de gravações (Supabase), transcrição e geração de resumo GPT por empresa.
+        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Consultoria estratégica</h1>
+        <p className="text-sm text-gray-500 mt-1 max-w-2xl">
+          Pedidos de call, links Meet, textos da tela do cliente e gravações/transcrições por empresa.
         </p>
       </div>
 
@@ -156,9 +263,101 @@ const AdminConsultancy: React.FC = () => {
         <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800">{message}</div>
       )}
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+      <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+            <Link2 size={18} /> Pedidos de call (todas as empresas)
+          </h2>
+          <button
+            type="button"
+            onClick={() => void loadAllRequests()}
+            disabled={loadingRequests}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={loadingRequests ? 'animate-spin' : ''} />
+            Atualizar lista
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          {loadingRequests ? (
+            <div className="flex items-center gap-2 text-gray-500 text-sm p-8">
+              <Loader2 className="animate-spin" size={18} /> Carregando pedidos…
+            </div>
+          ) : requests.length === 0 ? (
+            <p className="p-8 text-sm text-gray-500">Nenhum pedido registrado ainda.</p>
+          ) : (
+            <table className="w-full text-left text-sm min-w-[720px]">
+              <thead>
+                <tr className="bg-gray-50/80 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                  <th className="px-4 py-3">Empresa</th>
+                  <th className="px-4 py-3">Solicitante</th>
+                  <th className="px-4 py-3">Assunto</th>
+                  <th className="px-4 py-3">Urgência</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 min-w-[200px]">Link Meet</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {requests.map((r) => (
+                  <tr key={r.id} className="hover:bg-gray-50/50 align-top">
+                    <td className="px-4 py-3 font-bold text-gray-900">{r.companyName}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      <div className="font-medium text-gray-800">{r.requestedByName ?? '—'}</div>
+                      <div className="text-xs text-gray-400 break-all">{r.requestedByEmail ?? ''}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-gray-800">{r.subject}</div>
+                      <div className="text-xs text-gray-500 line-clamp-2 mt-1">{r.topics}</div>
+                    </td>
+                    <td className="px-4 py-3 capitalize text-gray-700">{r.urgency}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 text-xs font-bold">
+                        {r.statusLabel}
+                      </span>
+                      <div className="text-[10px] text-gray-400 mt-1">{r.createdAtLabel}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="url"
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono"
+                        placeholder="https://meet.google.com/..."
+                        value={editMeetById[r.id] ?? ''}
+                        onChange={(e) => setEditMeetById((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                      />
+                      {(r.meetLink || editMeetById[r.id]) && (r.meetLink || editMeetById[r.id])?.startsWith('http') && (
+                        <a
+                          href={(editMeetById[r.id] || r.meetLink) as string}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-emerald-600 hover:underline"
+                        >
+                          <ExternalLink size={12} /> Abrir link
+                        </a>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        disabled={savingRequestId === r.id}
+                        onClick={() => void handleSaveMeetLink(r)}
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                      >
+                        {savingRequestId === r.id ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                        Salvar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
         <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-          <Building2 size={18} /> Empresa
+          <Building2 size={18} /> Empresa (gravações e transcrições)
         </h2>
         <select
           className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium"
@@ -178,42 +377,111 @@ const AdminConsultancy: React.FC = () => {
         </select>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
         <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-          <User size={18} /> Perfil do consultor (exibido ao cliente)
+          <LayoutTemplate size={18} /> Aparência no app do cliente
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <input
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
-            placeholder="Nome"
-            value={profile.displayName}
-            onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
-          />
-          <input
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
-            placeholder="Cargo"
-            value={profile.role}
-            onChange={(e) => setProfile({ ...profile, role: e.target.value })}
-          />
-          <input
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
-            placeholder="URL da foto"
-            value={profile.avatarUrl}
-            onChange={(e) => setProfile({ ...profile, avatarUrl: e.target.value })}
-          />
-        </div>
-        <button
-          type="button"
-          disabled={!companyId || savingProfile}
-          onClick={() => void handleSaveProfile()}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50"
-        >
-          {savingProfile ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-          Salvar perfil
-        </button>
+        <p className="text-xs text-gray-500">
+          Textos da tela &quot;Consultoria Estratégica&quot; e dados do consultor. Valores vazios usam o padrão da
+          plataforma no app.
+        </p>
+        {appearanceLoading ? (
+          <div className="flex items-center gap-2 text-gray-500 text-sm py-6">
+            <Loader2 className="animate-spin" size={18} /> Carregando…
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="md:col-span-2 flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest">
+                <User size={14} /> Consultor
+              </div>
+              <input
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
+                placeholder="Nome exibido"
+                value={appearanceForm.displayName}
+                onChange={(e) => setAppearanceForm((f) => ({ ...f, displayName: e.target.value }))}
+                disabled={!companyId}
+              />
+              <input
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
+                placeholder="Cargo / especialidade"
+                value={appearanceForm.role}
+                onChange={(e) => setAppearanceForm((f) => ({ ...f, role: e.target.value }))}
+                disabled={!companyId}
+              />
+              <input
+                className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-2 text-sm"
+                placeholder="URL da foto (opcional)"
+                value={appearanceForm.avatarUrl}
+                onChange={(e) => setAppearanceForm((f) => ({ ...f, avatarUrl: e.target.value }))}
+                disabled={!companyId}
+              />
+              <div className="md:col-span-2 flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest pt-2">
+                <LayoutTemplate size={14} /> Textos da página
+              </div>
+              <input
+                className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-2 text-sm"
+                placeholder="Selo superior (ex.: Consultoria Estratégica)"
+                value={appearanceForm.kicker}
+                onChange={(e) => setAppearanceForm((f) => ({ ...f, kicker: e.target.value }))}
+                disabled={!companyId}
+              />
+              <input
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
+                placeholder="Título — parte antes do destaque"
+                value={appearanceForm.headlinePrefix}
+                onChange={(e) => setAppearanceForm((f) => ({ ...f, headlinePrefix: e.target.value }))}
+                disabled={!companyId}
+              />
+              <input
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
+                placeholder="Título — palavra em destaque (verde)"
+                value={appearanceForm.headlineAccent}
+                onChange={(e) => setAppearanceForm((f) => ({ ...f, headlineAccent: e.target.value }))}
+                disabled={!companyId}
+              />
+              <input
+                className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-2 text-sm"
+                placeholder="Legenda abaixo de &quot;Próximo encontro&quot;"
+                value={appearanceForm.nextSectionCaption}
+                onChange={(e) => setAppearanceForm((f) => ({ ...f, nextSectionCaption: e.target.value }))}
+                disabled={!companyId}
+              />
+              <input
+                className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-2 text-sm"
+                placeholder="Título do card &quot;Solicitar novo encontro&quot;"
+                value={appearanceForm.requestCardTitle}
+                onChange={(e) => setAppearanceForm((f) => ({ ...f, requestCardTitle: e.target.value }))}
+                disabled={!companyId}
+              />
+              <textarea
+                className="md:col-span-2 min-h-[80px] rounded-xl border border-gray-200 px-4 py-3 text-sm"
+                placeholder="Descrição do card de solicitação"
+                value={appearanceForm.requestCardDescription}
+                onChange={(e) => setAppearanceForm((f) => ({ ...f, requestCardDescription: e.target.value }))}
+                disabled={!companyId}
+              />
+            </div>
+            <button
+              type="button"
+              disabled={!companyId || savingAppearance}
+              onClick={() => void handleSaveAppearance()}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50"
+            >
+              {savingAppearance ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+              Salvar aparência
+            </button>
+            {companyId && (
+              <p className="text-[10px] text-gray-400">
+                Empresa selecionada:{' '}
+                <span className="font-bold text-gray-600">{companies.find((c) => c.id === companyId)?.name}</span>
+              </p>
+            )}
+          </>
+        )}
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
         <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Reuniões de consultoria</h2>
         {loadingList ? (
           <div className="flex items-center gap-2 text-gray-500 text-sm">
@@ -235,12 +503,12 @@ const AdminConsultancy: React.FC = () => {
           </select>
         )}
         <p className="text-xs text-gray-500">
-          Cadastre reuniões com tipo <strong>CONSULTANCY</strong> pelo calendário/API de meetings, ou migre dados
-          existentes.
+          Cadastre reuniões com tipo <strong>CONSULTANCY</strong> no calendário. O link principal da videoconferência
+          continua no agendamento; os pedidos de call usam o campo Meet na tabela acima.
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
         <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
           <Upload size={18} /> Gravação (vídeo/áudio)
         </h2>
@@ -251,7 +519,7 @@ const AdminConsultancy: React.FC = () => {
         </label>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
         <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
           <FileText size={18} /> Transcrição + resumo GPT
         </h2>

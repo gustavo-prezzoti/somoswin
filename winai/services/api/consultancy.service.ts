@@ -10,6 +10,25 @@ export interface ConsultantProfile {
     avatarUrl: string | null;
 }
 
+export interface ConsultancyPageCopy {
+    kicker: string;
+    headlinePrefix: string;
+    headlineAccent: string;
+    nextSectionCaption: string;
+    requestCardTitle: string;
+    requestCardDescription: string;
+}
+
+export interface ConsultancyClientCallRequest {
+    id: string;
+    subject: string;
+    urgency: string;
+    status: string;
+    statusLabel: string;
+    meetLink: string | null;
+    createdAtLabel: string;
+}
+
 export interface ConsultancyNextMeeting {
     id: string;
     dateLabel: string;
@@ -33,8 +52,10 @@ export interface ConsultancyHistoryRow {
 export interface ConsultancyDashboard {
     consultant: ConsultantProfile;
     planDisplayName: string;
+    pageCopy: ConsultancyPageCopy;
     nextMeeting: ConsultancyNextMeeting | null;
     history: ConsultancyHistoryRow[];
+    recentCallRequests: ConsultancyClientCallRequest[];
 }
 
 export interface ConsultancyMeetingDetail {

@@ -112,6 +112,25 @@ public class Company {
     @Column(name = "consultant_avatar_url", columnDefinition = "TEXT")
     private String consultantAvatarUrl;
 
+    /** Textos da tela "Consultoria Estratégica" no app do cliente (opcionais). */
+    @Column(name = "consultancy_client_kicker", length = 500)
+    private String consultancyClientKicker;
+
+    @Column(name = "consultancy_client_headline_prefix", length = 500)
+    private String consultancyClientHeadlinePrefix;
+
+    @Column(name = "consultancy_client_headline_accent", length = 255)
+    private String consultancyClientHeadlineAccent;
+
+    @Column(name = "consultancy_next_section_caption", length = 500)
+    private String consultancyNextSectionCaption;
+
+    @Column(name = "consultancy_request_card_title", length = 500)
+    private String consultancyRequestCardTitle;
+
+    @Column(name = "consultancy_request_card_description", columnDefinition = "TEXT")
+    private String consultancyRequestCardDescription;
+
     // Método auxiliar para verificar se os campos obrigatórios estão preenchidos
     public boolean hasRequiredContractFields() {
         return contratante != null && !contratante.trim().isEmpty()
