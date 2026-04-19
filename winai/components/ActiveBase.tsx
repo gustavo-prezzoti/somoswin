@@ -32,6 +32,7 @@ import {
 import { ApiError } from '../services/api/http-client';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
+import { BodyPortal } from './ui/BodyPortal';
 
 const nf = new Intl.NumberFormat('pt-BR');
 
@@ -269,13 +270,8 @@ const ActiveBase: React.FC = () => {
   };
 
   return (
+    <>
     <div className="space-y-8 pb-12">
-      <div className="fixed bottom-4 right-4 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
-        {toasts.map((toast) => (
-          <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
-        ))}
-      </div>
-
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">Base Ativa</h2>
@@ -630,7 +626,9 @@ const ActiveBase: React.FC = () => {
           </div>
         )}
       </div>
+    </div>
 
+    <BodyPortal>
       <AnimatePresence>
         {selectedCampaignId && (
           <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto min-h-0">
@@ -1076,7 +1074,14 @@ const ActiveBase: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+    </BodyPortal>
+
+    <div className="fixed bottom-4 right-4 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
+      {toasts.map((toast) => (
+        <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
+      ))}
     </div>
+    </>
   );
 };
 

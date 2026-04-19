@@ -24,6 +24,7 @@ import {
   Eraser,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { BodyPortal } from './ui/BodyPortal';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   leadService,
@@ -674,6 +675,7 @@ const VideoMeeting: React.FC = () => {
   ];
 
   return (
+    <>
     <div className="min-h-[calc(100vh-5rem)] bg-gradient-to-b from-emerald-50/35 via-white to-slate-50/90 px-3 sm:px-5 py-6 sm:py-10 animate-in fade-in duration-500">
       <div className="max-w-5xl mx-auto space-y-5 sm:space-y-7">
         {errorMsg && (
@@ -1221,6 +1223,13 @@ const VideoMeeting: React.FC = () => {
       )}
         </AnimatePresence>
 
+        {!selectedLeadId && !leadsLoading && wizardStep === 1 && (
+          <p className="text-center text-sm text-slate-500 px-2">Selecione um lead na lista acima para continuar.</p>
+        )}
+      </div>
+    </div>
+
+    <BodyPortal>
         <AnimatePresence>
           {confirmDeleteId && (
             <motion.div
@@ -1387,12 +1396,8 @@ const VideoMeeting: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {!selectedLeadId && !leadsLoading && wizardStep === 1 && (
-          <p className="text-center text-sm text-slate-500 px-2">Selecione um lead na lista acima para continuar.</p>
-        )}
-      </div>
-    </div>
+    </BodyPortal>
+    </>
   );
 };
 

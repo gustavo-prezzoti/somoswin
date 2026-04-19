@@ -24,6 +24,7 @@ import {
 import { ApiError } from '../services/api/http-client';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
+import { BodyPortal } from './ui/BodyPortal';
 
 function initialsFromName(name: string): string {
   const p = name.trim().split(/\s+/).filter(Boolean);
@@ -111,176 +112,8 @@ const Consultancy: React.FC = () => {
   const pageCopy = dashboard?.pageCopy;
 
   return (
+    <>
     <div className="max-w-7xl mx-auto space-y-8 pb-24 px-4 sm:px-6 animate-in fade-in duration-700">
-      <div className="fixed bottom-4 right-4 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
-        {toasts.map((toast) => (
-          <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
-        ))}
-      </div>
-
-      {showRequestForm && (
-        <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
-          <div className="bg-white w-full max-w-xl rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in duration-300 my-auto flex flex-col max-h-[90vh]">
-            <div className="p-8 bg-[#002a1e] text-white relative shrink-0">
-              <button
-                onClick={() => setShowRequestForm(false)}
-                className="absolute top-6 right-6 p-2 hover:bg-white/10 rounded-full transition-all"
-              >
-                <Plus className="rotate-45" size={24} />
-              </button>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/30">
-                  <Calendar size={20} />
-                </div>
-                <h3 className="text-2xl font-black italic tracking-tight">
-                {pageCopy?.requestCardTitle?.trim() || 'Solicitar call estratégica'}
-              </h3>
-              </div>
-              <p className="text-emerald-50/60 text-xs font-medium uppercase tracking-widest">
-                Preencha os detalhes — a equipe retornará em breve
-              </p>
-            </div>
-
-            <div className="p-8 overflow-y-auto flex-1 custom-scrollbar">
-              {isRequestSubmitted ? (
-                <div className="py-12 text-center space-y-4">
-                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                    <CheckCircle2 size={32} />
-                  </div>
-                  <h4 className="text-xl font-black text-gray-900">Solicitação enviada!</h4>
-                  <p className="text-gray-500 text-sm font-medium">Registramos seu pedido.</p>
-                </div>
-              ) : (
-                <form onSubmit={handleRequestSubmit} className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">
-                      Assunto principal
-                    </label>
-                    <input
-                      required
-                      type="text"
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-medium text-sm"
-                      placeholder="Ex: Revisão de Metas Q2"
-                      value={requestData.subject}
-                      onChange={(e) => setRequestData({ ...requestData, subject: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">
-                      Urgência
-                    </label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {['baixa', 'normal', 'alta'].map((u) => (
-                        <button
-                          key={u}
-                          type="button"
-                          onClick={() => setRequestData({ ...requestData, urgency: u })}
-                          className={`py-3 rounded-xl border-2 transition-all text-[10px] font-black uppercase tracking-widest ${
-                            requestData.urgency === u
-                              ? 'border-emerald-500 bg-emerald-50 text-emerald-600'
-                              : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
-                          }`}
-                        >
-                          {u}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">
-                      Tópicos a abordar
-                    </label>
-                    <textarea
-                      required
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-medium text-sm h-32 resize-none"
-                      placeholder="Descreva o que deseja discutir..."
-                      value={requestData.topics}
-                      onChange={(e) => setRequestData({ ...requestData, topics: e.target.value })}
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={submittingRequest}
-                    className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {submittingRequest ? <Loader2 className="animate-spin" size={18} /> : null}
-                    Confirmar solicitação
-                  </button>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {recordingUrl && (
-        <div className="fixed inset-0 z-[10050] bg-black/80 flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
-          <div className="bg-black rounded-2xl max-w-4xl w-full overflow-hidden relative">
-            <button
-              type="button"
-              className="absolute top-3 right-3 z-10 p-2 bg-white/10 rounded-full text-white hover:bg-white/20"
-              onClick={() => setRecordingUrl(null)}
-            >
-              <X size={22} />
-            </button>
-            <video src={recordingUrl} controls className="w-full max-h-[80vh]" playsInline>
-              Seu navegador não suporta reprodução de vídeo.
-            </video>
-          </div>
-        </div>
-      )}
-
-      {docMeetingId && (
-        <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
-          <div className="bg-white rounded-[32px] max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <h3 className="text-lg font-black text-gray-900">Material da reunião</h3>
-              <button
-                type="button"
-                className="p-2 rounded-full hover:bg-gray-100"
-                onClick={() => {
-                  setDocMeetingId(null);
-                  setDocDetail(null);
-                }}
-              >
-                <X size={22} className="text-gray-500" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-              {docLoading && (
-                <div className="flex items-center gap-2 text-gray-500 py-8">
-                  <Loader2 className="animate-spin" size={22} />
-                  Carregando…
-                </div>
-              )}
-              {!docLoading && docDetail && (
-                <>
-                  <div>
-                    <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">
-                      Resumo (GPT)
-                    </h4>
-                    <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                      {docDetail.aiSummary?.trim() || '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                      Transcrição completa
-                    </h4>
-                    <div className="text-sm text-gray-600 whitespace-pre-wrap max-h-64 overflow-y-auto custom-scrollbar leading-relaxed border border-gray-100 rounded-2xl p-4 bg-gray-50">
-                      {docDetail.transcriptionFull?.trim() || '—'}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white p-6 sm:p-8 rounded-[32px] border border-gray-100 shadow-sm">
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em]">
@@ -573,6 +406,178 @@ const Consultancy: React.FC = () => {
         </section>
       </div>
     </div>
+
+    <BodyPortal>
+      {showRequestForm && (
+        <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
+          <div className="bg-white w-full max-w-xl rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in duration-300 my-auto flex flex-col max-h-[90vh]">
+            <div className="p-8 bg-[#002a1e] text-white relative shrink-0">
+              <button
+                onClick={() => setShowRequestForm(false)}
+                className="absolute top-6 right-6 p-2 hover:bg-white/10 rounded-full transition-all"
+              >
+                <Plus className="rotate-45" size={24} />
+              </button>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/30">
+                  <Calendar size={20} />
+                </div>
+                <h3 className="text-2xl font-black italic tracking-tight">
+                {pageCopy?.requestCardTitle?.trim() || 'Solicitar call estratégica'}
+              </h3>
+              </div>
+              <p className="text-emerald-50/60 text-xs font-medium uppercase tracking-widest">
+                Preencha os detalhes — a equipe retornará em breve
+              </p>
+            </div>
+
+            <div className="p-8 overflow-y-auto flex-1 custom-scrollbar">
+              {isRequestSubmitted ? (
+                <div className="py-12 text-center space-y-4">
+                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <h4 className="text-xl font-black text-gray-900">Solicitação enviada!</h4>
+                  <p className="text-gray-500 text-sm font-medium">Registramos seu pedido.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleRequestSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">
+                      Assunto principal
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-medium text-sm"
+                      placeholder="Ex: Revisão de Metas Q2"
+                      value={requestData.subject}
+                      onChange={(e) => setRequestData({ ...requestData, subject: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">
+                      Urgência
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {['baixa', 'normal', 'alta'].map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => setRequestData({ ...requestData, urgency: u })}
+                          className={`py-3 rounded-xl border-2 transition-all text-[10px] font-black uppercase tracking-widest ${
+                            requestData.urgency === u
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-600'
+                              : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
+                          }`}
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">
+                      Tópicos a abordar
+                    </label>
+                    <textarea
+                      required
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-medium text-sm h-32 resize-none"
+                      placeholder="Descreva o que deseja discutir..."
+                      value={requestData.topics}
+                      onChange={(e) => setRequestData({ ...requestData, topics: e.target.value })}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submittingRequest}
+                    className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {submittingRequest ? <Loader2 className="animate-spin" size={18} /> : null}
+                    Confirmar solicitação
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {recordingUrl && (
+        <div className="fixed inset-0 z-[10050] bg-black/80 flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
+          <div className="bg-black rounded-2xl max-w-4xl w-full overflow-hidden relative">
+            <button
+              type="button"
+              className="absolute top-3 right-3 z-10 p-2 bg-white/10 rounded-full text-white hover:bg-white/20"
+              onClick={() => setRecordingUrl(null)}
+            >
+              <X size={22} />
+            </button>
+            <video src={recordingUrl} controls className="w-full max-h-[80vh]" playsInline>
+              Seu navegador não suporta reprodução de vídeo.
+            </video>
+          </div>
+        </div>
+      )}
+
+      {docMeetingId && (
+        <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
+          <div className="bg-white rounded-[32px] max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <h3 className="text-lg font-black text-gray-900">Material da reunião</h3>
+              <button
+                type="button"
+                className="p-2 rounded-full hover:bg-gray-100"
+                onClick={() => {
+                  setDocMeetingId(null);
+                  setDocDetail(null);
+                }}
+              >
+                <X size={22} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {docLoading && (
+                <div className="flex items-center gap-2 text-gray-500 py-8">
+                  <Loader2 className="animate-spin" size={22} />
+                  Carregando…
+                </div>
+              )}
+              {!docLoading && docDetail && (
+                <>
+                  <div>
+                    <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">
+                      Resumo (GPT)
+                    </h4>
+                    <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                      {docDetail.aiSummary?.trim() || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                      Transcrição completa
+                    </h4>
+                    <div className="text-sm text-gray-600 whitespace-pre-wrap max-h-64 overflow-y-auto custom-scrollbar leading-relaxed border border-gray-100 rounded-2xl p-4 bg-gray-50">
+                      {docDetail.transcriptionFull?.trim() || '—'}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </BodyPortal>
+
+    <div className="fixed bottom-4 right-4 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
+      {toasts.map((toast) => (
+        <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
+      ))}
+    </div>
+    </>
   );
 };
 
