@@ -30,16 +30,66 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
   dashboardService,
+  CampaignSummaryDTO,
   DashboardData,
   DashboardWeeklyTask,
   GoalDTO,
   RevenueGoalDTO,
 } from '../services/api/dashboard.service';
+import { marketingService, PaidTrafficAssetRow } from '../services/api/marketing.service';
 
 type ReportRange = '7' | '30' | '90';
 
 function daysFromRange(r: ReportRange): number {
   return r === '7' ? 7 : r === '30' ? 30 : 90;
+}
+
+/** Mesmo critério do backend (dashboard / paid-traffic): N dias inclusive até hoje. */
+function dateRangeForReportDays(days: number): { startDate: string; endDate: string } {
+  const end = new Date();
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - Math.max(0, days - 1));
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { startDate: ymd(start), endDate: ymd(end) };
+}
+
+/** Linhas da tabela — alinhadas ao que a tela Tráfego Pago mostra (Graph API por campanha). */
+type EfficiencyTableRow = {
+  name: string;
+  leads: number;
+  cpl: string;
+  conversion: string;
+  roas: string;
+};
+
+function efficiencyRowsFromPaidTraffic(rows: PaidTrafficAssetRow[]): EfficiencyTableRow[] {
+  return rows
+    .filter((r) => r.level === 'CAMPAIGN')
+    .map((r) => {
+      const conversions = r.conversions ?? 0;
+      const clicks = r.clicks ?? 0;
+      const spend = r.spend ?? 0;
+      const cplNum = r.cpl != null ? r.cpl : conversions > 0 ? spend / conversions : 0;
+      const convPct = clicks > 0 ? (conversions / clicks) * 100 : 0;
+      const roasNum = r.roas ?? 0;
+      return {
+        name: r.name,
+        leads: conversions,
+        cpl: `R$ ${cplNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        conversion: `${convPct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`,
+        roas: `${roasNum.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}x`,
+      };
+    });
+}
+
+function efficiencyRowsFromDashboardCampaigns(campaigns: CampaignSummaryDTO[]): EfficiencyTableRow[] {
+  return campaigns.map((c) => ({
+    name: c.name,
+    leads: c.leads,
+    cpl: c.cpl,
+    conversion: c.conversion,
+    roas: c.roas,
+  }));
 }
 
 function categoryBucket(type: string): 'Vendas' | 'Tráfego' | 'Operacional' {
@@ -387,18 +437,43 @@ const Dashboard: React.FC = () => {
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [tempGoal, setTempGoal] = useState('100000');
   const [tempRevenue, setTempRevenue] = useState('0');
+  /** Quando preenchido, a tabela "Análise de Eficiência" usa a mesma API que Tráfego Pago (métricas por campanha na Meta). */
+  const [metaEfficiencyRows, setMetaEfficiencyRows] = useState<EfficiencyTableRow[] | null>(null);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setMetaEfficiencyRows(null);
     try {
-      const d = await dashboardService.getDashboard(daysFromRange(reportRange));
+      const days = daysFromRange(reportRange);
+      const { startDate, endDate } = dateRangeForReportDays(days);
+
+      const [d, paidMeta] = await Promise.all([
+        dashboardService.getDashboard(days),
+        marketingService
+          .getPaidTrafficOverview({
+            platform: 'META',
+            startDate,
+            endDate,
+          })
+          .catch(() => null),
+      ]);
+
       setData(d);
       setRevenue(d.revenueGoal ?? null);
       setTasks(d.weeklyTasks ?? []);
       const rg = d.revenueGoal;
       if (rg?.targetValue != null) setTempGoal(String(rg.targetValue));
       if (rg?.currentValue != null) setTempRevenue(String(rg.currentValue));
+
+      if (
+        paidMeta?.connected &&
+        paidMeta.tableLevel === 'CAMPAIGNS' &&
+        paidMeta.rows &&
+        paidMeta.rows.length > 0
+      ) {
+        setMetaEfficiencyRows(efficiencyRowsFromPaidTraffic(paidMeta.rows));
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar dashboard';
       setError(msg);
@@ -511,15 +586,18 @@ const Dashboard: React.FC = () => {
       styles: { fontSize: 9, cellPadding: 4 },
     });
 
-    const campaigns = data.campaigns ?? [];
-    if (campaigns.length > 0) {
+    const pdfCampaignRows =
+      metaEfficiencyRows && metaEfficiencyRows.length > 0
+        ? metaEfficiencyRows
+        : efficiencyRowsFromDashboardCampaigns(data.campaigns ?? []);
+    if (pdfCampaignRows.length > 0) {
       docPdf.setFontSize(14);
       docPdf.setFont('helvetica', 'bold');
       docPdf.text('2. CAMPANHAS (META)', 15, (docPdf as any).lastAutoTable.finalY + 15);
       autoTable(docPdf, {
         startY: (docPdf as any).lastAutoTable.finalY + 20,
         head: [['Campanha', 'Leads', 'CPL', 'Conv.', 'ROAS']],
-        body: campaigns.map((c) => [c.name, String(c.leads), c.cpl, c.conversion, c.roas]),
+        body: pdfCampaignRows.map((c) => [c.name, String(c.leads), c.cpl, c.conversion, c.roas]),
         theme: 'grid',
         headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255] },
         styles: { fontSize: 9, cellPadding: 4 },
@@ -562,6 +640,10 @@ const Dashboard: React.FC = () => {
   }
 
   const campaigns = data.campaigns ?? [];
+  const efficiencyTableRows: EfficiencyTableRow[] =
+    metaEfficiencyRows && metaEfficiencyRows.length > 0
+      ? metaEfficiencyRows
+      : efficiencyRowsFromDashboardCampaigns(campaigns);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
@@ -762,7 +844,7 @@ const Dashboard: React.FC = () => {
                 Campanhas
               </button>
             </div>
-            {campaigns.length === 0 ? (
+            {efficiencyTableRows.length === 0 ? (
               <p className="text-sm text-gray-500 font-medium">
                 Sem campanhas Meta no período. Conecte o Meta em Configurações e sincronize em Campanhas para preencher esta tabela com dados reais.
               </p>
@@ -779,7 +861,7 @@ const Dashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {campaigns.map((item, idx) => (
+                    {efficiencyTableRows.map((item, idx) => (
                       <tr key={`${item.name}-${idx}`} className="group hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => navigate('/campanhas')}>
                         <td className="py-4">
                           <span className="text-xs font-bold text-gray-800">{item.name}</span>
