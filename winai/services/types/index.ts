@@ -21,6 +21,7 @@ export type NextAction =
     | 'MUST_ACCEPT_TERMS'
     | 'NEEDS_CONTRACT_INFO'
     | 'SUBSCRIPTION_EXPIRED'
+    | 'SUBSCRIPTION_INACTIVE_MEMBER'
     | 'SUCCESS';
 
 export interface UserDTO {

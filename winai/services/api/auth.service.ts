@@ -21,6 +21,7 @@ function normalizeNextAction(value: string | undefined): NextAction {
     if (s === 'MUST_ACCEPT_TERMS') return 'MUST_ACCEPT_TERMS';
     if (s === 'NEEDS_CONTRACT_INFO') return 'NEEDS_CONTRACT_INFO';
     if (s === 'SUBSCRIPTION_EXPIRED') return 'SUBSCRIPTION_EXPIRED';
+    if (s === 'SUBSCRIPTION_INACTIVE_MEMBER') return 'SUBSCRIPTION_INACTIVE_MEMBER';
     return 'SUCCESS';
 }
 

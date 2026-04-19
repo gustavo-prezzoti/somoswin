@@ -41,6 +41,7 @@ import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
 import MetaConnectionManager from './MetaConnectionManager';
 import { companyService } from '../services/api/company.service';
+import { termsService } from '../services/api/terms.service';
 import type { CompanyMemberDTO, AccessInvitationDTO, CompanyProfileDTO } from '../services/types';
 
 const Settings: React.FC = () => {
@@ -102,6 +103,8 @@ const Settings: React.FC = () => {
   const [agendamentoConfig, setAgendamentoConfig] = useState<AgendamentoConfig | null>(null);
   const [agendamentoSaving, setAgendamentoSaving] = useState(false);
   const [showGoogleConnectModal, setShowGoogleConnectModal] = useState(false);
+  /** Só o primeiro usuário da empresa (dono) vê Plano & Faturamento */
+  const [isBillingOwnerFlag, setIsBillingOwnerFlag] = useState<boolean | null>(null);
 
   // States for ConfirmModal
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -123,12 +126,30 @@ const Settings: React.FC = () => {
   };
 
   useEffect(() => {
+    termsService
+      .checkAcceptanceStatus()
+      .then((s) => setIsBillingOwnerFlag(s.isBillingOwner === true))
+      .catch(() => setIsBillingOwnerFlag(false));
+  }, []);
+
+  useEffect(() => {
+    if (isBillingOwnerFlag === false && activeTab === 'subscription') {
+      setActiveTab('profile');
+    }
+  }, [isBillingOwnerFlag, activeTab]);
+
+  useEffect(() => {
+    if (isBillingOwnerFlag === true) {
+      void loadSubscription();
+    }
+  }, [isBillingOwnerFlag]);
+
+  useEffect(() => {
     loadUser();
     checkGoogleConnection();
     checkMetaConnection();
     checkGoogleAdsConnection();
     checkWhatsAppConnection();
-    loadSubscription();
     loadAgendamentoConfig();
     // Check for OAuth callback
     if (window.location.href.includes('google=connected')) {
@@ -737,7 +758,7 @@ const Settings: React.FC = () => {
     { id: 'integrations', label: 'Conexões / Integrações', icon: Globe },
     { id: 'agendamento', label: 'Agendamento', icon: Clock },
     { id: 'subscription', label: 'Plano & Faturamento', icon: CreditCard }
-  ];
+  ].filter((tab) => tab.id !== 'subscription' || isBillingOwnerFlag === true);
 
   return (
     <>

@@ -18,7 +18,8 @@ import {
   Mic,
   Layers,
   AlertTriangle,
-  ShieldAlert
+  ShieldAlert,
+  CreditCard
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Goals from './components/Goals';
@@ -59,6 +60,7 @@ import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
 import { termsService } from './services/api/terms.service';
 import { authService } from './services/api/auth.service';
+import { subscriptionService } from './services/api/subscription.service';
 import { useWebSocket } from './hooks/useWebSocket';
 
 import logoLight from './logo_light.png';
@@ -340,6 +342,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
   const [needsContractInfo, setNeedsContractInfo] = useState(false);
   const [subscriptionExpired, setSubscriptionExpired] = useState(false);
+  const [isBillingOwner, setIsBillingOwner] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState<{ planName?: string; endDate?: string }>({});
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
@@ -364,6 +367,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
       setNeedsContractInfo(status.needsContractInfo || false);
       setTermsAccepted(status.hasAccepted);
       setSubscriptionExpired(status.subscriptionExpired || false);
+      setIsBillingOwner(status.isBillingOwner === true);
       if (status.subscriptionExpired) {
         setSubscriptionInfo({
           planName: status.subscriptionPlanName,
@@ -384,6 +388,45 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     return <Navigate to="/change-password" replace />;
   }
 
+  /** Membro convidado: assinatura da empresa inativa — só o dono regulariza; sem valores nem pagamento. */
+  if (sessionNextAction === 'SUBSCRIPTION_INACTIVE_MEMBER') {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-[#003d2b] to-gray-900 flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
+        <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl">
+          <div className="p-8 bg-gradient-to-br from-slate-700 to-slate-800 text-white text-center">
+            <div className="w-20 h-20 bg-white/10 backdrop-blur rounded-3xl flex items-center justify-center mx-auto mb-5">
+              <ShieldAlert size={40} />
+            </div>
+            <h1 className="text-2xl font-black uppercase italic tracking-tight">Acesso indisponível</h1>
+            <p className="text-emerald-200/90 text-sm font-medium mt-2">Assinatura da empresa inativa</p>
+          </div>
+          <div className="p-8 space-y-5">
+            <p className="text-sm text-gray-600 text-center leading-relaxed">
+              O plano da sua operação não está ativo. Somente o <strong>responsável pela conta</strong> (quem criou a
+              empresa) pode regularizar o pagamento. Você não precisa pagar nem tem acesso a faturamento.
+            </p>
+            <p className="text-xs text-gray-400 text-center">
+              Entre em contato com o administrador da empresa para reativar o acesso da equipe.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem('win_user');
+                localStorage.removeItem('win_access_token');
+                localStorage.removeItem('win_refresh_token');
+                window.location.href = '/login';
+              }}
+              className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-gray-800 transition-all flex items-center justify-center gap-2"
+            >
+              <LogOut size={18} />
+              Sair
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (sessionNextAction === null || !initialCheckDone) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-100">
@@ -391,8 +434,6 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
       </div>
     );
   }
-
-
 
   // Se precisa preencher dados do contrato, mostra mensagem de bloqueio
   if (needsContractInfo) {
@@ -432,21 +473,19 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     );
   }
 
-  // Se assinatura expirada ou sem assinatura ativa, bloqueia TODAS as rotas
-  if (subscriptionExpired) {
+  // Responsável financeiro: assinatura inativa — pode abrir pagamento (demais usuários não chegam aqui)
+  if (subscriptionExpired && isBillingOwner) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
         <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl">
-          {/* Header */}
           <div className="p-8 bg-gradient-to-br from-rose-600 to-rose-700 text-white text-center">
             <div className="w-20 h-20 bg-white/10 backdrop-blur rounded-3xl flex items-center justify-center mx-auto mb-5">
               <ShieldAlert size={40} />
             </div>
-            <h1 className="text-2xl font-black uppercase italic tracking-tight">Acesso Bloqueado</h1>
-            <p className="text-rose-200 text-sm font-medium mt-2">Sua assinatura não está ativa</p>
+            <h1 className="text-2xl font-black uppercase italic tracking-tight">Regularize o pagamento</h1>
+            <p className="text-rose-200 text-sm font-medium mt-2">Assinatura da empresa inativa</p>
           </div>
 
-          {/* Body */}
           <div className="p-8 space-y-5">
             <div className="bg-gray-50 rounded-2xl p-5 space-y-3">
               {subscriptionInfo.planName && (
@@ -472,12 +511,37 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
             </div>
 
             <p className="text-sm text-gray-500 text-center leading-relaxed">
-              Para utilizar a plataforma é necessário ter uma assinatura recorrente ativa.
-              Entre em contato com o administrador para ativar ou renovar sua assinatura.
+              Como responsável pela conta, você pode pagar ou reativar a assinatura recorrente para liberar o acesso da
+              equipe.
             </p>
 
             <div className="space-y-3">
               <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const url = await subscriptionService.getMyInvoice();
+                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                  } catch {
+                    /* 403 etc. */
+                  }
+                }}
+                className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25"
+              >
+                <CreditCard size={18} />
+                Abrir pagamento / fatura
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = '/configuracoes';
+                }}
+                className="w-full py-3 border border-gray-200 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all"
+              >
+                Ir para Plano &amp; Faturamento
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   localStorage.removeItem('win_user');
                   localStorage.removeItem('win_access_token');
@@ -487,9 +551,43 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
                 className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-gray-800 transition-all flex items-center justify-center gap-2"
               >
                 <LogOut size={18} />
-                Sair da Conta
+                Sair da conta
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (subscriptionExpired && !isBillingOwner) {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-[#003d2b] to-gray-900 flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
+        <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl">
+          <div className="p-8 bg-gradient-to-br from-slate-700 to-slate-800 text-white text-center">
+            <div className="w-20 h-20 bg-white/10 backdrop-blur rounded-3xl flex items-center justify-center mx-auto mb-5">
+              <ShieldAlert size={40} />
+            </div>
+            <h1 className="text-2xl font-black uppercase italic tracking-tight">Acesso indisponível</h1>
+            <p className="text-emerald-200/90 text-sm font-medium mt-2">Assinatura da empresa inativa</p>
+          </div>
+          <div className="p-8 space-y-5">
+            <p className="text-sm text-gray-600 text-center leading-relaxed">
+              Somente o responsável financeiro pode regularizar o pagamento. Você não tem permissão para ver faturamento.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem('win_user');
+                localStorage.removeItem('win_access_token');
+                localStorage.removeItem('win_refresh_token');
+                window.location.href = '/login';
+              }}
+              className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-gray-800 transition-all flex items-center justify-center gap-2"
+            >
+              <LogOut size={18} />
+              Sair
+            </button>
           </div>
         </div>
       </div>

@@ -16,6 +16,8 @@ export interface TermsStatus {
     hasRequiredContractFields?: boolean;
     message?: string;
     subscriptionExpired?: boolean;
+    /** true = quem criou a conta / primeiro usuário da empresa (pode pagar e ver faturamento) */
+    isBillingOwner?: boolean;
     subscriptionPlanName?: string;
     subscriptionEndDate?: string;
 }
