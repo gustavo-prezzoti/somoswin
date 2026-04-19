@@ -4,6 +4,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.core.env.Environment;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -17,12 +18,27 @@ import java.nio.charset.StandardCharsets;
 public class EmailService {
 
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
-
-    @Value("${app.mail.from:noreply@somoswin.com.br}")
-    private String fromAddress;
+    private final Environment env;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendBaseUrl;
+
+    /**
+     * Remetente: {@code app.mail.from} / {@code MAIL_FROM}, ou {@code spring.mail.username} se vazio
+     * (SMTPs como Hostinger rejeitam From diferente da caixa autenticada).
+     */
+    private String resolveFromAddress() {
+        String explicit = env.getProperty("app.mail.from");
+        if (explicit != null && !explicit.isBlank()) {
+            return explicit.trim();
+        }
+        String user = env.getProperty("spring.mail.username");
+        if (user != null && !user.isBlank()) {
+            return user.trim();
+        }
+        throw new IllegalStateException(
+                "Defina MAIL_FROM ou use o mesmo e-mail em MAIL_USERNAME (remetente SMTP).");
+    }
 
     public void sendAccessInvitation(String toEmail, String companyName, String inviteToken) {
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
@@ -36,7 +52,7 @@ public class EmailService {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
-            helper.setFrom(fromAddress);
+            helper.setFrom(resolveFromAddress());
             helper.setTo(toEmail);
             helper.setSubject("Convite para acessar " + companyName + " — SomosWin");
             helper.setText(buildInvitationHtml(companyName, link), true);
