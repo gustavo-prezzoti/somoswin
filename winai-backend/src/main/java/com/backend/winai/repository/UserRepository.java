@@ -31,4 +31,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query("SELECT u FROM User u WHERE u.company.id = :companyId")
     List<User> findByCompanyId(UUID companyId);
+
+    long countByCompany_Id(UUID companyId);
 }

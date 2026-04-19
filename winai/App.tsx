@@ -34,6 +34,7 @@ import Checkout from './components/Checkout';
 import Terms from './components/Terms';
 import LandingPage from './components/LandingPage';
 import Settings from './components/Settings';
+import AcceptInvitation from './components/AcceptInvitation';
 import OAuthComplete from './components/OAuthComplete';
 import Notifications from './components/Notifications';
 import AdminLayout from './components/Admin/AdminLayout';
@@ -507,6 +508,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/aceitar-convite" element={<AcceptInvitation />} />
         <Route path="/login" element={<Login />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/termos" element={<Terms />} />

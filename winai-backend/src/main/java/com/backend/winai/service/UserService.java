@@ -46,6 +46,7 @@ public class UserService {
                 .company(companyDTO)
                 .avatarUrl(fullUser.getAvatarUrl())
                 .phone(fullUser.getPhone())
+                .jobTitle(fullUser.getJobTitle())
                 .build();
     }
 
@@ -73,6 +74,10 @@ public class UserService {
 
         if (request.getPhone() != null) {
             fullUser.setPhone(request.getPhone());
+        }
+
+        if (request.getJobTitle() != null) {
+            fullUser.setJobTitle(request.getJobTitle());
         }
 
         fullUser = userRepository.save(fullUser);

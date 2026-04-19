@@ -2,9 +2,11 @@ package com.backend.winai.service;
 
 import com.backend.winai.dto.request.*;
 import com.backend.winai.dto.response.AuthResponse;
+import com.backend.winai.dto.response.InvitationPreviewResponse;
 import com.backend.winai.dto.response.MessageResponse;
 import com.backend.winai.dto.response.SessionStatusResponse;
 import com.backend.winai.entity.*;
+import com.backend.winai.repository.AccessInvitationRepository;
 import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.RefreshTokenRepository;
 import com.backend.winai.repository.UserRepository;
@@ -28,6 +30,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
+    private final AccessInvitationRepository accessInvitationRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -190,6 +193,71 @@ public class AuthService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public InvitationPreviewResponse getInvitationPreview(String token) {
+        AccessInvitation inv = accessInvitationRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Convite inválido"));
+        if (inv.getStatus() != InvitationStatus.PENDING) {
+            throw new RuntimeException("Este convite não está mais disponível");
+        }
+        if (ZonedDateTime.now().isAfter(inv.getExpiresAt())) {
+            throw new RuntimeException("Convite expirado");
+        }
+        return InvitationPreviewResponse.builder()
+                .email(inv.getEmail())
+                .companyName(inv.getCompany().getName())
+                .invitedName(inv.getInvitedName())
+                .build();
+    }
+
+    @Transactional
+    public AuthResponse acceptInvitation(AcceptInvitationRequest request) {
+        AccessInvitation inv = accessInvitationRepository.findByToken(request.getToken())
+                .orElseThrow(() -> new RuntimeException("Convite inválido"));
+        if (inv.getStatus() != InvitationStatus.PENDING) {
+            throw new RuntimeException("Este convite não está mais disponível");
+        }
+        if (ZonedDateTime.now().isAfter(inv.getExpiresAt())) {
+            inv.setStatus(InvitationStatus.EXPIRED);
+            accessInvitationRepository.save(inv);
+            throw new RuntimeException("Convite expirado");
+        }
+        if (userRepository.existsByEmail(inv.getEmail())) {
+            throw new RuntimeException("Já existe uma conta com este e-mail");
+        }
+
+        String name;
+        if (request.getName() != null && !request.getName().isBlank()) {
+            name = request.getName().trim();
+        } else if (inv.getInvitedName() != null && !inv.getInvitedName().isBlank()) {
+            name = inv.getInvitedName().trim();
+        } else {
+            name = extractNameFromEmail(inv.getEmail());
+        }
+
+        User user = User.builder()
+                .email(inv.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .name(name)
+                .role(inv.getRole())
+                .company(inv.getCompany())
+                .jobTitle(inv.getJobTitle())
+                .isActive(true)
+                .emailVerified(true)
+                .mustChangePassword(false)
+                .build();
+
+        user = userRepository.save(user);
+        inv.setStatus(InvitationStatus.ACCEPTED);
+        accessInvitationRepository.save(inv);
+
+        User reloaded = userRepository.findByEmailWithCompany(user.getEmail())
+                .orElseThrow(() -> new RuntimeException("Erro ao carregar usuário"));
+        AuthResponse res = generateAuthResponse(reloaded);
+        res.setNextAction(computeNextAction(reloaded));
+        return res;
+    }
+
     private AuthResponse generateAuthResponse(User user) {
         String accessToken = jwtService.generateToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);
@@ -224,6 +292,9 @@ public class AuthService {
                         .role(user.getRole().name())
                         .plan(user.getCompany() != null ? user.getCompany().getPlan().name() : "STARTER")
                         .company(companyDTO)
+                        .avatarUrl(user.getAvatarUrl())
+                        .phone(user.getPhone())
+                        .jobTitle(user.getJobTitle())
                         .build())
                 .build();
     }

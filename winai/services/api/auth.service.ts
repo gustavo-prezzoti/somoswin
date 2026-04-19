@@ -147,6 +147,34 @@ export const authService = {
     async getSessionStatus(): Promise<SessionStatusResponse> {
         return httpClient.get<SessionStatusResponse>('/auth/session-status');
     },
+
+    async getInvitationPreview(token: string): Promise<{
+        email: string;
+        companyName: string;
+        invitedName: string | null;
+    }> {
+        return httpClient.get(`/auth/invitation/${encodeURIComponent(token)}`, { skipAuth: true });
+    },
+
+    async acceptInvitation(body: { token: string; password: string; name?: string }): Promise<AuthResponse> {
+        const raw = await httpClient.post<AuthResponse>('/auth/accept-invitation', body, {
+            skipAuth: true,
+        });
+        const nextAction = normalizeNextAction(raw.nextAction);
+        const user = raw.user
+            ? { ...raw.user, mustChangePassword: nextAction === 'MUST_CHANGE_PASSWORD' }
+            : raw.user;
+        storageService.setTokens(raw.accessToken, raw.refreshToken);
+        if (user) storageService.setUser(user);
+        return {
+            accessToken: raw.accessToken,
+            refreshToken: raw.refreshToken,
+            tokenType: raw.tokenType ?? 'Bearer',
+            expiresIn: raw.expiresIn ?? 3600,
+            user: raw.user!,
+            nextAction,
+        };
+    },
 };
 
 export default authService;

@@ -131,6 +131,21 @@ public class Company {
     @Column(name = "consultancy_request_card_description", columnDefinition = "TEXT")
     private String consultancyRequestCardDescription;
 
+    @Column(name = "website", length = 1024)
+    private String website;
+
+    @Column(name = "instagram_handle", length = 255)
+    private String instagramHandle;
+
+    @Column(name = "revenue_range", length = 255)
+    private String revenueRange;
+
+    @Column(name = "team_size", length = 64)
+    private String teamSize;
+
+    @Column(name = "city_state", length = 255)
+    private String cityState;
+
     // Método auxiliar para verificar se os campos obrigatórios estão preenchidos
     public boolean hasRequiredContractFields() {
         return contratante != null && !contratante.trim().isEmpty()

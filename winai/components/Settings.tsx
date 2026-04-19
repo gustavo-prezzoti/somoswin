@@ -20,8 +20,13 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  BarChart2
+  BarChart2,
+  Instagram,
+  MapPin,
+  Zap,
+  Plus
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { googleDriveService } from '../services/api/google-drive.service';
 import { googleAdsService } from '../services/api/google-ads.service';
 import { agendamentoService, AgendamentoConfig } from '../services/api/agendamento.service';
@@ -34,6 +39,8 @@ import { ConfirmModal } from './ui/Modal';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
 import MetaConnectionManager from './MetaConnectionManager';
+import { companyService } from '../services/api/company.service';
+import type { CompanyMemberDTO, AccessInvitationDTO, CompanyProfileDTO } from '../services/types';
 
 const Settings: React.FC = () => {
   const initialTab = (() => {
@@ -42,9 +49,12 @@ const Settings: React.FC = () => {
     if (tab === 'subscription') return 'subscription';
     if (tab === 'integrations') return 'integrations';
     if (tab === 'agendamento') return 'agendamento';
+    if (tab === 'team') return 'team';
     return 'profile';
   })();
-  const [activeTab, setActiveTab] = useState<'profile' | 'integrations' | 'subscription' | 'agendamento'>(initialTab as any);
+  const [activeTab, setActiveTab] = useState<
+    'profile' | 'team' | 'integrations' | 'subscription' | 'agendamento'
+  >(initialTab as any);
   const [user, setUser] = useState<any>(null);
   const [saved, setSaved] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -55,7 +65,21 @@ const Settings: React.FC = () => {
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [isConnectingWhatsapp, setIsConnectingWhatsapp] = useState(false);
-  const [profileData, setProfileData] = useState({ name: '', email: '', phone: '' });
+  const [profileData, setProfileData] = useState({ name: '', email: '', phone: '', jobTitle: '' });
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfileDTO | null>(null);
+  const [teamMembers, setTeamMembers] = useState<CompanyMemberDTO[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<AccessInvitationDTO[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [inviteForm, setInviteForm] = useState({
+    email: '',
+    invitedName: '',
+    jobTitle: '',
+    role: 'USER' as 'USER' | 'ADMIN'
+  });
+
+  const isCompanyAdmin = user?.role === 'ADMIN';
   const [showMetaDetails, setShowMetaDetails] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -135,6 +159,31 @@ const Settings: React.FC = () => {
     }
   }, []);
 
+  const loadCompanyProfile = async () => {
+    try {
+      const c = await companyService.getProfile();
+      setCompanyProfile(c);
+    } catch (e) {
+      console.error('Failed to load company profile', e);
+    }
+  };
+
+  const loadTeamData = async () => {
+    setTeamLoading(true);
+    try {
+      const [members, invites] = await Promise.all([
+        companyService.listMembers(),
+        companyService.listInvitations()
+      ]);
+      setTeamMembers(members);
+      setPendingInvitations(invites);
+    } catch (e: any) {
+      showToast(e?.message || 'Erro ao carregar equipe', 'error');
+    } finally {
+      setTeamLoading(false);
+    }
+  };
+
   const loadUser = async () => {
     try {
       const userData = await userService.getProfile();
@@ -142,8 +191,10 @@ const Settings: React.FC = () => {
       setProfileData({
         name: userData.name || '',
         email: userData.email || '',
-        phone: userData.phone || ''
+        phone: userData.phone || '',
+        jobTitle: userData.jobTitle || ''
       });
+      await loadCompanyProfile();
     } catch (error) {
       console.error('Failed to load user', error);
       const savedUser = localStorage.getItem('win_user');
@@ -153,11 +204,18 @@ const Settings: React.FC = () => {
         setProfileData({
           name: parsed.name || '',
           email: parsed.email || '',
-          phone: parsed.phone || ''
+          phone: parsed.phone || '',
+          jobTitle: parsed.jobTitle || ''
         });
       }
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'team') {
+      void loadTeamData();
+    }
+  }, [activeTab]);
 
   const checkGoogleConnection = async () => {
     try {
@@ -410,16 +468,62 @@ const Settings: React.FC = () => {
       const updatedUser = await userService.updateProfile({
         name: profileData.name,
         email: profileData.email,
-        phone: profileData.phone
+        phone: profileData.phone,
+        jobTitle: profileData.jobTitle || undefined
       });
       setUser(updatedUser);
       localStorage.setItem('win_user', JSON.stringify(updatedUser));
       window.dispatchEvent(new CustomEvent('userUpdated', { detail: updatedUser }));
+      if (isCompanyAdmin && companyProfile) {
+        await companyService.patchProfile({
+          segment: companyProfile.segment ?? undefined,
+          website: companyProfile.website ?? undefined,
+          instagramHandle: companyProfile.instagramHandle ?? undefined,
+          revenueRange: companyProfile.revenueRange ?? undefined,
+          teamSize: companyProfile.teamSize ?? undefined,
+          cityState: companyProfile.cityState ?? undefined
+        });
+        await loadCompanyProfile();
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-      showToast('Perfil atualizado com sucesso!', 'success');
+      showToast('Alterações salvas com sucesso!', 'success');
     } catch (error: any) {
       showToast('Erro ao salvar: ' + (error.message || 'Erro desconhecido'), 'error');
+    }
+  };
+
+  const handleRevokeInvite = async (id: string) => {
+    try {
+      await companyService.revokeInvitation(id);
+      showToast('Convite revogado', 'success');
+      await loadTeamData();
+    } catch (e: any) {
+      showToast(e?.message || 'Erro ao revogar', 'error');
+    }
+  };
+
+  const handleSendInvite = async () => {
+    if (!inviteForm.email.trim()) {
+      showToast('Informe o e-mail do convite', 'error');
+      return;
+    }
+    setInviteSubmitting(true);
+    try {
+      await companyService.createInvitation({
+        email: inviteForm.email.trim(),
+        invitedName: inviteForm.invitedName.trim() || undefined,
+        jobTitle: inviteForm.jobTitle.trim() || undefined,
+        role: inviteForm.role
+      });
+      showToast('Convite enviado por e-mail', 'success');
+      setShowAddMember(false);
+      setInviteForm({ email: '', invitedName: '', jobTitle: '', role: 'USER' });
+      await loadTeamData();
+    } catch (e: any) {
+      showToast(e?.message || 'Erro ao enviar convite', 'error');
+    } finally {
+      setInviteSubmitting(false);
     }
   };
 
@@ -589,18 +693,24 @@ const Settings: React.FC = () => {
 
   const tabs = [
     { id: 'profile', label: 'Perfil Executivo', icon: User },
-    { id: 'integrations', label: 'Conexões Neurais', icon: Globe },
+    { id: 'team', label: 'Equipe / Membros', icon: Users },
+    { id: 'integrations', label: 'Conexões / Integrações', icon: Globe },
     { id: 'agendamento', label: 'Agendamento', icon: Clock },
-    { id: 'subscription', label: 'Assinatura', icon: CreditCard },
+    { id: 'subscription', label: 'Plano & Faturamento', icon: CreditCard }
   ];
 
   return (
     <>
-      <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700">
+      <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700 pb-20 px-4">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
+            <div className="flex items-center gap-2 text-emerald-600">
+              <SettingsIcon size={20} />
+              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Centro de Controle do Sistema</span>
+            </div>
             <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">
-              Configurações
+              Configurações <br />
+              <span className="text-emerald-600">da Operação.</span>
             </h1>
           </div>
 
@@ -659,7 +769,9 @@ const Settings: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic">{user?.name || 'Diretor'}</h3>
-                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">{user?.role || 'Executivo'}</p>
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">
+                      {profileData.jobTitle || user?.role || 'Executivo'}
+                    </p>
                   </div>
                 </div>
 
@@ -678,17 +790,18 @@ const Settings: React.FC = () => {
                     <input
                       type="email"
                       value={profileData.email}
-                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                      className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                      readOnly
+                      className="w-full px-6 py-4 bg-gray-100 border border-transparent rounded-2xl text-gray-500 font-bold text-sm cursor-not-allowed"
                     />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Cargo / Função</label>
                     <input
                       type="text"
-                      value={user?.role || ''}
-                      disabled
-                      className="w-full px-6 py-4 bg-gray-100 border border-transparent rounded-2xl font-bold text-sm text-gray-500 cursor-not-allowed"
+                      value={profileData.jobTitle}
+                      onChange={(e) => setProfileData({ ...profileData, jobTitle: e.target.value })}
+                      placeholder="Ex.: Diretor comercial"
+                      className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
                     />
                   </div>
                   <div className="space-y-2">
@@ -701,6 +814,564 @@ const Settings: React.FC = () => {
                       className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
                     />
                   </div>
+                </div>
+
+                <section className="space-y-8 pt-8 border-t border-gray-50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <Zap size={20} />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-900 uppercase italic tracking-tighter">Dados do Negócio</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Nicho / Segmento</label>
+                      <select
+                        value={companyProfile?.segment || ''}
+                        onChange={(e) =>
+                          setCompanyProfile((prev) =>
+                            prev ? { ...prev, segment: e.target.value } : prev
+                          )
+                        }
+                        disabled={!isCompanyAdmin}
+                        className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm appearance-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      >
+                        <option value="">Selecione...</option>
+                        <option>E-commerce / Loja Virtual</option>
+                        <option>SaaS / Tecnologia</option>
+                        <option>Serviços Profissionais</option>
+                        <option>Saúde e Estética</option>
+                        <option>Educação e Infoprodutos</option>
+                        <option>Varejo Físico</option>
+                        <option>Alimentação e Restaurantes</option>
+                        <option>Imobiliário</option>
+                        <option>Indústria / B2B</option>
+                        <option>Agências e Marketing</option>
+                        <option>Outro</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Website</label>
+                      <div className="relative">
+                        <input
+                          type="url"
+                          value={companyProfile?.website || ''}
+                          onChange={(e) =>
+                            setCompanyProfile((prev) =>
+                              prev ? { ...prev, website: e.target.value } : prev
+                            )
+                          }
+                          disabled={!isCompanyAdmin}
+                          placeholder="https://..."
+                          className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm pl-12 disabled:bg-gray-100"
+                        />
+                        <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Instagram</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={companyProfile?.instagramHandle || ''}
+                          onChange={(e) =>
+                            setCompanyProfile((prev) =>
+                              prev ? { ...prev, instagramHandle: e.target.value } : prev
+                            )
+                          }
+                          disabled={!isCompanyAdmin}
+                          placeholder="@seuusuario"
+                          className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm pl-12 disabled:bg-gray-100"
+                        />
+                        <Instagram className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Faturamento Médio Mensal</label>
+                      <select
+                        value={companyProfile?.revenueRange || ''}
+                        onChange={(e) =>
+                          setCompanyProfile((prev) =>
+                            prev ? { ...prev, revenueRange: e.target.value } : prev
+                          )
+                        }
+                        disabled={!isCompanyAdmin}
+                        className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm appearance-none disabled:bg-gray-100"
+                      >
+                        <option value="">Selecione...</option>
+                        <option>Até R$ 10.000</option>
+                        <option>R$ 10.001 a R$ 30.000</option>
+                        <option>R$ 30.001 a R$ 50.000</option>
+                        <option>R$ 50.001 a R$ 100.000</option>
+                        <option>R$ 100.001 a R$ 300.000</option>
+                        <option>R$ 300.001 a R$ 500.000</option>
+                        <option>Acima de R$ 500.000</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Tamanho da Equipe</label>
+                      <select
+                        value={companyProfile?.teamSize || ''}
+                        onChange={(e) =>
+                          setCompanyProfile((prev) =>
+                            prev ? { ...prev, teamSize: e.target.value } : prev
+                          )
+                        }
+                        disabled={!isCompanyAdmin}
+                        className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm appearance-none disabled:bg-gray-100"
+                      >
+                        <option value="">Selecione...</option>
+                        <option>Só eu</option>
+                        <option>2-5 pessoas</option>
+                        <option>6-10 pessoas</option>
+                        <option>11-25 pessoas</option>
+                        <option>25+ pessoas</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Cidade / Estado</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={companyProfile?.cityState || ''}
+                          onChange={(e) =>
+                            setCompanyProfile((prev) =>
+                              prev ? { ...prev, cityState: e.target.value } : prev
+                            )
+                          }
+                          disabled={!isCompanyAdmin}
+                          placeholder="Ex: São Paulo, SP"
+                          className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm pl-12 disabled:bg-gray-100"
+                        />
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {activeTab === 'team' && (
+              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-[#002a1e] p-8 rounded-[40px] text-white">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Plano Atual</p>
+                    <h3 className="text-2xl font-black italic tracking-tight">
+                      {subscription?.plan?.displayName || '—'}
+                    </h3>
+                    <p className="text-emerald-50/60 text-xs font-medium">
+                      Membros ativos: {teamMembers.length}
+                      {subscription?.plan?.userLimit != null
+                        ? ` / ${subscription.plan.userLimit}`
+                        : ' / Ilimitados'}
+                    </p>
+                  </div>
+                  {isCompanyAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMember(true)}
+                      className="bg-emerald-500 text-white font-black px-8 py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 uppercase text-xs tracking-widest"
+                    >
+                      <Plus size={18} /> Adicionar Membro
+                    </button>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50/50 border-b border-gray-100">
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Membro</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Nível</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {teamLoading ? (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
+                              <RefreshCw className="inline animate-spin mr-2" size={16} /> Carregando...
+                            </td>
+                          </tr>
+                        ) : teamMembers.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
+                              Nenhum membro encontrado.
+                            </td>
+                          </tr>
+                        ) : (
+                          teamMembers.map((membro) => (
+                            <tr key={membro.id} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-6 py-5">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-black text-sm overflow-hidden">
+                                    {membro.avatarUrl ? (
+                                      <img src={membro.avatarUrl} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      (membro.name || '?')[0]
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-black text-gray-900">{membro.name}</p>
+                                    <p className="text-[10px] font-medium text-gray-400 uppercase tracking-widest">
+                                      {membro.jobTitle || '—'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-5 text-xs font-medium text-gray-500">{membro.email}</td>
+                              <td className="px-6 py-5">
+                                <span
+                                  className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                                    membro.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                                  }`}
+                                >
+                                  {membro.role === 'ADMIN' && '👑 '}
+                                  {membro.role}
+                                </span>
+                              </td>
+                              <td className="px-6 py-5">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className={`w-1.5 h-1.5 rounded-full ${membro.isActive ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                                  />
+                                  <span className="text-[10px] font-black text-gray-700 uppercase">
+                                    {membro.isActive ? 'Ativo' : 'Inativo'}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {isCompanyAdmin && pendingInvitations.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Convites pendentes</h4>
+                    <div className="space-y-2">
+                      {pendingInvitations.map((inv) => (
+                        <div
+                          key={inv.id}
+                          className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div>
+                            <p className="text-sm font-black text-gray-800">{inv.email}</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                              Expira {new Date(inv.expiresAt).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRevokeInvite(inv.id)}
+                            className="text-[10px] font-black text-rose-600 uppercase tracking-widest hover:underline"
+                          >
+                            Revogar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'integrations' && (
+              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                <div className="grid grid-cols-1 gap-4">
+                  {[
+                    {
+                      id: 'whatsapp',
+                      name: 'Agente SDR (WhatsApp)',
+                      status: whatsappConnected ? 'connected' : 'disconnected',
+                      desc: 'Conecte seu WhatsApp para ativar a qualificação automática.',
+                      icon: Smartphone,
+                      action: 'Conectar via QR Code',
+                      color: whatsappConnected ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 bg-gray-100'
+                    },
+                    {
+                      id: 'calendar',
+                      name: 'Google Calendar',
+                      status: googleConnected ? 'connected' : 'disconnected',
+                      desc: 'Sincronização de reuniões agendadas pela IA.',
+                      icon: Globe,
+                      action: 'Conectar OAuth',
+                      color: googleConnected ? 'text-blue-600 bg-blue-100' : 'text-gray-400 bg-gray-100'
+                    },
+                    {
+                      id: 'meta',
+                      name: 'Meta Ads (Facebook/Instagram)',
+                      status: metaConnected ? 'connected' : 'disconnected',
+                      desc: 'Tráfego pago, Leads e Instagram Social Growth.',
+                      icon: Facebook,
+                      action: 'Conectar OAuth',
+                      color: metaConnected ? 'text-blue-500 bg-blue-50' : 'text-gray-400 bg-gray-100'
+                    },
+                    {
+                      id: 'google_ads',
+                      name: 'Google Ads',
+                      status: googleAdsConnected ? 'connected' : 'disconnected',
+                      desc: 'Métricas na tela Tráfego Pago. Depois de conectar, escolha a conta na aba Google Ads.',
+                      icon: BarChart2,
+                      action: 'Conectar OAuth',
+                      color: googleAdsConnected ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 bg-gray-100'
+                    }
+                  ].map((item) => (
+                    <div key={item.id} className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group hover:bg-white hover:shadow-xl transition-all">
+                      <div className="flex items-center gap-5">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.color}`}>
+                          <item.icon size={24} />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-gray-900 text-sm tracking-tight uppercase">{item.name}</h4>
+                          <p className="text-[11px] text-gray-400 font-medium">{item.desc}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {/* Ver Detalhes button for Meta when connected */}
+                        {item.id === 'meta' && item.status === 'connected' && (
+                          <button
+                            onClick={() => setShowMetaDetails(true)}
+                            className="px-4 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-blue-100"
+                          >
+                            Ver Detalhes
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (item.id === 'whatsapp') {
+                              if (item.status === 'connected') {
+                                handleWhatsAppDisconnect();
+                              } else {
+                                handleWhatsAppConnect();
+                              }
+                            } else if (item.id === 'calendar') {
+                              if (item.status === 'connected') {
+                                handleGoogleDisconnect();
+                              } else {
+                                handleGoogleConnect();
+                              }
+                            } else if (item.id === 'meta') {
+                              if (item.status === 'connected') {
+                                handleMetaDisconnect();
+                              } else {
+                                handleMetaConnect();
+                              }
+                            } else if (item.id === 'google_ads') {
+                              if (item.status === 'connected') {
+                                handleGoogleAdsDisconnect();
+                              } else {
+                                handleGoogleAdsConnect();
+                              }
+                            }
+                          }}
+                          disabled={item.id === 'whatsapp' && isConnectingWhatsapp}
+                          className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${item.status === 'connected' ? 'bg-white text-rose-500 border border-rose-100 hover:bg-rose-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20'
+                            }`}>
+                          {item.id === 'whatsapp' && isConnectingWhatsapp ? (
+                            <RefreshCw size={14} className="animate-spin" />
+                          ) : (
+                            item.status === 'connected' ? 'Desconectar' : item.action
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {activeTab === 'agendamento' && (
+              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                <div className="flex items-center gap-4 mb-8 pb-8 border-b border-gray-100">
+                  <div className="p-3 bg-emerald-50 rounded-2xl">
+                    <Clock size={24} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Agendamento via IA</h3>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Horário de Brasília • Google Calendar</p>
+                  </div>
+                </div>
+
+                {!agendamentoConfig?.googleConnected && (
+                  <div className="p-6 bg-amber-50 border border-amber-200 rounded-[24px] flex items-start gap-4">
+                    <AlertCircle size={24} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-black text-amber-800 text-sm uppercase">Conecte o Google Calendar</h4>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Para ativar o agendamento automático pela IA, é necessário conectar sua conta Google.
+                        A IA irá buscar horários disponíveis no seu calendário e criar eventos automaticamente.
+                      </p>
+                      <button
+                        onClick={handleGoogleConnect}
+                        className="mt-4 px-4 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 transition-all"
+                      >
+                        Conectar Google
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div>
+                      <p className="font-black text-gray-900 text-sm uppercase">Ativar agendamento</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">A IA poderá buscar horários e criar agendamentos no Google Calendar</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const next = !agendamentoConfig?.enabled;
+                        if (next && !agendamentoConfig?.canEnable) {
+                          setShowGoogleConnectModal(true);
+                          return;
+                        }
+                        setAgendamentoSaving(true);
+                        try {
+                          const updated = await agendamentoService.updateConfig({ enabled: next });
+                          setAgendamentoConfig(updated);
+                          showToast(next ? 'Agendamento ativado!' : 'Agendamento desativado.', 'success');
+                        } catch (e: any) {
+                          showToast(e?.message || 'Erro ao salvar.', 'error');
+                        } finally {
+                          setAgendamentoSaving(false);
+                        }
+                      }}
+                      className={`relative w-14 h-8 rounded-full transition-all cursor-pointer ${agendamentoConfig?.enabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
+                    >
+                      <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-all ${agendamentoConfig?.enabled ? 'left-7' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 block mb-2">Dias de atendimento</label>
+                      <p className="text-[10px] text-gray-400 mb-2">Selecione os dias em que a empresa atende (ex: sem fins de semana)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'].map((day) => {
+                          const labels: Record<string, string> = { MONDAY: 'Seg', TUESDAY: 'Ter', WEDNESDAY: 'Qua', THURSDAY: 'Qui', FRIDAY: 'Sex', SATURDAY: 'Sáb', SUNDAY: 'Dom' };
+                          const selected = (agendamentoConfig?.attendanceDays || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']).includes(day);
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={async () => {
+                                const current = agendamentoConfig?.attendanceDays || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
+                                const next = selected ? current.filter(d => d !== day) : [...current, day];
+                                if (next.length === 0) return;
+                                setAgendamentoConfig(prev => prev ? { ...prev, attendanceDays: next } : null);
+                                setAgendamentoSaving(true);
+                                try {
+                                  const updated = await agendamentoService.updateConfig({ attendanceDays: next });
+                                  setAgendamentoConfig(updated);
+                                  showToast('Dias salvos!', 'success');
+                                } catch (e: any) {
+                                  showToast(e?.message || 'Erro ao salvar.', 'error');
+                                } finally {
+                                  setAgendamentoSaving(false);
+                                }
+                              }}
+                              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                            >
+                              {labels[day]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                      <div>
+                        <p className="font-black text-gray-900 text-sm uppercase">Excluir feriados</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Feriados brasileiros não aparecerão como opção de agendamento</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const next = !agendamentoConfig?.excludeHolidays;
+                          setAgendamentoConfig(prev => prev ? { ...prev, excludeHolidays: next } : null);
+                          setAgendamentoSaving(true);
+                          try {
+                            const updated = await agendamentoService.updateConfig({ excludeHolidays: next });
+                            setAgendamentoConfig(updated);
+                            showToast(next ? 'Feriados excluídos dos horários.' : 'Feriados incluídos nos horários.', 'success');
+                          } catch (e: any) {
+                            showToast(e?.message || 'Erro ao salvar.', 'error');
+                          } finally {
+                            setAgendamentoSaving(false);
+                          }
+                        }}
+                        className={`relative w-14 h-8 rounded-full transition-all ${agendamentoConfig?.excludeHolidays !== false ? 'bg-emerald-600' : 'bg-gray-300'}`}
+                      >
+                        <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-all ${agendamentoConfig?.excludeHolidays !== false ? 'left-7' : 'left-1'}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Horário início (Brasília)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="time"
+                          value={agendamentoConfig?.startTime || '09:00'}
+                          onChange={(e) => setAgendamentoConfig(prev => prev ? { ...prev, startTime: e.target.value } : null)}
+                          onBlur={async () => {
+                            if (agendamentoConfig && (agendamentoConfig.startTime || agendamentoConfig.endTime)) {
+                              setAgendamentoSaving(true);
+                              try {
+                                const updated = await agendamentoService.updateConfig({
+                                  startTime: agendamentoConfig.startTime,
+                                  endTime: agendamentoConfig.endTime
+                                });
+                                setAgendamentoConfig(updated);
+                                showToast('Horários salvos!', 'success');
+                              } catch (e: any) {
+                                showToast(e?.message || 'Erro ao salvar.', 'error');
+                              } finally {
+                                setAgendamentoSaving(false);
+                              }
+                            }
+                          }}
+                          className="flex-1 px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Horário fim (Brasília)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="time"
+                          value={agendamentoConfig?.endTime || '18:00'}
+                          onChange={(e) => setAgendamentoConfig(prev => prev ? { ...prev, endTime: e.target.value } : null)}
+                          onBlur={async () => {
+                            if (agendamentoConfig && (agendamentoConfig.startTime || agendamentoConfig.endTime)) {
+                              setAgendamentoSaving(true);
+                              try {
+                                const updated = await agendamentoService.updateConfig({
+                                  startTime: agendamentoConfig.startTime,
+                                  endTime: agendamentoConfig.endTime
+                                });
+                                setAgendamentoConfig(updated);
+                                showToast('Horários salvos!', 'success');
+                              } catch (e: any) {
+                                showToast(e?.message || 'Erro ao salvar.', 'error');
+                              } finally {
+                                setAgendamentoSaving(false);
+                              }
+                            }
+                          }}
+                          className="flex-1 px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
+                        />
+                      </div>
+                    </div> 
+                  </div>
+
+                  <p className="text-[10px] text-gray-400">
+                    A IA buscará horários disponíveis no Google Calendar dentro deste intervalo. Ao agendar, o lead informará nome, e-mail e telefone.
+                  </p>
                 </div>
               </div>
             )}
@@ -1035,304 +1706,93 @@ const Settings: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 'agendamento' && (
-              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
-                <div className="flex items-center gap-4 mb-8 pb-8 border-b border-gray-100">
-                  <div className="p-3 bg-emerald-50 rounded-2xl">
-                    <Clock size={24} className="text-emerald-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Agendamento via IA</h3>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Horário de Brasília • Google Calendar</p>
-                  </div>
-                </div>
-
-                {!agendamentoConfig?.googleConnected && (
-                  <div className="p-6 bg-amber-50 border border-amber-200 rounded-[24px] flex items-start gap-4">
-                    <AlertCircle size={24} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="font-black text-amber-800 text-sm uppercase">Conecte o Google Calendar</h4>
-                      <p className="text-sm text-amber-700 mt-1">
-                        Para ativar o agendamento automático pela IA, é necessário conectar sua conta Google.
-                        A IA irá buscar horários disponíveis no seu calendário e criar eventos automaticamente.
-                      </p>
-                      <button
-                        onClick={handleGoogleConnect}
-                        className="mt-4 px-4 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 transition-all"
-                      >
-                        Conectar Google
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                    <div>
-                      <p className="font-black text-gray-900 text-sm uppercase">Ativar agendamento</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">A IA poderá buscar horários e criar agendamentos no Google Calendar</p>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        const next = !agendamentoConfig?.enabled;
-                        if (next && !agendamentoConfig?.canEnable) {
-                          setShowGoogleConnectModal(true);
-                          return;
-                        }
-                        setAgendamentoSaving(true);
-                        try {
-                          const updated = await agendamentoService.updateConfig({ enabled: next });
-                          setAgendamentoConfig(updated);
-                          showToast(next ? 'Agendamento ativado!' : 'Agendamento desativado.', 'success');
-                        } catch (e: any) {
-                          showToast(e?.message || 'Erro ao salvar.', 'error');
-                        } finally {
-                          setAgendamentoSaving(false);
-                        }
-                      }}
-                      className={`relative w-14 h-8 rounded-full transition-all cursor-pointer ${agendamentoConfig?.enabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
-                    >
-                      <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-all ${agendamentoConfig?.enabled ? 'left-7' : 'left-1'}`} />
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 block mb-2">Dias de atendimento</label>
-                      <p className="text-[10px] text-gray-400 mb-2">Selecione os dias em que a empresa atende (ex: sem fins de semana)</p>
-                      <div className="flex flex-wrap gap-2">
-                        {['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'].map((day) => {
-                          const labels: Record<string, string> = { MONDAY: 'Seg', TUESDAY: 'Ter', WEDNESDAY: 'Qua', THURSDAY: 'Qui', FRIDAY: 'Sex', SATURDAY: 'Sáb', SUNDAY: 'Dom' };
-                          const selected = (agendamentoConfig?.attendanceDays || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']).includes(day);
-                          return (
-                            <button
-                              key={day}
-                              type="button"
-                              onClick={async () => {
-                                const current = agendamentoConfig?.attendanceDays || ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
-                                const next = selected ? current.filter(d => d !== day) : [...current, day];
-                                if (next.length === 0) return;
-                                setAgendamentoConfig(prev => prev ? { ...prev, attendanceDays: next } : null);
-                                setAgendamentoSaving(true);
-                                try {
-                                  const updated = await agendamentoService.updateConfig({ attendanceDays: next });
-                                  setAgendamentoConfig(updated);
-                                  showToast('Dias salvos!', 'success');
-                                } catch (e: any) {
-                                  showToast(e?.message || 'Erro ao salvar.', 'error');
-                                } finally {
-                                  setAgendamentoSaving(false);
-                                }
-                              }}
-                              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-                            >
-                              {labels[day]}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                      <div>
-                        <p className="font-black text-gray-900 text-sm uppercase">Excluir feriados</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">Feriados brasileiros não aparecerão como opção de agendamento</p>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          const next = !agendamentoConfig?.excludeHolidays;
-                          setAgendamentoConfig(prev => prev ? { ...prev, excludeHolidays: next } : null);
-                          setAgendamentoSaving(true);
-                          try {
-                            const updated = await agendamentoService.updateConfig({ excludeHolidays: next });
-                            setAgendamentoConfig(updated);
-                            showToast(next ? 'Feriados excluídos dos horários.' : 'Feriados incluídos nos horários.', 'success');
-                          } catch (e: any) {
-                            showToast(e?.message || 'Erro ao salvar.', 'error');
-                          } finally {
-                            setAgendamentoSaving(false);
-                          }
-                        }}
-                        className={`relative w-14 h-8 rounded-full transition-all ${agendamentoConfig?.excludeHolidays !== false ? 'bg-emerald-600' : 'bg-gray-300'}`}
-                      >
-                        <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-all ${agendamentoConfig?.excludeHolidays !== false ? 'left-7' : 'left-1'}`} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Horário início (Brasília)</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="time"
-                          value={agendamentoConfig?.startTime || '09:00'}
-                          onChange={(e) => setAgendamentoConfig(prev => prev ? { ...prev, startTime: e.target.value } : null)}
-                          onBlur={async () => {
-                            if (agendamentoConfig && (agendamentoConfig.startTime || agendamentoConfig.endTime)) {
-                              setAgendamentoSaving(true);
-                              try {
-                                const updated = await agendamentoService.updateConfig({
-                                  startTime: agendamentoConfig.startTime,
-                                  endTime: agendamentoConfig.endTime
-                                });
-                                setAgendamentoConfig(updated);
-                                showToast('Horários salvos!', 'success');
-                              } catch (e: any) {
-                                showToast(e?.message || 'Erro ao salvar.', 'error');
-                              } finally {
-                                setAgendamentoSaving(false);
-                              }
-                            }
-                          }}
-                          className="flex-1 px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Horário fim (Brasília)</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="time"
-                          value={agendamentoConfig?.endTime || '18:00'}
-                          onChange={(e) => setAgendamentoConfig(prev => prev ? { ...prev, endTime: e.target.value } : null)}
-                          onBlur={async () => {
-                            if (agendamentoConfig && (agendamentoConfig.startTime || agendamentoConfig.endTime)) {
-                              setAgendamentoSaving(true);
-                              try {
-                                const updated = await agendamentoService.updateConfig({
-                                  startTime: agendamentoConfig.startTime,
-                                  endTime: agendamentoConfig.endTime
-                                });
-                                setAgendamentoConfig(updated);
-                                showToast('Horários salvos!', 'success');
-                              } catch (e: any) {
-                                showToast(e?.message || 'Erro ao salvar.', 'error');
-                              } finally {
-                                setAgendamentoSaving(false);
-                              }
-                            }
-                          }}
-                          className="flex-1 px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm"
-                        />
-                      </div>
-                    </div> 
-                  </div>
-
-                  <p className="text-[10px] text-gray-400">
-                    A IA buscará horários disponíveis no Google Calendar dentro deste intervalo. Ao agendar, o lead informará nome, e-mail e telefone.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'integrations' && (
-              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
-                <div className="grid grid-cols-1 gap-4">
-                  {[
-                    {
-                      id: 'whatsapp',
-                      name: 'Agente SDR (WhatsApp)',
-                      status: whatsappConnected ? 'connected' : 'disconnected',
-                      desc: 'Conecte seu WhatsApp para ativar a qualificação automática.',
-                      icon: Smartphone,
-                      action: 'Conectar via QR Code',
-                      color: whatsappConnected ? 'text-emerald-600 bg-emerald-100' : 'text-gray-400 bg-gray-100'
-                    },
-                    {
-                      id: 'calendar',
-                      name: 'Google Calendar',
-                      status: googleConnected ? 'connected' : 'disconnected',
-                      desc: 'Sincronização de reuniões agendadas pela IA.',
-                      icon: Globe,
-                      action: 'Conectar OAuth',
-                      color: googleConnected ? 'text-blue-600 bg-blue-100' : 'text-gray-400 bg-gray-100'
-                    },
-                    {
-                      id: 'meta',
-                      name: 'Meta Ads (Facebook/Instagram)',
-                      status: metaConnected ? 'connected' : 'disconnected',
-                      desc: 'Tráfego pago, Leads e Instagram Social Growth.',
-                      icon: Facebook,
-                      action: 'Conectar OAuth',
-                      color: metaConnected ? 'text-blue-500 bg-blue-50' : 'text-gray-400 bg-gray-100'
-                    },
-                    {
-                      id: 'google_ads',
-                      name: 'Google Ads',
-                      status: googleAdsConnected ? 'connected' : 'disconnected',
-                      desc: 'Métricas na tela Tráfego Pago. Depois de conectar, escolha a conta na aba Google Ads.',
-                      icon: BarChart2,
-                      action: 'Conectar OAuth',
-                      color: googleAdsConnected ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 bg-gray-100'
-                    }
-                  ].map((item) => (
-                    <div key={item.id} className="p-6 bg-gray-50 rounded-[32px] border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group hover:bg-white hover:shadow-xl transition-all">
-                      <div className="flex items-center gap-5">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.color}`}>
-                          <item.icon size={24} />
-                        </div>
-                        <div>
-                          <h4 className="font-black text-gray-900 text-sm tracking-tight uppercase">{item.name}</h4>
-                          <p className="text-[11px] text-gray-400 font-medium">{item.desc}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {/* Ver Detalhes button for Meta when connected */}
-                        {item.id === 'meta' && item.status === 'connected' && (
-                          <button
-                            onClick={() => setShowMetaDetails(true)}
-                            className="px-4 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-blue-100"
-                          >
-                            Ver Detalhes
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            if (item.id === 'whatsapp') {
-                              if (item.status === 'connected') {
-                                handleWhatsAppDisconnect();
-                              } else {
-                                handleWhatsAppConnect();
-                              }
-                            } else if (item.id === 'calendar') {
-                              if (item.status === 'connected') {
-                                handleGoogleDisconnect();
-                              } else {
-                                handleGoogleConnect();
-                              }
-                            } else if (item.id === 'meta') {
-                              if (item.status === 'connected') {
-                                handleMetaDisconnect();
-                              } else {
-                                handleMetaConnect();
-                              }
-                            } else if (item.id === 'google_ads') {
-                              if (item.status === 'connected') {
-                                handleGoogleAdsDisconnect();
-                              } else {
-                                handleGoogleAdsConnect();
-                              }
-                            }
-                          }}
-                          disabled={item.id === 'whatsapp' && isConnectingWhatsapp}
-                          className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${item.status === 'connected' ? 'bg-white text-rose-500 border border-rose-100 hover:bg-rose-50' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20'
-                            }`}>
-                          {item.id === 'whatsapp' && isConnectingWhatsapp ? (
-                            <RefreshCw size={14} className="animate-spin" />
-                          ) : (
-                            item.status === 'connected' ? 'Desconectar' : item.action
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showAddMember && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[10050] flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-xl rounded-[48px] shadow-2xl overflow-hidden my-auto flex flex-col max-h-[90vh]"
+            >
+              <div className="p-10 bg-[#002a1e] text-white relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowAddMember(false)}
+                  className="absolute top-8 right-8 p-2 hover:bg-white/10 rounded-full transition-all"
+                >
+                  <Plus className="rotate-45" size={24} />
+                </button>
+                <h3 className="text-3xl font-black italic tracking-tight">Adicionar Membro</h3>
+                <p className="text-emerald-50/60 text-xs font-medium uppercase tracking-widest mt-2">
+                  Convide sua equipe para a plataforma
+                </p>
+              </div>
+              <div className="p-10 space-y-6 overflow-y-auto flex-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nome Completo</label>
+                    <input
+                      type="text"
+                      value={inviteForm.invitedName}
+                      onChange={(e) => setInviteForm({ ...inviteForm, invitedName: e.target.value })}
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-sm"
+                      placeholder="Ex: Ana Silva"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Email</label>
+                    <input
+                      type="email"
+                      value={inviteForm.email}
+                      onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-sm"
+                      placeholder="ana@empresa.com"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Cargo</label>
+                    <input
+                      type="text"
+                      value={inviteForm.jobTitle}
+                      onChange={(e) => setInviteForm({ ...inviteForm, jobTitle: e.target.value })}
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-sm"
+                      placeholder="Ex: Vendedora"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nível de Permissão</label>
+                    <select
+                      value={inviteForm.role}
+                      onChange={(e) =>
+                        setInviteForm({ ...inviteForm, role: e.target.value as 'USER' | 'ADMIN' })
+                      }
+                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-sm appearance-none"
+                    >
+                      <option value="USER">Colaborador</option>
+                      <option value="ADMIN">Administrador</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={inviteSubmitting}
+                  onClick={() => void handleSendInvite()}
+                  className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 mt-4 disabled:opacity-50"
+                >
+                  {inviteSubmitting ? 'Enviando...' : 'Enviar Convite por E-mail'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* QR Code Modal */}
       {showQrModal && (

@@ -72,6 +72,9 @@ public class User implements UserDetails {
     @Column(name = "phone")
     private String phone;
 
+    @Column(name = "job_title")
+    private String jobTitle;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;

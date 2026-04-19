@@ -34,6 +34,7 @@ public class AuthResponse {
         private CompanyDTO company;
         private String avatarUrl;
         private String phone;
+        private String jobTitle;
     }
 
     @Data

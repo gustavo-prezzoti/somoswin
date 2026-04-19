@@ -2,6 +2,7 @@ package com.backend.winai.controller;
 
 import com.backend.winai.dto.request.*;
 import com.backend.winai.dto.response.AuthResponse;
+import com.backend.winai.dto.response.InvitationPreviewResponse;
 import com.backend.winai.dto.response.MessageResponse;
 import com.backend.winai.dto.response.SessionStatusResponse;
 import com.backend.winai.service.AuthService;
@@ -93,5 +94,23 @@ public class AuthController {
     public ResponseEntity<MessageResponse> logout(@RequestBody RefreshTokenRequest request) {
         authService.logout(request.getRefreshToken());
         return ResponseEntity.ok(MessageResponse.success("Logout realizado com sucesso"));
+    }
+
+    /**
+     * GET /api/v1/auth/invitation/{token}
+     * Dados públicos do convite (para a tela de aceite).
+     */
+    @GetMapping("/invitation/{token}")
+    public ResponseEntity<InvitationPreviewResponse> invitationPreview(@PathVariable String token) {
+        return ResponseEntity.ok(authService.getInvitationPreview(token));
+    }
+
+    /**
+     * POST /api/v1/auth/accept-invitation
+     * Aceita convite e cria sessão (JWT).
+     */
+    @PostMapping("/accept-invitation")
+    public ResponseEntity<AuthResponse> acceptInvitation(@Valid @RequestBody AcceptInvitationRequest request) {
+        return ResponseEntity.ok(authService.acceptInvitation(request));
     }
 }

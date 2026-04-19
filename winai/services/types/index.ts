@@ -32,6 +32,7 @@ export interface UserDTO {
     company: CompanyDTO | null;
     avatarUrl?: string | null;
     phone?: string | null;
+    jobTitle?: string | null;
     mustChangePassword?: boolean;
 }
 
@@ -40,6 +41,41 @@ export interface CompanyDTO {
     name: string;
     segment: string;
     plan: PlanType;
+}
+
+/** GET/PATCH /company/profile — dados do negócio */
+export interface CompanyProfileDTO {
+    id: string;
+    name: string;
+    segment: string;
+    website: string | null;
+    instagramHandle: string | null;
+    revenueRange: string | null;
+    teamSize: string | null;
+    cityState: string | null;
+    whatsapp: string | null;
+    leadVolume: string | null;
+}
+
+export interface CompanyMemberDTO {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    jobTitle: string | null;
+    isActive: boolean;
+    avatarUrl: string | null;
+}
+
+export interface AccessInvitationDTO {
+    id: string;
+    email: string;
+    invitedName: string | null;
+    jobTitle: string | null;
+    role: string;
+    status: string;
+    createdAt: string;
+    expiresAt: string;
 }
 
 export type UserRole = 'ADMIN' | 'MANAGER' | 'USER';

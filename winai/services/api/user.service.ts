@@ -23,7 +23,7 @@ export const userService = {
     /**
      * Atualiza o perfil do usuário
      */
-    async updateProfile(data: { name?: string; email?: string; phone?: string }): Promise<UserDTO> {
+    async updateProfile(data: { name?: string; email?: string; phone?: string; jobTitle?: string }): Promise<UserDTO> {
         const user = await httpClient.put<UserDTO>('/user/me', data);
 
         // Atualiza o usuário no storage
