@@ -1246,7 +1246,6 @@ const Campaigns: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
 
       <BodyPortal>
       {/* Modal Wizard for Campaign Creation */}
