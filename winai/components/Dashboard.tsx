@@ -18,6 +18,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { BodyPortal } from './ui/BodyPortal';
 import {
   Tooltip,
   ResponsiveContainer,
@@ -689,59 +690,61 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <AnimatePresence>
-        {isEditingGoal && (
-          <div className="fixed inset-0 z-[10050] overflow-y-auto min-h-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[40px] w-full max-w-md shadow-2xl border border-gray-100 relative my-auto flex flex-col max-h-[90vh] overflow-hidden"
-            >
-              <div className="p-8 border-b border-gray-50 shrink-0">
-                <h3 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Ajustar faturamento</h3>
-                <p className="text-xs text-gray-500 mt-2">Persistido como meta REVENUE no backend (PostgreSQL).</p>
-              </div>
-              <div className="p-8 space-y-6 overflow-y-auto flex-1">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Faturamento atual (R$)</label>
-                  <input
-                    type="number"
-                    value={tempRevenue}
-                    onChange={(e) => setTempRevenue(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  />
+      <BodyPortal>
+        <AnimatePresence>
+          {isEditingGoal && (
+            <div className="fixed inset-0 z-[10050] overflow-y-auto min-h-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-white rounded-[40px] w-full max-w-md shadow-2xl border border-gray-100 relative my-auto flex flex-col max-h-[90vh] overflow-hidden"
+              >
+                <div className="p-8 border-b border-gray-50 shrink-0">
+                  <h3 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Ajustar faturamento</h3>
+                  <p className="text-xs text-gray-500 mt-2">Persistido como meta REVENUE no backend (PostgreSQL).</p>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Meta de faturamento (R$)</label>
-                  <input
-                    type="number"
-                    value={tempGoal}
-                    onChange={(e) => setTempGoal(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  />
+                <div className="p-8 space-y-6 overflow-y-auto flex-1">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Faturamento atual (R$)</label>
+                    <input
+                      type="number"
+                      value={tempRevenue}
+                      onChange={(e) => setTempRevenue(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Meta de faturamento (R$)</label>
+                    <input
+                      type="number"
+                      value={tempGoal}
+                      onChange={(e) => setTempGoal(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingGoal(false)}
+                      className="flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-gray-50 transition-all border border-gray-100"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveMetrics}
+                      className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
+                    >
+                      Salvar
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingGoal(false)}
-                    className="flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-gray-50 transition-all border border-gray-100"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveMetrics}
-                    className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
-                  >
-                    Salvar
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </BodyPortal>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
