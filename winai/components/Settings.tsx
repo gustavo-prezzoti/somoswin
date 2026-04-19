@@ -80,6 +80,8 @@ const Settings: React.FC = () => {
     jobTitle: '',
     role: 'USER' as 'USER' | 'ADMIN'
   });
+  /** Só o primeiro usuário da empresa (dono) vê Plano & Faturamento; usado também em permissões de equipe. */
+  const [isBillingOwnerFlag, setIsBillingOwnerFlag] = useState<boolean | null>(null);
 
   const isCompanyAdmin = user?.role === 'ADMIN';
   /** Convites, revogar e remoção: pagante ou ADMIN (SUPER_ADMIN incluído). */
@@ -110,8 +112,6 @@ const Settings: React.FC = () => {
   const [agendamentoConfig, setAgendamentoConfig] = useState<AgendamentoConfig | null>(null);
   const [agendamentoSaving, setAgendamentoSaving] = useState(false);
   const [showGoogleConnectModal, setShowGoogleConnectModal] = useState(false);
-  /** Só o primeiro usuário da empresa (dono) vê Plano & Faturamento */
-  const [isBillingOwnerFlag, setIsBillingOwnerFlag] = useState<boolean | null>(null);
 
   // States for ConfirmModal
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
