@@ -8,6 +8,7 @@ import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import AudioPlayer from './ui/AudioPlayer';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
+import { BodyPortal } from './ui/BodyPortal';
 
 const WhatsApp: React.FC = () => {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
@@ -957,6 +958,7 @@ const WhatsApp: React.FC = () => {
   }
 
   return (
+    <>
     <div className="h-[calc(100vh-140px)] flex bg-white rounded-[32px] border border-gray-100 shadow-xl overflow-hidden">
 
       {/* Sidebar - Lista de Contatos */}
@@ -1433,6 +1435,9 @@ const WhatsApp: React.FC = () => {
           </div>
         </div>
       )}
+    </div>
+
+    <BodyPortal>
       {/* Modal de Confirmação - Limpar Chat */}
       {showClearChatModal && (
         <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto min-h-0">
@@ -1482,13 +1487,6 @@ const WhatsApp: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Toast Container */}
-      <div className="fixed bottom-6 right-6 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
-        {toasts.map((toast) => (
-          <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
-        ))}
-      </div>
 
       {/* Modal de Confirmação - Excluir Lead */}
       {showDeleteLeadModal && (
@@ -1558,7 +1556,14 @@ const WhatsApp: React.FC = () => {
           </div>
         </div>
       )}
+    </BodyPortal>
+
+    <div className="fixed bottom-6 right-6 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
+      {toasts.map((toast) => (
+        <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
+      ))}
     </div>
+    </>
   );
 };
 
