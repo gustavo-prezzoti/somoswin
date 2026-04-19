@@ -41,8 +41,7 @@ const AdminConsultancyLayout: React.FC = () => {
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Consultoria estratégica</h1>
         <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-          Operações por empresa (pedidos, gravações e transcrições) e aparência global do app do cliente (textos e foto do
-          consultor para todas as empresas).
+          Pedidos de call e links Meet; textos e foto do consultor no app ficam em <strong>Aparência global</strong>.
         </p>
       </div>
 

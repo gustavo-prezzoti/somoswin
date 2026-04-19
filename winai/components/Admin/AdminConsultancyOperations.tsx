@@ -1,35 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import {
-  Building2,
-  Loader2,
-  Upload,
-  FileText,
-  Save,
-  Link2,
-  RefreshCw,
-  ExternalLink,
-} from 'lucide-react';
-import adminService, {
-  followUpService,
-  Company,
-  AdminConsultancyHistoryRow,
-  ConsultancyMeetingDetailAdmin,
-  ConsultancyCallRequestAdminRow,
-} from '../../services/adminService';
+import { Loader2, Save, Link2, RefreshCw, ExternalLink } from 'lucide-react';
+import { followUpService, ConsultancyCallRequestAdminRow } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 
 const AdminConsultancyOperations: React.FC = () => {
   const [auth, setAuth] = useState<boolean | null>(null);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [companyId, setCompanyId] = useState('');
-  const [meetings, setMeetings] = useState<AdminConsultancyHistoryRow[]>([]);
-  const [meetingId, setMeetingId] = useState('');
-  const [loadingList, setLoadingList] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [savingTx, setSavingTx] = useState(false);
-  const [transcription, setTranscription] = useState('');
-  const [lastDetail, setLastDetail] = useState<ConsultancyMeetingDetailAdmin | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const [requests, setRequests] = useState<ConsultancyCallRequestAdminRow[]>([]);
@@ -51,21 +27,11 @@ const AdminConsultancyOperations: React.FC = () => {
         return;
       }
       setAuth(true);
-      void loadCompanies();
       void loadAllRequests();
     } catch {
       setAuth(false);
     }
   }, []);
-
-  const loadCompanies = async () => {
-    try {
-      const data = await adminService.getAllCompanies();
-      setCompanies(data || []);
-    } catch (e) {
-      setMessage(getErrorMessage(e));
-    }
-  };
 
   const loadAllRequests = async () => {
     setLoadingRequests(true);
@@ -82,67 +48,6 @@ const AdminConsultancyOperations: React.FC = () => {
       setRequests([]);
     } finally {
       setLoadingRequests(false);
-    }
-  };
-
-  const loadMeetings = async (cid: string) => {
-    if (!cid) {
-      setMeetings([]);
-      return;
-    }
-    setLoadingList(true);
-    try {
-      const list = await followUpService.listConsultancyMeetings(cid);
-      setMeetings(list);
-      setMeetingId(list[0]?.id ?? '');
-    } catch (e) {
-      setMessage(getErrorMessage(e));
-      setMeetings([]);
-    } finally {
-      setLoadingList(false);
-    }
-  };
-
-  useEffect(() => {
-    if (companyId) {
-      void loadMeetings(companyId);
-    }
-  }, [companyId]);
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !companyId || !meetingId) return;
-    setUploading(true);
-    setMessage(null);
-    try {
-      await followUpService.uploadConsultancyRecording(companyId, meetingId, file);
-      setMessage('Gravação enviada com sucesso.');
-      await loadMeetings(companyId);
-    } catch (err) {
-      setMessage(getErrorMessage(err));
-    } finally {
-      setUploading(false);
-      e.target.value = '';
-    }
-  };
-
-  const handleSaveTranscription = async () => {
-    if (!companyId || !meetingId || !transcription.trim()) {
-      setMessage('Selecione empresa, reunião e cole a transcrição.');
-      return;
-    }
-    setSavingTx(true);
-    setMessage(null);
-    try {
-      const detail = await followUpService.saveConsultancyTranscription(companyId, meetingId, transcription.trim());
-      setLastDetail(detail);
-      setMessage('Transcrição salva e resumo GPT gerado (se a API estiver ativa).');
-      setTranscription('');
-      await loadMeetings(companyId);
-    } catch (err) {
-      setMessage(getErrorMessage(err));
-    } finally {
-      setSavingTx(false);
     }
   };
 
@@ -270,98 +175,6 @@ const AdminConsultancyOperations: React.FC = () => {
           )}
         </div>
       </section>
-
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
-        <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-          <Building2 size={18} /> Empresa (gravações e transcrições)
-        </h2>
-        <p className="text-xs text-gray-500">
-          Textos e foto do consultor no app são globais — configure em <strong>Aparência global</strong>.
-        </p>
-        <select
-          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium"
-          value={companyId}
-          onChange={(e) => {
-            setCompanyId(e.target.value);
-            setMeetingId('');
-            setLastDetail(null);
-          }}
-        >
-          <option value="">Selecione a empresa</option>
-          {companies.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
-        <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Reuniões de consultoria</h2>
-        {loadingList ? (
-          <div className="flex items-center gap-2 text-gray-500 text-sm">
-            <Loader2 className="animate-spin" size={18} /> Carregando…
-          </div>
-        ) : (
-          <select
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium"
-            value={meetingId}
-            onChange={(e) => setMeetingId(e.target.value)}
-            disabled={!companyId}
-          >
-            <option value="">Selecione uma reunião</option>
-            {meetings.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.dateLabel} — {m.typeLabel}
-              </option>
-            ))}
-          </select>
-        )}
-        <p className="text-xs text-gray-500">
-          Cadastre reuniões com tipo <strong>CONSULTANCY</strong> no calendário. O link principal da videoconferência
-          continua no agendamento; os pedidos de call usam o campo Meet na tabela acima.
-        </p>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
-        <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-          <Upload size={18} /> Gravação (vídeo/áudio)
-        </h2>
-        <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-gray-300 cursor-pointer hover:bg-gray-50 text-sm font-bold text-gray-700">
-          {uploading ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
-          {uploading ? 'Enviando…' : 'Escolher arquivo'}
-          <input type="file" className="hidden" accept="video/*,audio/*" onChange={handleUpload} disabled={!meetingId || uploading} />
-        </label>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
-        <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-          <FileText size={18} /> Transcrição + resumo GPT
-        </h2>
-        <textarea
-          className="w-full min-h-[200px] rounded-xl border border-gray-200 px-4 py-3 text-sm"
-          placeholder="Cole aqui a transcrição completa da call..."
-          value={transcription}
-          onChange={(e) => setTranscription(e.target.value)}
-          disabled={!meetingId}
-        />
-        <button
-          type="button"
-          disabled={!meetingId || savingTx}
-          onClick={() => void handleSaveTranscription()}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50"
-        >
-          {savingTx ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-          Salvar e gerar resumo
-        </button>
-        {lastDetail?.aiSummary && (
-          <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm text-emerald-900 whitespace-pre-wrap">
-            <strong>Último resumo:</strong>
-            {'\n\n'}
-            {lastDetail.aiSummary}
-          </div>
-        )}
-      </div>
     </div>
   );
 };
