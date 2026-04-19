@@ -17,4 +17,6 @@ public interface KnowledgeBaseRepository extends JpaRepository<KnowledgeBase, UU
     @Query("SELECT kb FROM KnowledgeBase kb WHERE kb.company.id = :companyId ORDER BY kb.updatedAt DESC")
     List<KnowledgeBase> findByCompanyIdOrderByUpdatedAtDesc(@Param("companyId") UUID companyId);
 
+    long countByCompany_Id(UUID companyId);
+
 }

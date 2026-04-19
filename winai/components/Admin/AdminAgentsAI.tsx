@@ -102,7 +102,12 @@ const AdminAgentsAI = () => {
         const ModalBody = () => {
             const [data, setData] = useState(currentData);
             const [isCustom, setIsCustom] = useState(!!data.agentPrompt);
-            const [compMode, setCompMode] = useState(currentCompany?.defaultSupportMode || 'HUMAN');
+            const [compMode, setCompMode] = useState<'IA' | 'HUMAN' | null>(() => {
+                const m = currentCompany?.defaultSupportMode;
+                if (m === 'IA') return 'IA';
+                if (m === 'HUMAN') return 'HUMAN';
+                return null;
+            });
 
             const toggleCompanyMode = async (mode: string) => {
                 setCompMode(mode);
@@ -134,19 +139,26 @@ const AdminAgentsAI = () => {
                     </div>
 
                     {/* Switch de Modo de Suporte da Empresa */}
-                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Bot size={14} className="text-gray-400" />
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Novos Leads iniciam com:</span>
+                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                                <Bot size={14} className="text-gray-400" />
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Novos Leads iniciam com:</span>
+                            </div>
+                            {compMode === null && (
+                                <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wide">Não definido — escolha após vincular o agente ou apague o último agente para limpar</span>
+                            )}
                         </div>
-                        <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+                        <div className="flex bg-white rounded-lg p-1 border border-gray-200 shrink-0">
                             <button
+                                type="button"
                                 onClick={() => toggleCompanyMode('IA')}
                                 className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'IA' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 IA (Auto)
                             </button>
                             <button
+                                type="button"
                                 onClick={() => toggleCompanyMode('HUMAN')}
                                 className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'HUMAN' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' : 'text-gray-400 hover:text-gray-600'}`}
                             >
@@ -365,7 +377,8 @@ const AdminAgentsAI = () => {
             onConfirm: async () => {
                 try {
                     await knowledgeBaseService.delete(id);
-                    loadBases();
+                    await loadBases();
+                    await loadCompanies();
                     showToast('Agente excluído com sucesso.');
                 } catch (error) {
                     showToast(getErrorMessage(error, 'Falha ao excluir o agente.'), 'error');

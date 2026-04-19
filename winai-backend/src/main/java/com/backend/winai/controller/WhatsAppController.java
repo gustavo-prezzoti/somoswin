@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -174,9 +175,10 @@ public class WhatsAppController {
      * Retorna o modo de suporte padrão para novos leads
      */
     @GetMapping("/settings/support-mode")
-    public ResponseEntity<Map<String, String>> getDefaultSupportMode(@AuthenticationPrincipal User user) {
-        String mode = whatsAppService.getDefaultSupportMode(user);
-        return ResponseEntity.ok(Map.of("mode", mode));
+    public ResponseEntity<Map<String, Object>> getDefaultSupportMode(@AuthenticationPrincipal User user) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("mode", whatsAppService.getDefaultSupportMode(user));
+        return ResponseEntity.ok(body);
     }
 
     /**

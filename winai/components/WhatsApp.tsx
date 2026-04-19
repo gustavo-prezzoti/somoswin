@@ -71,10 +71,12 @@ const WhatsApp: React.FC = () => {
       try {
         const { mode } = await whatsappService.getDefaultSupportMode();
         if (!cancelled) {
-          setCompanyDefaultSupportMode(mode === 'IA' ? 'IA' : 'HUMAN');
+          if (mode === 'IA') setCompanyDefaultSupportMode('IA');
+          else if (mode === 'HUMAN') setCompanyDefaultSupportMode('HUMAN');
+          else setCompanyDefaultSupportMode(null);
         }
       } catch {
-        if (!cancelled) setCompanyDefaultSupportMode('HUMAN');
+        if (!cancelled) setCompanyDefaultSupportMode(null);
       }
     })();
     return () => {

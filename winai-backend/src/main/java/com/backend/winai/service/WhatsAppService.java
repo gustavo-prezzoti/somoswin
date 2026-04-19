@@ -889,7 +889,7 @@ public class WhatsAppService {
     public String getDefaultSupportMode(User user) {
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
-        return company.getDefaultSupportMode() != null ? company.getDefaultSupportMode() : "HUMAN";
+        return company.getDefaultSupportMode();
     }
 
     /**
@@ -900,8 +900,14 @@ public class WhatsAppService {
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
+        if (mode == null || mode.isBlank()) {
+            company.setDefaultSupportMode(null);
+            companyRepository.save(company);
+            return;
+        }
+
         if (!"IA".equals(mode) && !"HUMAN".equals(mode)) {
-            throw new IllegalArgumentException("Modo inválido. Use 'IA' ou 'HUMAN'");
+            throw new IllegalArgumentException("Modo inválido. Use 'IA', 'HUMAN' ou vazio para limpar.");
         }
 
         if ("IA".equals(mode)) {

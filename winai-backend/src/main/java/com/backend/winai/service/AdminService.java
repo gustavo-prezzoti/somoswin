@@ -390,7 +390,6 @@ public class AdminService {
                 .emailContratante(request.getEmailContratante())
                 .plan(com.backend.winai.entity.UserPlan.STARTER) // Garante plano padrão
                 .status(com.backend.winai.entity.AccountStatus.ACTIVE)
-                .defaultSupportMode("HUMAN")
                 .subscriptionStatus("PENDING")
                 .subscriptionStartDate(java.time.LocalDate.now())
                 .subscriptionEndDate(java.time.LocalDate.now().plusDays(30))
@@ -493,9 +492,13 @@ public class AdminService {
         if (details.get("emailContratante") != null) {
             company.setEmailContratante((String) details.get("emailContratante"));
         }
-        if (details.get("defaultSupportMode") != null) {
-            String mode = (String) details.get("defaultSupportMode");
-            if (mode != null && "IA".equalsIgnoreCase(mode.trim())) {
+        if (details.containsKey("defaultSupportMode")) {
+            Object raw = details.get("defaultSupportMode");
+            String mode = raw == null ? null : String.valueOf(raw).trim();
+            if (mode != null && mode.isEmpty()) {
+                mode = null;
+            }
+            if (mode != null && "IA".equalsIgnoreCase(mode)) {
                 companyAiPolicy.assertMaySetDefaultSupportModeToIA(company.getId());
             }
             company.setDefaultSupportMode(mode);

@@ -94,7 +94,7 @@ export interface Company {
     planId?: string;
     planName?: string;
     createdAt?: string;
-    defaultSupportMode?: string;
+    defaultSupportMode?: string | null;
     asaasCustomerId?: string;
     asaasSubscriptionId?: string;
     subscriptionStatus?: string;
@@ -130,7 +130,7 @@ export interface UpdateCompanyRequest {
     documento?: string;
     emailContratante?: string;
     planId?: string;
-    defaultSupportMode?: string;
+    defaultSupportMode?: string | null;
     subscriptionStartDate?: string;
     subscriptionEndDate?: string;
     subscriptionStatus?: string;

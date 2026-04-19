@@ -63,9 +63,9 @@ public class Company {
     @Builder.Default
     private AccountStatus status = AccountStatus.PENDING;
 
+    /** null = sem agente configurado / não definido; "IA" ou "HUMAN" quando explícito. */
     @Column(name = "default_support_mode")
-    @Builder.Default
-    private String defaultSupportMode = "HUMAN"; // IA só após habilitar no admin
+    private String defaultSupportMode;
 
     // Asaas Integration
     @Column(name = "asaas_customer_id")

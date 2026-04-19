@@ -148,8 +148,8 @@ export const whatsappService = {
     /**
      * Obtém o modo de suporte padrão
      */
-    async getDefaultSupportMode(): Promise<{ mode: string }> {
-        return await httpClient.get<{ mode: string }>('/whatsapp/settings/support-mode');
+    async getDefaultSupportMode(): Promise<{ mode: string | null }> {
+        return await httpClient.get<{ mode: string | null }>('/whatsapp/settings/support-mode');
     },
 
     /**

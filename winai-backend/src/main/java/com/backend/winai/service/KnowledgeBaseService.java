@@ -89,9 +89,18 @@ public class KnowledgeBaseService {
     public void delete(User user, UUID id) {
         KnowledgeBase kb = repository.findById(id).orElseThrow(() -> new RuntimeException("Base não encontrada"));
         checkPermission(user, kb.getCompany());
-        // Chunks deletados em cascata ou manualmente se JPA não tratar
+        UUID companyId = kb.getCompany().getId();
+        // Remover vínculos WhatsApp → agente antes de apagar a KB (evita linhas órfãs / FK inconsistente)
+        connectionRepository.deleteByKnowledgeBase(kb);
         chunkRepository.deleteByKnowledgeBase(kb);
         repository.delete(kb);
+        // Último agente removido: modo padrão da empresa volta a não definido (null), não "HUMAN" fictício
+        if (repository.countByCompany_Id(companyId) == 0) {
+            companyRepository.findById(companyId).ifPresent(c -> {
+                c.setDefaultSupportMode(null);
+                companyRepository.save(c);
+            });
+        }
     }
 
     public List<UserWhatsAppConnection> findConnections(User user, UUID kbId) {
