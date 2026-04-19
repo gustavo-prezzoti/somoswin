@@ -84,6 +84,12 @@ services:
       # App URLs
       - APP_FRONTEND_URL=${FRONTEND_URL}
 
+      # SMTP (convites / e-mail) — defina MAIL_* no .env do host ou nas variáveis do servidor
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+
       # UaZap (WhatsApp)
       - UAZAP_DEFAULT_BASE_URL=${UAZAP_BASE_URL}
       - UAZAP_DEFAULT_TOKEN=${UAZAP_TOKEN}

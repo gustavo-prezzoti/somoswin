@@ -49,11 +49,23 @@ public final class DotEnvLoader {
             dir = parent;
         }
 
-        log.warn(
-                "Nenhum .env carregado (tentativas: {}). cwd={}. Defina MAIL_HOST no ambiente ou -DMAIL_HOST=...",
-                tried.size(),
-                cwd);
+        if (mailHostFromEnvironment()) {
+            log.debug(
+                    "Nenhum arquivo .env (tentativas: {}); MAIL_HOST já vem do ambiente (Docker/CI). cwd={}",
+                    tried.size(),
+                    cwd);
+        } else {
+            log.warn(
+                    "Nenhum .env carregado (tentativas: {}). cwd={}. Defina MAIL_HOST no ambiente ou -DMAIL_HOST=...",
+                    tried.size(),
+                    cwd);
+        }
         syncSpringMailFromMailKeys();
+    }
+
+    private static boolean mailHostFromEnvironment() {
+        String h = firstNonBlank(System.getenv("MAIL_HOST"), System.getenv("SPRING_MAIL_HOST"));
+        return h != null && !h.isBlank();
     }
 
     private static boolean tryLoadEnvFile(Path envFile, Set<Path> tried) {
