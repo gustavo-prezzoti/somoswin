@@ -357,19 +357,22 @@ export const followUpService = {
         await httpClient.delete(`/admin/followup/status/${conversationId}`);
     },
 
-    getConsultancyClientAppearance: async (companyId: string): Promise<ConsultancyClientAppearanceAdmin> => {
-        return await httpClient.get<ConsultancyClientAppearanceAdmin>(
-            `/admin/consultancy/companies/${companyId}/client-appearance`
-        );
+    getConsultancyGlobalAppearance: async (): Promise<ConsultancyClientAppearanceAdmin> => {
+        return await httpClient.get<ConsultancyClientAppearanceAdmin>(`/admin/consultancy/global-appearance`);
     },
 
-    patchConsultancyClientAppearance: async (
-        companyId: string,
+    patchConsultancyGlobalAppearance: async (
         body: ConsultancyClientAppearancePatch
     ): Promise<ConsultancyClientAppearanceAdmin> => {
-        return await httpClient.patch<ConsultancyClientAppearanceAdmin>(
-            `/admin/consultancy/companies/${companyId}/client-appearance`,
-            body
+        return await httpClient.patch<ConsultancyClientAppearanceAdmin>(`/admin/consultancy/global-appearance`, body);
+    },
+
+    uploadConsultancyConsultantAvatar: async (file: File): Promise<ConsultancyClientAppearanceAdmin> => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return await httpClient.post<ConsultancyClientAppearanceAdmin>(
+            `/admin/consultancy/global-appearance/avatar`,
+            fd
         );
     },
 
@@ -410,15 +413,6 @@ export const followUpService = {
         );
     },
 
-    patchConsultantProfile: async (
-        companyId: string,
-        body: { displayName?: string; role?: string; avatarUrl?: string }
-    ): Promise<ConsultantProfileAdmin> => {
-        return await httpClient.patch<ConsultantProfileAdmin>(
-            `/admin/consultancy/companies/${companyId}/consultant-profile`,
-            body
-        );
-    }
 };
 
 export interface ConsultancyPageCopyAdmin {
@@ -438,7 +432,6 @@ export interface ConsultancyClientAppearanceAdmin {
 export interface ConsultancyClientAppearancePatch {
     displayName?: string;
     role?: string;
-    avatarUrl?: string;
     kicker?: string;
     headlinePrefix?: string;
     headlineAccent?: string;

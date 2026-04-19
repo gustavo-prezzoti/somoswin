@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Building2,
@@ -6,8 +6,6 @@ import {
   Upload,
   FileText,
   Save,
-  User,
-  LayoutTemplate,
   Link2,
   RefreshCw,
   ExternalLink,
@@ -21,7 +19,7 @@ import adminService, {
 } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 
-const AdminConsultancy: React.FC = () => {
+const AdminConsultancyOperations: React.FC = () => {
   const [auth, setAuth] = useState<boolean | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyId, setCompanyId] = useState('');
@@ -38,20 +36,6 @@ const AdminConsultancy: React.FC = () => {
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [savingRequestId, setSavingRequestId] = useState<string | null>(null);
   const [editMeetById, setEditMeetById] = useState<Record<string, string>>({});
-
-  const [appearanceLoading, setAppearanceLoading] = useState(false);
-  const [savingAppearance, setSavingAppearance] = useState(false);
-  const [appearanceForm, setAppearanceForm] = useState({
-    displayName: '',
-    role: '',
-    avatarUrl: '',
-    kicker: '',
-    headlinePrefix: '',
-    headlineAccent: '',
-    nextSectionCaption: '',
-    requestCardTitle: '',
-    requestCardDescription: '',
-  });
 
   useEffect(() => {
     const token = localStorage.getItem('win_access_token');
@@ -119,48 +103,11 @@ const AdminConsultancy: React.FC = () => {
     }
   };
 
-  const loadAppearance = useCallback(async (cid: string) => {
-    if (!cid) {
-      setAppearanceForm({
-        displayName: '',
-        role: '',
-        avatarUrl: '',
-        kicker: '',
-        headlinePrefix: '',
-        headlineAccent: '',
-        nextSectionCaption: '',
-        requestCardTitle: '',
-        requestCardDescription: '',
-      });
-      return;
-    }
-    setAppearanceLoading(true);
-    try {
-      const data = await followUpService.getConsultancyClientAppearance(cid);
-      setAppearanceForm({
-        displayName: data.consultant.displayName ?? '',
-        role: data.consultant.role ?? '',
-        avatarUrl: data.consultant.avatarUrl ?? '',
-        kicker: data.pageCopy.kicker ?? '',
-        headlinePrefix: data.pageCopy.headlinePrefix ?? '',
-        headlineAccent: data.pageCopy.headlineAccent ?? '',
-        nextSectionCaption: data.pageCopy.nextSectionCaption ?? '',
-        requestCardTitle: data.pageCopy.requestCardTitle ?? '',
-        requestCardDescription: data.pageCopy.requestCardDescription ?? '',
-      });
-    } catch (e) {
-      setMessage(getErrorMessage(e));
-    } finally {
-      setAppearanceLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     if (companyId) {
       void loadMeetings(companyId);
-      void loadAppearance(companyId);
     }
-  }, [companyId, loadAppearance]);
+  }, [companyId]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -199,30 +146,6 @@ const AdminConsultancy: React.FC = () => {
     }
   };
 
-  const handleSaveAppearance = async () => {
-    if (!companyId) return;
-    setSavingAppearance(true);
-    setMessage(null);
-    try {
-      await followUpService.patchConsultancyClientAppearance(companyId, {
-        displayName: appearanceForm.displayName || undefined,
-        role: appearanceForm.role || undefined,
-        avatarUrl: appearanceForm.avatarUrl || undefined,
-        kicker: appearanceForm.kicker || undefined,
-        headlinePrefix: appearanceForm.headlinePrefix || undefined,
-        headlineAccent: appearanceForm.headlineAccent || undefined,
-        nextSectionCaption: appearanceForm.nextSectionCaption || undefined,
-        requestCardTitle: appearanceForm.requestCardTitle || undefined,
-        requestCardDescription: appearanceForm.requestCardDescription || undefined,
-      });
-      setMessage('Aparência da consultoria salva.');
-    } catch (err) {
-      setMessage(getErrorMessage(err));
-    } finally {
-      setSavingAppearance(false);
-    }
-  };
-
   const handleSaveMeetLink = async (row: ConsultancyCallRequestAdminRow) => {
     const link = (editMeetById[row.id] ?? '').trim();
     setSavingRequestId(row.id);
@@ -251,14 +174,7 @@ const AdminConsultancy: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 p-4 sm:p-6 pb-16">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Consultoria estratégica</h1>
-        <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-          Pedidos de call, links Meet, textos da tela do cliente e gravações/transcrições por empresa.
-        </p>
-      </div>
-
+    <div className="space-y-8">
       {message && (
         <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800">{message}</div>
       )}
@@ -359,6 +275,9 @@ const AdminConsultancy: React.FC = () => {
         <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
           <Building2 size={18} /> Empresa (gravações e transcrições)
         </h2>
+        <p className="text-xs text-gray-500">
+          Textos e foto do consultor no app são globais — configure em <strong>Aparência global</strong>.
+        </p>
         <select
           className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-medium"
           value={companyId}
@@ -375,110 +294,6 @@ const AdminConsultancy: React.FC = () => {
             </option>
           ))}
         </select>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
-        <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-          <LayoutTemplate size={18} /> Aparência no app do cliente
-        </h2>
-        <p className="text-xs text-gray-500">
-          Textos da tela &quot;Consultoria Estratégica&quot; e dados do consultor. Valores vazios usam o padrão da
-          plataforma no app.
-        </p>
-        {appearanceLoading ? (
-          <div className="flex items-center gap-2 text-gray-500 text-sm py-6">
-            <Loader2 className="animate-spin" size={18} /> Carregando…
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="md:col-span-2 flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest">
-                <User size={14} /> Consultor
-              </div>
-              <input
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
-                placeholder="Nome exibido"
-                value={appearanceForm.displayName}
-                onChange={(e) => setAppearanceForm((f) => ({ ...f, displayName: e.target.value }))}
-                disabled={!companyId}
-              />
-              <input
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
-                placeholder="Cargo / especialidade"
-                value={appearanceForm.role}
-                onChange={(e) => setAppearanceForm((f) => ({ ...f, role: e.target.value }))}
-                disabled={!companyId}
-              />
-              <input
-                className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-2 text-sm"
-                placeholder="URL da foto (opcional)"
-                value={appearanceForm.avatarUrl}
-                onChange={(e) => setAppearanceForm((f) => ({ ...f, avatarUrl: e.target.value }))}
-                disabled={!companyId}
-              />
-              <div className="md:col-span-2 flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest pt-2">
-                <LayoutTemplate size={14} /> Textos da página
-              </div>
-              <input
-                className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-2 text-sm"
-                placeholder="Selo superior (ex.: Consultoria Estratégica)"
-                value={appearanceForm.kicker}
-                onChange={(e) => setAppearanceForm((f) => ({ ...f, kicker: e.target.value }))}
-                disabled={!companyId}
-              />
-              <input
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
-                placeholder="Título — parte antes do destaque"
-                value={appearanceForm.headlinePrefix}
-                onChange={(e) => setAppearanceForm((f) => ({ ...f, headlinePrefix: e.target.value }))}
-                disabled={!companyId}
-              />
-              <input
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm"
-                placeholder="Título — palavra em destaque (verde)"
-                value={appearanceForm.headlineAccent}
-                onChange={(e) => setAppearanceForm((f) => ({ ...f, headlineAccent: e.target.value }))}
-                disabled={!companyId}
-              />
-              <input
-                className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-2 text-sm"
-                placeholder="Legenda abaixo de &quot;Próximo encontro&quot;"
-                value={appearanceForm.nextSectionCaption}
-                onChange={(e) => setAppearanceForm((f) => ({ ...f, nextSectionCaption: e.target.value }))}
-                disabled={!companyId}
-              />
-              <input
-                className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-2 text-sm"
-                placeholder="Título do card &quot;Solicitar novo encontro&quot;"
-                value={appearanceForm.requestCardTitle}
-                onChange={(e) => setAppearanceForm((f) => ({ ...f, requestCardTitle: e.target.value }))}
-                disabled={!companyId}
-              />
-              <textarea
-                className="md:col-span-2 min-h-[80px] rounded-xl border border-gray-200 px-4 py-3 text-sm"
-                placeholder="Descrição do card de solicitação"
-                value={appearanceForm.requestCardDescription}
-                onChange={(e) => setAppearanceForm((f) => ({ ...f, requestCardDescription: e.target.value }))}
-                disabled={!companyId}
-              />
-            </div>
-            <button
-              type="button"
-              disabled={!companyId || savingAppearance}
-              onClick={() => void handleSaveAppearance()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50"
-            >
-              {savingAppearance ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-              Salvar aparência
-            </button>
-            {companyId && (
-              <p className="text-[10px] text-gray-400">
-                Empresa selecionada:{' '}
-                <span className="font-bold text-gray-600">{companies.find((c) => c.id === companyId)?.name}</span>
-              </p>
-            )}
-          </>
-        )}
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
@@ -551,4 +366,4 @@ const AdminConsultancy: React.FC = () => {
   );
 };
 
-export default AdminConsultancy;
+export default AdminConsultancyOperations;

@@ -4,6 +4,7 @@ import com.backend.winai.dto.consultancy.*;
 import com.backend.winai.entity.*;
 import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.ConsultancyCallRequestRepository;
+import com.backend.winai.repository.ConsultancyGlobalSettingsRepository;
 import com.backend.winai.repository.MeetingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -34,6 +35,7 @@ public class ConsultancyService {
     private final MeetingRepository meetingRepository;
     private final CompanyRepository companyRepository;
     private final ConsultancyCallRequestRepository consultancyCallRequestRepository;
+    private final ConsultancyGlobalSettingsRepository consultancyGlobalSettingsRepository;
     private final SupabaseStorageService supabaseStorageService;
     private final OpenAiService openAiService;
 
@@ -45,10 +47,11 @@ public class ConsultancyService {
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new IllegalStateException("Empresa não encontrada"));
 
+        ConsultancyGlobalSettings global = loadGlobalSettings();
         ConsultantProfileDto consultant = ConsultantProfileDto.builder()
-                .displayName(blankToNull(company.getConsultantDisplayName()))
-                .role(blankToNull(company.getConsultantRole()))
-                .avatarUrl(blankToNull(company.getConsultantAvatarUrl()))
+                .displayName(blankToNull(global.getConsultantDisplayName()))
+                .role(blankToNull(global.getConsultantRole()))
+                .avatarUrl(blankToNull(global.getConsultantAvatarUrl()))
                 .build();
 
         String planName = resolvePlanDisplayName(company);
@@ -75,7 +78,7 @@ public class ConsultancyService {
         return ConsultancyDashboardResponse.builder()
                 .consultant(consultant)
                 .planDisplayName(planName)
-                .pageCopy(buildPageCopyForClient(company))
+                .pageCopy(buildPageCopyForClient(global))
                 .nextMeeting(next)
                 .history(history)
                 .recentCallRequests(recentRequests)
@@ -159,9 +162,72 @@ public class ConsultancyService {
     }
 
     @Transactional(readOnly = true)
-    public ConsultancyClientAppearanceDto adminGetClientAppearance(UUID companyId) {
-        Company c = companyRepository.findById(companyId)
-                .orElseThrow(() -> new IllegalArgumentException("Empresa não encontrada"));
+    public ConsultancyClientAppearanceDto adminGetGlobalAppearance() {
+        return toAppearanceDto(loadGlobalSettings());
+    }
+
+    /**
+     * Atualiza textos da aparência global. Foto do consultor apenas via upload ({@link #adminUploadConsultantAvatar});
+     * campo avatarUrl no body é ignorado.
+     */
+    @Transactional
+    public ConsultancyClientAppearanceDto adminPatchGlobalAppearance(ConsultancyClientAppearancePatchRequest req) {
+        ConsultancyGlobalSettings g = loadGlobalSettings();
+        if (req.getDisplayName() != null) {
+            g.setConsultantDisplayName(emptyToNull(req.getDisplayName()));
+        }
+        if (req.getRole() != null) {
+            g.setConsultantRole(emptyToNull(req.getRole()));
+        }
+        if (req.getKicker() != null) {
+            g.setConsultancyClientKicker(emptyToNull(req.getKicker()));
+        }
+        if (req.getHeadlinePrefix() != null) {
+            g.setConsultancyClientHeadlinePrefix(emptyToNull(req.getHeadlinePrefix()));
+        }
+        if (req.getHeadlineAccent() != null) {
+            g.setConsultancyClientHeadlineAccent(emptyToNull(req.getHeadlineAccent()));
+        }
+        if (req.getNextSectionCaption() != null) {
+            g.setConsultancyNextSectionCaption(emptyToNull(req.getNextSectionCaption()));
+        }
+        if (req.getRequestCardTitle() != null) {
+            g.setConsultancyRequestCardTitle(emptyToNull(req.getRequestCardTitle()));
+        }
+        if (req.getRequestCardDescription() != null) {
+            g.setConsultancyRequestCardDescription(emptyToNull(req.getRequestCardDescription()));
+        }
+        consultancyGlobalSettingsRepository.save(g);
+        return toAppearanceDto(loadGlobalSettings());
+    }
+
+    @Transactional
+    public ConsultancyClientAppearanceDto adminUploadConsultantAvatar(MultipartFile file) throws Exception {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Arquivo obrigatório");
+        }
+        ConsultancyGlobalSettings g = loadGlobalSettings();
+        String orig = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar.bin";
+        String ext = orig.contains(".") ? orig.substring(orig.lastIndexOf('.')) : "";
+        if (ext.isEmpty()) {
+            ext = ".jpg";
+        }
+        String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+        String path = "global/consultant-avatar/" + UUID.randomUUID() + ext;
+        String url = supabaseStorageService.uploadFileBytes(RECORDINGS_BUCKET, path, file.getBytes(), contentType);
+        g.setConsultantAvatarUrl(url);
+        consultancyGlobalSettingsRepository.save(g);
+        return toAppearanceDto(g);
+    }
+
+    private ConsultancyGlobalSettings loadGlobalSettings() {
+        return consultancyGlobalSettingsRepository.findById(ConsultancyGlobalSettings.SINGLETON_ID)
+                .orElseGet(() -> consultancyGlobalSettingsRepository.save(ConsultancyGlobalSettings.builder()
+                        .id(ConsultancyGlobalSettings.SINGLETON_ID)
+                        .build()));
+    }
+
+    private ConsultancyClientAppearanceDto toAppearanceDto(ConsultancyGlobalSettings c) {
         return ConsultancyClientAppearanceDto.builder()
                 .consultant(ConsultantProfileDto.builder()
                         .displayName(blankToNull(c.getConsultantDisplayName()))
@@ -177,42 +243,6 @@ public class ConsultancyService {
                         .requestCardDescription(blankToNull(c.getConsultancyRequestCardDescription()))
                         .build())
                 .build();
-    }
-
-    @Transactional
-    public ConsultancyClientAppearanceDto adminPatchClientAppearance(UUID companyId,
-            ConsultancyClientAppearancePatchRequest req) {
-        Company c = companyRepository.findById(companyId)
-                .orElseThrow(() -> new IllegalArgumentException("Empresa não encontrada"));
-        if (req.getDisplayName() != null) {
-            c.setConsultantDisplayName(emptyToNull(req.getDisplayName()));
-        }
-        if (req.getRole() != null) {
-            c.setConsultantRole(emptyToNull(req.getRole()));
-        }
-        if (req.getAvatarUrl() != null) {
-            c.setConsultantAvatarUrl(emptyToNull(req.getAvatarUrl()));
-        }
-        if (req.getKicker() != null) {
-            c.setConsultancyClientKicker(emptyToNull(req.getKicker()));
-        }
-        if (req.getHeadlinePrefix() != null) {
-            c.setConsultancyClientHeadlinePrefix(emptyToNull(req.getHeadlinePrefix()));
-        }
-        if (req.getHeadlineAccent() != null) {
-            c.setConsultancyClientHeadlineAccent(emptyToNull(req.getHeadlineAccent()));
-        }
-        if (req.getNextSectionCaption() != null) {
-            c.setConsultancyNextSectionCaption(emptyToNull(req.getNextSectionCaption()));
-        }
-        if (req.getRequestCardTitle() != null) {
-            c.setConsultancyRequestCardTitle(emptyToNull(req.getRequestCardTitle()));
-        }
-        if (req.getRequestCardDescription() != null) {
-            c.setConsultancyRequestCardDescription(emptyToNull(req.getRequestCardDescription()));
-        }
-        companyRepository.save(c);
-        return adminGetClientAppearance(companyId);
     }
 
     @Transactional(readOnly = true)
@@ -247,27 +277,6 @@ public class ConsultancyService {
         ConsultancyCallRequest detailed = consultancyCallRequestRepository.findDetailedById(requestId)
                 .orElse(r);
         return toAdminCallRequestRow(detailed);
-    }
-
-    @Transactional
-    public ConsultantProfileDto adminPatchConsultantProfile(UUID companyId, ConsultantProfilePatchRequest req) {
-        Company c = companyRepository.findById(companyId)
-                .orElseThrow(() -> new IllegalArgumentException("Empresa não encontrada"));
-        if (req.getDisplayName() != null) {
-            c.setConsultantDisplayName(req.getDisplayName().trim());
-        }
-        if (req.getRole() != null) {
-            c.setConsultantRole(req.getRole().trim());
-        }
-        if (req.getAvatarUrl() != null) {
-            c.setConsultantAvatarUrl(req.getAvatarUrl().trim().isEmpty() ? null : req.getAvatarUrl().trim());
-        }
-        companyRepository.save(c);
-        return ConsultantProfileDto.builder()
-                .displayName(c.getConsultantDisplayName())
-                .role(c.getConsultantRole())
-                .avatarUrl(c.getConsultantAvatarUrl())
-                .build();
     }
 
     private Meeting loadConsultancyMeeting(UUID companyId, UUID meetingId) {
@@ -327,7 +336,7 @@ public class ConsultancyService {
                 .build();
     }
 
-    private ConsultancyPageCopyDto buildPageCopyForClient(Company c) {
+    private ConsultancyPageCopyDto buildPageCopyForClient(ConsultancyGlobalSettings c) {
         return ConsultancyPageCopyDto.builder()
                 .kicker(firstNonBlank(c.getConsultancyClientKicker(), "Consultoria Estratégica"))
                 .headlinePrefix(firstNonBlank(c.getConsultancyClientHeadlinePrefix(), "Seu Painel de "))

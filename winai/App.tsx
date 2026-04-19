@@ -51,7 +51,9 @@ import AdminCompanies from './components/Admin/AdminCompanies';
 import AdminFollowUp from './components/Admin/AdminFollowUp';
 import AdminGlobalNotifications from './components/Admin/AdminGlobalNotifications';
 import AdminTerms from './components/Admin/AdminTerms';
-import AdminConsultancy from './components/Admin/AdminConsultancy';
+import AdminConsultancyLayout from './components/Admin/AdminConsultancyLayout';
+import AdminConsultancyOperations from './components/Admin/AdminConsultancyOperations';
+import AdminConsultancyGlobalAppearance from './components/Admin/AdminConsultancyGlobalAppearance';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
@@ -636,7 +638,10 @@ const App: React.FC = () => {
           <Route path="settings" element={<AdminSettings />} />
           <Route path="notifications" element={<AdminGlobalNotifications />} />
           <Route path="terms" element={<AdminTerms />} />
-          <Route path="consultancy" element={<AdminConsultancy />} />
+          <Route path="consultancy" element={<AdminConsultancyLayout />}>
+            <Route index element={<AdminConsultancyOperations />} />
+            <Route path="aparencia" element={<AdminConsultancyGlobalAppearance />} />
+          </Route>
         </Route>
 
       </Routes>

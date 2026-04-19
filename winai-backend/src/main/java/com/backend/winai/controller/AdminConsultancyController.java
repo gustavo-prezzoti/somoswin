@@ -25,16 +25,21 @@ public class AdminConsultancyController {
 
     private final ConsultancyService consultancyService;
 
-    @GetMapping("/companies/{companyId}/client-appearance")
-    public ResponseEntity<ConsultancyClientAppearanceDto> getClientAppearance(@PathVariable UUID companyId) {
-        return ResponseEntity.ok(consultancyService.adminGetClientAppearance(companyId));
+    @GetMapping("/global-appearance")
+    public ResponseEntity<ConsultancyClientAppearanceDto> getGlobalAppearance() {
+        return ResponseEntity.ok(consultancyService.adminGetGlobalAppearance());
     }
 
-    @PatchMapping("/companies/{companyId}/client-appearance")
-    public ResponseEntity<ConsultancyClientAppearanceDto> patchClientAppearance(
-            @PathVariable UUID companyId,
+    @PatchMapping("/global-appearance")
+    public ResponseEntity<ConsultancyClientAppearanceDto> patchGlobalAppearance(
             @RequestBody ConsultancyClientAppearancePatchRequest body) {
-        return ResponseEntity.ok(consultancyService.adminPatchClientAppearance(companyId, body));
+        return ResponseEntity.ok(consultancyService.adminPatchGlobalAppearance(body));
+    }
+
+    @PostMapping(value = "/global-appearance/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ConsultancyClientAppearanceDto> uploadConsultantAvatar(@RequestPart("file") MultipartFile file)
+            throws Exception {
+        return ResponseEntity.ok(consultancyService.adminUploadConsultantAvatar(file));
     }
 
     @GetMapping("/requests")
@@ -71,10 +76,4 @@ public class AdminConsultancyController {
         return ResponseEntity.ok(consultancyService.adminSaveTranscriptionAndSummarize(companyId, meetingId, body));
     }
 
-    @PatchMapping("/companies/{companyId}/consultant-profile")
-    public ResponseEntity<ConsultantProfileDto> patchConsultantProfile(
-            @PathVariable UUID companyId,
-            @RequestBody ConsultantProfilePatchRequest body) {
-        return ResponseEntity.ok(consultancyService.adminPatchConsultantProfile(companyId, body));
-    }
 }
