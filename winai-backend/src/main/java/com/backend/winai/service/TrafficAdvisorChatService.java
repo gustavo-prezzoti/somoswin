@@ -4,10 +4,8 @@ import com.backend.winai.dto.social.*;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.TrafficAdvisorChat;
 import com.backend.winai.entity.User;
-import com.backend.winai.entity.SystemPrompt;
 import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.TrafficAdvisorChatRepository;
-import com.backend.winai.repository.SystemPromptRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +29,6 @@ public class TrafficAdvisorChatService {
     private final OpenAiService openAiService;
     private final ObjectMapper objectMapper;
     private final ChatMemoryService chatMemoryService;
-    private final SystemPromptRepository systemPromptRepository;
     private final CompanyRepository companyRepository;
 
     @Transactional(readOnly = true)
@@ -320,10 +317,7 @@ public class TrafficAdvisorChatService {
     }
 
     private String buildTrafficAdvisorSystemPrompt() {
-        // Busca o prompt mestre configurado no Admin para PAID_TRAFFIC
-        return systemPromptRepository.findByCategoryAndIsActiveTrueAndIsDefaultTrue("PAID_TRAFFIC")
-                .map(SystemPrompt::getContent)
-                .orElse(getDefaultTrafficAdvisorPrompt());
+        return getDefaultTrafficAdvisorPrompt();
     }
 
     private String getDefaultTrafficAdvisorPrompt() {
