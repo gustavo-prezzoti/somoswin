@@ -273,10 +273,12 @@ const WeeklyTasksWidget = ({
   tasks,
   onToggle,
   disabled,
+  onOpenMetas,
 }: {
   tasks: DashboardWeeklyTask[];
   onToggle: (id: number) => void;
   disabled?: boolean;
+  onOpenMetas?: () => void;
 }) => (
   <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm flex flex-col gap-6">
     <div className="flex items-center justify-between">
@@ -339,7 +341,7 @@ const WeeklyTasksWidget = ({
     </div>
     <button
       type="button"
-      onClick={() => {}}
+      onClick={() => onOpenMetas?.()}
       className="w-full py-3 border-2 border-dashed border-gray-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:border-emerald-200 hover:text-emerald-600 transition-all"
     >
       Acompanhe o plano completo em Metas
@@ -856,11 +858,6 @@ const Dashboard: React.FC = () => {
             <span>{progressPct}% concluído</span>
             <span>100%</span>
           </div>
-          {!revenue?.goalId && (
-            <p className="text-xs text-amber-700 font-medium bg-amber-50 border border-amber-100 rounded-xl px-4 py-2">
-              Nenhuma meta de faturamento (tipo REVENUE) ativa. Clique em &quot;Editar Meta&quot; para criar e passar a acompanhar no banco de dados.
-            </p>
-          )}
         </div>
       </div>
 
@@ -1028,7 +1025,12 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="lg:col-span-1">
-          <WeeklyTasksWidget tasks={tasks} onToggle={(id) => void toggleTask(id)} disabled={taskBusy} />
+          <WeeklyTasksWidget
+            tasks={tasks}
+            onToggle={(id) => void toggleTask(id)}
+            disabled={taskBusy}
+            onOpenMetas={() => navigate('/metas')}
+          />
         </div>
       </div>
 
