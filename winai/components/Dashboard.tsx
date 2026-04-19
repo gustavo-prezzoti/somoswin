@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ArrowUpRight,
   ArrowDownRight,
+  ChevronLeft,
   ChevronRight,
   Activity,
   Edit2,
@@ -39,6 +40,8 @@ import {
 import { marketingService, PaidTrafficAssetRow } from '../services/api/marketing.service';
 
 type ReportRange = '7' | '30' | '90';
+
+const EFFICIENCY_PAGE_SIZE = 8;
 
 function daysFromRange(r: ReportRange): number {
   return r === '7' ? 7 : r === '30' ? 30 : 90;
@@ -496,6 +499,24 @@ const Dashboard: React.FC = () => {
   const [tempRevenue, setTempRevenue] = useState('0');
   /** Quando preenchido, a tabela "Análise de Eficiência" usa a mesma API que Tráfego Pago (métricas por campanha na Meta). */
   const [metaEfficiencyRows, setMetaEfficiencyRows] = useState<EfficiencyTableRow[] | null>(null);
+  const [efficiencyPage, setEfficiencyPage] = useState(1);
+
+  const efficiencyTableRows = useMemo((): EfficiencyTableRow[] => {
+    if (!data) return [];
+    const campaigns = data.campaigns ?? [];
+    return metaEfficiencyRows && metaEfficiencyRows.length > 0
+      ? metaEfficiencyRows
+      : efficiencyRowsFromDashboardCampaigns(campaigns);
+  }, [data, metaEfficiencyRows]);
+
+  useEffect(() => {
+    setEfficiencyPage(1);
+  }, [reportRange]);
+
+  useEffect(() => {
+    const total = Math.max(1, Math.ceil(efficiencyTableRows.length / EFFICIENCY_PAGE_SIZE));
+    setEfficiencyPage((p) => Math.min(Math.max(1, p), total));
+  }, [efficiencyTableRows.length]);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -703,11 +724,18 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  const campaigns = data.campaigns ?? [];
-  const efficiencyTableRows: EfficiencyTableRow[] =
-    metaEfficiencyRows && metaEfficiencyRows.length > 0
-      ? metaEfficiencyRows
-      : efficiencyRowsFromDashboardCampaigns(campaigns);
+  const efficiencyTotalPages = Math.max(1, Math.ceil(efficiencyTableRows.length / EFFICIENCY_PAGE_SIZE));
+  const efficiencyPageSafe = Math.min(Math.max(1, efficiencyPage), efficiencyTotalPages);
+  const efficiencyRowsPage = efficiencyTableRows.slice(
+    (efficiencyPageSafe - 1) * EFFICIENCY_PAGE_SIZE,
+    efficiencyPageSafe * EFFICIENCY_PAGE_SIZE
+  );
+  const efficiencyRangeStart =
+    efficiencyTableRows.length === 0 ? 0 : (efficiencyPageSafe - 1) * EFFICIENCY_PAGE_SIZE + 1;
+  const efficiencyRangeEnd = Math.min(
+    efficiencyPageSafe * EFFICIENCY_PAGE_SIZE,
+    efficiencyTableRows.length
+  );
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
@@ -925,9 +953,9 @@ const Dashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {efficiencyTableRows.map((item, idx) => (
+                    {efficiencyRowsPage.map((item, idx) => (
                       <tr
-                        key={`${item.name}-${idx}`}
+                        key={`${item.name}-${(efficiencyPageSafe - 1) * EFFICIENCY_PAGE_SIZE + idx}`}
                         className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
                         onClick={() => navigate('/campanhas')}
                       >
@@ -964,9 +992,36 @@ const Dashboard: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
-                <p className="mt-3 text-[10px] text-gray-400 font-medium">
-                  &quot;—&quot; indica métrica não aplicável para o objetivo da campanha (ex.: campanhas de Engajamento/Alcance não geram leads ou ROAS).
-                </p>
+                {efficiencyTableRows.length > EFFICIENCY_PAGE_SIZE && (
+                  <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-gray-50 pt-4">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                      {efficiencyRangeStart}–{efficiencyRangeEnd} de {efficiencyTableRows.length} campanhas
+                    </p>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        aria-label="Página anterior"
+                        disabled={efficiencyPageSafe <= 1}
+                        onClick={() => setEfficiencyPage((p) => Math.max(1, p - 1))}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 text-gray-600 transition-colors hover:bg-gray-100 disabled:pointer-events-none disabled:opacity-40"
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+                      <span className="min-w-[4.5rem] text-center text-[10px] font-black text-gray-700 tabular-nums">
+                        {efficiencyPageSafe} / {efficiencyTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Próxima página"
+                        disabled={efficiencyPageSafe >= efficiencyTotalPages}
+                        onClick={() => setEfficiencyPage((p) => Math.min(efficiencyTotalPages, p + 1))}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 text-gray-600 transition-colors hover:bg-gray-100 disabled:pointer-events-none disabled:opacity-40"
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
