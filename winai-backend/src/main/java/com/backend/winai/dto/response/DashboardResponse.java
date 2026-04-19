@@ -37,6 +37,7 @@ public class DashboardResponse {
     public static class CampaignSummaryDTO {
         private String name;
         private String status;
+        private String objective;
         private Integer leads;
         private String spend;
         private String cpl;

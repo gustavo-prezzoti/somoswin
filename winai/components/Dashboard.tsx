@@ -56,40 +56,97 @@ function dateRangeForReportDays(days: number): { startDate: string; endDate: str
 /** Linhas da tabela — alinhadas ao que a tela Tráfego Pago mostra (Graph API por campanha). */
 type EfficiencyTableRow = {
   name: string;
-  leads: number;
+  objective?: string;
+  status?: string;
+  spend: string;
+  leadsLabel: string;
   cpl: string;
-  conversion: string;
   roas: string;
 };
+
+const DASH_PLACEHOLDER = '—';
+
+function fmtBRL(value: number): string {
+  return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Normaliza o objetivo do Meta para um rótulo curto em pt-BR (ENGAJAMENTO, LEADS, VENDAS, ALCANCE, TRAFEGO...). */
+function shortObjective(obj?: string): string | undefined {
+  if (!obj) return undefined;
+  const u = obj.toUpperCase();
+  if (u.includes('ENGAGEMENT') || u.includes('POST_ENGAGEMENT')) return 'ENGAJAMENTO';
+  if (u.includes('LEAD')) return 'LEADS';
+  if (u.includes('SALES') || u.includes('CONVERSION') || u.includes('PURCHASE')) return 'VENDAS';
+  if (u.includes('REACH')) return 'ALCANCE';
+  if (u.includes('TRAFFIC') || u.includes('LINK_CLICKS')) return 'TRÁFEGO';
+  if (u.includes('AWARENESS')) return 'RECONHECIMENTO';
+  if (u.includes('VIDEO')) return 'VÍDEO';
+  if (u.includes('MESSAGES')) return 'MENSAGENS';
+  if (u.includes('APP')) return 'APP';
+  return u.replace(/_/g, ' ');
+}
+
+/** Verdadeiro quando o objetivo da campanha não é otimizado para conversão/lead/venda. */
+function isNonConversionObjective(obj?: string): boolean {
+  const o = (obj || '').toUpperCase();
+  if (!o) return false;
+  return (
+    (o.includes('ENGAGEMENT') ||
+      o.includes('REACH') ||
+      o.includes('AWARENESS') ||
+      o.includes('TRAFFIC') ||
+      o.includes('VIDEO_VIEWS') ||
+      o.includes('LINK_CLICKS')) &&
+    !o.includes('LEAD') &&
+    !o.includes('CONVERSION') &&
+    !o.includes('SALES') &&
+    !o.includes('PURCHASE')
+  );
+}
 
 function efficiencyRowsFromPaidTraffic(rows: PaidTrafficAssetRow[]): EfficiencyTableRow[] {
   return rows
     .filter((r) => r.level === 'CAMPAIGN')
     .map((r) => {
       const conversions = r.conversions ?? 0;
-      const clicks = r.clicks ?? 0;
       const spend = r.spend ?? 0;
       const cplNum = r.cpl != null ? r.cpl : conversions > 0 ? spend / conversions : 0;
-      const convPct = clicks > 0 ? (conversions / clicks) * 100 : 0;
       const roasNum = r.roas ?? 0;
+      const nonConv = isNonConversionObjective(r.objective);
+      const showLeads = conversions > 0 || !nonConv;
+      const showCpl = conversions > 0;
+      const showRoas = roasNum > 0;
       return {
         name: r.name,
-        leads: conversions,
-        cpl: `R$ ${cplNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        conversion: `${convPct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`,
-        roas: `${roasNum.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}x`,
+        objective: shortObjective(r.objective),
+        status: r.status,
+        spend: spend > 0 ? fmtBRL(spend) : DASH_PLACEHOLDER,
+        leadsLabel: showLeads ? String(conversions) : DASH_PLACEHOLDER,
+        cpl: showCpl
+          ? fmtBRL(cplNum)
+          : nonConv
+          ? DASH_PLACEHOLDER
+          : 'R$ 0,00',
+        roas: showRoas
+          ? `${roasNum.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}x`
+          : DASH_PLACEHOLDER,
       };
     });
 }
 
 function efficiencyRowsFromDashboardCampaigns(campaigns: CampaignSummaryDTO[]): EfficiencyTableRow[] {
-  return campaigns.map((c) => ({
-    name: c.name,
-    leads: c.leads,
-    cpl: c.cpl,
-    conversion: c.conversion,
-    roas: c.roas,
-  }));
+  return campaigns.map((c) => {
+    const nonConv = isNonConversionObjective(c.objective);
+    return {
+      name: c.name,
+      objective: shortObjective(c.objective),
+      status: c.status,
+      spend: c.spend ?? DASH_PLACEHOLDER,
+      leadsLabel: nonConv && c.leads === 0 ? DASH_PLACEHOLDER : String(c.leads),
+      cpl: nonConv && c.leads === 0 ? DASH_PLACEHOLDER : c.cpl,
+      roas: nonConv ? DASH_PLACEHOLDER : c.roas,
+    };
+  });
 }
 
 function categoryBucket(type: string): 'Vendas' | 'Tráfego' | 'Operacional' {
@@ -596,8 +653,15 @@ const Dashboard: React.FC = () => {
       docPdf.text('2. CAMPANHAS (META)', 15, (docPdf as any).lastAutoTable.finalY + 15);
       autoTable(docPdf, {
         startY: (docPdf as any).lastAutoTable.finalY + 20,
-        head: [['Campanha', 'Leads', 'CPL', 'Conv.', 'ROAS']],
-        body: pdfCampaignRows.map((c) => [c.name, String(c.leads), c.cpl, c.conversion, c.roas]),
+        head: [['Campanha', 'Objetivo', 'Invest.', 'Leads', 'CPL', 'ROAS']],
+        body: pdfCampaignRows.map((c) => [
+          c.name,
+          c.objective ?? '—',
+          c.spend,
+          c.leadsLabel,
+          c.cpl,
+          c.roas,
+        ]),
         theme: 'grid',
         headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255] },
         styles: { fontSize: 9, cellPadding: 4 },
@@ -853,27 +917,45 @@ const Dashboard: React.FC = () => {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-gray-50">
-                      <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Canal</th>
+                      <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Campanha</th>
+                      <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Invest.</th>
                       <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Leads</th>
                       <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CPL</th>
-                      <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Conv.</th>
                       <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">ROAS</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {efficiencyTableRows.map((item, idx) => (
-                      <tr key={`${item.name}-${idx}`} className="group hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => navigate('/campanhas')}>
-                        <td className="py-4">
-                          <span className="text-xs font-bold text-gray-800">{item.name}</span>
+                      <tr
+                        key={`${item.name}-${idx}`}
+                        className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
+                        onClick={() => navigate('/campanhas')}
+                      >
+                        <td className="py-4 pr-4">
+                          <span className="text-xs font-bold text-gray-800 line-clamp-1">{item.name}</span>
+                          {(item.objective || item.status) && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1">
+                              {item.objective && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600">
+                                  {item.objective}
+                                </span>
+                              )}
+                              {item.status && item.status.toUpperCase() !== 'ACTIVE' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-gray-100 text-gray-500">
+                                  {item.status}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-4 text-center">
-                          <span className="text-xs font-black text-gray-600">{item.leads}</span>
+                          <span className="text-xs font-black text-gray-800">{item.spend}</span>
+                        </td>
+                        <td className="py-4 text-center">
+                          <span className="text-xs font-black text-gray-600">{item.leadsLabel}</span>
                         </td>
                         <td className="py-4 text-center">
                           <span className="text-xs font-black text-emerald-600">{item.cpl}</span>
-                        </td>
-                        <td className="py-4 text-center">
-                          <span className="text-xs font-black text-gray-600">{item.conversion}</span>
                         </td>
                         <td className="py-4 text-right">
                           <span className="text-xs font-black text-gray-800">{item.roas}</span>
@@ -882,6 +964,9 @@ const Dashboard: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+                <p className="mt-3 text-[10px] text-gray-400 font-medium">
+                  &quot;—&quot; indica métrica não aplicável para o objetivo da campanha (ex.: campanhas de Engajamento/Alcance não geram leads ou ROAS).
+                </p>
               </div>
             )}
           </div>

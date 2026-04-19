@@ -11,6 +11,7 @@ import { httpClient } from './http-client';
 export interface CampaignSummaryDTO {
     name: string;
     status: string;
+    objective?: string;
     leads: number;
     spend: string;
     cpl: string;

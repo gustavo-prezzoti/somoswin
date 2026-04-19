@@ -301,6 +301,7 @@ public class DashboardService {
                 return DashboardResponse.CampaignSummaryDTO.builder()
                                 .name(r.getName() != null ? r.getName() : "—")
                                 .status(r.getStatus() != null ? r.getStatus() : "UNKNOWN")
+                                .objective(r.getObjective())
                                 .leads(leads)
                                 .spend(formatCurrency(spend))
                                 .cpl(formatCurrency(cpl))
