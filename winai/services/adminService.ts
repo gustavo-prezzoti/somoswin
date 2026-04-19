@@ -1,5 +1,6 @@
 // Admin Service - API calls para o painel administrativo
 import { httpClient } from './api/http-client';
+import type { MeetingData, MeetingStatusType } from './api/meeting.service';
 
 export interface AdminStats {
     totalUsers: number;
@@ -7,6 +8,251 @@ export interface AdminStats {
     totalConversations: number;
     totalInstances: number;
     connectedInstances: number;
+}
+
+export interface AdminDashboardKpi {
+    label: string;
+    value: string;
+    subtitle: string;
+    icon: 'USERS' | 'CLOCK' | 'CALENDAR' | 'DOLLAR';
+}
+
+export interface AdminDashboardMeeting {
+    id: string;
+    title: string;
+    companyName: string;
+    meetingDate: string;
+    meetingTime: string;
+    status: string;
+}
+
+export interface AdminDashboardAlert {
+    id: string;
+    title: string;
+    message: string;
+    type: string;
+    createdAt: string;
+    read: boolean;
+}
+
+export interface AdminDashboard {
+    kpis: AdminDashboardKpi[];
+    upcomingMeetings: AdminDashboardMeeting[];
+    priorityAlerts: AdminDashboardAlert[];
+}
+
+export interface SpringPage<T> {
+    content: T[];
+    totalElements: number;
+    totalPages: number;
+    number: number;
+    size: number;
+}
+
+export interface AdminLeadRow {
+    id: string;
+    companyId: string | null;
+    companyName: string;
+    name: string;
+    email: string;
+    phone: string | null;
+    status: string;
+    statusLabel: string;
+    ownerName: string | null;
+    notes: string | null;
+    source: string | null;
+    estimatedValue: number | null;
+    leadScore: number;
+    profilePictureUrl: string | null;
+    aiSummary: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface AdminConversationRow {
+    id: string;
+    companyId: string | null;
+    companyName: string;
+    leadId: string | null;
+    leadName: string | null;
+    phoneNumber: string;
+    contactName: string | null;
+    lastMessageText: string | null;
+    lastMessageTimestamp: number | null;
+    unreadCount: number;
+    profilePictureUrl: string | null;
+    uazapInstance: string | null;
+}
+
+export interface AdminWhatsAppMessage {
+    id: string;
+    content: string;
+    fromMe: boolean;
+    messageType: string | null;
+    mediaUrl: string | null;
+    createdAt: string;
+    messageTimestamp: number | null;
+}
+
+/** Escuta Inteligente — sessão global (admin) */
+export interface AdminEscutaSession {
+    companyId: string;
+    companyName: string;
+    id: string;
+    leadId: string;
+    leadName: string;
+    title: string;
+    meetingDate: string | null;
+    meetingTime: string | null;
+    status: string;
+    statusLabel: string;
+    createdAt: string | null;
+    transcriptionFull: string | null;
+    aiSummary: string | null;
+    negotiatedValueBrl: number | null;
+}
+
+export interface AdminEscutaStartRequest {
+    companyId: string;
+    leadId: string;
+    title?: string;
+}
+
+/** Linha da agenda comercial (todas as empresas) */
+export interface AdminMeetingRow {
+    id: string;
+    companyId: string;
+    companyName: string;
+    leadId: string | null;
+    leadName: string | null;
+    title: string | null;
+    contactName: string | null;
+    contactEmail: string | null;
+    contactPhone: string | null;
+    meetingDate: string;
+    meetingTime: string;
+    durationMinutes: number | null;
+    status: string;
+    statusLabel: string;
+    meetingKind: string | null;
+    meetingLink: string | null;
+    googleEventId: string | null;
+    scheduledBy: string | null;
+    notes: string | null;
+}
+
+export interface AdminMeetingCreateBody {
+    companyId: string;
+    title?: string;
+    contactName: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    meetingDate: string;
+    meetingTime: string;
+    durationMinutes?: number;
+    notes?: string;
+    meetingLink?: string;
+    leadId?: string;
+    meetingKind?: 'STANDARD' | 'CONSULTANCY' | 'INTELLIGENT_LISTENING';
+}
+
+export interface AdminMetaAdsCompanyRow {
+    companyId: string;
+    companyName: string;
+    connected: boolean;
+    adAccountId: string | null;
+    accountName: string | null;
+    pageId: string | null;
+    instagramBusinessId: string | null;
+    campaignCount: number;
+}
+
+export interface MetaCampaignListItem {
+    id: string;
+    name: string;
+    status: string;
+    objective: string;
+    accountName: string | null;
+    accountId: string | null;
+    dailyBudget: number | null;
+    spend: number;
+    impressions: number;
+    reach: number;
+    clicks: number;
+    ctr: number;
+    conversions: number;
+    cpl: number | null;
+}
+
+export interface MetaCampaignsListResponse {
+    campaigns: MetaCampaignListItem[];
+    accountName: string | null;
+}
+
+export interface AdminGoalCompanyRow {
+    companyId: string;
+    companyName: string;
+    year: number;
+    activeGoalsCount: number;
+}
+
+export interface DashboardGoalTaskDTO {
+    id: number;
+    title: string;
+    description: string | null;
+    week: number | null;
+    level: string | null;
+    weight: number | null;
+    completed: boolean | null;
+    completedAt: string | null;
+    deadline: string | null;
+    status: string | null;
+    evidenciaObrigatoria: boolean | null;
+    evidenciaJson: string | null;
+    sortOrder: number | null;
+}
+
+export interface DashboardGoalCheckpointDTO {
+    id: number;
+    dataPrevista: string | null;
+    dataRealizada: string | null;
+    semana: number | null;
+    status: string | null;
+    analiseIaJson: string | null;
+    ajustesSugeridosJson: string | null;
+    sortOrder: number | null;
+}
+
+export interface DashboardGoalDTO {
+    id: number;
+    title: string;
+    description: string | null;
+    type: string;
+    targetValue: number | null;
+    currentValue: number | null;
+    progressPercentage: number | null;
+    status: string;
+    isHighlighted: boolean | null;
+    startDate: string | null;
+    endDate: string | null;
+    yearCycle: number | null;
+    createdAt: string | null;
+    color: string | null;
+    prazoDias: number | null;
+    scenario: string | null;
+    unit: string | null;
+    progressoResultado: number | null;
+    executionProgressPercentage: number | null;
+    expectedProgressPercentage: number | null;
+    tasks: DashboardGoalTaskDTO[];
+    checkpoints: DashboardGoalCheckpointDTO[];
+}
+
+export interface AdminGoalsForCompanyResponse {
+    companyId: string;
+    companyName: string;
+    year: number;
+    goals: DashboardGoalDTO[];
 }
 
 export interface AdminUser {
@@ -149,6 +395,10 @@ const adminService = {
         return await httpClient.get<AdminStats>('/admin/stats');
     },
 
+    getDashboard: async (): Promise<AdminDashboard> => {
+        return await httpClient.get<AdminDashboard>('/admin/dashboard');
+    },
+
     // ========== CRUD DE USUÁRIOS ==========
 
     getAllUsers: async (): Promise<AdminUser[]> => {
@@ -268,6 +518,130 @@ const adminService = {
         await httpClient.delete(`/admin/user-whatsapp-connections/${connectionId}`);
     },
 
+    // ========== CRM / ATENDIMENTO (ADMIN GLOBAL) ==========
+
+    getCrmLeads: async (params: { page?: number; size?: number; status?: string; q?: string }) => {
+        const sp = new URLSearchParams();
+        if (params.page != null) sp.set('page', String(params.page));
+        if (params.size != null) sp.set('size', String(params.size));
+        if (params.status) sp.set('status', params.status);
+        if (params.q) sp.set('q', params.q);
+        const qs = sp.toString();
+        return await httpClient.get<SpringPage<AdminLeadRow>>(`/admin/crm/leads${qs ? `?${qs}` : ''}`);
+    },
+
+    patchCrmLeadStatus: async (leadId: string, status: string) => {
+        return await httpClient.patch<AdminLeadRow>(`/admin/crm/leads/${leadId}/status`, { status });
+    },
+
+    getAtendimentoConversations: async (params: { page?: number; size?: number; companyId?: string }) => {
+        const sp = new URLSearchParams();
+        if (params.page != null) sp.set('page', String(params.page));
+        if (params.size != null) sp.set('size', String(params.size));
+        if (params.companyId) sp.set('companyId', params.companyId);
+        const qs = sp.toString();
+        return await httpClient.get<SpringPage<AdminConversationRow>>(`/admin/atendimento/conversations${qs ? `?${qs}` : ''}`);
+    },
+
+    getAtendimentoMessages: async (conversationId: string, page = 0, limit = 80) => {
+        return await httpClient.get<AdminWhatsAppMessage[]>(
+            `/admin/atendimento/conversations/${conversationId}/messages?page=${page}&limit=${limit}`
+        );
+    },
+
+    getEscutaSessions: async (params: { page?: number; size?: number; q?: string }) => {
+        const sp = new URLSearchParams();
+        if (params.page != null) sp.set('page', String(params.page));
+        if (params.size != null) sp.set('size', String(params.size));
+        if (params.q) sp.set('q', params.q);
+        const qs = sp.toString();
+        return await httpClient.get<SpringPage<AdminEscutaSession>>(`/admin/escuta/sessions${qs ? `?${qs}` : ''}`);
+    },
+
+    getEscutaSession: async (sessionId: string) => {
+        return await httpClient.get<AdminEscutaSession>(`/admin/escuta/sessions/${sessionId}`);
+    },
+
+    startEscutaSession: async (body: AdminEscutaStartRequest) => {
+        return await httpClient.post<AdminEscutaSession>('/admin/escuta/sessions', body);
+    },
+
+    uploadEscutaAudio: async (sessionId: string, file: File) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return await httpClient.post<AdminEscutaSession>(`/admin/escuta/sessions/${sessionId}/audio`, fd);
+    },
+
+    analyzeEscutaSession: async (sessionId: string) => {
+        return await httpClient.post<AdminEscutaSession>(`/admin/escuta/sessions/${sessionId}/analyze`);
+    },
+
+    completeEscutaSession: async (sessionId: string) => {
+        return await httpClient.post<AdminEscutaSession>(`/admin/escuta/sessions/${sessionId}/complete`);
+    },
+
+    deleteEscutaSession: async (sessionId: string) => {
+        await httpClient.delete(`/admin/escuta/sessions/${sessionId}`);
+    },
+
+    getMetaAdsCompanies: async (): Promise<AdminMetaAdsCompanyRow[]> => {
+        return await httpClient.get<AdminMetaAdsCompanyRow[]>('/admin/meta-ads/companies');
+    },
+
+    getMetaAdsCampaigns: async (companyId: string): Promise<MetaCampaignsListResponse> => {
+        return await httpClient.get<MetaCampaignsListResponse>(`/admin/meta-ads/companies/${companyId}/campaigns`);
+    },
+
+    syncMetaAdsCompany: async (companyId: string): Promise<{ status: string; message: string }> => {
+        return await httpClient.post<{ status: string; message: string }>(`/admin/meta-ads/companies/${companyId}/sync`);
+    },
+
+    getGoalCompanies: async (year?: number): Promise<AdminGoalCompanyRow[]> => {
+        const qs = year != null ? `?year=${year}` : '';
+        return await httpClient.get<AdminGoalCompanyRow[]>(`/admin/goals/companies${qs}`);
+    },
+
+    getGoalsForCompany: async (companyId: string, params?: { year?: number; planningMonth?: number }) => {
+        const sp = new URLSearchParams();
+        if (params?.year != null) sp.set('year', String(params.year));
+        if (params?.planningMonth != null) sp.set('planningMonth', String(params.planningMonth));
+        const q = sp.toString();
+        return await httpClient.get<AdminGoalsForCompanyResponse>(
+            `/admin/goals/companies/${companyId}${q ? `?${q}` : ''}`
+        );
+    },
+
+    // ========== AGENDA COMERCIAL (ADMIN GLOBAL) ==========
+
+    getAgendaMeetings: async (params: { start: string; end: string; companyId?: string; q?: string }) => {
+        const sp = new URLSearchParams();
+        sp.set('start', params.start);
+        sp.set('end', params.end);
+        if (params.companyId) sp.set('companyId', params.companyId);
+        if (params.q) sp.set('q', params.q);
+        return await httpClient.get<AdminMeetingRow[]>(`/admin/agenda/meetings?${sp.toString()}`);
+    },
+
+    createAgendaMeeting: async (body: AdminMeetingCreateBody): Promise<MeetingData> => {
+        return await httpClient.post<MeetingData>('/admin/agenda/meetings', body);
+    },
+
+    patchAgendaMeetingStatus: async (meetingId: string, status: MeetingStatusType): Promise<MeetingData> => {
+        return await httpClient.patch<MeetingData>(
+            `/admin/agenda/meetings/${meetingId}/status?status=${encodeURIComponent(status)}`
+        );
+    },
+
+    deleteAgendaMeeting: async (meetingId: string): Promise<void> => {
+        await httpClient.delete(`/admin/agenda/meetings/${meetingId}`);
+    },
+
+    sendWhatsAppTextFromAdmin: async (
+        companyId: string,
+        body: { phoneNumber: string; message: string; leadId?: string }
+    ) => {
+        return await httpClient.post<AdminWhatsAppMessage>(`/whatsapp/chat/send/text?companyId=${companyId}`, body);
+    },
 };
 
 export interface FollowUpStepResponse {

@@ -1,15 +1,14 @@
-/* Admin Layout - Sistema de Design Premium Industrial */
+/* Admin Layout — Amplia (escuro) */
 :root {
-  --admin-sidebar-width: 300px;
-  --admin-primary: #10b981;
-  --admin-primary-dark: #059669;
-  --admin-bg: #f8fafc;
-  --admin-surface: #ffffff;
-  --admin-text-main: #0f172a;
-  --admin-text-muted: #64748b;
-  --admin-border: #f1f5f9;
+  --admin-sidebar-width: 256px;
+  --admin-sidebar-width-narrow: 80px;
+  --admin-primary: #00ff00;
+  --admin-bg: #141414;
+  --admin-surface: #1a1a1a;
+  --admin-text-main: #fafafa;
+  --admin-text-muted: #9ca3af;
+  --admin-border: rgba(255, 255, 255, 0.06);
   --admin-radius: 2rem;
-  --admin-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
 }
 
 .admin-layout {
@@ -20,13 +19,29 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+.admin-layout--amplia .admin-content {
+  background: var(--admin-bg);
+  color: var(--admin-text-main);
+}
+
+.admin-layout--amplia .glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+}
+
 .admin-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   margin-left: var(--admin-sidebar-width);
-  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 0;
+}
+
+.admin-main--narrow {
+  margin-left: var(--admin-sidebar-width-narrow);
 }
 
 .admin-content {
@@ -71,12 +86,30 @@
   background-clip: content-box;
 }
 
-/* Responsive - HD */
-@media (max-width: 1400px) {
-  :root {
-    --admin-sidebar-width: 280px;
+/* Sidebar fixa Amplia */
+.admin-sidebar-amplia {
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 1024px) {
+  .admin-sidebar-amplia {
+    transform: translateX(-100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  .admin-sidebar-amplia.open {
+    transform: translateX(0);
+    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.25);
+  }
+
+  .admin-main,
+  .admin-main--narrow {
+    margin-left: 0;
+  }
+}
+
+/* Responsive - HD */
+@media (max-width: 1400px) {
   .admin-content {
     padding: 40px;
   }
@@ -84,10 +117,6 @@
 
 /* Responsive - Tablet/HD */
 @media (max-width: 1024px) {
-  .admin-main {
-    margin-left: 0;
-  }
-
   .admin-content {
     padding: 32px;
   }

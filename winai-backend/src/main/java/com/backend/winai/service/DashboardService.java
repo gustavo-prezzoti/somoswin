@@ -910,6 +910,19 @@ public class DashboardService {
         }
 
         /**
+         * Metas ativas do ciclo anual por empresa (painel admin).
+         */
+        @Transactional(readOnly = true)
+        public List<DashboardResponse.GoalDTO> getGoalsForCompany(Company company, Integer year, Integer planningMonth) {
+                if (company == null) {
+                        return List.of();
+                }
+                int y = year != null ? year : LocalDate.now().getYear();
+                return buildGoalDTOs(goalRepository.findByCompanyAndYearCycleAndStatusOrderByCreatedAtDesc(company,
+                                y, GoalStatus.ACTIVE), company, planningMonth);
+        }
+
+        /**
          * Atualiza uma meta existente
          */
         @Transactional

@@ -4,6 +4,8 @@ import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Meeting;
 import com.backend.winai.entity.MeetingKind;
 import com.backend.winai.entity.MeetingStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -73,4 +75,35 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
 
         List<Meeting> findByCompanyAndLead_IdAndMeetingKindOrderByCreatedAtDesc(Company company, UUID leadId,
                         MeetingKind kind);
+
+        @Query("SELECT m FROM Meeting m JOIN FETCH m.company WHERE m.meetingDate >= :start AND m.meetingDate <= :end ORDER BY m.meetingDate ASC, m.meetingTime ASC")
+        List<Meeting> findAllByMeetingDateBetweenWithCompany(@Param("start") LocalDate start,
+                        @Param("end") LocalDate end);
+
+        @Query("SELECT COUNT(m) FROM Meeting m WHERE m.meetingDate >= :start AND m.meetingDate <= :end")
+        long countByMeetingDateBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
+
+        Page<Meeting> findByMeetingKindOrderByCreatedAtDesc(MeetingKind meetingKind, Pageable pageable);
+
+        @Query(value = "SELECT m FROM Meeting m JOIN m.company c LEFT JOIN m.lead l WHERE m.meetingKind = :kind AND ("
+                        + "LOWER(m.title) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                        + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                        + "LOWER(COALESCE(l.name,'')) LIKE LOWER(CONCAT('%', :q, '%')))",
+                        countQuery = "SELECT count(m) FROM Meeting m JOIN m.company c LEFT JOIN m.lead l WHERE m.meetingKind = :kind AND ("
+                                        + "LOWER(m.title) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                                        + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                                        + "LOWER(COALESCE(l.name,'')) LIKE LOWER(CONCAT('%', :q, '%')))")
+        Page<Meeting> searchByMeetingKindAndQuery(@Param("kind") MeetingKind kind, @Param("q") String q,
+                        Pageable pageable);
+
+        /** Agenda admin: período global, filtro opcional por empresa e busca textual. */
+        @Query("SELECT m FROM Meeting m JOIN FETCH m.company c LEFT JOIN m.lead l WHERE m.meetingDate >= :start AND m.meetingDate <= :end "
+                        + "AND (:companyId IS NULL OR c.id = :companyId) "
+                        + "AND (:q IS NULL OR LOWER(m.title) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                        + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                        + "LOWER(m.contactName) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                        + "LOWER(COALESCE(l.name,'')) LIKE LOWER(CONCAT('%', :q, '%'))) "
+                        + "ORDER BY m.meetingDate ASC, m.meetingTime ASC")
+        List<Meeting> searchAdminAgenda(@Param("start") LocalDate start, @Param("end") LocalDate end,
+                        @Param("companyId") UUID companyId, @Param("q") String q);
 }

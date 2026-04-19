@@ -216,7 +216,8 @@ public class IntelligentListeningService {
         return m;
     }
 
-    private IntelligentListeningSessionResponse toResponse(Meeting m) {
+    /** Exposto para o painel admin (lista global) reutilizar o mesmo mapeamento. */
+    public IntelligentListeningSessionResponse toResponse(Meeting m) {
         UUID leadId = m.getLead() != null ? m.getLead().getId() : null;
         String leadName = m.getLead() != null ? m.getLead().getName() : m.getContactName();
         return IntelligentListeningSessionResponse.builder()

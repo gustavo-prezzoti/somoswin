@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@stomp/stompjs": "^7.2.1",
     "date-fns": "^4.1.0",
     "emoji-picker-react": "^4.17.1",

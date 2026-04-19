@@ -40,4 +40,6 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     int markAllAsReadByUser(@Param("user") User user);
 
     void deleteByUser(User user);
+
+    List<Notification> findTop12ByOrderByCreatedAtDesc();
 }

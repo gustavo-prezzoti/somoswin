@@ -1,9 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Plus, Pencil, Trash2, Lock, Unlock, User as UserIcon, Building2, Shield, Mail, Key, Search, Copy, Check } from 'lucide-react';
 import adminService, { AdminUser, CreateUserRequest, UpdateUserRequest, Company } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
+
+function roleLabel(role: string): string {
+    if (role === 'SUPER_ADMIN') return 'Super admin';
+    if (role === 'ADMIN') return 'Administrador';
+    return 'Usuário';
+}
+
+function roleBadgeClass(role: string): string {
+    if (role === 'SUPER_ADMIN') return 'bg-[#00FF00]/15 text-[#00FF00] border border-[#00FF00]/35';
+    if (role === 'ADMIN') return 'bg-white/10 text-white border border-white/15';
+    return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25';
+}
 
 const AdminUsers: React.FC = () => {
     const navigate = useNavigate();
@@ -13,6 +26,18 @@ const AdminUsers: React.FC = () => {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+    const meRole = useMemo(() => {
+        try {
+            const userStr = localStorage.getItem('win_user');
+            if (!userStr) return '';
+            return (JSON.parse(userStr) as { role?: string }).role ?? '';
+        } catch {
+            return '';
+        }
+    }, [isAuthenticated]);
+
+    const canAssignSuperAdmin = meRole === 'SUPER_ADMIN';
 
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
@@ -25,7 +50,7 @@ const AdminUsers: React.FC = () => {
 
         try {
             const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN') {
+            if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
                 setIsAuthenticated(false);
                 return;
             }
@@ -39,10 +64,7 @@ const AdminUsers: React.FC = () => {
     const loadData = async () => {
         try {
             setLoading(true);
-            const [usersData, companiesData] = await Promise.all([
-                adminService.getAllUsers(),
-                adminService.getAllCompanies()
-            ]);
+            const [usersData, companiesData] = await Promise.all([adminService.getAllUsers(), adminService.getAllCompanies()]);
             setUsers(usersData || []);
             setCompanies(companiesData || []);
         } catch (err: any) {
@@ -91,7 +113,7 @@ const AdminUsers: React.FC = () => {
                 } catch (err: any) {
                     showToast(getErrorMessage(err, 'Não foi possível processar a exclusão.'), 'error');
                 }
-            }
+            },
         });
     };
 
@@ -110,10 +132,10 @@ const AdminUsers: React.FC = () => {
                     } else {
                         showToast('Senha resetada, mas tempPassword veio vazio.', 'error');
                     }
-        } catch (err: any) {
-            showToast(getErrorMessage(err, 'Erro ao resetar senha.'), 'error');
-        }
-            }
+                } catch (err: any) {
+                    showToast(getErrorMessage(err, 'Erro ao resetar senha.'), 'error');
+                }
+            },
         });
     };
 
@@ -160,14 +182,13 @@ const AdminUsers: React.FC = () => {
             );
         };
 
-        // Usar setTimeout para garantir que o modal de confirmação anterior feche antes de abrir este
         setTimeout(() => {
             showConfirm({
                 title: 'Credenciais de Acesso',
                 body: <TempPassBody />,
                 confirmText: 'Entendido, já copiei',
                 type: 'success',
-                onConfirm: () => { }
+                onConfirm: () => {},
             });
         }, 100);
     };
@@ -184,7 +205,7 @@ const AdminUsers: React.FC = () => {
                     name: formData.name,
                     email: formData.email,
                     role: formData.role,
-                    companyId: formData.companyId
+                    companyId: formData.companyId,
                 };
                 if (formData.password) updateData.password = formData.password;
                 await adminService.updateUser(editingUser.id, updateData);
@@ -211,7 +232,7 @@ const AdminUsers: React.FC = () => {
             email: user?.email || '',
             password: '',
             role: user?.role || 'USER',
-            companyId: user?.companyId || ''
+            companyId: user?.companyId || '',
         };
 
         const ModalBody = () => {
@@ -228,7 +249,7 @@ const AdminUsers: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                <UserIcon size={12} className="text-emerald-500" /> Identificação Completa
+                                <UserIcon size={12} className="text-emerald-500" /> Identificação completa
                             </label>
                             <input
                                 type="text"
@@ -242,7 +263,7 @@ const AdminUsers: React.FC = () => {
 
                         <div>
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                <Mail size={12} className="text-blue-500" /> Email Credenciado
+                                <Mail size={12} className="text-blue-500" /> E-mail
                             </label>
                             <input
                                 type="email"
@@ -257,35 +278,38 @@ const AdminUsers: React.FC = () => {
                         {user && (
                             <div>
                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                    <Key size={12} className="text-amber-500" /> Redefinir Senha
+                                    <Key size={12} className="text-amber-500" /> Redefinir senha
                                 </label>
                                 <input
                                     type="password"
                                     value={data.password}
                                     onChange={(e) => updateField('password', e.target.value)}
                                     className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-amber-500/10 focus:bg-white transition-all font-bold text-gray-700"
-                                    placeholder="NOVA SENHA (OPCIONAL)"
+                                    placeholder="Nova senha (opcional)"
                                 />
                             </div>
                         )}
 
                         <div>
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                <Shield size={12} className="text-rose-500" /> Nível de Autorização
+                                <Shield size={12} className="text-rose-500" /> Nível de autorização
                             </label>
                             <select
                                 value={data.role}
-                                onChange={(e) => updateField('role', e.target.value as any)}
+                                onChange={(e) => updateField('role', e.target.value)}
                                 className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-rose-500/10 focus:bg-white transition-all font-black text-gray-700 appearance-none uppercase"
                             >
-                                <option value="USER">USUÁRIO</option>
-                                <option value="ADMIN">ADMINISTRADOR</option>
+                                <option value="USER">Usuário</option>
+                                <option value="ADMIN">Administrador</option>
+                                {(canAssignSuperAdmin || user?.role === 'SUPER_ADMIN') && (
+                                    <option value="SUPER_ADMIN">Super administrador</option>
+                                )}
                             </select>
                         </div>
 
-                        <div>
+                        <div className="md:col-span-2">
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                <Building2 size={12} className="text-indigo-500" /> Unidade Corporativa
+                                <Building2 size={12} className="text-indigo-500" /> Empresa
                             </label>
                             <select
                                 value={data.companyId}
@@ -293,9 +317,11 @@ const AdminUsers: React.FC = () => {
                                 className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all font-black text-gray-700 appearance-none uppercase"
                                 required
                             >
-                                <option value="">SELECIONE MATRIZ...</option>
-                                {companies.map(company => (
-                                    <option key={company.id} value={company.id}>{company.name.toUpperCase()}</option>
+                                <option value="">Selecione a empresa…</option>
+                                {companies.map((company) => (
+                                    <option key={company.id} value={company.id}>
+                                        {company.name.toUpperCase()}
+                                    </option>
                                 ))}
                             </select>
                         </div>
@@ -305,18 +331,21 @@ const AdminUsers: React.FC = () => {
         };
 
         showConfirm({
-            title: user ? 'Editar Usuário' : 'Novo Usuário',
+            title: user ? 'Editar usuário' : 'Novo usuário',
             body: <ModalBody />,
             confirmText: user ? 'Salvar' : 'Criar',
             onConfirm: async () => {
                 await handleSave(user, currentData);
-            }
+            },
         });
     };
 
-    const filteredUsers = users.filter(user =>
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    const q = searchTerm.toLowerCase().trim();
+    const filteredUsers = users.filter(
+        (user) =>
+            user.name.toLowerCase().includes(q) ||
+            user.email.toLowerCase().includes(q) ||
+            (user.companyName && user.companyName.toLowerCase().includes(q))
     );
 
     if (isAuthenticated === false) {
@@ -325,112 +354,155 @@ const AdminUsers: React.FC = () => {
 
     if (isAuthenticated === null || loading) {
         return (
-            <div className="flex flex-col items-center justify-center h-96 gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Carregando usuários...</span>
+            <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+                <div className="w-12 h-12 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando usuários…</span>
             </div>
         );
     }
 
     return (
-        <div className="p-6">
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-12">
-                <div className="relative">
-                    <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Usuários</h1>
-                    <p className="text-gray-500 font-bold text-sm tracking-tight mt-2 opacity-70">Gerenciamento de usuários e níveis de acesso</p>
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6 max-w-[1800px] mx-auto"
+        >
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white">Usuários</h2>
+                    <p className="text-sm text-gray-400 font-medium mt-1">
+                        Contas e permissões por empresa.{' '}
+                        <Link to="/admin/clientes" className="text-[#00FF00] hover:underline font-bold">
+                            Ver clientes
+                        </Link>
+                    </p>
                 </div>
-
                 <button
+                    type="button"
                     onClick={() => openUserModal()}
-                    className="w-full lg:w-auto flex items-center justify-center gap-3 px-8 py-4 bg-gray-900 text-white rounded-2xl hover:bg-black transition-all font-black uppercase text-xs tracking-widest active:scale-95"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#00FF00] text-black text-xs font-black uppercase tracking-widest hover:brightness-110"
                 >
-                    <Plus size={20} strokeWidth={3} />
-                    Novo Usuário
+                    <Plus size={18} strokeWidth={3} />
+                    Novo usuário
                 </button>
             </div>
 
-            <div className="mb-8 relative group">
-                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-emerald-500 transition-colors" size={20} />
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
-                    type="text"
-                    placeholder="PESQUISAR POR NOME OU EMAIL..."
+                    type="search"
+                    placeholder="Buscar por nome, e-mail ou empresa…"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-16 pr-6 py-5 bg-white border border-gray-100 rounded-[2rem] shadow-sm focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-black text-gray-800 uppercase italic text-sm tracking-wide"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00FF00]/40"
                 />
             </div>
 
-            <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="glass-card rounded-2xl border border-white/10 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse hidden md:table">
                         <thead>
-                            <tr className="bg-gray-50/50">
-                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Usuário</th>
-                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Nível</th>
-                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Empresa</th>
-                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Status</th>
-                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 text-right">Ações</th>
+                            <tr className="border-b border-white/10 bg-white/[0.03]">
+                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Usuário</th>
+                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Nível</th>
+                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Empresa</th>
+                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
+                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Ações</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-white/5">
                             {filteredUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-8 py-24 text-center text-gray-300 font-bold uppercase tracking-[0.2em] italic">
-                                        Nenhum usuário encontrado
+                                    <td colSpan={5} className="px-5 py-16 text-center text-gray-500 text-sm">
+                                        Nenhum usuário encontrado.
                                     </td>
                                 </tr>
                             ) : (
                                 filteredUsers.map((user) => (
-                                    <tr key={user.id} className="hover:bg-gray-50/50 transition-all group">
-                                        <td className="px-8 py-6">
-                                            <div className="flex items-center gap-4">
+                                    <tr key={user.id} className="hover:bg-white/[0.02] transition-colors group">
+                                        <td className="px-5 py-4">
+                                            <div className="flex items-center gap-3">
                                                 <div className="relative shrink-0">
                                                     <img
-                                                        src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=10b981&color=fff&bold=true`}
+                                                        src={
+                                                            user.avatarUrl ||
+                                                            `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
+                                                        }
                                                         alt={user.name}
-                                                        className="w-12 h-12 rounded-xl object-cover transition-all shadow-sm"
+                                                        className="w-11 h-11 rounded-xl object-cover border border-white/10"
                                                     />
-                                                    <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${user.active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                                    <div
+                                                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#141414] ${
+                                                            user.active ? 'bg-[#00FF00]' : 'bg-rose-500'
+                                                        }`}
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <p className="font-black text-gray-800 tracking-tighter uppercase italic text-base leading-none">{user.name}</p>
-                                                    <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-tight">{user.email}</p>
+                                                    <p className="font-bold text-white text-sm leading-tight">{user.name}</p>
+                                                    <p className="text-[10px] text-gray-500 mt-0.5">{user.email}</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-6">
-                                            <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-[0.15em] flex items-center gap-2 w-fit ${user.role === 'ADMIN' ? 'bg-gray-900 text-white' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                        <td className="px-5 py-4">
+                                            <span
+                                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${roleBadgeClass(
+                                                    user.role
+                                                )}`}
+                                            >
                                                 <Shield size={10} />
-                                                {user.role === 'ADMIN' ? 'ADMINISTRADOR' : 'USUÁRIO'}
+                                                {roleLabel(user.role)}
                                             </span>
                                         </td>
-                                        <td className="px-8 py-6">
-                                            <div className="flex items-center gap-2">
-                                                <Building2 size={12} className="text-gray-300" />
-                                                <span className="font-black text-gray-500 text-[10px] uppercase tracking-widest italic truncate max-w-[150px]">
-                                                    {user.companyName?.toUpperCase() || 'EXTERNAL UNIT'}
+                                        <td className="px-5 py-4">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <Building2 size={12} className="text-gray-600 shrink-0" />
+                                                <span className="text-xs text-gray-300 truncate max-w-[180px]">
+                                                    {user.companyName || '—'}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-6">
-                                            <div className={`flex items-center gap-2 font-black text-[9px] tracking-[0.2em] ${user.active ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                                <div className={`w-1.5 h-1.5 rounded-full ${user.active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                                                {user.active ? 'ATIVO' : 'DESATIVADO'}
-                                            </div>
+                                        <td className="px-5 py-4">
+                                            <span
+                                                className={`text-[10px] font-black uppercase tracking-widest ${
+                                                    user.active ? 'text-[#00FF00]' : 'text-rose-400'
+                                                }`}
+                                            >
+                                                {user.active ? 'Ativo' : 'Desativado'}
+                                            </span>
                                         </td>
-                                        <td className="px-8 py-6">
-                                            <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
-                                                <button onClick={() => openUserModal(user)} className="p-3 bg-white text-gray-400 hover:text-emerald-600 hover:shadow-xl rounded-xl transition-all border border-gray-100">
-                                                    <Pencil size={18} />
+                                        <td className="px-5 py-4 text-right">
+                                            <div className="flex gap-1 justify-end opacity-70 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openUserModal(user)}
+                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-[#00FF00] hover:bg-white/5 border border-transparent hover:border-white/10"
+                                                    title="Editar"
+                                                >
+                                                    <Pencil size={16} />
                                                 </button>
-                                                <button onClick={() => handleToggleStatus(user.id)} className={`p-3 bg-white hover:shadow-xl rounded-xl transition-all border border-gray-100 ${user.active ? 'text-gray-400 hover:text-amber-600' : 'text-emerald-500 hover:text-emerald-600'}`}>
-                                                    {user.active ? <Lock size={18} /> : <Unlock size={18} />}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleToggleStatus(user.id)}
+                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-white/5 border border-transparent hover:border-white/10"
+                                                    title={user.active ? 'Bloquear' : 'Desbloquear'}
+                                                >
+                                                    {user.active ? <Lock size={16} /> : <Unlock size={16} />}
                                                 </button>
-                                                <button onClick={() => handleDelete(user.id, true)} className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:shadow-xl rounded-xl transition-all border border-gray-100">
-                                                    <Trash2 size={18} />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDelete(user.id, true)}
+                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-white/5 border border-transparent hover:border-white/10"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 size={16} />
                                                 </button>
-                                                <button onClick={() => handleResetPassword(user.id, user.name, user.email)} className="p-3 bg-white text-gray-400 hover:text-amber-600 hover:shadow-xl rounded-xl transition-all border border-gray-100" title="Resetar Senha">
-                                                    <Key size={18} />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleResetPassword(user.id, user.name, user.email)}
+                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-white/5 border border-transparent hover:border-white/10"
+                                                    title="Resetar senha"
+                                                >
+                                                    <Key size={16} />
                                                 </button>
                                             </div>
                                         </td>
@@ -440,43 +512,51 @@ const AdminUsers: React.FC = () => {
                         </tbody>
                     </table>
 
-                    <div className="md:hidden grid grid-cols-1 gap-4 p-4">
-                        {filteredUsers.map(user => (
-                            <div key={user.id} className="bg-gray-50/50 rounded-3xl p-6 border border-gray-100 space-y-6">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-4">
+                    <div className="md:hidden grid grid-cols-1 gap-3 p-4">
+                        {filteredUsers.map((user) => (
+                            <div key={user.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-3 min-w-0">
                                         <img
-                                            src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=10b981&color=fff&bold=true`}
+                                            src={
+                                                user.avatarUrl ||
+                                                `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
+                                            }
                                             alt={user.name}
-                                            className="w-14 h-14 rounded-2xl object-cover shadow-lg"
+                                            className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0"
                                         />
-                                        <div>
-                                            <h3 className="font-black text-gray-800 uppercase italic leading-none">{user.name}</h3>
-                                            <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase">{user.email}</p>
+                                        <div className="min-w-0">
+                                            <p className="font-bold text-white text-sm truncate">{user.name}</p>
+                                            <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
                                         </div>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black tracking-widest ${user.role === 'ADMIN' ? 'bg-gray-900 text-white' : 'bg-emerald-100 text-emerald-600'}`}>
-                                        {user.role === 'ADMIN' ? 'ADMINISTRADOR' : 'USUÁRIO'}
+                                    <span className={`shrink-0 px-2 py-1 rounded-md text-[8px] font-black uppercase ${roleBadgeClass(user.role)}`}>
+                                        {user.role}
                                     </span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-white p-3 rounded-2xl border border-gray-100">
-                                        <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Company</p>
-                                        <p className="text-[10px] font-bold text-gray-600 truncate">{user.companyName?.toUpperCase() || 'N/A'}</p>
-                                    </div>
-                                    <div className="bg-white p-3 rounded-2xl border border-gray-100">
-                                        <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Status</p>
-                                        <p className={`text-[10px] font-black uppercase ${user.active ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                            {user.active ? 'ACTIVE' : 'REVOKED'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => openUserModal(user)} className="flex-1 py-3 bg-white text-gray-600 rounded-xl font-black uppercase text-[10px] tracking-widest border border-gray-100">Edit</button>
-                                    <button onClick={() => handleToggleStatus(user.id)} className="flex-1 py-3 bg-white text-amber-600 rounded-xl font-black uppercase text-[10px] tracking-widest border border-gray-100">
-                                        {user.active ? 'Lock' : 'Unlock'}
+                                <p className="text-xs text-gray-400 flex items-center gap-1">
+                                    <Building2 size={12} /> {user.companyName || '—'}
+                                </p>
+                                <div className="flex gap-2 flex-wrap">
+                                    <button
+                                        type="button"
+                                        onClick={() => openUserModal(user)}
+                                        className="flex-1 py-2 rounded-lg bg-white/5 text-xs font-black uppercase text-gray-300 border border-white/10"
+                                    >
+                                        Editar
                                     </button>
-                                    <button onClick={() => handleDelete(user.id, true)} className="p-3 bg-rose-50 text-rose-500 rounded-xl border border-rose-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleStatus(user.id)}
+                                        className="flex-1 py-2 rounded-lg bg-white/5 text-xs font-black uppercase text-amber-400 border border-white/10"
+                                    >
+                                        {user.active ? 'Bloquear' : 'Ativar'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDelete(user.id, true)}
+                                        className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                    >
                                         <Trash2 size={16} />
                                     </button>
                                 </div>
@@ -485,7 +565,7 @@ const AdminUsers: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </div>
+        </motion.div>
     );
 };
 

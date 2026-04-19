@@ -50,4 +50,18 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     // Método removido - usando CriteriaBuilder no serviço para evitar problemas com
     // tipos null no PostgreSQL
+
+    Page<Lead> findByStatusOrderByCreatedAtDesc(LeadStatus status, Pageable pageable);
+
+    @Query(value = "SELECT l FROM Lead l LEFT JOIN l.company c WHERE "
+            + "LOWER(l.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+            + "LOWER(l.email) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+            + "LOWER(COALESCE(l.phone, '')) LIKE CONCAT('%', :q, '%') OR "
+            + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%'))",
+            countQuery = "SELECT count(l) FROM Lead l LEFT JOIN l.company c WHERE "
+                    + "LOWER(l.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "LOWER(l.email) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "LOWER(COALESCE(l.phone, '')) LIKE CONCAT('%', :q, '%') OR "
+                    + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%'))")
+    Page<Lead> searchAllLeads(@Param("q") String q, Pageable pageable);
 }

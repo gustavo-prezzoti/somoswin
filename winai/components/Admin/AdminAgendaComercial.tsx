@@ -1,0 +1,674 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import {
+    CalendarRange,
+    Search,
+    RefreshCw,
+    Plus,
+    Trash2,
+    ExternalLink,
+    Building2,
+    User,
+    Clock,
+} from 'lucide-react';
+import adminService, { AdminMeetingRow, Company } from '../../services/adminService';
+import { MEETING_STATUS_LABELS, MeetingStatusType } from '../../services/api/meeting.service';
+import { getErrorMessage } from '../../services/utils/errorHelper';
+
+function pad2(n: number): string {
+    return n < 10 ? `0${n}` : `${n}`;
+}
+
+function toYMD(d: Date): string {
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function startOfMonth(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function endOfMonth(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
+function startOfWeekMonday(d: Date): Date {
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    const res = new Date(d);
+    res.setDate(d.getDate() + diff);
+    return res;
+}
+
+function addDays(d: Date, n: number): Date {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+}
+
+function formatTimeHm(s: string | null | undefined): string {
+    if (!s) return '—';
+    return s.length >= 5 ? s.slice(0, 5) : s;
+}
+
+const STATUS_OPTIONS: MeetingStatusType[] = [
+    'SCHEDULED',
+    'CONFIRMED',
+    'COMPLETED',
+    'NO_SHOW',
+    'CANCELLED',
+    'RESCHEDULED',
+];
+
+const BADGE: Record<MeetingStatusType, string> = {
+    SCHEDULED: 'bg-blue-500/15 text-blue-300 border-blue-500/35',
+    CONFIRMED: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35',
+    COMPLETED: 'bg-[#00FF00]/15 text-[#00FF00] border-[#00FF00]/35',
+    NO_SHOW: 'bg-rose-500/15 text-rose-300 border-rose-500/35',
+    CANCELLED: 'bg-white/5 text-gray-400 border-white/15',
+    RESCHEDULED: 'bg-amber-500/15 text-amber-200 border-amber-500/35',
+};
+
+const AdminAgendaComercial: React.FC = () => {
+    const today = useMemo(() => new Date(), []);
+    const [start, setStart] = useState(() => toYMD(startOfMonth(today)));
+    const [end, setEnd] = useState(() => toYMD(endOfMonth(today)));
+
+    const [companies, setCompanies] = useState<Company[]>([]);
+    const [companyId, setCompanyId] = useState('');
+    const [search, setSearch] = useState('');
+    const [debouncedQ, setDebouncedQ] = useState('');
+
+    const [rows, setRows] = useState<AdminMeetingRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [savingId, setSavingId] = useState<string | null>(null);
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [creating, setCreating] = useState(false);
+    const [form, setForm] = useState({
+        companyId: '',
+        title: '',
+        contactName: '',
+        contactEmail: '',
+        contactPhone: '',
+        meetingDate: toYMD(today),
+        meetingTime: '10:00',
+        durationMinutes: 30,
+        notes: '',
+        meetingLink: '',
+        leadId: '',
+        meetingKind: 'STANDARD' as 'STANDARD' | 'CONSULTANCY' | 'INTELLIGENT_LISTENING',
+    });
+
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedQ(search.trim()), 350);
+        return () => clearTimeout(t);
+    }, [search]);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const list = await adminService.getAllCompanies();
+                if (!cancelled) setCompanies(list);
+            } catch {
+                if (!cancelled) setCompanies([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const load = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const data = await adminService.getAgendaMeetings({
+                start,
+                end,
+                companyId: companyId || undefined,
+                q: debouncedQ || undefined,
+            });
+            setRows(data);
+        } catch (e) {
+            setError(getErrorMessage(e, 'Erro ao carregar agenda'));
+        } finally {
+            setLoading(false);
+        }
+    }, [start, end, companyId, debouncedQ]);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const setPreset = (key: 'week' | 'month' | 'next7') => {
+        const now = new Date();
+        if (key === 'month') {
+            setStart(toYMD(startOfMonth(now)));
+            setEnd(toYMD(endOfMonth(now)));
+        } else if (key === 'week') {
+            const s = startOfWeekMonday(now);
+            setStart(toYMD(s));
+            setEnd(toYMD(addDays(s, 6)));
+        } else {
+            setStart(toYMD(now));
+            setEnd(toYMD(addDays(now, 6)));
+        }
+    };
+
+    const openCreate = () => {
+        setForm((f) => ({
+            ...f,
+            companyId: companyId || '',
+            meetingDate: toYMD(new Date()),
+        }));
+        setModalOpen(true);
+    };
+
+    const submitCreate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!form.companyId.trim() || !form.contactName.trim()) return;
+        try {
+            setCreating(true);
+            setError(null);
+            const mt = form.meetingTime.length === 5 ? `${form.meetingTime}:00` : form.meetingTime;
+            await adminService.createAgendaMeeting({
+                companyId: form.companyId.trim(),
+                title: form.title.trim() || undefined,
+                contactName: form.contactName.trim(),
+                contactEmail: form.contactEmail.trim() || undefined,
+                contactPhone: form.contactPhone.trim() || undefined,
+                meetingDate: form.meetingDate,
+                meetingTime: mt,
+                durationMinutes: form.durationMinutes || 30,
+                notes: form.notes.trim() || undefined,
+                meetingLink: form.meetingLink.trim() || undefined,
+                leadId: form.leadId.trim() || undefined,
+                meetingKind: form.meetingKind,
+            });
+            setModalOpen(false);
+            await load();
+        } catch (err) {
+            setError(getErrorMessage(err, 'Não foi possível criar a reunião'));
+        } finally {
+            setCreating(false);
+        }
+    };
+
+    const onStatusChange = async (meetingId: string, status: MeetingStatusType) => {
+        setSavingId(meetingId);
+        const prev = rows;
+        setRows((list) =>
+            list.map((r) =>
+                r.id === meetingId
+                    ? { ...r, status, statusLabel: MEETING_STATUS_LABELS[status] ?? status }
+                    : r
+            )
+        );
+        try {
+            const updated = await adminService.patchAgendaMeetingStatus(meetingId, status);
+            setRows((list) =>
+                list.map((r) =>
+                    r.id === meetingId
+                        ? {
+                              ...r,
+                              status: updated.status,
+                              statusLabel: updated.statusLabel,
+                          }
+                        : r
+                )
+            );
+        } catch (err) {
+            setRows(prev);
+            setError(getErrorMessage(err, 'Não foi possível atualizar o status'));
+        } finally {
+            setSavingId(null);
+        }
+    };
+
+    const onDelete = async (meetingId: string) => {
+        if (!window.confirm('Excluir esta reunião? O evento no Google Calendar também será removido, se existir.')) {
+            return;
+        }
+        setSavingId(meetingId);
+        try {
+            await adminService.deleteAgendaMeeting(meetingId);
+            setRows((list) => list.filter((r) => r.id !== meetingId));
+        } catch (err) {
+            setError(getErrorMessage(err, 'Não foi possível excluir'));
+        } finally {
+            setSavingId(null);
+        }
+    };
+
+    const sortedRows = useMemo(() => {
+        return [...rows].sort((a, b) => {
+            const da = `${a.meetingDate}T${formatTimeHm(a.meetingTime)}`;
+            const db = `${b.meetingDate}T${formatTimeHm(b.meetingTime)}`;
+            return da.localeCompare(db);
+        });
+    }, [rows]);
+
+    if (loading && rows.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+                <div className="w-12 h-12 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando agenda…</span>
+            </div>
+        );
+    }
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6 max-w-[1800px] mx-auto"
+        >
+            <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white">Agenda comercial</h2>
+                    <p className="text-sm text-gray-400 font-medium mt-1">
+                        Reuniões de todas as empresas — período, filtros e ações em tempo real
+                    </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setPreset('week')}
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-white/10 text-gray-300 hover:bg-white/5"
+                    >
+                        Esta semana
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setPreset('month')}
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-white/10 text-gray-300 hover:bg-white/5"
+                    >
+                        Este mês
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setPreset('next7')}
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-white/10 text-gray-300 hover:bg-white/5"
+                    >
+                        Próx. 7 dias
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => load()}
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-[#00FF00]/30 text-[#00FF00] hover:bg-[#00FF00]/10 flex items-center gap-2"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Atualizar
+                    </button>
+                    <button
+                        type="button"
+                        onClick={openCreate}
+                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-[#00FF00] text-black hover:bg-[#00FF00]/90 flex items-center gap-2"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Nova reunião
+                    </button>
+                </div>
+            </div>
+
+            {error && (
+                <div className="glass-card rounded-xl px-4 py-3 border border-rose-500/40 bg-rose-500/10 text-sm text-rose-200">
+                    {error}
+                </div>
+            )}
+
+            <div className="glass-card rounded-xl p-4 border border-white/10 space-y-4">
+                <div className="flex flex-col lg:flex-row flex-wrap gap-4 lg:items-end">
+                    <div className="flex flex-wrap gap-3 items-end">
+                        <label className="flex flex-col gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            <span className="flex items-center gap-1">
+                                <CalendarRange className="w-3.5 h-3.5" /> Início
+                            </span>
+                            <input
+                                type="date"
+                                value={start}
+                                onChange={(e) => setStart(e.target.value)}
+                                className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00FF00]/40"
+                            />
+                        </label>
+                        <label className="flex flex-col gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            Fim
+                            <input
+                                type="date"
+                                value={end}
+                                onChange={(e) => setEnd(e.target.value)}
+                                className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00FF00]/40"
+                            />
+                        </label>
+                    </div>
+                    <label className="flex flex-col gap-1 flex-1 min-w-[200px] text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        <span className="flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5" /> Empresa
+                        </span>
+                        <select
+                            value={companyId}
+                            onChange={(e) => setCompanyId(e.target.value)}
+                            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00FF00]/40"
+                        >
+                            <option value="">Todas</option>
+                            {companies.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <div className="relative flex-1 min-w-[220px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <input
+                            type="search"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Buscar título, cliente, contato, lead…"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00FF00]/40"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="glass-card rounded-xl border border-white/10 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="border-b border-white/10 text-xs font-black uppercase tracking-widest text-gray-500">
+                                <th className="px-4 py-3 whitespace-nowrap">Data / hora</th>
+                                <th className="px-4 py-3 whitespace-nowrap">Empresa</th>
+                                <th className="px-4 py-3 whitespace-nowrap">Título</th>
+                                <th className="px-4 py-3 whitespace-nowrap">Contato</th>
+                                <th className="px-4 py-3 whitespace-nowrap">Lead</th>
+                                <th className="px-4 py-3 whitespace-nowrap">Status</th>
+                                <th className="px-4 py-3 whitespace-nowrap">Tipo</th>
+                                <th className="px-4 py-3 whitespace-nowrap">Link</th>
+                                <th className="px-4 py-3 whitespace-nowrap text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sortedRows.length === 0 ? (
+                                <tr>
+                                    <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
+                                        Nenhuma reunião no período. Ajuste as datas ou cadastre uma nova reunião.
+                                    </td>
+                                </tr>
+                            ) : (
+                                sortedRows.map((r) => {
+                                    const st = (STATUS_OPTIONS.includes(r.status as MeetingStatusType)
+                                        ? r.status
+                                        : 'SCHEDULED') as MeetingStatusType;
+                                    return (
+                                        <tr
+                                            key={r.id}
+                                            className="border-b border-white/5 hover:bg-white/[0.03] text-gray-200"
+                                        >
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <div className="font-semibold text-white">
+                                                    {r.meetingDate?.split('-').reverse().join('/') ?? '—'}
+                                                </div>
+                                                <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                                    <Clock className="w-3 h-3" />
+                                                    {formatTimeHm(r.meetingTime)}
+                                                    {r.durationMinutes != null ? ` · ${r.durationMinutes} min` : ''}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 min-w-[140px]">
+                                                <span className="text-white font-medium">{r.companyName}</span>
+                                            </td>
+                                            <td className="px-4 py-3 max-w-[200px]">
+                                                <span className="line-clamp-2">{r.title || '—'}</span>
+                                            </td>
+                                            <td className="px-4 py-3 min-w-[160px]">
+                                                <div className="flex items-start gap-1.5">
+                                                    <User className="w-3.5 h-3.5 text-gray-500 shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <div>{r.contactName || '—'}</div>
+                                                        {(r.contactEmail || r.contactPhone) && (
+                                                            <div className="text-xs text-gray-500">
+                                                                {[r.contactEmail, r.contactPhone].filter(Boolean).join(' · ')}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 max-w-[140px]">
+                                                <span className="line-clamp-2 text-gray-400">{r.leadName || '—'}</span>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <select
+                                                    value={st}
+                                                    disabled={savingId === r.id}
+                                                    onChange={(e) =>
+                                                        onStatusChange(r.id, e.target.value as MeetingStatusType)
+                                                    }
+                                                    className={`max-w-[160px] rounded-lg border px-2 py-1.5 text-xs font-bold uppercase tracking-wide bg-black/40 focus:outline-none focus:border-[#00FF00]/40 ${BADGE[st]}`}
+                                                >
+                                                    {STATUS_OPTIONS.map((opt) => (
+                                                        <option key={opt} value={opt} className="bg-[#141414] text-white">
+                                                            {MEETING_STATUS_LABELS[opt]}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </td>
+                                            <td className="px-4 py-3 text-xs text-gray-400 uppercase">
+                                                {r.meetingKind?.replace(/_/g, ' ') ?? '—'}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                {r.meetingLink ? (
+                                                    <a
+                                                        href={r.meetingLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1 text-[#00FF00] hover:underline text-xs"
+                                                    >
+                                                        Abrir <ExternalLink className="w-3 h-3" />
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-gray-600">—</span>
+                                                )}
+                                                {r.googleEventId && (
+                                                    <div className="text-[10px] text-gray-600 mt-1 truncate max-w-[100px]" title="Google Calendar">
+                                                        GCal
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                                                <button
+                                                    type="button"
+                                                    disabled={savingId === r.id}
+                                                    onClick={() => onDelete(r.id)}
+                                                    className="p-2 rounded-lg border border-white/10 text-gray-400 hover:text-rose-400 hover:border-rose-500/40 disabled:opacity-40"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {modalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="glass-card w-full max-w-lg rounded-2xl border border-[#00FF00]/25 p-6 max-h-[90vh] overflow-y-auto"
+                    >
+                        <h3 className="text-xl font-black italic uppercase text-white tracking-tight mb-1">
+                            Nova reunião
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-6">A reunião é criada na empresa selecionada (Google Calendar se conectado).</p>
+                        <form onSubmit={submitCreate} className="space-y-4">
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                Empresa *
+                                <select
+                                    required
+                                    value={form.companyId}
+                                    onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}
+                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                >
+                                    <option value="">Selecione…</option>
+                                    {companies.map((c) => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                Título
+                                <input
+                                    type="text"
+                                    value={form.title}
+                                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white placeholder:text-gray-600"
+                                    placeholder="Ex.: Apresentação comercial"
+                                />
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Contato *
+                                    <input
+                                        required
+                                        type="text"
+                                        value={form.contactName}
+                                        onChange={(e) => setForm((f) => ({ ...f, contactName: e.target.value }))}
+                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    />
+                                </label>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Tipo
+                                    <select
+                                        value={form.meetingKind}
+                                        onChange={(e) =>
+                                            setForm((f) => ({
+                                                ...f,
+                                                meetingKind: e.target.value as typeof form.meetingKind,
+                                            }))
+                                        }
+                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    >
+                                        <option value="STANDARD">Padrão</option>
+                                        <option value="CONSULTANCY">Consultoria</option>
+                                        <option value="INTELLIGENT_LISTENING">Escuta inteligente</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    E-mail
+                                    <input
+                                        type="email"
+                                        value={form.contactEmail}
+                                        onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))}
+                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    />
+                                </label>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Telefone
+                                    <input
+                                        type="text"
+                                        value={form.contactPhone}
+                                        onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))}
+                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    />
+                                </label>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Data *
+                                    <input
+                                        required
+                                        type="date"
+                                        value={form.meetingDate}
+                                        onChange={(e) => setForm((f) => ({ ...f, meetingDate: e.target.value }))}
+                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    />
+                                </label>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Hora *
+                                    <input
+                                        required
+                                        type="time"
+                                        value={form.meetingTime}
+                                        onChange={(e) => setForm((f) => ({ ...f, meetingTime: e.target.value }))}
+                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    />
+                                </label>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Duração (min)
+                                    <input
+                                        type="number"
+                                        min={15}
+                                        step={5}
+                                        value={form.durationMinutes}
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, durationMinutes: Number(e.target.value) || 30 }))
+                                        }
+                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    />
+                                </label>
+                            </div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                ID do lead (opcional)
+                                <input
+                                    type="text"
+                                    value={form.leadId}
+                                    onChange={(e) => setForm((f) => ({ ...f, leadId: e.target.value }))}
+                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-xs text-white font-mono"
+                                    placeholder="UUID do CRM"
+                                />
+                            </label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                Link da reunião
+                                <input
+                                    type="url"
+                                    value={form.meetingLink}
+                                    onChange={(e) => setForm((f) => ({ ...f, meetingLink: e.target.value }))}
+                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    placeholder="https://"
+                                />
+                            </label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                Observações
+                                <textarea
+                                    value={form.notes}
+                                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                                    rows={3}
+                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white resize-none"
+                                />
+                            </label>
+                            <div className="flex flex-wrap gap-2 justify-end pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setModalOpen(false)}
+                                    className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-white/15 text-gray-300 hover:bg-white/5"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={creating}
+                                    className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-[#00FF00] text-black hover:bg-[#00FF00]/90 disabled:opacity-50"
+                                >
+                                    {creating ? 'Salvando…' : 'Criar reunião'}
+                                </button>
+                            </div>
+                        </form>
+                    </motion.div>
+                </div>
+            )}
+        </motion.div>
+    );
+};
+
+export default AdminAgendaComercial;

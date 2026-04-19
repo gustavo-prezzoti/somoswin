@@ -13,4 +13,6 @@ public interface DashboardTaskRepository extends JpaRepository<DashboardTask, Lo
     List<DashboardTask> findByCompanyOrderBySortOrderAscIdAsc(Company company);
 
     long countByCompany(Company company);
+
+    long countByCompletedFalse();
 }

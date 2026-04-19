@@ -1,10 +1,25 @@
 package com.backend.winai.service;
 
 import com.backend.winai.dto.request.AdminCreateUserRequest;
+import com.backend.winai.dto.request.AdminEscutaStartRequest;
+import com.backend.winai.dto.request.IntelligentListeningStartRequest;
 import com.backend.winai.dto.request.AdminUpdateUserRequest;
 import com.backend.winai.dto.request.UpdateInstanceConfigRequest;
+import com.backend.winai.dto.marketing.CampaignsListResponse;
+import com.backend.winai.dto.response.AdminConversationSummaryResponse;
+import com.backend.winai.dto.response.AdminEscutaSessionResponse;
+import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
+import com.backend.winai.dto.response.AdminGoalsForCompanyResponse;
+import com.backend.winai.dto.response.AdminMetaAdsCompanyResponse;
+import com.backend.winai.dto.response.AdminDashboardResponse;
+import com.backend.winai.dto.response.DashboardResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
+import com.backend.winai.dto.response.AdminLeadResponse;
+import com.backend.winai.dto.response.AdminMeetingRowResponse;
 import com.backend.winai.dto.response.AdminUserResponse;
+import com.backend.winai.dto.response.MeetingResponse;
+import com.backend.winai.dto.response.IntelligentListeningSessionResponse;
+import com.backend.winai.dto.response.WhatsAppMessageResponse;
 import com.backend.winai.dto.uazap.UazapInstanceDTO;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.User;
@@ -15,6 +30,7 @@ import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
+import com.backend.winai.repository.DashboardTaskRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.KnowledgeBaseRepository;
 import com.backend.winai.repository.KnowledgeBaseChunkRepository;
@@ -40,22 +56,45 @@ import com.backend.winai.repository.FollowUpConfigRepository;
 import com.backend.winai.repository.FollowUpStatusRepository;
 import com.backend.winai.repository.GlobalNotificationConfigRepository;
 import com.backend.winai.repository.TrafficAdvisorChatRepository;
+import com.backend.winai.entity.Lead;
+import com.backend.winai.entity.LeadStatus;
+import com.backend.winai.entity.GoalStatus;
+import com.backend.winai.entity.MetaConnection;
+import com.backend.winai.entity.Meeting;
+import com.backend.winai.entity.MeetingKind;
+import com.backend.winai.entity.MeetingStatus;
+import com.backend.winai.entity.Notification;
 import com.backend.winai.entity.UserWhatsAppConnection;
 import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.KnowledgeBase;
+import com.backend.winai.dto.request.AdminMeetingCreateRequest;
+import com.backend.winai.dto.request.MeetingRequest;
 import com.backend.winai.dto.request.CreateUserWhatsAppConnectionRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -74,6 +113,7 @@ public class AdminService {
     private final LeadRepository leadRepository;
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final KnowledgeBaseChunkRepository knowledgeBaseChunkRepository;
+    private final DashboardTaskRepository dashboardTaskRepository;
     private final MeetingRepository meetingRepository;
     private final SocialMediaProfileRepository socialMediaProfileRepository;
     private final SocialGrowthChatRepository socialGrowthChatRepository;
@@ -99,6 +139,12 @@ public class AdminService {
     private final TrafficAdvisorChatRepository trafficAdvisorChatRepository;
     private final AsaasService asaasService;
     private final UazapService uazapService;
+    private final WhatsAppChatService whatsAppChatService;
+    private final IntelligentListeningService intelligentListeningService;
+    private final MarketingService marketingService;
+    private final MetaSyncService metaSyncService;
+    private final DashboardService dashboardService;
+    private final MeetingService meetingService;
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -133,6 +179,447 @@ public class AdminService {
         }
 
         return stats;
+    }
+
+    /**
+     * Painel admin estilo Amplia: KPIs, próximos encontros e alertas recentes.
+     */
+    public AdminDashboardResponse getAdminDashboard() {
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+
+        long totalCompanies = companyRepository.count();
+        ZonedDateTime monthStart = today.withDayOfMonth(1).atStartOfDay(ZoneId.systemDefault());
+        long newCompaniesMonth = companyRepository.countByCreatedAtAfter(monthStart);
+
+        long incompleteTasks = dashboardTaskRepository.countByCompletedFalse();
+        long meetingsWeek = meetingRepository.countByMeetingDateBetween(startWeek, endWeek);
+
+        String newCompaniesSubtitle = "+" + newCompaniesMonth + " este mês";
+
+        List<AdminDashboardResponse.Kpi> kpis = List.of(
+                AdminDashboardResponse.Kpi.builder()
+                        .label("CLIENTES TOTAIS")
+                        .value(String.valueOf(totalCompanies))
+                        .subtitle(newCompaniesSubtitle)
+                        .icon("USERS")
+                        .build(),
+                AdminDashboardResponse.Kpi.builder()
+                        .label("CHECKPOINTS")
+                        .value(String.valueOf(incompleteTasks))
+                        .subtitle("Tarefas incompletas (dashboard)")
+                        .icon("CLOCK")
+                        .build(),
+                AdminDashboardResponse.Kpi.builder()
+                        .label("ENCONTROS SEMANA")
+                        .value(String.valueOf(meetingsWeek))
+                        .subtitle("Semana corrente")
+                        .icon("CALENDAR")
+                        .build(),
+                AdminDashboardResponse.Kpi.builder()
+                        .label("FATURAMENTO")
+                        .value("—")
+                        .subtitle("Em breve")
+                        .icon("DOLLAR")
+                        .build());
+
+        LocalDate horizonEnd = today.plusWeeks(2);
+        List<Meeting> rawMeetings = meetingRepository.findAllByMeetingDateBetweenWithCompany(today, horizonEnd);
+        List<AdminDashboardResponse.MeetingRow> meetingRows = rawMeetings.stream()
+                .limit(15)
+                .map(m -> AdminDashboardResponse.MeetingRow.builder()
+                        .id(m.getId().toString())
+                        .title(m.getTitle())
+                        .companyName(m.getCompany() != null ? m.getCompany().getName() : "—")
+                        .meetingDate(m.getMeetingDate().toString())
+                        .meetingTime(m.getMeetingTime().toString())
+                        .status(m.getStatus() != null ? m.getStatus().name() : "")
+                        .build())
+                .collect(Collectors.toList());
+
+        List<Notification> notifs = notificationRepository.findTop12ByOrderByCreatedAtDesc();
+        List<AdminDashboardResponse.AlertRow> alerts = notifs.stream()
+                .map(n -> AdminDashboardResponse.AlertRow.builder()
+                        .id(n.getId().toString())
+                        .title(n.getTitle())
+                        .message(n.getMessage() != null ? n.getMessage() : "")
+                        .type(n.getType() != null ? n.getType() : "INFO")
+                        .createdAt(n.getCreatedAt() != null ? n.getCreatedAt().toString() : "")
+                        .read(Boolean.TRUE.equals(n.getRead()))
+                        .build())
+                .collect(Collectors.toList());
+
+        return AdminDashboardResponse.builder()
+                .kpis(kpis)
+                .upcomingMeetings(meetingRows)
+                .priorityAlerts(alerts)
+                .build();
+    }
+
+    // ========== ESCUTA INTELIGENTE (ADMIN GLOBAL) ==========
+
+    public Page<AdminEscutaSessionResponse> getAdminEscutaSessions(int page, int size, String q) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Meeting> meetings;
+        if (q != null && !q.trim().isEmpty()) {
+            meetings = meetingRepository.searchByMeetingKindAndQuery(MeetingKind.INTELLIGENT_LISTENING, q.trim(),
+                    pageable);
+        } else {
+            meetings = meetingRepository.findByMeetingKindOrderByCreatedAtDesc(MeetingKind.INTELLIGENT_LISTENING,
+                    pageable);
+        }
+        return meetings.map(this::toAdminEscuta);
+    }
+
+    public AdminEscutaSessionResponse getAdminEscutaSession(UUID id) {
+        return toAdminEscuta(loadEscutaMeeting(id));
+    }
+
+    @Transactional
+    public AdminEscutaSessionResponse startAdminEscuta(AdminEscutaStartRequest request) {
+        Company company = companyRepository.findById(request.getCompanyId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        IntelligentListeningStartRequest ir = new IntelligentListeningStartRequest();
+        ir.setLeadId(request.getLeadId());
+        ir.setTitle(request.getTitle());
+        IntelligentListeningSessionResponse created = intelligentListeningService.startSession(company, ir);
+        Meeting m = meetingRepository.findById(created.getId())
+                .orElseThrow(() -> new RuntimeException("Sessão não encontrada após criação"));
+        return toAdminEscuta(m);
+    }
+
+    @Transactional
+    public AdminEscutaSessionResponse analyzeAdminEscuta(UUID sessionId) {
+        Meeting m = loadEscutaMeeting(sessionId);
+        intelligentListeningService.analyze(companyForEscuta(m), sessionId);
+        return toAdminEscuta(meetingRepository.findById(sessionId).orElseThrow());
+    }
+
+    @Transactional
+    public AdminEscutaSessionResponse completeAdminEscuta(UUID sessionId) {
+        Meeting m = loadEscutaMeeting(sessionId);
+        intelligentListeningService.completeToCrm(companyForEscuta(m), sessionId);
+        return toAdminEscuta(meetingRepository.findById(sessionId).orElseThrow());
+    }
+
+    @Transactional
+    public void deleteAdminEscuta(UUID sessionId) {
+        Meeting m = loadEscutaMeeting(sessionId);
+        intelligentListeningService.deleteSession(companyForEscuta(m), sessionId);
+    }
+
+    @Transactional
+    public AdminEscutaSessionResponse uploadAdminEscutaAudio(UUID sessionId, MultipartFile file) {
+        Meeting m = loadEscutaMeeting(sessionId);
+        intelligentListeningService.uploadAndTranscribe(companyForEscuta(m), sessionId, file);
+        return toAdminEscuta(meetingRepository.findById(sessionId).orElseThrow());
+    }
+
+    private Meeting loadEscutaMeeting(UUID id) {
+        Meeting m = meetingRepository.findById(id).orElseThrow(() -> new RuntimeException("Sessão não encontrada"));
+        if (m.getMeetingKind() != MeetingKind.INTELLIGENT_LISTENING) {
+            throw new RuntimeException("Esta sessão não é Escuta Inteligente");
+        }
+        return m;
+    }
+
+    private Company companyForEscuta(Meeting m) {
+        if (m.getCompany() == null) {
+            throw new RuntimeException("Sessão sem empresa");
+        }
+        return m.getCompany();
+    }
+
+    private AdminEscutaSessionResponse toAdminEscuta(Meeting m) {
+        IntelligentListeningSessionResponse r = intelligentListeningService.toResponse(m);
+        UUID companyId = m.getCompany() != null ? m.getCompany().getId() : null;
+        String companyName = m.getCompany() != null ? m.getCompany().getName() : "—";
+        return AdminEscutaSessionResponse.builder()
+                .companyId(companyId)
+                .companyName(companyName)
+                .id(r.getId())
+                .leadId(r.getLeadId())
+                .leadName(r.getLeadName())
+                .title(r.getTitle())
+                .meetingDate(r.getMeetingDate())
+                .meetingTime(r.getMeetingTime())
+                .status(r.getStatus())
+                .statusLabel(r.getStatusLabel())
+                .createdAt(r.getCreatedAt())
+                .transcriptionFull(r.getTranscriptionFull())
+                .aiSummary(r.getAiSummary())
+                .negotiatedValueBrl(r.getNegotiatedValueBrl())
+                .build();
+    }
+
+    // ========== META ADS (ADMIN GLOBAL) ==========
+
+    public List<AdminMetaAdsCompanyResponse> getAdminMetaAdsCompanies() {
+        List<Company> companies = companyRepository.findAll();
+        List<AdminMetaAdsCompanyResponse> rows = new ArrayList<>();
+        for (Company c : companies) {
+            Optional<MetaConnection> mcOpt = metaConnectionRepository.findByCompany(c);
+            long campCount = metaCampaignRepository.countByCompanyId(c.getId());
+            if (mcOpt.isEmpty()) {
+                rows.add(AdminMetaAdsCompanyResponse.builder()
+                        .companyId(c.getId())
+                        .companyName(c.getName())
+                        .connected(false)
+                        .adAccountId(null)
+                        .accountName(null)
+                        .pageId(null)
+                        .instagramBusinessId(null)
+                        .campaignCount(campCount)
+                        .build());
+            } else {
+                MetaConnection mc = mcOpt.get();
+                rows.add(AdminMetaAdsCompanyResponse.builder()
+                        .companyId(c.getId())
+                        .companyName(c.getName())
+                        .connected(mc.isConnected())
+                        .adAccountId(mc.getAdAccountId())
+                        .accountName(mc.getAccountName())
+                        .pageId(mc.getPageId())
+                        .instagramBusinessId(mc.getInstagramBusinessId())
+                        .campaignCount(campCount)
+                        .build());
+            }
+        }
+        rows.sort(Comparator.comparing(AdminMetaAdsCompanyResponse::getCompanyName, String.CASE_INSENSITIVE_ORDER));
+        return rows;
+    }
+
+    public CampaignsListResponse getAdminMetaAdsCampaigns(UUID companyId) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        return marketingService.getCampaignsForCompany(company);
+    }
+
+    @Transactional
+    public void syncAdminMetaAdsForCompany(UUID companyId) {
+        metaSyncService.syncForCompany(companyId);
+    }
+
+    // ========== METAS E OBJETIVOS (ADMIN GLOBAL) ==========
+
+    public List<AdminGoalCompanyRowResponse> getAdminGoalCompanyRows(Integer year) {
+        int y = year != null ? year : LocalDate.now().getYear();
+        List<Company> companies = companyRepository.findAll();
+        List<AdminGoalCompanyRowResponse> rows = new ArrayList<>();
+        for (Company c : companies) {
+            long count = goalRepository.findByCompanyAndYearCycleAndStatusOrderByCreatedAtDesc(c, y, GoalStatus.ACTIVE)
+                    .size();
+            rows.add(AdminGoalCompanyRowResponse.builder()
+                    .companyId(c.getId())
+                    .companyName(c.getName())
+                    .year(y)
+                    .activeGoalsCount(count)
+                    .build());
+        }
+        rows.sort(Comparator.comparing(AdminGoalCompanyRowResponse::getCompanyName, String.CASE_INSENSITIVE_ORDER));
+        return rows;
+    }
+
+    public AdminGoalsForCompanyResponse getAdminGoalsForCompany(UUID companyId, Integer year, Integer planningMonth) {
+        Company c = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        int y = year != null ? year : LocalDate.now().getYear();
+        List<DashboardResponse.GoalDTO> goals = dashboardService.getGoalsForCompany(c, year, planningMonth);
+        return AdminGoalsForCompanyResponse.builder()
+                .companyId(c.getId())
+                .companyName(c.getName())
+                .year(y)
+                .goals(goals)
+                .build();
+    }
+
+    // ========== AGENDA COMERCIAL (ADMIN GLOBAL) ==========
+
+    private static final Map<MeetingStatus, String> MEETING_STATUS_LABELS = Map.of(
+            MeetingStatus.SCHEDULED, "Agendada",
+            MeetingStatus.CONFIRMED, "Confirmada",
+            MeetingStatus.COMPLETED, "Realizada",
+            MeetingStatus.NO_SHOW, "Não compareceu",
+            MeetingStatus.CANCELLED, "Cancelada",
+            MeetingStatus.RESCHEDULED, "Reagendada");
+
+    public List<AdminMeetingRowResponse> getAdminAgenda(LocalDate start, LocalDate end, UUID companyId, String q) {
+        if (start == null || end == null) {
+            throw new RuntimeException("Informe data inicial e final");
+        }
+        String qf = (q != null && !q.trim().isEmpty()) ? q.trim() : null;
+        List<Meeting> meetings = meetingRepository.searchAdminAgenda(start, end, companyId, qf);
+        return meetings.stream().map(this::toAdminMeetingRow).collect(Collectors.toList());
+    }
+
+    private AdminMeetingRowResponse toAdminMeetingRow(Meeting m) {
+        MeetingStatus st = m.getStatus() != null ? m.getStatus() : MeetingStatus.SCHEDULED;
+        MeetingKind k = m.getMeetingKind() != null ? m.getMeetingKind() : MeetingKind.STANDARD;
+        String leadName = m.getLead() != null ? m.getLead().getName() : null;
+        return AdminMeetingRowResponse.builder()
+                .id(m.getId())
+                .companyId(m.getCompany().getId())
+                .companyName(m.getCompany().getName())
+                .leadId(m.getLead() != null ? m.getLead().getId() : null)
+                .leadName(leadName)
+                .title(m.getTitle())
+                .contactName(m.getContactName())
+                .contactEmail(m.getContactEmail())
+                .contactPhone(m.getContactPhone())
+                .meetingDate(m.getMeetingDate())
+                .meetingTime(m.getMeetingTime())
+                .durationMinutes(m.getDurationMinutes())
+                .status(st.name())
+                .statusLabel(MEETING_STATUS_LABELS.getOrDefault(st, st.name()))
+                .meetingKind(k.name())
+                .meetingLink(m.getMeetingLink())
+                .googleEventId(m.getGoogleEventId())
+                .scheduledBy(m.getScheduledBy())
+                .notes(m.getNotes())
+                .build();
+    }
+
+    @Transactional
+    public MeetingResponse createAdminMeeting(AdminMeetingCreateRequest req) {
+        Company company = companyRepository.findById(req.getCompanyId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        MeetingRequest mr = new MeetingRequest();
+        mr.setTitle(req.getTitle());
+        mr.setContactName(req.getContactName());
+        mr.setContactEmail(req.getContactEmail());
+        mr.setContactPhone(req.getContactPhone());
+        mr.setMeetingDate(req.getMeetingDate());
+        mr.setMeetingTime(req.getMeetingTime());
+        mr.setDurationMinutes(req.getDurationMinutes() != null ? req.getDurationMinutes() : 30);
+        mr.setNotes(req.getNotes());
+        mr.setMeetingLink(req.getMeetingLink());
+        mr.setLeadId(req.getLeadId());
+        mr.setMeetingKind(req.getMeetingKind() != null ? req.getMeetingKind() : MeetingKind.STANDARD);
+        mr.setScheduledBy("Admin");
+        mr.setStatus(MeetingStatus.SCHEDULED);
+        return meetingService.createMeeting(company, mr);
+    }
+
+    @Transactional
+    public MeetingResponse patchAdminMeetingStatus(UUID meetingId, MeetingStatus status) {
+        return meetingService.updateMeetingStatusAsAdmin(meetingId, status);
+    }
+
+    @Transactional
+    public void deleteAdminMeeting(UUID meetingId) {
+        meetingService.deleteMeetingAsAdmin(meetingId);
+    }
+
+    private static final Map<LeadStatus, String> LEAD_STATUS_LABELS = new HashMap<>();
+
+    static {
+        LEAD_STATUS_LABELS.put(LeadStatus.NEW, "Novos Leads");
+        LEAD_STATUS_LABELS.put(LeadStatus.CONTACTED, "Em Contato");
+        LEAD_STATUS_LABELS.put(LeadStatus.QUALIFIED, "Qualificados");
+        LEAD_STATUS_LABELS.put(LeadStatus.MEETING_SCHEDULED, "Reunião");
+        LEAD_STATUS_LABELS.put(LeadStatus.PROPOSAL_SENT, "Proposta");
+        LEAD_STATUS_LABELS.put(LeadStatus.NEGOTIATION, "Negociação");
+        LEAD_STATUS_LABELS.put(LeadStatus.WON, "Ganhos");
+        LEAD_STATUS_LABELS.put(LeadStatus.LOST, "Perdidos");
+    }
+
+    /**
+     * Lista leads de todas as empresas (paginado).
+     */
+    public Page<AdminLeadResponse> getAdminLeads(int page, int size, String status, String q) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Lead> leads;
+        if (q != null && !q.trim().isEmpty()) {
+            leads = leadRepository.searchAllLeads(q.trim(), pageable);
+        } else if (status != null && !status.trim().isEmpty()) {
+            LeadStatus st = LeadStatus.valueOf(status.trim().toUpperCase());
+            leads = leadRepository.findByStatusOrderByCreatedAtDesc(st, pageable);
+        } else {
+            leads = leadRepository.findAll(pageable);
+        }
+        return leads.map(this::toAdminLeadResponse);
+    }
+
+    @Transactional
+    public AdminLeadResponse patchAdminLeadStatus(UUID leadId, LeadStatus newStatus) {
+        Lead lead = leadRepository.findById(leadId)
+                .orElseThrow(() -> new RuntimeException("Lead não encontrado"));
+        if (!newStatus.equals(lead.getStatus())) {
+            lead.setManuallyQualified(true);
+        }
+        lead.setStatus(newStatus);
+        leadRepository.save(lead);
+        return toAdminLeadResponse(lead);
+    }
+
+    /**
+     * Conversas WhatsApp em todas as empresas (ou filtradas por empresa).
+     */
+    public Page<AdminConversationSummaryResponse> getAdminConversations(int page, int size, UUID companyId) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<WhatsAppConversation> convs;
+        if (companyId != null) {
+            Company c = companyRepository.findById(companyId)
+                    .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+            convs = conversationRepository.findByCompanyOrderByLastMessageTimestampDesc(c, pageable);
+        } else {
+            convs = conversationRepository.findAllOrderByLastMessageDesc(pageable);
+        }
+        return convs.map(this::toAdminConversationSummary);
+    }
+
+    public List<WhatsAppMessageResponse> getAdminConversationMessages(UUID conversationId, int page, int limit) {
+        return whatsAppChatService.getMessagesByConversation(conversationId, page, limit);
+    }
+
+    private AdminLeadResponse toAdminLeadResponse(Lead lead) {
+        UUID cid = null;
+        String cname = "—";
+        if (lead.getCompany() != null) {
+            cid = lead.getCompany().getId();
+            cname = lead.getCompany().getName();
+        }
+        return AdminLeadResponse.builder()
+                .id(lead.getId())
+                .companyId(cid)
+                .companyName(cname)
+                .name(lead.getName())
+                .email(lead.getEmail())
+                .phone(lead.getPhone())
+                .status(lead.getStatus().name())
+                .statusLabel(LEAD_STATUS_LABELS.getOrDefault(lead.getStatus(), lead.getStatus().name()))
+                .ownerName(lead.getOwnerName())
+                .notes(lead.getNotes())
+                .source(lead.getSource())
+                .estimatedValue(lead.getEstimatedValue())
+                .leadScore(lead.getLeadScore() != null ? lead.getLeadScore() : 0)
+                .profilePictureUrl(lead.getProfilePictureUrl())
+                .aiSummary(lead.getAiSummary())
+                .createdAt(lead.getCreatedAt())
+                .updatedAt(lead.getUpdatedAt())
+                .build();
+    }
+
+    private AdminConversationSummaryResponse toAdminConversationSummary(WhatsAppConversation c) {
+        UUID companyId = c.getCompany() != null ? c.getCompany().getId() : null;
+        String companyName = c.getCompany() != null ? c.getCompany().getName() : "—";
+        UUID leadId = c.getLead() != null ? c.getLead().getId() : null;
+        String leadName = c.getLead() != null ? c.getLead().getName() : null;
+        return AdminConversationSummaryResponse.builder()
+                .id(c.getId())
+                .companyId(companyId)
+                .companyName(companyName)
+                .leadId(leadId)
+                .leadName(leadName)
+                .phoneNumber(c.getPhoneNumber())
+                .contactName(c.getContactName())
+                .lastMessageText(c.getLastMessageText())
+                .lastMessageTimestamp(c.getLastMessageTimestamp())
+                .unreadCount(c.getUnreadCount())
+                .profilePictureUrl(c.getProfilePictureUrl())
+                .uazapInstance(c.getUazapInstance())
+                .build();
     }
 
     // ========== CRUD DE USUÁRIOS ==========

@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import { ModalProvider } from './ModalContext';
+import { loadSidebarCollapsed, saveSidebarCollapsed } from './adminAmpliaRoutes';
 import './AdminLayout.css';
 
 const AdminLayout: React.FC = () => {
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [sidebarNarrow, setSidebarNarrow] = useState(loadSidebarCollapsed);
+
+    useEffect(() => {
+        saveSidebarCollapsed(sidebarNarrow);
+    }, [sidebarNarrow]);
 
     // VERIFICAÇÃO SÍNCRONA IMEDIATA - Antes de qualquer render
     const token = localStorage.getItem('win_access_token');
@@ -52,8 +58,13 @@ const AdminLayout: React.FC = () => {
     // Usuário autenticado e é ADMIN - renderiza o painel
     return (
         <ModalProvider>
-            <div className={`admin-layout ${isSidebarOpen ? 'sidebar-open' : ''}`}>
-                <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+            <div className={`admin-layout admin-layout--amplia ${isSidebarOpen ? 'sidebar-open' : ''}`}>
+                <AdminSidebar
+                    isOpen={isSidebarOpen}
+                    onClose={() => setIsSidebarOpen(false)}
+                    narrow={sidebarNarrow}
+                    onNarrowChange={setSidebarNarrow}
+                />
 
                 {/* Mobile Overlay */}
                 {isSidebarOpen && (
@@ -63,7 +74,7 @@ const AdminLayout: React.FC = () => {
                     />
                 )}
 
-                <div className="admin-main">
+                <div className={`admin-main ${sidebarNarrow ? 'admin-main--narrow' : ''}`}>
                     <AdminHeader user={user} onMenuClick={toggleSidebar} />
                     <div className="admin-content">
                         <Outlet />

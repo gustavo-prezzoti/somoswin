@@ -1,44 +1,35 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Users, MessageSquare, Smartphone, MessagesSquare, RefreshCw, AlertCircle, Activity, ArrowUpRight, Zap, Cpu } from 'lucide-react';
-import adminService from '../../services/adminService';
+import {
+    Users,
+    Clock,
+    Calendar,
+    DollarSign,
+    RefreshCw,
+    AlertCircle,
+    Bell,
+    Building2,
+} from 'lucide-react';
+import { motion } from 'framer-motion';
+import adminService, { AdminDashboard as AdminDashboardData } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 
-interface StatCardProps {
-    icon: React.ReactNode;
-    title: string;
-    value: string | number;
-    subtitle?: string;
-    variant?: 'emerald' | 'indigo' | 'rose' | 'amber';
+const KPI_ICONS = {
+    USERS: Users,
+    CLOCK: Clock,
+    CALENDAR: Calendar,
+    DOLLAR: DollarSign,
+} as const;
+
+function subtitleClass(sub: string): string {
+    if (sub.includes('↑') || sub.includes('+')) return 'text-emerald-500';
+    if (sub.includes('⚠️') || sub.toLowerCase().includes('crít')) return 'text-red-500';
+    return 'text-gray-400';
 }
-
-const StatCard: React.FC<StatCardProps> = ({ icon, title, value, subtitle, variant = 'indigo' }) => {
-    const colors = {
-        emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-        indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-        rose: 'bg-rose-50 text-rose-600 border-rose-100',
-        amber: 'bg-amber-50 text-amber-600 border-amber-100',
-    };
-
-    return (
-        <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-gray-100 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between h-full">
-            <div className="flex items-start justify-between mb-8">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${colors[variant]}`}>
-                    {icon}
-                </div>
-            </div>
-
-            <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] mb-2">{title}</p>
-                <h3 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter italic uppercase leading-none">{value}</h3>
-            </div>
-        </div>
-    );
-};
 
 const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
-    const [stats, setStats] = useState<any>(null);
+    const [data, setData] = useState<AdminDashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -54,36 +45,37 @@ const AdminDashboard: React.FC = () => {
 
         try {
             const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN') {
+            if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
                 setIsAuthenticated(false);
                 return;
             }
             setIsAuthenticated(true);
-            loadStats();
+            loadDashboard();
         } catch {
             setIsAuthenticated(false);
         }
     }, []);
 
-    const loadStats = async () => {
+    const loadDashboard = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
-            const data = await adminService.getStats();
-            setStats(data || { totalUsers: 0, totalMessages: 0, totalConversations: 0, totalInstances: 0, connectedInstances: 0 });
-        } catch (err: any) {
-            console.error('Erro ao carregar estatísticas:', err);
-            if (err.status === 401 || err.status === 403) {
+            const res = await adminService.getDashboard();
+            setData(res);
+        } catch (err: unknown) {
+            console.error('Erro ao carregar dashboard:', err);
+            const e = err as { status?: number };
+            if (e.status === 401 || e.status === 403) {
                 localStorage.removeItem('win_access_token');
                 localStorage.removeItem('win_user');
                 navigate('/admin/login');
                 return;
             }
-            setError(getErrorMessage(err, 'Erro ao carregar estatísticas'));
+            setError(getErrorMessage(err, 'Erro ao carregar dashboard'));
         } finally {
             setLoading(false);
         }
-    };
+    }, [navigate]);
 
     if (isAuthenticated === false) {
         return <Navigate to="/admin/login" replace />;
@@ -91,27 +83,28 @@ const AdminDashboard: React.FC = () => {
 
     if (isAuthenticated === null || loading) {
         return (
-            <div className="flex flex-col items-center justify-center h-96 gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Carregando estatísticas...</span>
+            <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+                <div className="w-12 h-12 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando dashboard…</span>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="p-6">
-                <div className="bg-white rounded-[2rem] border border-gray-100 p-16 text-center max-w-xl mx-auto shadow-lg">
-                    <div className="w-20 h-20 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-8 text-rose-500">
+            <div className="max-w-xl mx-auto">
+                <div className="glass-card rounded-2xl p-12 text-center border border-white/10">
+                    <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-red-400">
                         <AlertCircle size={40} />
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 uppercase italic mb-4">Erro ao carregar dados</h3>
-                    <p className="text-gray-400 font-bold mb-10 italic max-w-sm mx-auto">{error}</p>
+                    <h3 className="text-xl font-black text-white uppercase italic mb-3">Erro ao carregar dados</h3>
+                    <p className="text-gray-400 font-medium text-sm mb-8">{error}</p>
                     <button
-                        onClick={loadStats}
-                        className="flex items-center gap-3 px-10 py-5 bg-gray-900 text-white rounded-2xl hover:bg-black transition-all font-black uppercase text-xs tracking-widest active:scale-95 mx-auto"
+                        type="button"
+                        onClick={() => loadDashboard()}
+                        className="inline-flex items-center gap-3 px-8 py-4 bg-[#00FF00] text-black rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-[#00dd00] transition-all"
                     >
-                        <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                         Tentar novamente
                     </button>
                 </div>
@@ -119,54 +112,111 @@ const AdminDashboard: React.FC = () => {
         );
     }
 
-    return (
-        <div className="p-6 max-w-[1600px] mx-auto min-h-screen">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-16 px-4 md:px-0">
-                <div className="relative">
-                    <h1 className="text-5xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Dashboard</h1>
-                    <p className="text-gray-500 font-bold text-sm tracking-tight mt-3 opacity-70 flex items-center gap-2">
-                        Visão geral do sistema Amplia
-                    </p>
-                </div>
+    const kpis = data?.kpis ?? [];
 
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8 max-w-[1600px] mx-auto"
+        >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl sm:text-4xl font-black italic tracking-tighter uppercase text-white">Dashboard</h2>
+                    <p className="text-sm text-gray-400 font-medium mt-1">Visão geral estratégica e operacional</p>
+                </div>
                 <button
-                    onClick={loadStats}
-                    className="hidden md:flex items-center gap-3 px-6 py-4 bg-white text-gray-400 hover:text-emerald-600 rounded-xl border border-gray-100 shadow-sm transition-all active:scale-95"
+                    type="button"
+                    onClick={() => loadDashboard()}
+                    className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest text-white hover:bg-white/10 hover:border-[#00FF00]/30 transition-all shadow-sm group"
                 >
-                    <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Atualizar</span>
+                    <RefreshCw size={16} className="text-[#00FF00] group-hover:rotate-180 transition-transform duration-500" />
+                    Sincronizar
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
-                <StatCard
-                    icon={<Users size={28} />}
-                    title="Usuários"
-                    value={stats?.totalUsers || 0}
-                    variant="emerald"
-                />
-                <StatCard
-                    icon={<MessageSquare size={28} />}
-                    title="Mensagens"
-                    value={(stats?.totalMessages || 0).toLocaleString('pt-BR')}
-                    variant="indigo"
-                />
-                <StatCard
-                    icon={<Smartphone size={28} />}
-                    title="Instâncias"
-                    value={`${stats?.connectedInstances || 0}/${stats?.totalInstances || 0}`}
-                    variant="amber"
-                />
-                <StatCard
-                    icon={<MessagesSquare size={28} />}
-                    title="Conversas"
-                    value={stats?.totalConversations || 0}
-                    variant="rose"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                {kpis.map((stat, index) => {
+                    const Icon = KPI_ICONS[stat.icon] || Users;
+                    return (
+                        <motion.div
+                            key={stat.label}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="glass-card p-5 flex flex-col group hover:border-[#00FF00]/30 transition-all cursor-default"
+                        >
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="w-10 h-10 bg-white/5 text-[#00FF00] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <Icon size={20} />
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-right max-w-[55%] leading-tight">
+                                    {stat.label}
+                                </span>
+                            </div>
+                            <div className="flex flex-col items-start gap-1">
+                                <span className="text-2xl font-black italic tracking-tighter text-white">{stat.value}</span>
+                                <span className={`text-[9px] font-bold uppercase tracking-tight ${subtitleClass(stat.subtitle)}`}>
+                                    {stat.subtitle}
+                                </span>
+                            </div>
+                        </motion.div>
+                    );
+                })}
             </div>
 
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                    <h3 className="text-lg font-black italic uppercase tracking-tighter text-white flex items-center gap-2">
+                        <Calendar size={18} className="text-[#00FF00]" />
+                        Próximos encontros
+                    </h3>
+                    <div className="glass-card rounded-2xl overflow-hidden divide-y divide-white/5">
+                        {(data?.upcomingMeetings?.length ?? 0) === 0 ? (
+                            <p className="p-8 text-sm text-gray-500 text-center">Nenhum encontro nos próximos 14 dias.</p>
+                        ) : (
+                            data!.upcomingMeetings.map((m) => (
+                                <div key={m.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between hover:bg-white/[0.02]">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-bold text-white truncate">{m.title}</p>
+                                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                                            <Building2 size={12} className="shrink-0" />
+                                            {m.companyName}
+                                        </p>
+                                    </div>
+                                    <div className="text-xs font-mono text-[#00FF00]/90 shrink-0">
+                                        {m.meetingDate} · {m.meetingTime?.slice(0, 5)}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
 
-        </div>
+                <div className="space-y-4">
+                    <h3 className="text-lg font-black italic uppercase tracking-tighter text-white flex items-center gap-2">
+                        <Bell size={18} className="text-[#00FF00]" />
+                        Alertas recentes
+                    </h3>
+                    <div className="glass-card rounded-2xl overflow-hidden divide-y divide-white/5">
+                        {(data?.priorityAlerts?.length ?? 0) === 0 ? (
+                            <p className="p-8 text-sm text-gray-500 text-center">Nenhuma notificação recente.</p>
+                        ) : (
+                            data!.priorityAlerts.map((a) => (
+                                <div
+                                    key={a.id}
+                                    className={`p-4 ${a.read ? 'opacity-70' : ''}`}
+                                >
+                                    <p className="text-sm font-bold text-white">{a.title}</p>
+                                    {a.message && <p className="text-xs text-gray-400 mt-1 line-clamp-2">{a.message}</p>}
+                                    <p className="text-[10px] text-gray-600 mt-2 font-mono">{a.createdAt}</p>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+        </motion.div>
     );
 };
 

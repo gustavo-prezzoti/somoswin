@@ -1,100 +1,223 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Smartphone, Settings, ArrowLeft, Link, Bot, Building2, X, Zap, Activity, Clock, Bell, FileText, Video } from 'lucide-react';
-import './AdminSidebar.css';
+import React, { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import {
+    Home,
+    Target,
+    MessageCircle,
+    Mic,
+    Users,
+    User,
+    Calendar,
+    ClipboardCheck,
+    Bell,
+    BarChart3,
+    Building2,
+    DollarSign,
+    Smartphone,
+    Link as LinkIcon,
+    Bot,
+    Clock,
+    Terminal,
+    ChevronDown,
+    ChevronRight,
+    X,
+    Flag,
+} from 'lucide-react';
+import {
+    ADMIN_NAV_SECTIONS,
+    loadSectionCollapsedState,
+    saveSectionCollapsedState,
+} from './adminAmpliaRoutes';
 import logoBlack from '../../logo_black.png';
+
+const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+    dashboard: Home,
+    crm: Target,
+    atendimento: MessageCircle,
+    escuta: Mic,
+    clientes: Users,
+    usuarios: User,
+    metaads: Target,
+    metas: Flag,
+    agenda: Calendar,
+    diagnostico: ClipboardCheck,
+    alertas: Bell,
+    performance: BarChart3,
+    gestao_equipe: Users,
+    contratos: Building2,
+    equipe: Users,
+    financas: DollarSign,
+    instancias: Smartphone,
+    conexoes: LinkIcon,
+    agentes: Bot,
+    followup: Clock,
+    prompts: Terminal,
+};
+
+function isNavActive(to: string, pathname: string, search: string): boolean {
+    const [path, query] = to.split('?');
+    if (pathname !== path) return false;
+    if (!query) return true;
+    return search === `?${query}`;
+}
 
 interface AdminSidebarProps {
     isOpen?: boolean;
     onClose?: () => void;
+    narrow: boolean;
+    onNarrowChange: (narrow: boolean) => void;
 }
 
-const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
+function navClassName(active: boolean, narrow: boolean): string {
+    const base = `w-full flex items-center ${narrow ? 'justify-center' : 'justify-between'} px-4 py-2.5 rounded-xl transition-all duration-200 group relative`;
+    if (active) return `${base} bg-[#141414] text-white shadow-lg`;
+    return `${base} text-gray-400 hover:bg-white/5 hover:text-white`;
+}
+
+const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, onNarrowChange }) => {
+    const location = useLocation();
+    const [sectionFolded, setSectionFolded] = useState<Record<string, boolean>>(loadSectionCollapsedState);
+
+    useEffect(() => {
+        saveSectionCollapsedState(sectionFolded);
+    }, [sectionFolded]);
+
     return (
-        <aside className={`admin-sidebar ${isOpen ? 'open' : ''}`}>
-            <div className="admin-sidebar-header">
-                <div className="admin-logo">
-                    <img src={logoBlack} alt="Amplia Admin" className="admin-logo-img" style={{ height: '36px', width: 'auto' }} />
+        <aside
+            className={`admin-sidebar-amplia ${isOpen ? 'open' : ''} ${
+                narrow ? 'w-20' : 'w-64'
+            } h-screen bg-white border-r border-black/5 flex flex-col fixed left-0 top-0 z-[1000] transition-all duration-300 ease-in-out`}
+        >
+            <div className="p-6 flex items-center justify-between gap-2 overflow-hidden border-b border-black/5">
+                <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 bg-[#00FF00] rounded-lg flex items-center justify-center shrink-0">
+                        <Bot size={20} className="text-black" />
+                    </div>
+                    {!narrow && (
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-bold text-emerald-500 tracking-widest leading-none uppercase">Sistema</span>
+                            <span className="text-lg font-black italic tracking-tighter leading-none truncate">AMPLIA • ADMIN</span>
+                        </div>
+                    )}
                 </div>
-                <button onClick={onClose} className="lg:hidden p-3 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all">
-                    <X size={20} strokeWidth={3} />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                    {!narrow && (
+                        <button
+                            type="button"
+                            onClick={() => onNarrowChange(true)}
+                            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 transition-all hidden lg:block"
+                            aria-label="Recolher menu"
+                        >
+                            <ChevronRight size={16} className="rotate-180" />
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="lg:hidden p-2 text-gray-400 hover:text-rose-500 rounded-xl"
+                        aria-label="Fechar menu"
+                    >
+                        <X size={20} strokeWidth={2.5} />
+                    </button>
+                </div>
             </div>
 
-            <nav className="admin-nav">
-                <div className="admin-nav-section">
-                    <div className="admin-nav-section-title">Principal</div>
-
-                    <NavLink to="/admin" end className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <LayoutDashboard className="admin-nav-icon" />
-                        <span>Dashboard</span>
-                    </NavLink>
-
-                    <NavLink to="/admin/companies" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <Building2 className="admin-nav-icon" />
-                        <span>Empresas</span>
-                    </NavLink>
-
-                    <NavLink to="/admin/consultancy" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <Video className="admin-nav-icon" />
-                        <span>Consultoria</span>
-                    </NavLink>
-
-                    <NavLink to="/admin/users" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <Users className="admin-nav-icon" />
-                        <span>Usuários</span>
-                    </NavLink>
+            {narrow && (
+                <div className="px-4 mb-4 pt-2">
+                    <button
+                        type="button"
+                        onClick={() => onNarrowChange(false)}
+                        className="w-full py-3 flex items-center justify-center bg-gray-50 hover:bg-gray-100 border border-black/5 rounded-xl text-gray-400 transition-all"
+                        aria-label="Expandir menu"
+                    >
+                        <ChevronRight size={18} />
+                    </button>
                 </div>
+            )}
 
-                <div className="admin-nav-section">
-                    <div className="admin-nav-section-title">Operacional</div>
+            <nav className="flex-1 px-4 py-2 overflow-y-auto scrollbar-hide custom-scrollbar">
+                {ADMIN_NAV_SECTIONS.map((section) => {
+                    const folded = sectionFolded[section.label] ?? false;
+                    const showItems = narrow || !folded;
+                    return (
+                        <div key={section.id} className="mb-4">
+                            {!narrow ? (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setSectionFolded((s) => ({
+                                            ...s,
+                                            [section.label]: !folded,
+                                        }))
+                                    }
+                                    className="w-full flex items-center justify-between px-4 mb-2 group"
+                                >
+                                    <h3 className={`text-[10px] font-bold ${section.accentClass} tracking-widest uppercase`}>
+                                        {section.label}
+                                    </h3>
+                                    <ChevronDown
+                                        size={12}
+                                        className={`text-gray-300 transition-transform duration-200 ${folded ? '-rotate-90' : ''}`}
+                                    />
+                                </button>
+                            ) : (
+                                <div className="h-px bg-black/5 my-4 mx-2" />
+                            )}
 
-                    <NavLink to="/admin/instances" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <Smartphone className="admin-nav-icon" />
-                        <span>Instâncias</span>
-                    </NavLink>
-
-                    <NavLink to="/admin/user-connections" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <Link className="admin-nav-icon" />
-                        <span>Conexões</span>
-                    </NavLink>
-
-                    <NavLink to="/admin/agents" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <Bot className="admin-nav-icon" />
-                        <span>Agentes IA</span>
-                    </NavLink>
-
-                    <NavLink to="/admin/followup" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <Clock className="admin-nav-icon" />
-                        <span>Follow-up</span>
-                    </NavLink>
-
-                </div>
-
-                <div className="admin-nav-section">
-                    <div className="admin-nav-section-title">Sistema</div>
-                    <NavLink to="/admin/terms" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <FileText className="admin-nav-icon" />
-                        <span>Termos de Uso</span>
-                    </NavLink>
-
-                    <NavLink to="/admin/settings" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <Settings className="admin-nav-icon" />
-                        <span>Configurações</span>
-                    </NavLink>
-
-                    <NavLink to="/admin/notifications" className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                        <Bell className="admin-nav-icon" />
-                        <span>Notificações</span>
-                    </NavLink>
-                </div>
+                            {showItems && (
+                                <div className="space-y-1">
+                                    {section.items.map((item) => {
+                                        const Icon = iconMap[item.id] || Home;
+                                        const active = isNavActive(item.to, location.pathname, location.search);
+                                        return (
+                                            <NavLink
+                                                key={item.id}
+                                                to={item.to}
+                                                end={item.to === '/admin'}
+                                                title={narrow ? item.label : undefined}
+                                                onClick={onClose}
+                                                className={() => navClassName(active, narrow)}
+                                            >
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <Icon
+                                                        size={18}
+                                                        className={
+                                                            active ? 'text-[#00FF00] shrink-0' : 'text-gray-400 group-hover:text-gray-200 shrink-0'
+                                                        }
+                                                    />
+                                                    {!narrow && (
+                                                        <span className="text-xs font-bold tracking-wide truncate">{item.label}</span>
+                                                    )}
+                                                </div>
+                                                {!narrow && active && <div className="w-1.5 h-1.5 bg-[#00FF00] rounded-full shrink-0" />}
+                                            </NavLink>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </nav>
 
-            <div className="admin-sidebar-footer">
-                <NavLink to="/dashboard" className="admin-nav-item group">
-                    <ArrowLeft className="admin-nav-icon group-hover:-translate-x-1 transition-transform" />
-                    <span>Voltar ao App</span>
+            <div className="p-4 border-t border-black/5">
+                <NavLink
+                    to="/dashboard"
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                        `w-full flex items-center ${narrow ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-xl transition-all group ${
+                            isActive ? 'bg-gray-100' : 'text-gray-500 hover:bg-gray-50'
+                        }`
+                    }
+                >
+                    <ChevronRight size={18} className={`${narrow ? '' : 'rotate-180'} text-gray-400 group-hover:text-gray-600`} />
+                    {!narrow && <span className="text-xs font-bold tracking-wide">Voltar ao App</span>}
                 </NavLink>
+                {!narrow && (
+                    <div className="mt-3 px-2 flex items-center gap-2 opacity-60">
+                        <img src={logoBlack} alt="" className="h-6 w-auto opacity-80" />
+                    </div>
+                )}
             </div>
         </aside>
     );

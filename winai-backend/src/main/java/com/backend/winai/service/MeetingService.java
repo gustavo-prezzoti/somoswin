@@ -323,4 +323,36 @@ public class MeetingService {
                 .topicsPreview(meeting.getTopicsPreview())
                 .build();
     }
+
+    @Transactional(readOnly = true)
+    public MeetingResponse getMeetingByIdAsAdmin(java.util.UUID id) {
+        Meeting meeting = meetingRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Reunião não encontrada"));
+        return toResponse(meeting);
+    }
+
+    @Transactional
+    public MeetingResponse updateMeetingStatusAsAdmin(java.util.UUID id, MeetingStatus status) {
+        Meeting meeting = meetingRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Reunião não encontrada"));
+        meeting.setStatus(status);
+        meeting.setManualUpdate(true);
+        meeting = meetingRepository.save(meeting);
+        return toResponse(meeting);
+    }
+
+    @Transactional
+    public void deleteMeetingAsAdmin(java.util.UUID id) {
+        Meeting meeting = meetingRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Reunião não encontrada"));
+        Company company = meeting.getCompany();
+        try {
+            if (meeting.getGoogleEventId() != null) {
+                googleDriveService.deleteCalendarEvent(company, meeting.getGoogleEventId());
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to sync deletion with Google Calendar: " + e.getMessage());
+        }
+        meetingRepository.delete(meeting);
+    }
 }

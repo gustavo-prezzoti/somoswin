@@ -1,12 +1,28 @@
 package com.backend.winai.controller;
 
+import com.backend.winai.dto.request.AdminMeetingCreateRequest;
 import com.backend.winai.dto.request.AdminCreateUserRequest;
+import com.backend.winai.dto.request.AdminEscutaStartRequest;
+import com.backend.winai.dto.request.AdminLeadStatusPatchRequest;
 import com.backend.winai.dto.request.AdminUpdateUserRequest;
 import com.backend.winai.dto.request.UpdateInstanceConfigRequest;
 import com.backend.winai.dto.request.CreateUserWhatsAppConnectionRequest;
 import com.backend.winai.dto.request.CreateTermsRequest;
+import com.backend.winai.dto.response.AdminConversationSummaryResponse;
+import com.backend.winai.dto.marketing.CampaignsListResponse;
+import com.backend.winai.dto.response.AdminEscutaSessionResponse;
+import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
+import com.backend.winai.dto.response.AdminGoalsForCompanyResponse;
+import com.backend.winai.dto.response.AdminMetaAdsCompanyResponse;
+import com.backend.winai.dto.response.AdminDashboardResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
+import com.backend.winai.dto.response.AdminMeetingRowResponse;
+import com.backend.winai.dto.response.AdminLeadResponse;
 import com.backend.winai.dto.response.AdminUserResponse;
+import com.backend.winai.dto.response.MeetingResponse;
+import com.backend.winai.dto.response.WhatsAppMessageResponse;
+import com.backend.winai.entity.LeadStatus;
+import com.backend.winai.entity.MeetingStatus;
 import com.backend.winai.dto.response.TermsOfServiceResponse;
 import com.backend.winai.dto.response.UserTermsAcceptanceResponse;
 import com.backend.winai.service.AdminService;
@@ -16,10 +32,16 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,7 +51,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Admin", description = "Endpoints de administração do sistema")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
 public class AdminController {
 
     private final AdminService adminService;
@@ -41,6 +63,163 @@ public class AdminController {
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getSystemStats() {
         return ResponseEntity.ok(adminService.getSystemStats());
+    }
+
+    @Operation(summary = "Dashboard admin (Amplia)", description = "KPIs, próximos encontros e alertas recentes")
+    @GetMapping("/dashboard")
+    public ResponseEntity<AdminDashboardResponse> getAdminDashboard() {
+        return ResponseEntity.ok(adminService.getAdminDashboard());
+    }
+
+    @Operation(summary = "CRM — listar leads (global)", description = "Leads de todas as empresas, com busca e filtro por status")
+    @GetMapping("/crm/leads")
+    public ResponseEntity<Page<AdminLeadResponse>> getCrmLeads(
+            @Parameter(description = "Página (0-based)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamanho") @RequestParam(defaultValue = "50") int size,
+            @Parameter(description = "Filtrar por status (enum LeadStatus)") @RequestParam(required = false) String status,
+            @Parameter(description = "Busca em nome, email, telefone e empresa") @RequestParam(required = false) String q) {
+        return ResponseEntity.ok(adminService.getAdminLeads(page, size, status, q));
+    }
+
+    @Operation(summary = "CRM — atualizar status do lead", description = "Atualiza estágio do funil (marca qualificação manual)")
+    @PatchMapping("/crm/leads/{leadId}/status")
+    public ResponseEntity<AdminLeadResponse> patchCrmLeadStatus(
+            @PathVariable UUID leadId,
+            @Valid @RequestBody AdminLeadStatusPatchRequest body) {
+        LeadStatus st = LeadStatus.valueOf(body.getStatus().trim().toUpperCase());
+        return ResponseEntity.ok(adminService.patchAdminLeadStatus(leadId, st));
+    }
+
+    @Operation(summary = "Atendimento — conversas WhatsApp (global)", description = "Lista conversas; opcionalmente filtra por empresa")
+    @GetMapping("/atendimento/conversations")
+    public ResponseEntity<Page<AdminConversationSummaryResponse>> getAtendimentoConversations(
+            @Parameter(description = "Página (0-based)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamanho") @RequestParam(defaultValue = "30") int size,
+            @Parameter(description = "Filtrar por empresa") @RequestParam(required = false) UUID companyId) {
+        return ResponseEntity.ok(adminService.getAdminConversations(page, size, companyId));
+    }
+
+    @Operation(summary = "Atendimento — mensagens da conversa", description = "Histórico de mensagens (mesma regra do chat)")
+    @GetMapping("/atendimento/conversations/{conversationId}/messages")
+    public ResponseEntity<List<WhatsAppMessageResponse>> getAtendimentoMessages(
+            @PathVariable UUID conversationId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int limit) {
+        return ResponseEntity.ok(adminService.getAdminConversationMessages(conversationId, page, limit));
+    }
+
+    @Operation(summary = "Escuta Inteligente — listar sessões (global)", description = "Sessões de análise de áudio/transcrição em todas as empresas")
+    @GetMapping("/escuta/sessions")
+    public ResponseEntity<Page<AdminEscutaSessionResponse>> listEscutaSessions(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "40") int size,
+            @RequestParam(required = false) String q) {
+        return ResponseEntity.ok(adminService.getAdminEscutaSessions(page, size, q));
+    }
+
+    @Operation(summary = "Escuta Inteligente — detalhe da sessão")
+    @GetMapping("/escuta/sessions/{sessionId}")
+    public ResponseEntity<AdminEscutaSessionResponse> getEscutaSession(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(adminService.getAdminEscutaSession(sessionId));
+    }
+
+    @Operation(summary = "Escuta Inteligente — nova sessão", description = "Cria sessão vinculada a lead da empresa indicada")
+    @PostMapping("/escuta/sessions")
+    public ResponseEntity<AdminEscutaSessionResponse> startEscutaSession(@Valid @RequestBody AdminEscutaStartRequest body) {
+        return ResponseEntity.ok(adminService.startAdminEscuta(body));
+    }
+
+    @Operation(summary = "Escuta Inteligente — enviar áudio e transcrever")
+    @PostMapping(value = "/escuta/sessions/{sessionId}/audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AdminEscutaSessionResponse> uploadEscutaAudio(
+            @PathVariable UUID sessionId,
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(adminService.uploadAdminEscutaAudio(sessionId, file));
+    }
+
+    @Operation(summary = "Escuta Inteligente — rodar análise IA (JSON no CRM)")
+    @PostMapping("/escuta/sessions/{sessionId}/analyze")
+    public ResponseEntity<AdminEscutaSessionResponse> analyzeEscutaSession(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(adminService.analyzeAdminEscuta(sessionId));
+    }
+
+    @Operation(summary = "Escuta Inteligente — concluir e enviar resumo ao CRM (notas do lead)")
+    @PostMapping("/escuta/sessions/{sessionId}/complete")
+    public ResponseEntity<AdminEscutaSessionResponse> completeEscutaSession(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(adminService.completeAdminEscuta(sessionId));
+    }
+
+    @Operation(summary = "Escuta Inteligente — excluir sessão")
+    @DeleteMapping("/escuta/sessions/{sessionId}")
+    public ResponseEntity<Void> deleteEscutaSession(@PathVariable UUID sessionId) {
+        adminService.deleteAdminEscuta(sessionId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Meta Ads — empresas e status de conexão", description = "Lista todas as empresas com dados da conexão Meta (Graph API)")
+    @GetMapping("/meta-ads/companies")
+    public ResponseEntity<List<AdminMetaAdsCompanyResponse>> listMetaAdsCompanies() {
+        return ResponseEntity.ok(adminService.getAdminMetaAdsCompanies());
+    }
+
+    @Operation(summary = "Meta Ads — campanhas da empresa", description = "Mesma origem que o app cliente: campanhas sincronizadas no banco")
+    @GetMapping("/meta-ads/companies/{companyId}/campaigns")
+    public ResponseEntity<CampaignsListResponse> getMetaAdsCampaigns(@PathVariable UUID companyId) {
+        return ResponseEntity.ok(adminService.getAdminMetaAdsCampaigns(companyId));
+    }
+
+    @Operation(summary = "Meta Ads — disparar sincronização", description = "Chama sync de campanhas/insights para a empresa (background)")
+    @PostMapping("/meta-ads/companies/{companyId}/sync")
+    public ResponseEntity<Map<String, String>> syncMetaAdsCompany(@PathVariable UUID companyId) {
+        adminService.syncAdminMetaAdsForCompany(companyId);
+        return ResponseEntity.ok(Map.of("status", "sync_started", "message", "Sincronização iniciada em background"));
+    }
+
+    @Operation(summary = "Metas — resumo por empresa (ciclo anual)", description = "Contagem de metas ativas no ano do ciclo")
+    @GetMapping("/goals/companies")
+    public ResponseEntity<List<AdminGoalCompanyRowResponse>> listGoalCompanies(
+            @RequestParam(required = false) Integer year) {
+        return ResponseEntity.ok(adminService.getAdminGoalCompanyRows(year));
+    }
+
+    @Operation(summary = "Metas — detalhe da empresa", description = "Mesma estrutura do dashboard: tarefas, checkpoints, progresso")
+    @GetMapping("/goals/companies/{companyId}")
+    public ResponseEntity<AdminGoalsForCompanyResponse> getGoalsForCompany(
+            @PathVariable UUID companyId,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer planningMonth) {
+        return ResponseEntity.ok(adminService.getAdminGoalsForCompany(companyId, year, planningMonth));
+    }
+
+    @Operation(summary = "Agenda comercial — listar reuniões", description = "Todas as empresas no período; filtro opcional por empresa e busca")
+    @GetMapping("/agenda/meetings")
+    public ResponseEntity<List<AdminMeetingRowResponse>> listAgendaMeetings(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
+            @RequestParam(required = false) UUID companyId,
+            @RequestParam(required = false) String q) {
+        return ResponseEntity.ok(adminService.getAdminAgenda(start, end, companyId, q));
+    }
+
+    @Operation(summary = "Agenda comercial — criar reunião", description = "Cria na empresa indicada (integração Google Calendar quando conectada)")
+    @PostMapping("/agenda/meetings")
+    public ResponseEntity<MeetingResponse> createAgendaMeeting(@Valid @RequestBody AdminMeetingCreateRequest body) {
+        return ResponseEntity.ok(adminService.createAdminMeeting(body));
+    }
+
+    @Operation(summary = "Agenda comercial — alterar status")
+    @PatchMapping("/agenda/meetings/{meetingId}/status")
+    public ResponseEntity<MeetingResponse> patchAgendaMeetingStatus(
+            @PathVariable UUID meetingId,
+            @RequestParam MeetingStatus status) {
+        return ResponseEntity.ok(adminService.patchAdminMeetingStatus(meetingId, status));
+    }
+
+    @Operation(summary = "Agenda comercial — excluir reunião")
+    @DeleteMapping("/agenda/meetings/{meetingId}")
+    public ResponseEntity<Void> deleteAgendaMeeting(@PathVariable UUID meetingId) {
+        adminService.deleteAdminMeeting(meetingId);
+        return ResponseEntity.noContent().build();
     }
 
     // ========== CRUD DE USUÁRIOS ==========

@@ -1,42 +1,40 @@
-/* Admin Header - Ultra Premium Industrial */
-.admin-header {
+/* Admin Header — tema Amplia (escuro) */
+.admin-header--amplia {
     position: sticky;
     top: 0;
     z-index: 100;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 40px;
-    background: rgba(255, 255, 255, 0.9);
+    padding: 16px 32px;
+    background: rgba(20, 20, 20, 0.92);
     backdrop-filter: blur(12px);
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .admin-header-left {
     display: flex;
     align-items: center;
     gap: 16px;
+    min-width: 0;
+    flex: 1;
 }
 
 .admin-header-right {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
+    flex-shrink: 0;
 }
 
-/* Responsive */
 @media (max-width: 1024px) {
-    .admin-header {
-        padding: 16px 24px;
+    .admin-header--amplia {
+        padding: 12px 20px;
     }
 }
 
 @media (max-width: 640px) {
-    .admin-header {
-        padding: 12px 16px;
-    }
-
     .admin-header-right {
-        gap: 10px;
+        gap: 8px;
     }
 }

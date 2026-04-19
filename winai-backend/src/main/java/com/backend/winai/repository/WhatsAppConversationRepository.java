@@ -2,6 +2,8 @@ package com.backend.winai.repository;
 
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.WhatsAppConversation;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -38,6 +40,8 @@ public interface WhatsAppConversationRepository extends JpaRepository<WhatsAppCo
 
         List<WhatsAppConversation> findByCompanyOrderByLastMessageTimestampDesc(Company company);
 
+        Page<WhatsAppConversation> findByCompanyOrderByLastMessageTimestampDesc(Company company, Pageable pageable);
+
         List<WhatsAppConversation> findByCompanyAndIsArchivedOrderByLastMessageTimestampDesc(Company company,
                         Boolean isArchived);
 
@@ -48,4 +52,8 @@ public interface WhatsAppConversationRepository extends JpaRepository<WhatsAppCo
         Optional<WhatsAppConversation> findByIdWithCompany(@Param("id") UUID id);
 
         List<WhatsAppConversation> findByLead_Id(UUID leadId);
+
+        @Query(value = "SELECT c FROM WhatsAppConversation c ORDER BY COALESCE(c.lastMessageTimestamp, 0) DESC",
+                        countQuery = "SELECT count(c) FROM WhatsAppConversation c")
+        Page<WhatsAppConversation> findAllOrderByLastMessageDesc(Pageable pageable);
 }

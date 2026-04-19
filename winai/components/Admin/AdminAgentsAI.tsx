@@ -109,7 +109,7 @@ const AdminAgentsAI = () => {
                 return null;
             });
 
-            const toggleCompanyMode = async (mode: string) => {
+            const toggleCompanyMode = async (mode: 'IA' | 'HUMAN') => {
                 setCompMode(mode);
                 if (currentCompany) {
                     try {
