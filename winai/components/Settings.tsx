@@ -82,6 +82,13 @@ const Settings: React.FC = () => {
   });
 
   const isCompanyAdmin = user?.role === 'ADMIN';
+  /** Convites, revogar e remoção: pagante ou ADMIN (SUPER_ADMIN incluído). */
+  const canManageTeam =
+    isBillingOwnerFlag === true ||
+    user?.role === 'ADMIN' ||
+    user?.role === 'SUPER_ADMIN';
+  /** ADMIN que não é o responsável financeiro — remoção restrita a USER. Enquanto o dono não carrega, assume-se o caso mais restritivo. */
+  const invitedCompanyAdmin = user?.role === 'ADMIN' && isBillingOwnerFlag !== true;
   const [showMetaDetails, setShowMetaDetails] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -537,10 +544,27 @@ const Settings: React.FC = () => {
   };
 
   const canRemoveMember = (membro: CompanyMemberDTO) => {
-    if (!isCompanyAdmin || !user?.id || membro.id === user.id) return false;
+    if (!canManageTeam || !user?.id || membro.id === user.id) return false;
     const admins = teamMembers.filter((m) => m.role === 'ADMIN');
     if (membro.role === 'ADMIN' && admins.length <= 1) return false;
+    if (invitedCompanyAdmin && (membro.isBillingOwner || membro.role === 'ADMIN')) return false;
     return true;
+  };
+
+  const removeMemberBlockedReason = (membro: CompanyMemberDTO): string | null => {
+    if (!canManageTeam || !user?.id) return null;
+    if (membro.id === user.id) return 'Você não pode remover a si mesmo.';
+    const admins = teamMembers.filter((m) => m.role === 'ADMIN');
+    if (membro.role === 'ADMIN' && admins.length <= 1) {
+      return 'Não é possível remover o único administrador da empresa.';
+    }
+    if (invitedCompanyAdmin && membro.isBillingOwner) {
+      return 'Administradores convidados não podem remover o responsável financeiro.';
+    }
+    if (invitedCompanyAdmin && membro.role === 'ADMIN') {
+      return 'Administradores convidados não podem remover outros administradores.';
+    }
+    return null;
   };
 
   const openRevokeInviteConfirm = (inv: AccessInvitationDTO) => {
@@ -1015,6 +1039,12 @@ const Settings: React.FC = () => {
 
             {activeTab === 'team' && (
               <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                {isBillingOwnerFlag !== null && !canManageTeam && (
+                  <p className="text-sm font-medium text-gray-600 bg-amber-50 border border-amber-100 rounded-2xl px-5 py-4">
+                    Apenas administradores ou o responsável financeiro da conta podem adicionar ou remover membros e
+                    gerenciar convites.
+                  </p>
+                )}
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-[#002a1e] p-8 rounded-[40px] text-white">
                   <div className="space-y-1">
                     <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Plano Atual</p>
@@ -1028,7 +1058,7 @@ const Settings: React.FC = () => {
                         : ' / Ilimitados'}
                     </p>
                   </div>
-                  {isCompanyAdmin && (
+                  {canManageTeam && (
                     <button
                       type="button"
                       onClick={() => setShowAddMember(true)}
@@ -1048,7 +1078,7 @@ const Settings: React.FC = () => {
                           <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
                           <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Nível</th>
                           <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                          {isCompanyAdmin && (
+                          {canManageTeam && (
                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">
                               Ações
                             </th>
@@ -1058,13 +1088,13 @@ const Settings: React.FC = () => {
                       <tbody className="divide-y divide-gray-50">
                         {teamLoading ? (
                           <tr>
-                            <td colSpan={isCompanyAdmin ? 5 : 4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
+                            <td colSpan={canManageTeam ? 5 : 4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
                               <RefreshCw className="inline animate-spin mr-2" size={16} /> Carregando...
                             </td>
                           </tr>
                         ) : teamMembers.length === 0 ? (
                           <tr>
-                            <td colSpan={isCompanyAdmin ? 5 : 4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
+                            <td colSpan={canManageTeam ? 5 : 4} className="px-6 py-10 text-center text-gray-400 text-sm font-bold">
                               Nenhum membro encontrado.
                             </td>
                           </tr>
@@ -1109,7 +1139,7 @@ const Settings: React.FC = () => {
                                   </span>
                                 </div>
                               </td>
-                              {isCompanyAdmin && (
+                              {canManageTeam && (
                                 <td className="px-6 py-5 text-right">
                                   {canRemoveMember(membro) ? (
                                     <button
@@ -1121,7 +1151,12 @@ const Settings: React.FC = () => {
                                       Excluir
                                     </button>
                                   ) : (
-                                    <span className="text-[10px] font-medium text-gray-300">—</span>
+                                    <span
+                                      className="text-[10px] font-medium text-gray-300 cursor-default inline-block"
+                                      title={removeMemberBlockedReason(membro) ?? 'Ação não disponível'}
+                                    >
+                                      —
+                                    </span>
                                   )}
                                 </td>
                               )}
@@ -1133,7 +1168,7 @@ const Settings: React.FC = () => {
                   </div>
                 </div>
 
-                {isCompanyAdmin && pendingInvitations.length > 0 && (
+                {canManageTeam && pendingInvitations.length > 0 && (
                   <div className="space-y-3">
                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Convites pendentes</h4>
                     <div className="space-y-2">

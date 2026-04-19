@@ -30,6 +30,7 @@ public class CompanyTeamService {
     private final UserRepository userRepository;
     private final AccessInvitationRepository accessInvitationRepository;
     private final EmailService emailService;
+    private final SubscriptionBillingService subscriptionBillingService;
 
     public CompanyProfileResponse getCompanyProfile(User user) {
         Company company = requireCompany(user);
@@ -75,12 +76,13 @@ public class CompanyTeamService {
                         .jobTitle(u.getJobTitle())
                         .isActive(u.getIsActive())
                         .avatarUrl(u.getAvatarUrl())
+                        .isBillingOwner(subscriptionBillingService.isBillingOwner(u))
                         .build())
                 .collect(Collectors.toList());
     }
 
     public List<AccessInvitationListItemResponse> listPendingInvitations(User user) {
-        if (user.getRole() != UserRole.ADMIN) {
+        if (!canManageTeam(user)) {
             return Collections.emptyList();
         }
         Company company = requireCompany(user);
@@ -93,8 +95,8 @@ public class CompanyTeamService {
 
     @Transactional
     public AccessInvitationListItemResponse createInvitation(User admin, CreateAccessInvitationRequest request) {
-        if (admin.getRole() != UserRole.ADMIN) {
-            throw new RuntimeException("Apenas administradores podem convidar membros");
+        if (!canManageTeam(admin)) {
+            throw new RuntimeException("Apenas administradores ou o responsável financeiro podem convidar membros");
         }
         Company company = companyRepository.findByIdWithPlan(requireCompany(admin).getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
@@ -131,18 +133,25 @@ public class CompanyTeamService {
     }
 
     @Transactional
-    public void removeMember(User admin, UUID memberUserId) {
-        if (admin.getRole() != UserRole.ADMIN) {
-            throw new RuntimeException("Apenas administradores podem remover membros");
+    public void removeMember(User actor, UUID memberUserId) {
+        if (!canManageTeam(actor)) {
+            throw new RuntimeException("Apenas administradores ou o responsável financeiro podem remover membros");
         }
-        if (admin.getId().equals(memberUserId)) {
+        if (actor.getId().equals(memberUserId)) {
             throw new RuntimeException("Você não pode remover a si mesmo da equipe");
         }
-        Company company = requireCompany(admin);
+        Company company = requireCompany(actor);
         User member = userRepository.findByIdWithCompany(memberUserId)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
         if (member.getCompany() == null || !member.getCompany().getId().equals(company.getId())) {
             throw new RuntimeException("Este usuário não pertence à sua empresa");
+        }
+        if (subscriptionBillingService.isBillingOwner(member) && !subscriptionBillingService.isBillingOwner(actor)) {
+            throw new RuntimeException("Administradores convidados não podem remover o responsável financeiro da conta");
+        }
+        boolean invitedAdmin = isInvitedCompanyAdmin(actor);
+        if (invitedAdmin && member.getRole() == UserRole.ADMIN) {
+            throw new RuntimeException("Administradores convidados não podem remover outros administradores");
         }
         if (member.getRole() == UserRole.ADMIN) {
             long admins = userRepository.countByCompany_IdAndRoleAndIsActiveTrue(company.getId(), UserRole.ADMIN);
@@ -157,8 +166,8 @@ public class CompanyTeamService {
 
     @Transactional
     public void revokeInvitation(User admin, UUID invitationId) {
-        if (admin.getRole() != UserRole.ADMIN) {
-            throw new RuntimeException("Apenas administradores podem revogar convites");
+        if (!canManageTeam(admin)) {
+            throw new RuntimeException("Apenas administradores ou o responsável financeiro podem revogar convites");
         }
         Company company = requireCompany(admin);
         AccessInvitation inv = accessInvitationRepository.findById(invitationId)
@@ -191,6 +200,23 @@ public class CompanyTeamService {
             throw new RuntimeException("Sem empresa associada à conta");
         }
         return user.getCompany();
+    }
+
+    /** Dono financeiro, administrador da empresa ou SUPER_ADMIN. */
+    private boolean canManageTeam(User user) {
+        if (user == null) {
+            return false;
+        }
+        if (subscriptionBillingService.isBillingOwner(user)) {
+            return true;
+        }
+        UserRole role = user.getRole();
+        return role == UserRole.ADMIN || role == UserRole.SUPER_ADMIN;
+    }
+
+    /** ADMIN da empresa que não é o responsável financeiro (regras mais restritas na remoção). */
+    private boolean isInvitedCompanyAdmin(User user) {
+        return user.getRole() == UserRole.ADMIN && !subscriptionBillingService.isBillingOwner(user);
     }
 
     private CompanyProfileResponse mapCompanyProfile(Company c) {

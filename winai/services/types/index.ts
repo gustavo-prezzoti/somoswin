@@ -66,6 +66,8 @@ export interface CompanyMemberDTO {
     jobTitle: string | null;
     isActive: boolean;
     avatarUrl: string | null;
+    /** Responsável financeiro (primeiro usuário da empresa). */
+    isBillingOwner?: boolean;
 }
 
 export interface AccessInvitationDTO {

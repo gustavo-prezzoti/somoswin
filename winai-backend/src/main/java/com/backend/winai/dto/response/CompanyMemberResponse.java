@@ -19,4 +19,6 @@ public class CompanyMemberResponse {
     private String jobTitle;
     private Boolean isActive;
     private String avatarUrl;
+    /** True se este usuário é o responsável financeiro (primeiro da empresa). */
+    private Boolean isBillingOwner;
 }
