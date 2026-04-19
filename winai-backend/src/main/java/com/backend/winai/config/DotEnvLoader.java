@@ -110,9 +110,11 @@ public final class DotEnvLoader {
             }
         }
 
-        if (log.isDebugEnabled()) {
-            String h = System.getProperty("spring.mail.host");
-            log.debug("spring.mail.host após sync: {}", h != null && !h.isBlank() ? "[definido]" : "[vazio]");
+        String host = System.getProperty("spring.mail.host");
+        if (host != null && !host.isBlank()) {
+            log.info("SMTP: spring.mail.host={} (MailSender pode ser criado ao arrancar)", host);
+        } else {
+            log.warn("SMTP sem host: preencha MAIL_HOST no .env (somoswin/.env) ou exporte MAIL_HOST / SPRING_MAIL_HOST.");
         }
     }
 
