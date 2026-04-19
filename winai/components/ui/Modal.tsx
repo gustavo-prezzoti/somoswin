@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Loader2 } from 'lucide-react';
+import { BodyPortal } from './BodyPortal';
 
 interface ModalProps {
     isOpen: boolean;
@@ -28,6 +29,7 @@ export const Modal: React.FC<ModalProps> = ({
     };
 
     return (
+        <BodyPortal>
         <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-emerald-950/20 backdrop-blur-sm overflow-y-auto min-h-0">
             <div
                 className={`bg-white w-full ${sizeClasses[size]} rounded-3xl shadow-2xl border border-emerald-800/10 max-h-[min(90dvh,900px)] flex flex-col my-auto`}
@@ -53,6 +55,7 @@ export const Modal: React.FC<ModalProps> = ({
                 </div>
             </div>
         </div>
+        </BodyPortal>
     );
 };
 
@@ -88,6 +91,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     };
 
     return (
+        <BodyPortal>
         <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-emerald-950/30 backdrop-blur-sm overflow-y-auto min-h-0">
             <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden border border-gray-100 my-auto max-h-[min(90dvh,900px)] flex flex-col">
                 <div className="p-6 sm:p-8 space-y-6 overflow-y-auto min-h-0">
@@ -117,6 +121,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 </div>
             </div>
         </div>
+        </BodyPortal>
     );
 };
 

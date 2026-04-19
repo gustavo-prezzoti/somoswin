@@ -38,7 +38,7 @@ import {
   KANBAN_COLUMN_ORDER,
   KANBAN_COLUMN_COLORS,
 } from '../services';
-import { ConfirmModal } from './ui';
+import { ConfirmModal, BodyPortal } from './ui';
 
 const kanbanColumns = KANBAN_COLUMN_ORDER.map((id) => ({
   id,
@@ -315,6 +315,7 @@ const CRM: React.FC = () => {
   }
 
   return (
+    <>
     <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
         <div>
@@ -638,6 +639,10 @@ const CRM: React.FC = () => {
         </div>
       )}
 
+    </div>
+
+    <BodyPortal>
+      <>
       <AnimatePresence>
         {selectedLead && (
           <div className="fixed inset-0 z-[10050] flex justify-end">
@@ -1132,7 +1137,9 @@ const CRM: React.FC = () => {
         variant="danger"
         isLoading={isDeleting}
       />
-    </div>
+      </>
+    </BodyPortal>
+    </>
   );
 };
 
