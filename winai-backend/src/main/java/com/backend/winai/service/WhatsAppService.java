@@ -50,6 +50,7 @@ public class WhatsAppService {
     private final SimpMessagingTemplate messagingTemplate;
     private final SupabaseStorageService storageService;
     private final UserWhatsAppConnectionRepository connectionRepository;
+    private final CompanyAiPolicy companyAiPolicy;
     private final RestTemplate restTemplate;
 
     @Value("${uazap.default-token:}")
@@ -901,6 +902,10 @@ public class WhatsAppService {
 
         if (!"IA".equals(mode) && !"HUMAN".equals(mode)) {
             throw new IllegalArgumentException("Modo inválido. Use 'IA' ou 'HUMAN'");
+        }
+
+        if ("IA".equals(mode)) {
+            companyAiPolicy.assertMaySetDefaultSupportModeToIA(company.getId());
         }
 
         company.setDefaultSupportMode(mode);

@@ -41,6 +41,7 @@ public class WhatsAppChatService {
         private final UserWhatsAppConnectionRepository userWhatsAppConnectionRepository;
         private final FollowUpService followUpService;
         private final ChatMemoryService chatMemoryService;
+        private final AIAgentService aiAgentService;
 
         /**
          * Busca todas as conversas de uma empresa
@@ -336,7 +337,11 @@ public class WhatsAppChatService {
                         String dm = company.getDefaultSupportMode();
                         if (dm == null || !"IA".equalsIgnoreCase(dm.trim())) {
                                 throw new IllegalArgumentException(
-                                                "A IA só pode ser ativada depois de habilitada no painel administrativo (Agentes / modo da empresa).");
+                                                "A IA só pode ser ativada depois de habilitada no painel (modo padrão da empresa) e com agente configurado.");
+                        }
+                        if (!aiAgentService.hasActiveLinkedKbForConversation(conversation)) {
+                                throw new IllegalArgumentException(
+                                                "Não há agente (base de conhecimento ativa) vinculado à conexão WhatsApp desta conversa. Crie o agente e vincule-o antes de ativar IA.");
                         }
                 }
 

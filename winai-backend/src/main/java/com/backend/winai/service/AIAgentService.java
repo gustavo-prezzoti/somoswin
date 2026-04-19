@@ -873,9 +873,13 @@ public class AIAgentService {
                 .updatedAt(conversation.getUpdatedAt()).build();
     }
 
+    /**
+     * Resolve qual KB usar para IA: mesma conexão WhatsApp da conversa (instância/token).
+     * Não usa fallback para "primeira conexão da empresa" — evita IA sem agente vinculado à instância correta.
+     */
     private KnowledgeBase findKnowledgeBaseForConversation(WhatsAppConversation conversation) {
         try {
-            UserWhatsAppConnection whatsAppConnection = findConnectionForConversation(conversation);
+            UserWhatsAppConnection whatsAppConnection = findConnectionForConversationStrictForAi(conversation);
 
             if (whatsAppConnection == null) {
                 log.debug("No WhatsApp connection found for conversation: {}", conversation.getId());
@@ -893,6 +897,39 @@ public class AIAgentService {
 
         } catch (Exception e) {
             log.error("Error finding knowledge base for conversation: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Conexão WhatsApp ligada à conversa (instância ou URL+token), sem assumir outra instância da empresa.
+     * Usado para localizar KB/agente; envio de mensagem continua usando {@link #findConnectionForConversation} com fallback.
+     */
+    private UserWhatsAppConnection findConnectionForConversationStrictForAi(WhatsAppConversation conversation) {
+        try {
+            String instanceName = conversation.getUazapInstance();
+            UUID companyId = conversation.getCompany().getId();
+
+            if (instanceName != null && !instanceName.isEmpty()) {
+                var conn = whatsAppConnectionRepository.findByCompanyIdAndInstanceName(companyId, instanceName)
+                        .orElse(null);
+                if (conn != null) {
+                    return conn;
+                }
+            }
+
+            String baseUrl = conversation.getUazapBaseUrl();
+            String token = conversation.getUazapToken();
+            if (baseUrl != null && token != null) {
+                return whatsAppConnectionRepository.findByInstanceBaseUrlAndInstanceToken(baseUrl, token)
+                        .filter(c -> c.getCompany().getId().equals(companyId))
+                        .orElse(null);
+            }
+
+            return null;
+
+        } catch (Exception e) {
+            log.error("Error finding connection (strict) for conversation: {}", e.getMessage());
             return null;
         }
     }
@@ -928,6 +965,14 @@ public class AIAgentService {
             log.error("Error finding connection for conversation: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Verifica se existe agente (KB ativa) vinculado à conexão WhatsApp desta conversa (resolução estrita, sem fallback de instância).
+     */
+    public boolean hasActiveLinkedKbForConversation(WhatsAppConversation conversation) {
+        KnowledgeBase kb = findKnowledgeBaseForConversation(conversation);
+        return kb != null && Boolean.TRUE.equals(kb.getIsActive());
     }
 
     public List<OpenAiService.ChatMessage> getRecentConversationHistory(UUID conversationId, int limit) {
@@ -1027,7 +1072,7 @@ public class AIAgentService {
 
         KnowledgeBase kb = findKnowledgeBaseForConversation(conversation);
         if (kb == null) {
-            log.info("IA desabilitada para conversa {}: nenhuma Base de Conhecimento ativa vinculada à conexão WhatsApp. Vincule uma KB à conexão no painel.", conversation.getId());
+            log.info("IA desabilitada para conversa {}: nenhuma Base de Conhecimento ativa vinculada à instância/conexão WhatsApp desta conversa (sem fallback para outra conexão da empresa).", conversation.getId());
             return false;
         }
         if (!Boolean.TRUE.equals(kb.getIsActive())) {

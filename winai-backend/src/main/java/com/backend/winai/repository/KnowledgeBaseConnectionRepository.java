@@ -25,4 +25,10 @@ public interface KnowledgeBaseConnectionRepository extends JpaRepository<Knowled
     Optional<KnowledgeBaseConnection> findByConnectionIdWithKnowledgeBase(@Param("connectionId") UUID connectionId);
 
     void deleteByConnection(UserWhatsAppConnection connection);
+
+    /** Pelo menos uma conexão WhatsApp ativa com KB ativa vinculada (pré-requisito para modo padrão IA). */
+    @Query("SELECT COUNT(kbc) FROM KnowledgeBaseConnection kbc WHERE kbc.connection.company.id = :companyId "
+            + "AND (kbc.connection.isActive IS NULL OR kbc.connection.isActive = true) "
+            + "AND kbc.knowledgeBase.isActive = true")
+    long countActiveLinkedKnowledgeBasesForCompany(@Param("companyId") UUID companyId);
 }

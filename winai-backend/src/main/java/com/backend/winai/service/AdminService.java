@@ -90,6 +90,7 @@ public class AdminService {
     private final MetaAdRepository metaAdRepository;
     private final MetaInsightRepository metaInsightRepository;
     private final PlanRepository planRepository;
+    private final CompanyAiPolicy companyAiPolicy;
     private final AiRecommendationCacheRepository aiRecommendationCacheRepository;
     private final AgendamentoConfigRepository agendamentoConfigRepository;
     private final FollowUpConfigRepository followUpConfigRepository;
@@ -445,7 +446,11 @@ public class AdminService {
             company.setLeadVolume(companyDetails.getLeadVolume());
         }
         if (companyDetails.getDefaultSupportMode() != null) {
-            company.setDefaultSupportMode(companyDetails.getDefaultSupportMode());
+            String m = companyDetails.getDefaultSupportMode();
+            if (m != null && "IA".equalsIgnoreCase(m.trim())) {
+                companyAiPolicy.assertMaySetDefaultSupportModeToIA(company.getId());
+            }
+            company.setDefaultSupportMode(m);
         }
         // Campos de contrato para termos de uso
         if (companyDetails.getContratante() != null) {
@@ -489,7 +494,11 @@ public class AdminService {
             company.setEmailContratante((String) details.get("emailContratante"));
         }
         if (details.get("defaultSupportMode") != null) {
-            company.setDefaultSupportMode((String) details.get("defaultSupportMode"));
+            String mode = (String) details.get("defaultSupportMode");
+            if (mode != null && "IA".equalsIgnoreCase(mode.trim())) {
+                companyAiPolicy.assertMaySetDefaultSupportModeToIA(company.getId());
+            }
+            company.setDefaultSupportMode(mode);
         }
 
         // Processar planId - buscar o Plan pelo ID
