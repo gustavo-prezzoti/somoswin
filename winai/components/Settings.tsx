@@ -581,7 +581,7 @@ const Settings: React.FC = () => {
           showToast('Convite excluído', 'success');
           await loadTeamData();
         } catch (e: any) {
-          showToast(e?.message || 'Erro ao excluir convite', 'error');
+          showToast(getErrorMessage(e) || 'Erro ao excluir convite', 'error');
         }
       }
     });
