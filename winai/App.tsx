@@ -48,7 +48,6 @@ import AdminSettings from './components/Admin/AdminSettings';
 import AdminUserConnections from './src/components/Admin/AdminUserConnections';
 import AdminAgentsAI from './components/Admin/AdminAgentsAI';
 import AdminCompanies from './components/Admin/AdminCompanies';
-import AdminProfessionals from './components/Admin/AdminProfessionals';
 import AdminFollowUp from './components/Admin/AdminFollowUp';
 import AdminGlobalNotifications from './components/Admin/AdminGlobalNotifications';
 import AdminTerms from './components/Admin/AdminTerms';
@@ -634,7 +633,6 @@ const App: React.FC = () => {
           <Route path="user-connections" element={<AdminUserConnections />} />
           <Route path="agents" element={<AdminAgentsAI />} />
           <Route path="followup" element={<AdminFollowUp />} />
-          <Route path="professionals" element={<AdminProfessionals />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="notifications" element={<AdminGlobalNotifications />} />
           <Route path="terms" element={<AdminTerms />} />
