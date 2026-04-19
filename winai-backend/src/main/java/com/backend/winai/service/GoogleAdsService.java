@@ -49,7 +49,8 @@ public class GoogleAdsService {
     @Value("${google.ads.developer-token:}")
     private String developerToken;
 
-    @Value("${google.ads.api.version:v16}")
+    /** Versões antigas (ex.: v16) são desligadas pelo Google → 404 no REST. Ver sunset dates na doc oficial. */
+    @Value("${google.ads.api.version:v23}")
     private String apiVersion;
 
     private final GoogleAdsConnectionRepository googleAdsConnectionRepository;
@@ -487,23 +488,65 @@ public class GoogleAdsService {
      * (hierarquia conforme documentação Google).
      */
     public List<GoogleAdsAccessibleAccountDTO> listAccessibleAccounts(User user) {
+        UUID companyId = user.getCompany().getId();
         if (developerToken == null || developerToken.isBlank()) {
+            log.info("[GoogleAds][contas] companyId={} lista vazia: developer token não configurado", companyId);
             return Collections.emptyList();
         }
-        Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(user.getCompany().getId());
+        Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(companyId);
         if (connOpt.isEmpty() || !connOpt.get().isConnected()
                 || connOpt.get().getRefreshToken() == null || connOpt.get().getRefreshToken().isBlank()) {
+            log.info(
+                    "[GoogleAds][contas] companyId={} lista vazia: conexão ausente ou sem refresh (connected={})",
+                    companyId,
+                    connOpt.map(GoogleAdsConnection::isConnected).orElse(false));
             return Collections.emptyList();
         }
         try {
+            log.info("[GoogleAds][contas] companyId={} renovando access token…", companyId);
             String accessToken = refreshAccessToken(connOpt.get().getRefreshToken());
             List<GoogleAdsAccessibleAccountDTO> list = buildAccessibleAccountList(accessToken);
             list.sort(Comparator.comparing(GoogleAdsAccessibleAccountDTO::getDescriptiveName, String.CASE_INSENSITIVE_ORDER));
+            log.info(
+                    "[GoogleAds][contas] companyId={} total={} {}",
+                    companyId,
+                    list.size(),
+                    summarizeAccountsForLog(list));
             return list;
         } catch (Exception e) {
-            log.warn("[GoogleAds] list accessible accounts: {}", e.getMessage());
+            log.warn("[GoogleAds][contas] companyId={} falha ao listar: {}", companyId, e.getMessage(), e);
             return Collections.emptyList();
         }
+    }
+
+    /** Resumo curto para log (IDs e nomes são dados operacionais da conta, não segredos). */
+    private static String summarizeAccountsForLog(List<GoogleAdsAccessibleAccountDTO> list) {
+        if (list.isEmpty()) {
+            return "detalhe=[]";
+        }
+        int max = 25;
+        StringBuilder sb = new StringBuilder("detalhe=[");
+        for (int i = 0; i < Math.min(list.size(), max); i++) {
+            GoogleAdsAccessibleAccountDTO a = list.get(i);
+            if (i > 0) {
+                sb.append("; ");
+            }
+            String mcc = a.getManagerCustomerId() != null && !a.getManagerCustomerId().isBlank()
+                    ? a.getManagerCustomerId()
+                    : "-";
+            sb.append(a.getCustomerId())
+                    .append('|')
+                    .append(a.getDescriptiveName().replace('\n', ' ').trim())
+                    .append("|mgr=")
+                    .append(a.isManager())
+                    .append("|loginMcc=")
+                    .append(mcc);
+        }
+        if (list.size() > max) {
+            sb.append("; …+").append(list.size() - max).append(" outras");
+        }
+        sb.append(']');
+        return sb.toString();
     }
 
     /**
@@ -512,14 +555,18 @@ public class GoogleAdsService {
      */
     private List<GoogleAdsAccessibleAccountDTO> buildAccessibleAccountList(String accessToken) throws Exception {
         Map<String, GoogleAdsAccessibleAccountDTO> byId = new LinkedHashMap<>();
-        for (String rn : fetchAccessibleCustomerResourceNames(accessToken)) {
+        List<String> resourceNames = fetchAccessibleCustomerResourceNames(accessToken);
+        log.info("[GoogleAds][contas] listAccessibleCustomers retornou {} resourceName(s)", resourceNames.size());
+        for (String rn : resourceNames) {
             String id = parseCustomerIdFromResourceName(rn);
             if (id == null) {
+                log.info("[GoogleAds][contas] ignorando resourceName inválido: {}", rn);
                 continue;
             }
             GoogleAdsAccessibleAccountDTO meta = fetchAccountMeta(accessToken, id, null);
             byId.putIfAbsent(meta.getCustomerId(), meta);
         }
+        log.info("[GoogleAds][contas] após metadados das raízes: {} conta(s)", byId.size());
 
         Deque<SimpleImmutableEntry<String, String>> managersToExpand = new ArrayDeque<>();
         for (GoogleAdsAccessibleAccountDTO m : new ArrayList<>(byId.values())) {
@@ -527,6 +574,7 @@ public class GoogleAdsService {
                 managersToExpand.add(new SimpleImmutableEntry<>(m.getCustomerId(), null));
             }
         }
+        log.info("[GoogleAds][contas] fila inicial de MCC para expandir: {}", managersToExpand.size());
 
         Set<String> expanded = new HashSet<>();
         while (!managersToExpand.isEmpty()) {
@@ -540,6 +588,11 @@ public class GoogleAdsService {
             expanded.add(expandKey);
 
             List<GoogleAdsAccessibleAccountDTO> children = fetchCustomerClients(accessToken, managerId, loginHeader);
+            log.info(
+                    "[GoogleAds][contas] expandindo MCC managerId={} loginHeader={} filhasEncontradas={}",
+                    managerId,
+                    loginHeader != null ? loginHeader : "(nenhum)",
+                    children.size());
             String loginForChildren = loginHeader != null ? loginHeader : managerId;
 
             for (GoogleAdsAccessibleAccountDTO child : children) {
@@ -554,6 +607,7 @@ public class GoogleAdsService {
             }
         }
 
+        log.info("[GoogleAds][contas] após expansão de MCC: {} conta(s) únicas", byId.size());
         return new ArrayList<>(byId.values());
     }
 
@@ -600,7 +654,11 @@ public class GoogleAdsService {
                         .build());
             }
         } catch (Exception e) {
-            log.debug("[GoogleAds] customer_client for {}: {}", managerCustomerId, e.getMessage());
+            log.warn(
+                    "[GoogleAds][contas] customer_client falhou managerId={} loginCustomerId={}: {}",
+                    managerCustomerId,
+                    loginCustomerId != null ? loginCustomerId : "(nenhum)",
+                    e.getMessage());
         }
         return rows;
     }
@@ -610,34 +668,57 @@ public class GoogleAdsService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
     public void tryAutoSelectCustomerAfterOAuth(Company company) {
+        UUID companyId = company.getId();
         if (developerToken == null || developerToken.isBlank()) {
+            log.info("[GoogleAds][auto-select] companyId={} ignorado: developer token vazio", companyId);
             return;
         }
-        Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(company.getId());
+        Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(companyId);
         if (connOpt.isEmpty() || !connOpt.get().isConnected()) {
+            log.info(
+                    "[GoogleAds][auto-select] companyId={} ignorado: sem conexão ou não conectado",
+                    companyId);
             return;
         }
         GoogleAdsConnection conn = connOpt.get();
         if (conn.getCustomerId() != null && !conn.getCustomerId().isBlank()) {
+            log.info(
+                    "[GoogleAds][auto-select] companyId={} ignorado: já existe customerId={} loginMcc={}",
+                    companyId,
+                    conn.getCustomerId(),
+                    conn.getLoginCustomerId() != null ? conn.getLoginCustomerId() : "");
             return;
         }
         if (conn.getRefreshToken() == null || conn.getRefreshToken().isBlank()) {
+            log.info("[GoogleAds][auto-select] companyId={} ignorado: refresh token vazio", companyId);
             return;
         }
         try {
+            log.info("[GoogleAds][auto-select] companyId={} buscando contas acessíveis…", companyId);
             String accessToken = refreshAccessToken(conn.getRefreshToken());
             List<GoogleAdsAccessibleAccountDTO> accounts = buildAccessibleAccountList(accessToken);
+            log.info(
+                    "[GoogleAds][auto-select] companyId={} candidatos={} {}",
+                    companyId,
+                    accounts.size(),
+                    summarizeAccountsForLog(accounts));
             GoogleAdsAccessibleAccountDTO best = pickPreferredAccount(accounts);
             if (best != null) {
                 conn.setCustomerId(best.getCustomerId());
                 String login = best.getManagerCustomerId();
                 conn.setLoginCustomerId(login != null && !login.isBlank() ? login.replace("-", "").trim() : null);
                 googleAdsConnectionRepository.save(conn);
-                log.info("[GoogleAds] Conta padrão selecionada automaticamente: {} ({}) loginMcc={}",
-                        best.getDescriptiveName(), best.getCustomerId(), conn.getLoginCustomerId());
+                log.info(
+                        "[GoogleAds][auto-select] companyId={} escolhida: nome={} customerId={} loginMcc={}",
+                        companyId,
+                        best.getDescriptiveName(),
+                        best.getCustomerId(),
+                        conn.getLoginCustomerId() != null ? conn.getLoginCustomerId() : "");
+            } else {
+                log.info("[GoogleAds][auto-select] companyId={} nenhuma conta candidata após pickPreferred", companyId);
             }
         } catch (Exception e) {
-            log.warn("[GoogleAds] auto-select customer: {}", e.getMessage());
+            log.warn("[GoogleAds][auto-select] companyId={} erro: {}", companyId, e.getMessage(), e);
         }
     }
 

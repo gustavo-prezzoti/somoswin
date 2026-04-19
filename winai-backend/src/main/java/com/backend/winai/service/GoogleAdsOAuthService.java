@@ -81,6 +81,10 @@ public class GoogleAdsOAuthService {
             return frontendUrl + "/configuracoes?error=google_ads_denied";
         }
         try {
+            log.info(
+                    "[GoogleAds][OAuth] callback HTTP recebido companyId={} codePresent={}",
+                    companyIdStr,
+                    code != null && !code.isBlank());
             NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
             GoogleTokenResponse tokenResponse = new GoogleAuthorizationCodeTokenRequest(
                     httpTransport, JSON_FACTORY, clientId, clientSecret, code, redirectUri)
@@ -100,10 +104,16 @@ public class GoogleAdsOAuthService {
             conn.setConnected(true);
             googleAdsConnectionRepository.save(conn);
 
+            log.info(
+                    "[GoogleAds][OAuth] conexão gravada companyId={} refreshTokenRecebido={}",
+                    companyId,
+                    rt != null && !rt.isBlank());
+
             try {
+                log.info("[GoogleAds][OAuth] iniciando tryAutoSelectCustomerAfterOAuth companyId={}", companyId);
                 googleAdsService.tryAutoSelectCustomerAfterOAuth(company);
             } catch (Exception ex) {
-                log.warn("Google Ads: não foi possível selecionar conta automaticamente: {}", ex.getMessage());
+                log.warn("[GoogleAds][OAuth] auto-select falhou companyId={}: {}", companyId, ex.getMessage());
             }
 
             return frontendUrl + "/configuracoes?google_ads=connected";
@@ -114,13 +124,24 @@ public class GoogleAdsOAuthService {
     }
 
     public Map<String, Object> getStatus(User user) {
-        return googleAdsConnectionRepository.findByCompany_Id(user.getCompany().getId())
+        var companyId = user.getCompany().getId();
+        Map<String, Object> out = googleAdsConnectionRepository.findByCompany_Id(companyId)
                 .filter(GoogleAdsConnection::isConnected)
                 .map(c -> Map.<String, Object>of(
                         "connected", true,
                         "customerId", c.getCustomerId() != null ? c.getCustomerId() : "",
                         "loginCustomerId", c.getLoginCustomerId() != null ? c.getLoginCustomerId() : ""))
                 .orElse(Map.of("connected", false));
+        if (Boolean.TRUE.equals(out.get("connected"))) {
+            log.info(
+                    "[GoogleAds][status] companyId={} customerId={} loginCustomerId={}",
+                    companyId,
+                    out.getOrDefault("customerId", ""),
+                    out.getOrDefault("loginCustomerId", ""));
+        } else {
+            log.debug("[GoogleAds][status] companyId={} connected=false", companyId);
+        }
+        return out;
     }
 
     @Transactional
@@ -146,5 +167,10 @@ public class GoogleAdsOAuthService {
             conn.setLoginCustomerId(loginCustomerId.replace("-", "").trim());
         }
         googleAdsConnectionRepository.save(conn);
+        log.info(
+                "[GoogleAds][customer-ids] companyId={} customerId={} loginCustomerId={}",
+                company.getId(),
+                conn.getCustomerId(),
+                conn.getLoginCustomerId() != null ? conn.getLoginCustomerId() : "");
     }
 }

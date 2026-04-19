@@ -184,9 +184,13 @@ const Settings: React.FC = () => {
     }
   };
 
+  /** Para ver no console do navegador: `localStorage.setItem('DEBUG_GOOGLE_ADS','1')` e recarregar. */
   const checkGoogleAdsConnection = async () => {
     try {
       const s = await googleAdsService.getStatus();
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_GOOGLE_ADS') === '1') {
+        console.info('[GoogleAds UI] GET /google-ads/status', s);
+      }
       setGoogleAdsConnected(!!s.connected);
       const cid = (s.customerId || '').replace(/\D/g, '');
       const lid = (s.loginCustomerId || '').replace(/\D/g, '');
@@ -196,6 +200,12 @@ const Settings: React.FC = () => {
         setGoogleAdsAccountsLoading(true);
         try {
           const raw = await googleAdsService.getAccessibleAccounts();
+          if (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_GOOGLE_ADS') === '1') {
+            console.info('[GoogleAds UI] GET /google-ads/accessible-accounts', {
+              count: raw?.length,
+              raw,
+            });
+          }
           const list: GoogleAdsAccessibleAccount[] = (raw || []).map((a: Record<string, unknown>) => {
             const id = String(a.customerId ?? a.customer_id ?? '')
               .replace(/\D/g, '');
@@ -215,6 +225,9 @@ const Settings: React.FC = () => {
               managerCustomerId: mgrDigits,
             };
           }).filter((a) => a.customerId.length > 0);
+          if (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_GOOGLE_ADS') === '1') {
+            console.info('[GoogleAds UI] contas normalizadas para o select', list);
+          }
           setGoogleAdsAccounts(list);
         } catch {
           setGoogleAdsAccounts([]);
