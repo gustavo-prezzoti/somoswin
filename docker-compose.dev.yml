@@ -56,6 +56,12 @@ services:
       # App URLs
       - APP_FRONTEND_URL=${FRONTEND_URL}
 
+      # SMTP — mesmo padrão do docker-compose.yml
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+
       # UaZap
       - UAZAP_BASE_URL=${UAZAP_BASE_URL}
       - UAZAP_TOKEN=${UAZAP_TOKEN}
