@@ -23,6 +23,7 @@ import {
 import { motion } from 'framer-motion';
 import useAuth from '../services/hooks/useAuth';
 import { dashboardService, GoalDTO, CreateGoalRequest, GoalTaskDTO } from '../services/api/dashboard.service';
+import { BodyPortal } from './ui';
 
 type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 type ViewMode = 'TABLE' | 'GANTT' | 'CARDS';
@@ -528,6 +529,7 @@ const Goals: React.FC = () => {
   }
 
   return (
+    <>
     <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500 pb-20">
       {alerts.length > 0 && (
         <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
@@ -1120,6 +1122,10 @@ const Goals: React.FC = () => {
         )}
       </div>
 
+    </div>
+
+    <BodyPortal>
+      <>
       {selectedTaskForView && (
         <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
           <motion.div
@@ -1378,7 +1384,9 @@ const Goals: React.FC = () => {
           </motion.div>
         </div>
       )}
-    </div>
+      </>
+    </BodyPortal>
+    </>
   );
 };
 
