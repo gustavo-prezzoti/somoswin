@@ -9,7 +9,7 @@ export { dashboardService } from './dashboard.service';
 export { leadService, LEAD_STATUS_LABELS, LEAD_STATUS_STYLES, KANBAN_COLUMN_ORDER, KANBAN_COLUMN_COLORS } from './lead.service';
 export { meetingService, MEETING_STATUS_LABELS, MEETING_STATUS_STYLES, parseAttendees, ATTENDEE_STATUS_LABELS, getOrganizer, getParticipants } from './meeting.service';
 export { marketingService } from './marketing.service';
-export { googleAdsService } from './google-ads.service';
+export { googleAdsService, type GoogleAdsAccessibleAccount } from './google-ads.service';
 export { googleDriveService } from './google-drive.service';
 export { whatsappService } from './whatsapp.service';
 export { whatsappBroadcastService } from './whatsapp-broadcast.service';

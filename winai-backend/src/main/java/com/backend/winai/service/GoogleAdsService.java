@@ -1,5 +1,6 @@
 package com.backend.winai.service;
 
+import com.backend.winai.dto.marketing.GoogleAdsAccessibleAccountDTO;
 import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficAssetRowDTO;
 import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficInsightBannerDTO;
 import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficKpiCardDTO;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
@@ -72,7 +74,7 @@ public class GoogleAdsService {
         }
         GoogleAdsConnection conn = connOpt.get();
         if (conn.getCustomerId() == null || conn.getCustomerId().isBlank()) {
-            return emptyGoogleOverview("Informe o ID da conta Google Ads em Configurações.");
+            return emptyGoogleOverview("Selecione a conta Google Ads em Configurações.");
         }
 
         String accessToken;
@@ -477,5 +479,156 @@ public class GoogleAdsService {
             throw new IllegalStateException(node.path("error_description").asText("token error"));
         }
         return node.get("access_token").asText();
+    }
+
+    /**
+     * Contas que o OAuth pode acessar (listAccessibleCustomers + nome / tipo).
+     */
+    public List<GoogleAdsAccessibleAccountDTO> listAccessibleAccounts(User user) {
+        List<GoogleAdsAccessibleAccountDTO> out = new ArrayList<>();
+        if (developerToken == null || developerToken.isBlank()) {
+            return out;
+        }
+        Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(user.getCompany().getId());
+        if (connOpt.isEmpty() || !connOpt.get().isConnected()
+                || connOpt.get().getRefreshToken() == null || connOpt.get().getRefreshToken().isBlank()) {
+            return out;
+        }
+        try {
+            String accessToken = refreshAccessToken(connOpt.get().getRefreshToken());
+            for (String rn : fetchAccessibleCustomerResourceNames(accessToken)) {
+                String id = parseCustomerIdFromResourceName(rn);
+                if (id != null) {
+                    out.add(fetchAccountMeta(accessToken, id));
+                }
+            }
+            out.sort(Comparator.comparing(GoogleAdsAccessibleAccountDTO::getDescriptiveName, String.CASE_INSENSITIVE_ORDER));
+        } catch (Exception e) {
+            log.warn("[GoogleAds] list accessible accounts: {}", e.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * Após OAuth, escolhe automaticamente uma conta (prioriza contas não gestoras).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
+    public void tryAutoSelectCustomerAfterOAuth(Company company) {
+        if (developerToken == null || developerToken.isBlank()) {
+            return;
+        }
+        Optional<GoogleAdsConnection> connOpt = googleAdsConnectionRepository.findByCompany_Id(company.getId());
+        if (connOpt.isEmpty() || !connOpt.get().isConnected()) {
+            return;
+        }
+        GoogleAdsConnection conn = connOpt.get();
+        if (conn.getCustomerId() != null && !conn.getCustomerId().isBlank()) {
+            return;
+        }
+        if (conn.getRefreshToken() == null || conn.getRefreshToken().isBlank()) {
+            return;
+        }
+        try {
+            String accessToken = refreshAccessToken(conn.getRefreshToken());
+            List<GoogleAdsAccessibleAccountDTO> accounts = new ArrayList<>();
+            for (String rn : fetchAccessibleCustomerResourceNames(accessToken)) {
+                String id = parseCustomerIdFromResourceName(rn);
+                if (id != null) {
+                    accounts.add(fetchAccountMeta(accessToken, id));
+                }
+            }
+            GoogleAdsAccessibleAccountDTO best = pickPreferredAccount(accounts);
+            if (best != null) {
+                conn.setCustomerId(best.getCustomerId());
+                conn.setLoginCustomerId(null);
+                googleAdsConnectionRepository.save(conn);
+                log.info("[GoogleAds] Conta padrão selecionada automaticamente: {} ({})",
+                        best.getDescriptiveName(), best.getCustomerId());
+            }
+        } catch (Exception e) {
+            log.warn("[GoogleAds] auto-select customer: {}", e.getMessage());
+        }
+    }
+
+    private GoogleAdsAccessibleAccountDTO pickPreferredAccount(List<GoogleAdsAccessibleAccountDTO> accounts) {
+        if (accounts.isEmpty()) {
+            return null;
+        }
+        return accounts.stream()
+                .filter(a -> !a.isManager())
+                .findFirst()
+                .orElse(accounts.get(0));
+    }
+
+    private List<String> fetchAccessibleCustomerResourceNames(String accessToken) throws Exception {
+        String url = String.format("https://googleads.googleapis.com/%s/customers:listAccessibleCustomers", apiVersion);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+        headers.add("developer-token", developerToken);
+        HttpEntity<String> entity = new HttpEntity<>("{}", headers);
+        ResponseEntity<String> res = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        JsonNode root = objectMapper.readTree(res.getBody());
+        if (root.has("error")) {
+            throw new IllegalStateException(root.get("error").toString());
+        }
+        List<String> names = new ArrayList<>();
+        JsonNode arr = root.path("resourceNames");
+        if (arr.isArray()) {
+            for (JsonNode n : arr) {
+                names.add(n.asText());
+            }
+        }
+        return names;
+    }
+
+    private String parseCustomerIdFromResourceName(String resourceName) {
+        if (resourceName == null || !resourceName.startsWith("customers/")) {
+            return null;
+        }
+        String id = resourceName.substring("customers/".length()).replace("-", "").trim();
+        return id.matches("\\d+") ? id : null;
+    }
+
+    private GoogleAdsAccessibleAccountDTO fetchAccountMeta(String accessToken, String customerIdDigits) {
+        try {
+            String q = "SELECT customer.id, customer.descriptive_name, customer.manager FROM customer";
+            JsonNode root = search(accessToken, customerIdDigits, null, q);
+            JsonNode results = root.path("results");
+            if (!results.isArray() || results.isEmpty()) {
+                return GoogleAdsAccessibleAccountDTO.builder()
+                        .customerId(customerIdDigits)
+                        .descriptiveName("Conta " + customerIdDigits)
+                        .manager(false)
+                        .build();
+            }
+            JsonNode c = results.get(0).path("customer");
+            String name = c.path("descriptiveName").asText("");
+            if (name.isBlank()) {
+                name = c.path("descriptive_name").asText("");
+            }
+            if (name.isBlank()) {
+                name = "Conta " + customerIdDigits;
+            }
+            boolean manager = c.path("manager").asBoolean(false);
+            String idStr = c.path("id").isMissingNode() || c.path("id").isNull()
+                    ? customerIdDigits
+                    : c.path("id").asText().replace("-", "");
+            if (idStr.isBlank()) {
+                idStr = customerIdDigits;
+            }
+            return GoogleAdsAccessibleAccountDTO.builder()
+                    .customerId(idStr)
+                    .descriptiveName(name)
+                    .manager(manager)
+                    .build();
+        } catch (Exception e) {
+            log.debug("[GoogleAds] meta for {}: {}", customerIdDigits, e.getMessage());
+            return GoogleAdsAccessibleAccountDTO.builder()
+                    .customerId(customerIdDigits)
+                    .descriptiveName("Conta " + customerIdDigits)
+                    .manager(false)
+                    .build();
+        }
     }
 }

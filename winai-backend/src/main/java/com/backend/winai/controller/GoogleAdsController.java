@@ -1,7 +1,9 @@
 package com.backend.winai.controller;
 
+import com.backend.winai.dto.marketing.GoogleAdsAccessibleAccountDTO;
 import com.backend.winai.entity.User;
 import com.backend.winai.service.GoogleAdsOAuthService;
+import com.backend.winai.service.GoogleAdsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,7 @@ import java.util.Map;
 public class GoogleAdsController {
 
     private final GoogleAdsOAuthService googleAdsOAuthService;
+    private final GoogleAdsService googleAdsService;
 
     @GetMapping("/auth")
     public ResponseEntity<Map<String, String>> getAuthUrl(@AuthenticationPrincipal User user) {
@@ -41,6 +44,13 @@ public class GoogleAdsController {
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> status(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(googleAdsOAuthService.getStatus(user));
+    }
+
+    /** Contas Google Ads acessíveis ao usuário (após OAuth), para seleção sem digitar ID. */
+    @GetMapping("/accessible-accounts")
+    public ResponseEntity<java.util.List<GoogleAdsAccessibleAccountDTO>> accessibleAccounts(
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(googleAdsService.listAccessibleAccounts(user));
     }
 
     @PostMapping("/disconnect")

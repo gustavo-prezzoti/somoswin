@@ -6,6 +6,12 @@ export interface GoogleAdsStatus {
     loginCustomerId?: string;
 }
 
+export interface GoogleAdsAccessibleAccount {
+    customerId: string;
+    descriptiveName: string;
+    manager: boolean;
+}
+
 export const googleAdsService = {
     getAuthUrl: async (): Promise<{ url: string }> => {
         return api.get<{ url: string }>('/google-ads/auth');
@@ -21,5 +27,9 @@ export const googleAdsService = {
         if (customerId) q.set('customerId', customerId);
         if (loginCustomerId) q.set('loginCustomerId', loginCustomerId);
         await api.patch('/google-ads/customer-ids?' + q.toString(), {});
-    }
+    },
+
+    getAccessibleAccounts: async (): Promise<GoogleAdsAccessibleAccount[]> => {
+        return api.get<GoogleAdsAccessibleAccount[]>('/google-ads/accessible-accounts');
+    },
 };

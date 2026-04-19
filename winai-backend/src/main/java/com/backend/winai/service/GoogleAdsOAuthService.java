@@ -43,6 +43,7 @@ public class GoogleAdsOAuthService {
 
     private final GoogleAdsConnectionRepository googleAdsConnectionRepository;
     private final CompanyRepository companyRepository;
+    private final GoogleAdsService googleAdsService;
 
     public String getErrorRedirectUrl() {
         return frontendUrl + "/configuracoes?error=google_ads_denied";
@@ -61,11 +62,13 @@ public class GoogleAdsOAuthService {
                     httpTransport, JSON_FACTORY, clientId, clientSecret, ADS_SCOPES)
                     .setAccessType("offline")
                     .build();
-            return flow.newAuthorizationUrl()
+            String url = flow.newAuthorizationUrl()
                     .setRedirectUri(redirectUri)
                     .setState(user.getCompany().getId().toString())
                     .set("prompt", "consent")
                     .build();
+            log.info("Google Ads OAuth: redirect_uri usado na solicitação = {}", redirectUri);
+            return url;
         } catch (Exception e) {
             log.error("Google Ads auth URL", e);
             throw new RuntimeException("Falha ao gerar URL Google Ads");
@@ -96,6 +99,12 @@ public class GoogleAdsOAuthService {
             }
             conn.setConnected(true);
             googleAdsConnectionRepository.save(conn);
+
+            try {
+                googleAdsService.tryAutoSelectCustomerAfterOAuth(company);
+            } catch (Exception ex) {
+                log.warn("Google Ads: não foi possível selecionar conta automaticamente: {}", ex.getMessage());
+            }
 
             return frontendUrl + "/configuracoes?google_ads=connected";
         } catch (Exception e) {

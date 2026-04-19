@@ -23,7 +23,7 @@ import {
   BarChart2
 } from 'lucide-react';
 import { googleDriveService } from '../services/api/google-drive.service';
-import { googleAdsService } from '../services/api/google-ads.service';
+import { googleAdsService, GoogleAdsAccessibleAccount } from '../services/api/google-ads.service';
 import { agendamentoService, AgendamentoConfig } from '../services/api/agendamento.service';
 import { userService } from '../services/api/user.service';
 import { marketingService } from '../services/api/marketing.service';
@@ -53,6 +53,8 @@ const Settings: React.FC = () => {
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
   const [googleAdsCustomerId, setGoogleAdsCustomerId] = useState('');
   const [googleAdsLoginCustomerId, setGoogleAdsLoginCustomerId] = useState('');
+  const [googleAdsAccounts, setGoogleAdsAccounts] = useState<GoogleAdsAccessibleAccount[]>([]);
+  const [googleAdsAccountsLoading, setGoogleAdsAccountsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -121,9 +123,9 @@ const Settings: React.FC = () => {
     }
     if (window.location.href.includes('google_ads=connected')) {
       setGoogleAdsConnected(true);
-      showToast('Google Ads conectado. Informe o ID da conta abaixo se necessário.', 'success');
+      showToast('Google Ads conectado. Estamos carregando suas contas…', 'success');
       window.history.replaceState({}, document.title, window.location.hash.split('?')[0]);
-      checkGoogleAdsConnection();
+      void checkGoogleAdsConnection();
     }
     if (window.location.href.includes('error=meta_auth_failed')) {
       showToast('Falha na autenticação com a Meta. Tente novamente.', 'error');
@@ -188,6 +190,19 @@ const Settings: React.FC = () => {
       setGoogleAdsConnected(!!s.connected);
       setGoogleAdsCustomerId(s.customerId || '');
       setGoogleAdsLoginCustomerId(s.loginCustomerId || '');
+      if (s.connected) {
+        setGoogleAdsAccountsLoading(true);
+        try {
+          const list = await googleAdsService.getAccessibleAccounts();
+          setGoogleAdsAccounts(list);
+        } catch {
+          setGoogleAdsAccounts([]);
+        } finally {
+          setGoogleAdsAccountsLoading(false);
+        }
+      } else {
+        setGoogleAdsAccounts([]);
+      }
     } catch (error) {
       console.error('Failed to check google ads connection', error);
     }
@@ -392,11 +407,23 @@ const Settings: React.FC = () => {
         googleAdsCustomerId.trim() || undefined,
         googleAdsLoginCustomerId.trim() || undefined
       );
-      showToast('IDs da conta Google Ads salvos', 'success');
+      showToast('Conta Google Ads atualizada', 'success');
       await checkGoogleAdsConnection();
     } catch (error) {
       console.error(error);
-      showToast(getErrorMessage(error) || 'Erro ao salvar IDs', 'error');
+      showToast(getErrorMessage(error) || 'Erro ao salvar', 'error');
+    }
+  };
+
+  const handleGoogleAdsAccountSelect = async (customerId: string) => {
+    const digits = customerId.replace(/\D/g, '');
+    setGoogleAdsCustomerId(digits);
+    try {
+      await googleAdsService.updateCustomerIds(digits, googleAdsLoginCustomerId.trim() || undefined);
+      showToast('Conta Google Ads selecionada', 'success');
+      await checkGoogleAdsConnection();
+    } catch (error) {
+      showToast(getErrorMessage(error) || 'Erro ao salvar conta', 'error');
     }
   };
 
@@ -1348,35 +1375,100 @@ const Settings: React.FC = () => {
                 {googleAdsConnected && (
                   <div className="p-6 bg-indigo-50/40 rounded-[32px] border border-indigo-100 space-y-4">
                     <p className="text-xs font-bold text-indigo-900">
-                      ID da conta de anúncios (somente números) e, se usar MCC, o ID do gestor (login customer).
+                      Escolha qual conta de anúncios usar para métricas e tráfego pago. As contas vêm do Google após a
+                      conexão — não é preciso digitar o ID.
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {googleAdsAccountsLoading ? (
+                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Carregando contas…</p>
+                    ) : googleAdsAccounts.length > 0 ? (
                       <div>
-                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Customer ID</label>
-                        <input
-                          value={googleAdsCustomerId}
-                          onChange={(e) => setGoogleAdsCustomerId(e.target.value)}
-                          placeholder="ex: 1234567890"
+                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">
+                          Conta Google Ads
+                        </label>
+                        <select
+                          value={googleAdsCustomerId.replace(/\D/g, '')}
+                          onChange={(e) => void handleGoogleAdsAccountSelect(e.target.value)}
                           className="w-full px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm"
-                        />
+                        >
+                          <option value="">Selecione…</option>
+                          {googleAdsAccounts.map((a) => (
+                            <option key={a.customerId} value={a.customerId.replace(/\D/g, '')}>
+                              {a.descriptiveName}
+                              {a.manager ? ' (gestor)' : ''} · {a.customerId.replace(/\D/g, '')}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <div>
-                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Login Customer ID (MCC)</label>
-                        <input
-                          value={googleAdsLoginCustomerId}
-                          onChange={(e) => setGoogleAdsLoginCustomerId(e.target.value)}
-                          placeholder="Opcional"
-                          className="w-full px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm"
-                        />
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">
+                            Customer ID
+                          </label>
+                          <input
+                            value={googleAdsCustomerId}
+                            onChange={(e) => setGoogleAdsCustomerId(e.target.value)}
+                            placeholder="Somente números, ex: 1234567890"
+                            className="w-full px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">
+                            Login customer (MCC)
+                          </label>
+                          <input
+                            value={googleAdsLoginCustomerId}
+                            onChange={(e) => setGoogleAdsLoginCustomerId(e.target.value)}
+                            placeholder="Opcional"
+                            className="w-full px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <button
+                            type="button"
+                            onClick={() => void checkGoogleAdsConnection()}
+                            className="text-[10px] font-black uppercase text-indigo-600 hover:underline mr-4"
+                          >
+                            Recarregar lista de contas
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveGoogleAdsIds()}
+                            className="px-6 py-3 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors"
+                          >
+                            Salvar
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSaveGoogleAdsIds}
-                      className="px-6 py-3 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors"
-                    >
-                      Salvar IDs
-                    </button>
+                    )}
+                    {googleAdsAccounts.length > 0 && (
+                      <details className="text-xs text-indigo-800/80">
+                        <summary className="cursor-pointer font-bold text-indigo-600">Conta gestora (MCC) — opcional</summary>
+                        <p className="mt-2 mb-2 text-[11px] text-indigo-700/90">
+                          Só preencha se o Google exigir consultar uma conta filha via MCC (erro de permissão nas métricas).
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                          <div>
+                            <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">
+                              Login customer ID
+                            </label>
+                            <input
+                              value={googleAdsLoginCustomerId}
+                              onChange={(e) => setGoogleAdsLoginCustomerId(e.target.value)}
+                              placeholder="ID do gestor (só números)"
+                              className="w-full px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveGoogleAdsIds()}
+                            className="px-6 py-3 rounded-xl bg-white border border-indigo-200 text-indigo-700 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors"
+                          >
+                            Salvar MCC
+                          </button>
+                        </div>
+                      </details>
+                    )}
                   </div>
                 )}
               </div>
