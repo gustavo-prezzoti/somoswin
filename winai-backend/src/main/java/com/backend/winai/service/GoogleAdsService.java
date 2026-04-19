@@ -26,6 +26,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -733,13 +734,18 @@ public class GoogleAdsService {
     }
 
     private List<String> fetchAccessibleCustomerResourceNames(String accessToken) throws Exception {
-        String url = String.format("https://googleads.googleapis.com/%s/customers:listAccessibleCustomers", apiVersion);
+        /*
+         * REST: GET com corpo vazio (POST no mesmo path costuma retornar 404 HTML).
+         * URI.create mantém ":" em customers:listAccessibleCustomers sem percent-encoding.
+         */
+        URI url = URI.create("https://googleads.googleapis.com/"
+                + apiVersion
+                + "/customers:listAccessibleCustomers");
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(accessToken);
         headers.add("developer-token", developerToken);
-        HttpEntity<String> entity = new HttpEntity<>("{}", headers);
-        ResponseEntity<String> res = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+        ResponseEntity<String> res = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
         JsonNode root = objectMapper.readTree(res.getBody());
         if (root.has("error")) {
             throw new IllegalStateException(root.get("error").toString());
