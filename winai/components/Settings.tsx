@@ -24,7 +24,8 @@ import {
   Instagram,
   MapPin,
   Zap,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { googleDriveService } from '../services/api/google-drive.service';
@@ -493,14 +494,25 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleRevokeInvite = async (id: string) => {
-    try {
-      await companyService.revokeInvitation(id);
-      showToast('Convite revogado', 'success');
-      await loadTeamData();
-    } catch (e: any) {
-      showToast(e?.message || 'Erro ao revogar', 'error');
-    }
+  const openRevokeInviteConfirm = (inv: AccessInvitationDTO) => {
+    const label = inv.invitedName ? `${inv.invitedName} (${inv.email})` : inv.email;
+    setConfirmModalConfig({
+      title: 'Excluir convite',
+      message: `O convite para ${label} será cancelado. O link enviado por e-mail deixará de funcionar e essa pessoa precisará de um novo convite para acessar.`,
+      variant: 'danger',
+      confirmLabel: 'Sim, excluir',
+      action: async () => {
+        try {
+          await companyService.revokeInvitation(inv.id);
+          setConfirmModalOpen(false);
+          showToast('Convite excluído', 'success');
+          await loadTeamData();
+        } catch (e: any) {
+          showToast(e?.message || 'Erro ao excluir convite', 'error');
+        }
+      }
+    });
+    setConfirmModalOpen(true);
   };
 
   const handleSendInvite = async () => {
@@ -1068,10 +1080,11 @@ const Settings: React.FC = () => {
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleRevokeInvite(inv.id)}
-                            className="text-[10px] font-black text-rose-600 uppercase tracking-widest hover:underline"
+                            onClick={() => openRevokeInviteConfirm(inv)}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-rose-200 bg-white text-rose-700 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-colors"
                           >
-                            Revogar
+                            <Trash2 size={14} className="shrink-0" aria-hidden />
+                            Excluir convite
                           </button>
                         </div>
                       ))}
