@@ -345,7 +345,7 @@ const AdminProfessionals: React.FC = () => {
 
             {/* Create/Edit Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
                     <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 animate-in fade-in zoom-in-95 duration-300 max-h-[80vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-2xl font-bold text-gray-800">
@@ -514,7 +514,7 @@ const AdminProfessionals: React.FC = () => {
 
             {/* Delete Modal */}
             {isDeleteModalOpen && professionalToDelete && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
                     <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-300">
                         <div className="flex items-center gap-4 mb-6">
                             <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">

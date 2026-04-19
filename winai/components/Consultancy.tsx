@@ -112,14 +112,14 @@ const Consultancy: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-24 px-4 sm:px-6 animate-in fade-in duration-700">
-      <div className="fixed bottom-4 right-4 z-[1000] flex flex-col gap-2">
+      <div className="fixed bottom-4 right-4 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
         {toasts.map((toast) => (
           <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
         ))}
       </div>
 
       {showRequestForm && (
-        <div className="fixed -inset-10 bg-black/60 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
           <div className="bg-white w-full max-w-xl rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in duration-300 my-auto flex flex-col max-h-[90vh]">
             <div className="p-8 bg-[#002a1e] text-white relative shrink-0">
               <button
@@ -217,7 +217,7 @@ const Consultancy: React.FC = () => {
       )}
 
       {recordingUrl && (
-        <div className="fixed inset-0 z-[1001] bg-black/80 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10050] bg-black/80 flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
           <div className="bg-black rounded-2xl max-w-4xl w-full overflow-hidden relative">
             <button
               type="button"
@@ -234,7 +234,7 @@ const Consultancy: React.FC = () => {
       )}
 
       {docMeetingId && (
-        <div className="fixed inset-0 z-[1001] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
           <div className="bg-white rounded-[32px] max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h3 className="text-lg font-black text-gray-900">Material da reunião</h3>

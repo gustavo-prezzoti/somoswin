@@ -1336,7 +1336,7 @@ const Settings: React.FC = () => {
 
       {/* QR Code Modal */}
       {showQrModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300 overflow-y-auto min-h-0">
           <div className="bg-white rounded-[40px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div className="flex items-center gap-4">
@@ -1421,7 +1421,7 @@ const Settings: React.FC = () => {
 
       {/* Plan Change Modal */}
       {showPlanChangeModal && planChangePreview && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-300 overflow-y-auto min-h-0">
           <div className="bg-white rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-gray-100 bg-gradient-to-br from-[#002a1e] to-[#004d35] text-white">
               <div className="flex items-center gap-4">
@@ -1528,7 +1528,7 @@ const Settings: React.FC = () => {
       )}
 
       {/* Toast Container */}
-      <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2">
+      <div className="fixed top-4 right-4 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
         {toasts.map((toast) => (
           <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
         ))}

@@ -215,7 +215,7 @@ const TermsAcceptanceModal: React.FC<TermsAcceptanceModalProps> = ({ onAccepted 
 
     if (loading) {
         return (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999]">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[10050] overflow-y-auto min-h-0 p-4 sm:p-6">
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent"></div>
             </div>
         );
@@ -226,7 +226,7 @@ const TermsAcceptanceModal: React.FC<TermsAcceptanceModalProps> = ({ onAccepted 
     }
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
             <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
                 <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-5 flex items-center gap-4">
                     <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">

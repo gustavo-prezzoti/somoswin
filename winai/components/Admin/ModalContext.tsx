@@ -122,7 +122,7 @@ export const ModalProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             {children}
 
             {/* Toasts Container */}
-            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[10000] flex flex-col gap-3 pointer-events-none">
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[10060] flex flex-col gap-3 pointer-events-none max-w-[calc(100vw-2rem)]">
                 {toasts.map(toast => (
                     <div
                         key={toast.id}
@@ -143,7 +143,7 @@ export const ModalProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             {currentModal && (
                 <div
-                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/40 animate-in fade-in duration-200"
+                    className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/40 animate-in fade-in duration-200 overflow-y-auto min-h-0"
                     onClick={(e) => {
                         if (e.target === e.currentTarget && !isLoading) {
                             if (currentModal.onCancel) currentModal.onCancel();
@@ -151,7 +151,7 @@ export const ModalProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         }
                     }}
                 >
-                    <div className="bg-white rounded-[2rem] w-full max-w-3xl shadow-xl overflow-y-auto max-h-[90vh] animate-in zoom-in-95 slide-in-from-bottom-2 duration-200 border border-gray-100 flex flex-col">
+                    <div className="bg-white rounded-[2rem] w-full max-w-3xl shadow-xl overflow-y-auto max-h-[min(90dvh,56rem)] my-auto animate-in zoom-in-95 slide-in-from-bottom-2 duration-200 border border-gray-100 flex flex-col">
                         {/* Header */}
                         <div className="p-8 pb-6">
                             <div className="flex items-start gap-5">

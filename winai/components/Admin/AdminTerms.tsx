@@ -288,7 +288,7 @@ const AdminTerms: React.FC = () => {
 
             {/* Create Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[1100] p-4 lg:p-8">
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[10050] p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-0">
                     <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in duration-200">
                         <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
                             <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Nova Versão dos Termos</h2>
@@ -361,7 +361,7 @@ const AdminTerms: React.FC = () => {
 
             {/* View Terms Modal */}
             {viewingTerm && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[1100] p-4 lg:p-8">
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[10050] p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-0">
                     <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in duration-200">
                         <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
                             <div>

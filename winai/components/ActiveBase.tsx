@@ -270,7 +270,7 @@ const ActiveBase: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-12">
-      <div className="fixed bottom-4 right-4 z-[1000] flex flex-col gap-2">
+      <div className="fixed bottom-4 right-4 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
         {toasts.map((toast) => (
           <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
         ))}
@@ -633,7 +633,7 @@ const ActiveBase: React.FC = () => {
 
       <AnimatePresence>
         {selectedCampaignId && (
-          <div className="fixed -inset-10 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto">
+          <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto min-h-0">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -754,7 +754,7 @@ const ActiveBase: React.FC = () => {
 
       <AnimatePresence>
         {showCreateModal && (
-          <div className="fixed -inset-10 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto min-h-0">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

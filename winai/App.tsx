@@ -396,7 +396,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   // Se precisa preencher dados do contrato, mostra mensagem de bloqueio
   if (needsContractInfo) {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
         <div className="bg-white rounded-2xl w-full max-w-lg p-8 text-center shadow-2xl">
           <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertTriangle className="text-amber-600" size={32} />
@@ -434,7 +434,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   // Se assinatura expirada ou sem assinatura ativa, bloqueia TODAS as rotas
   if (subscriptionExpired) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center z-[9999] p-4">
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
         <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl">
           {/* Header */}
           <div className="p-8 bg-gradient-to-br from-rose-600 to-rose-700 text-white text-center">

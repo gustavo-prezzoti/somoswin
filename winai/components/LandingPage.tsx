@@ -281,7 +281,7 @@ const LandingPage: React.FC = () => {
 
          {/* Modal de Agendamento */}
          {isModalOpen && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-overlay overflow-y-auto">
+            <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 modal-overlay overflow-y-auto min-h-0">
                <div className="bg-white w-full max-w-xl rounded-[48px] shadow-2xl overflow-hidden border border-emerald-900/10 animate-in zoom-in-95 duration-300 my-8">
                   <div className="p-8 md:p-12 space-y-8">
                      <div className="flex justify-between items-start">

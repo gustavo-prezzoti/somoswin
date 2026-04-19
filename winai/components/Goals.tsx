@@ -1121,7 +1121,7 @@ const Goals: React.FC = () => {
       </div>
 
       {selectedTaskForView && (
-        <div className="fixed -inset-10 z-[999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1176,7 +1176,7 @@ const Goals: React.FC = () => {
       )}
 
       {isAddingTask && (
-        <div className="fixed -inset-10 z-[999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1260,7 +1260,7 @@ const Goals: React.FC = () => {
       )}
 
       {isModalOpen && (
-        <div className="fixed -inset-10 z-[999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10050] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}

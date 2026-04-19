@@ -28,28 +28,27 @@ export const Modal: React.FC<ModalProps> = ({
     };
 
     return (
-        <div
-            className="fixed top-16 right-0 bottom-0 z-[9999] flex items-center justify-center p-4 bg-emerald-950/20 backdrop-blur-sm"
-            style={{ left: 'var(--app-sidebar-width, 0px)' }}
-        >
-            <div className={`bg-white w-full ${sizeClasses[size]} rounded-3xl shadow-2xl border border-emerald-800/10 max-h-[90vh] flex flex-col`}>
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-emerald-950/20 backdrop-blur-sm overflow-y-auto min-h-0">
+            <div
+                className={`bg-white w-full ${sizeClasses[size]} rounded-3xl shadow-2xl border border-emerald-800/10 max-h-[min(90dvh,900px)] flex flex-col my-auto`}
+            >
                 {/* Header fixo */}
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center shrink-0">
-                    <div className="space-y-0.5">
+                <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center shrink-0 gap-3">
+                    <div className="space-y-0.5 min-w-0">
                         {subtitle && (
                             <span className="text-[9px] font-black text-emerald-600 uppercase tracking-[0.2em]">{subtitle}</span>
                         )}
-                        <h2 className="text-xl font-black text-gray-900 tracking-tight">{title}</h2>
+                        <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">{title}</h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+                        className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors shrink-0"
                     >
                         <X size={20} />
                     </button>
                 </div>
                 {/* Conteúdo com scroll */}
-                <div className="p-6 overflow-y-auto flex-1">
+                <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0">
                     {children}
                 </div>
             </div>
@@ -89,18 +88,15 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     };
 
     return (
-        <div
-            className="fixed top-16 right-0 bottom-0 z-[9999] flex items-center justify-center p-6 bg-emerald-950/30 backdrop-blur-sm"
-            style={{ left: 'var(--app-sidebar-width, 0px)' }}
-        >
-            <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden border border-gray-100">
-                <div className="p-8 space-y-6">
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-emerald-950/30 backdrop-blur-sm overflow-y-auto min-h-0">
+            <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden border border-gray-100 my-auto max-h-[min(90dvh,900px)] flex flex-col">
+                <div className="p-6 sm:p-8 space-y-6 overflow-y-auto min-h-0">
                     <div className="text-center space-y-2">
-                        <h3 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic">{title}</h3>
-                        <p className="text-gray-500 font-medium">{message}</p>
+                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tighter uppercase italic">{title}</h3>
+                        <p className="text-gray-500 font-medium text-sm sm:text-base">{message}</p>
                     </div>
 
-                    <div className="flex gap-4 pt-2">
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2">
                         <button
                             type="button"
                             onClick={onClose}

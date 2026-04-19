@@ -70,11 +70,11 @@ const MetaConnectionManager: React.FC<MetaConnectionManagerProps> = ({ onClose }
     if (isLoading) {
         return (
             <div
-                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+                className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/50 p-4 sm:p-6 overflow-y-auto min-h-0"
                 onClick={onClose}
             >
                 <div
-                    className="bg-white rounded-2xl w-full max-w-2xl mx-4 p-8 flex flex-col items-center gap-4"
+                    className="bg-white rounded-2xl w-full max-w-2xl mx-auto my-auto p-8 flex flex-col items-center gap-4 max-h-[min(90dvh,900px)] overflow-y-auto"
                     onClick={e => e.stopPropagation()}
                 >
                     <RefreshCw size={32} className="text-blue-600 animate-spin" />
@@ -88,11 +88,11 @@ const MetaConnectionManager: React.FC<MetaConnectionManagerProps> = ({ onClose }
     if (error || !details || !details.connected) {
         return (
             <div
-                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+                className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/50 p-4 sm:p-6 overflow-y-auto min-h-0"
                 onClick={onClose}
             >
                 <div
-                    className="bg-white rounded-2xl w-full max-w-md mx-4 p-8 flex flex-col items-center gap-4"
+                    className="bg-white rounded-2xl w-full max-w-md mx-auto my-auto p-8 flex flex-col items-center gap-4 max-h-[min(90dvh,900px)] overflow-y-auto"
                     onClick={e => e.stopPropagation()}
                 >
                     <AlertTriangle size={40} className="text-amber-500" />
@@ -110,7 +110,7 @@ const MetaConnectionManager: React.FC<MetaConnectionManagerProps> = ({ onClose }
 
     return (
         <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
+            className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/50 p-4 sm:p-6 overflow-y-auto min-h-0"
             onClick={onClose}
         >
             <div

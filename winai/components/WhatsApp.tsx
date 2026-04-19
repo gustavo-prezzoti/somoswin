@@ -1435,8 +1435,8 @@ const WhatsApp: React.FC = () => {
       )}
       {/* Modal de Confirmação - Limpar Chat */}
       {showClearChatModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto min-h-0">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full max-h-[min(90dvh,900px)] overflow-y-auto shadow-2xl scale-100 animate-in zoom-in-95 duration-200 my-auto">
             <div className="flex flex-col items-center text-center gap-4">
               <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mb-2">
                 <Trash2 className="text-rose-500" size={32} />
@@ -1446,7 +1446,7 @@ const WhatsApp: React.FC = () => {
                 Tem certeza que deseja apagar <strong>TODAS</strong> as mensagens desta conversa? Essa ação é irreversível.
               </p>
 
-              <div className="flex gap-3 w-full mt-4">
+              <div className="flex flex-col-reverse sm:flex-row gap-3 w-full mt-4">
                 <button
                   onClick={() => setShowClearChatModal(false)}
                   className="flex-1 py-3 px-4 rounded-xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-all"
@@ -1484,7 +1484,7 @@ const WhatsApp: React.FC = () => {
       )}
 
       {/* Toast Container */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+      <div className="fixed bottom-6 right-6 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
         {toasts.map((toast) => (
           <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
         ))}
@@ -1492,8 +1492,8 @@ const WhatsApp: React.FC = () => {
 
       {/* Modal de Confirmação - Excluir Lead */}
       {showDeleteLeadModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto min-h-0">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full max-h-[min(90dvh,900px)] overflow-y-auto shadow-2xl scale-100 animate-in zoom-in-95 duration-200 my-auto">
             <div className="flex flex-col items-center text-center gap-4">
               <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mb-2">
                 <UserMinus className="text-rose-500" size={32} />
@@ -1503,7 +1503,7 @@ const WhatsApp: React.FC = () => {
                 Isso exclui o lead e apaga por completo a conversa do WhatsApp (mensagens, mídias e o contato na lista de atendimento). Não dá para desfazer.
               </p>
 
-              <div className="flex gap-3 w-full mt-4">
+              <div className="flex flex-col-reverse sm:flex-row gap-3 w-full mt-4">
                 <button
                   onClick={() => setShowDeleteLeadModal(false)}
                   className="flex-1 py-3 px-4 rounded-xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-all"

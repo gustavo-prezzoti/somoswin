@@ -1231,7 +1231,7 @@ const VideoMeeting: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/45 backdrop-blur-sm"
+              className="fixed inset-0 z-[10050] flex items-end sm:items-center justify-center p-4 sm:p-6 bg-slate-900/45 backdrop-blur-sm overflow-y-auto min-h-0"
               onClick={() => {
                 if (!deletingId) setConfirmDeleteId(null);
               }}
@@ -1288,7 +1288,7 @@ const VideoMeeting: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/45 backdrop-blur-sm"
+              className="fixed inset-0 z-[10050] flex items-end sm:items-center justify-center p-4 sm:p-6 bg-slate-900/45 backdrop-blur-sm overflow-y-auto min-h-0"
               onClick={() => {
                 if (!clearingContent) setPendingClear(null);
               }}
@@ -1346,7 +1346,7 @@ const VideoMeeting: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/45 backdrop-blur-sm"
+              className="fixed inset-0 z-[10050] flex items-end sm:items-center justify-center p-4 sm:p-6 bg-slate-900/45 backdrop-blur-sm overflow-y-auto min-h-0"
               onClick={() => setCrmSuccessOpen(false)}
             >
               <motion.div

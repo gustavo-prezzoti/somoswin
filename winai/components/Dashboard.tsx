@@ -691,7 +691,7 @@ const Dashboard: React.FC = () => {
 
       <AnimatePresence>
         {isEditingGoal && (
-          <div className="fixed inset-0 z-[999] overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[10050] overflow-y-auto min-h-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

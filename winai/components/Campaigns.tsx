@@ -1249,7 +1249,7 @@ const Campaigns: React.FC = () => {
 
       {/* Modal Wizard for Campaign Creation */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50" onClick={(e) => {
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50 overflow-y-auto min-h-0" onClick={(e) => {
           if (e.target === e.currentTarget) {
             setIsModalOpen(false);
           }
@@ -1768,7 +1768,7 @@ const Campaigns: React.FC = () => {
       )}
 
       {/* Toast Container */}
-      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
+      <div className="fixed bottom-6 right-6 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
         {toasts.map((toast) => (
           <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
         ))}

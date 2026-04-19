@@ -640,16 +640,19 @@ const CRM: React.FC = () => {
 
       <AnimatePresence>
         {selectedLead && (
-          <div
-            className="fixed top-16 right-0 bottom-0 z-[100] flex justify-end bg-black/60 backdrop-blur-md"
-            style={{ left: 'var(--app-sidebar-width, 16rem)' }}
-          >
+          <div className="fixed inset-0 z-[10050] flex justify-end">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/60 backdrop-blur-md border-0 p-0 cursor-pointer"
+              aria-label="Fechar detalhe do lead"
+              onClick={() => setSelectedLead(null)}
+            />
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="bg-white w-full max-w-2xl h-full shadow-2xl flex flex-col border-l border-gray-100"
+              className="relative z-10 bg-white w-full max-w-2xl h-full max-h-[100dvh] shadow-2xl flex flex-col border-l border-gray-100"
             >
               <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-gray-50/30">
                 <div className="flex items-center gap-4 min-w-0">
@@ -809,15 +812,12 @@ const CRM: React.FC = () => {
 
       <AnimatePresence>
         {showNewLeadModal && (
-          <div
-            className="fixed top-16 right-0 bottom-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
-            style={{ left: 'var(--app-sidebar-width, 16rem)' }}
-          >
+          <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto min-h-0">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-xl rounded-[48px] shadow-2xl overflow-hidden border border-emerald-800/10 relative flex flex-col max-h-[90vh] my-auto"
+              className="bg-white w-full max-w-xl rounded-[48px] shadow-2xl overflow-hidden border border-emerald-800/10 relative flex flex-col max-h-[min(90dvh,900px)] my-auto"
             >
               <div className="p-8 md:p-12 pb-4 flex justify-between items-center shrink-0">
                 <div className="space-y-1">
@@ -981,11 +981,8 @@ const CRM: React.FC = () => {
       </AnimatePresence>
 
       {editingLead && (
-        <div
-          className="fixed top-16 right-0 bottom-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
-          style={{ left: 'var(--app-sidebar-width, 16rem)' }}
-        >
-          <div className="bg-white w-full max-w-lg rounded-[48px] shadow-2xl overflow-hidden border border-emerald-800/10 relative flex flex-col max-h-[90vh] my-auto">
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto min-h-0">
+          <div className="bg-white w-full max-w-lg rounded-[48px] shadow-2xl overflow-hidden border border-emerald-800/10 relative flex flex-col max-h-[min(90dvh,900px)] my-auto">
             <div className="p-8 md:p-12 pb-4 flex justify-between items-center shrink-0">
               <div className="space-y-1">
                 <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em]">Modo de Edição</span>
