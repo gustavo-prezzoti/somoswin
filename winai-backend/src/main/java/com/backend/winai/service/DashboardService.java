@@ -1,10 +1,12 @@
 package com.backend.winai.service;
 
+import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficAssetRowDTO;
 import com.backend.winai.dto.response.DashboardResponse;
 import com.backend.winai.dto.response.LeadResponse;
 import com.backend.winai.entity.*;
 import com.backend.winai.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -26,6 +28,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class DashboardService {
@@ -34,6 +37,7 @@ public class DashboardService {
         private final GoalRepository goalRepository;
         private final AIInsightRepository insightRepository;
         private final MarketingService marketingService;
+        private final MetaPaidTrafficGraphService metaPaidTrafficGraphService;
         private final MetricsSyncService metricsSyncService; // Re-added
         private final OpenAiService openAiService;
         private final LeadRepository leadRepository;
@@ -151,7 +155,7 @@ public class DashboardService {
                                 .revenueGoal(buildRevenueGoalDto(company))
                                 .weeklyTasks(taskDtos)
                                 .insights(buildInsightDTOs(insights))
-                                .campaigns(buildCampaignSummaries(company))
+                                .campaigns(buildCampaignSummaries(company, days))
                                 .recentLeads(buildRecentLeads(company))
                                 .performanceScore(performanceScore)
                                 .operationStatus(determineOperationStatus(performanceScore))
@@ -262,30 +266,47 @@ public class DashboardService {
                                 .collect(Collectors.toList());
         }
 
-        private List<DashboardResponse.CampaignSummaryDTO> buildCampaignSummaries(Company company) {
-                if (company == null)
+        /**
+         * Tabela de campanhas do dashboard: mesma fonte que a tela Tráfego Pago
+         * ({@link MetaPaidTrafficGraphService#fetchCampaigns(Company, LocalDate, LocalDate)} — Graph API no período),
+         * não os campos agregados em {@code meta_campaigns} (que podem ficar zerados entre syncs).
+         */
+        private List<DashboardResponse.CampaignSummaryDTO> buildCampaignSummaries(Company company, int days) {
+                if (company == null) {
                         return List.of();
+                }
+                LocalDate end = LocalDate.now();
+                LocalDate start = end.minusDays(Math.max(0, days - 1));
+                try {
+                        List<PaidTrafficAssetRowDTO> rows = metaPaidTrafficGraphService.fetchCampaigns(company, start,
+                                        end);
+                        return rows.stream()
+                                        .filter(r -> r.getLevel() == PaidTrafficAssetRowDTO.AssetLevel.CAMPAIGN)
+                                        .map(this::toDashboardCampaignSummary)
+                                        .collect(Collectors.toList());
+                } catch (Exception e) {
+                        log.warn("[Dashboard] Falha ao montar campanhas (período {}–{}): {}", start, end, e.getMessage());
+                        return List.of();
+                }
+        }
 
-                List<java.util.Map<String, Object>> campaigns = marketingService.getRealTimeCampaigns(company);
-
-                return campaigns.stream().map(c -> {
-                        double spend = (double) c.get("spend");
-                        long conversions = (long) c.get("conversions");
-                        long clicks = (long) c.get("clicks");
-
-                        double cpl = conversions > 0 ? spend / conversions : 0;
-                        double convRate = clicks > 0 ? (double) conversions / clicks * 100 : 0;
-
-                        return DashboardResponse.CampaignSummaryDTO.builder()
-                                        .name((String) c.get("name"))
-                                        .status((String) c.get("status"))
-                                        .leads((int) conversions)
-                                        .spend(formatCurrency(spend))
-                                        .cpl(formatCurrency(cpl))
-                                        .conversion(formatPercentage(convRate))
-                                        .roas(formatRoi(cpl > 0 ? (100.0 / cpl) : 0))
-                                        .build();
-                }).collect(Collectors.toList());
+        private DashboardResponse.CampaignSummaryDTO toDashboardCampaignSummary(PaidTrafficAssetRowDTO r) {
+                double spend = r.getSpend() != null ? r.getSpend() : 0.0;
+                long conversions = r.getConversions() != null ? r.getConversions() : 0L;
+                long clicks = r.getClicks() != null ? r.getClicks() : 0L;
+                double cpl = r.getCpl() != null ? r.getCpl() : (conversions > 0 ? spend / conversions : 0.0);
+                double convRate = clicks > 0 ? (double) conversions / clicks * 100.0 : 0.0;
+                double roasVal = r.getRoas() != null ? r.getRoas() : 0.0;
+                int leads = (int) Math.min(conversions, Integer.MAX_VALUE);
+                return DashboardResponse.CampaignSummaryDTO.builder()
+                                .name(r.getName() != null ? r.getName() : "—")
+                                .status(r.getStatus() != null ? r.getStatus() : "UNKNOWN")
+                                .leads(leads)
+                                .spend(formatCurrency(spend))
+                                .cpl(formatCurrency(cpl))
+                                .conversion(formatPercentage(convRate))
+                                .roas(formatRoi(roasVal))
+                                .build();
         }
 
         /**
@@ -1137,7 +1158,7 @@ public class DashboardService {
                 if (company == null || !openAiService.isChatEnabled())
                         return;
 
-                List<DashboardResponse.CampaignSummaryDTO> campaigns = buildCampaignSummaries(company);
+                List<DashboardResponse.CampaignSummaryDTO> campaigns = buildCampaignSummaries(company, 30);
                 if (campaigns.isEmpty())
                         return;
 

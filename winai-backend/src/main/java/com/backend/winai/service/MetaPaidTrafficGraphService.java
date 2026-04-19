@@ -2,6 +2,7 @@ package com.backend.winai.service;
 
 import com.backend.winai.dto.marketing.AccountInsightTotals;
 import com.backend.winai.dto.marketing.paidtraffic.PaidTrafficAssetRowDTO;
+import com.backend.winai.entity.Company;
 import com.backend.winai.entity.MetaConnection;
 import com.backend.winai.entity.User;
 import com.backend.winai.repository.MetaConnectionRepository;
@@ -43,12 +44,23 @@ public class MetaPaidTrafficGraphService {
      * Campanhas da conta com insights no período (mesma base que drill em conjuntos/anúncios).
      */
     public List<PaidTrafficAssetRowDTO> fetchCampaigns(User user, LocalDate start, LocalDate end) {
-        Optional<MetaConnection> conn = connection(user);
-        if (conn.isEmpty()) return List.of();
+        if (user == null || user.getCompany() == null) {
+            return List.of();
+        }
+        return fetchCampaigns(user.getCompany(), start, end);
+    }
+
+    /**
+     * Mesmo que {@link #fetchCampaigns(User, LocalDate, LocalDate)} — para jobs e dashboard sem instância {@link User}.
+     */
+    public List<PaidTrafficAssetRowDTO> fetchCampaigns(Company company, LocalDate start, LocalDate end) {
+        Optional<MetaConnection> conn = connection(company);
+        if (conn.isEmpty()) {
+            return List.of();
+        }
         String aid = normalizeAdAccountId(conn.get().getAdAccountId());
         String token = conn.get().getAccessToken();
         // 1) insights.time_range({...}) no field graph — é o que a Meta aplica de fato ao período (igual ad sets).
-        //    time_range só na query da edge /campaigns costuma ser ignorado para o sub-recurso insights → dados “gerais”.
         String urlEmbedded = buildGraphUrl(aid + "/campaigns", buildCampaignFieldsEmbeddedTimeRange(start, end),
                 token, null, null);
         List<PaidTrafficAssetRowDTO> rows = fetchAllPages(urlEmbedded, PaidTrafficAssetRowDTO.AssetLevel.CAMPAIGN);
@@ -127,9 +139,20 @@ public class MetaPaidTrafficGraphService {
     }
 
     private Optional<MetaConnection> connection(User user) {
-        return metaConnectionRepository.findByCompany(user.getCompany())
+        if (user == null || user.getCompany() == null) {
+            return Optional.empty();
+        }
+        return connection(user.getCompany());
+    }
+
+    private Optional<MetaConnection> connection(Company company) {
+        if (company == null) {
+            return Optional.empty();
+        }
+        return metaConnectionRepository.findByCompany(company)
                 .filter(MetaConnection::isConnected)
-                .filter(c -> c.getAccessToken() != null && !c.getAccessToken().isBlank());
+                .filter(c -> c.getAccessToken() != null && !c.getAccessToken().isBlank())
+                .filter(c -> c.getAdAccountId() != null && !c.getAdAccountId().isBlank());
     }
 
     private String normalizeId(String id) {

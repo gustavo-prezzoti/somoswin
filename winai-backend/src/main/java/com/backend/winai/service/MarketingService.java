@@ -343,7 +343,8 @@ public class MarketingService {
 
         try {
             LocalDate endDate = LocalDate.now();
-            LocalDate startDate = endDate.minusDays(days);
+            // Alinha com o dashboard: ex. days=7 → 7 dias inclusive (hoje e os 6 anteriores).
+            LocalDate startDate = endDate.minusDays(Math.max(0, days - 1));
             String timeRange = String.format("{\"since\":\"%s\",\"until\":\"%s\"}", startDate, endDate);
 
             // Fetch daily breakdown
@@ -371,8 +372,9 @@ public class MarketingService {
                     if (node.has("actions")) {
                         for (JsonNode action : node.get("actions")) {
                             String actionType = action.get("action_type").asText();
-                            if ("onsite_conversion.messaging_conversation_started_7d".equals(actionType) ||
-                                    "lead".equals(actionType)) {
+                            // Mesmo critério amplo que MetaPaidTrafficGraphService (leads + conversas + compras).
+                            if (actionType.contains("messaging_conversation") || "lead".equals(actionType)
+                                    || actionType.contains("lead") || actionType.contains("purchase")) {
                                 conversions += action.get("value").asLong();
                             }
                         }
