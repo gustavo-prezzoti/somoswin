@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
     Home,
@@ -24,6 +24,8 @@ import {
     loadSectionCollapsedState,
     saveSectionCollapsedState,
 } from './adminAmpliaRoutes';
+import { canAccessAdminModule, isAmpliaFullAdmin } from './adminPermissions';
+import type { UserDTO } from '../../services/types';
 
 const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
     dashboard: Home,
@@ -55,11 +57,23 @@ interface AdminSidebarProps {
     onClose?: () => void;
     narrow: boolean;
     onNarrowChange: (narrow: boolean) => void;
+    /** Perfil para filtrar itens por permissão (colaborador interno). */
+    navUser?: UserDTO | null;
 }
 
-const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, onNarrowChange }) => {
+const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, onNarrowChange, navUser }) => {
     const location = useLocation();
     const [sectionFolded, setSectionFolded] = useState<Record<string, boolean>>(loadSectionCollapsedState);
+
+    const navSections = useMemo(() => {
+        if (!navUser || isAmpliaFullAdmin(navUser)) {
+            return ADMIN_NAV_SECTIONS;
+        }
+        return ADMIN_NAV_SECTIONS.map((section) => ({
+            ...section,
+            items: section.items.filter((item) => canAccessAdminModule(navUser, item.id)),
+        })).filter((s) => s.items.length > 0);
+    }, [navUser]);
 
     useEffect(() => {
         saveSectionCollapsedState(sectionFolded);
@@ -119,7 +133,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
             )}
 
             <div className="flex-1 px-4 py-2 overflow-y-auto scrollbar-hide custom-scrollbar">
-                {ADMIN_NAV_SECTIONS.map((section) => {
+                {navSections.map((section) => {
                     const folded = sectionFolded[section.label] ?? false;
                     const showItems = narrow || !folded;
                     return (

@@ -3,8 +3,15 @@ import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import { ModalProvider } from './ModalContext';
-import { AdminStaffViewProvider, isSuperAdminRole } from './AdminStaffViewContext';
+import { AdminStaffViewProvider } from './AdminStaffViewContext';
 import { loadSidebarCollapsed, saveSidebarCollapsed } from './adminAmpliaRoutes';
+import {
+    adminRouteToModule,
+    canAccessAdminModule,
+    canAccessAmpliaAdmin,
+    isAmpliaFullAdmin,
+    isFullAdminOnlyAdminPath,
+} from './adminPermissions';
 import { userService } from '../../services/api/user.service';
 import './AdminLayout.css';
 
@@ -77,12 +84,20 @@ const AdminLayout: React.FC = () => {
     }
 
     const user = sessionUser ?? parseStoredUser();
-    const canAccessAdmin = user?.role === 'ADMIN' || isSuperAdminRole(user?.role);
-    if (!user?.role || !canAccessAdmin) {
+    if (!user?.role || !canAccessAmpliaAdmin(user)) {
         localStorage.removeItem('win_access_token');
         localStorage.removeItem('win_user');
         localStorage.removeItem('win_refresh_token');
         return <Navigate to="/admin/login" state={{ from: location }} replace />;
+    }
+
+    if (isFullAdminOnlyAdminPath(location.pathname) && !isAmpliaFullAdmin(user)) {
+        return <Navigate to="/admin/gestao-equipe" replace />;
+    }
+
+    const routeModule = adminRouteToModule(location.pathname);
+    if (routeModule && !canAccessAdminModule(user, routeModule)) {
+        return <Navigate to="/admin" replace />;
     }
 
     return (
@@ -94,6 +109,7 @@ const AdminLayout: React.FC = () => {
                         onClose={() => setIsSidebarOpen(false)}
                         narrow={sidebarNarrow}
                         onNarrowChange={setSidebarNarrow}
+                        navUser={user}
                     />
 
                     {isSidebarOpen && (

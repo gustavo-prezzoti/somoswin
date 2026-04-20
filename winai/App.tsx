@@ -62,6 +62,7 @@ import AdminMetasObjetivos from './components/Admin/AdminMetasObjetivos';
 import AdminAlertas from './components/Admin/AdminAlertas';
 import AdminPerformance from './components/Admin/AdminPerformance';
 import AdminGestaoEquipe from './components/Admin/AdminGestaoEquipe';
+import AdminGestaoPapeis from './components/Admin/AdminGestaoPapeis';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
@@ -653,6 +654,7 @@ const App: React.FC = () => {
           <Route index element={<AdminDashboard />} />
           <Route path="em-breve" element={<AdminComingSoon />} />
           <Route path="gestao-equipe" element={<AdminGestaoEquipe />} />
+          <Route path="gestao-equipe/papeis" element={<AdminGestaoPapeis />} />
           <Route path="clientes" element={<AdminClientes />} />
           <Route path="meta-ads" element={<AdminMetaAds />} />
           <Route path="metas" element={<AdminMetasObjetivos />} />

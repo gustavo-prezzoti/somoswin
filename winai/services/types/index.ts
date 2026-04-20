@@ -24,11 +24,13 @@ export type NextAction =
     | 'SUBSCRIPTION_INACTIVE_MEMBER'
     | 'SUCCESS';
 
+export type AmpliaAdminRole = UserRole | 'SUPER_ADMIN';
+
 export interface UserDTO {
     id: string;
     email: string;
     name: string;
-    role: UserRole;
+    role: AmpliaAdminRole | UserRole;
     plan: PlanType | 'INTERNAL_STAFF';
     company: CompanyDTO | null;
     avatarUrl?: string | null;
@@ -38,6 +40,10 @@ export interface UserDTO {
     /** Colaborador interno Amplia (sem assinatura). */
     ampliaInternalStaff?: boolean;
     ampliaStaffType?: string | null;
+    ampliaStaffRoleId?: string | null;
+    ampliaStaffRoleName?: string | null;
+    ampliaStaffPermissions?: string[];
+    ampliaStaffFullAccess?: boolean;
 }
 
 export interface CompanyDTO {

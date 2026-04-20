@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Users,
@@ -36,7 +36,9 @@ import adminService, {
     InternalStaffMember,
     InternalStaffMemberDashboard,
     CreateInternalStaffPayload,
+    AmpliaStaffRoleRow,
 } from '../../services/adminService';
+import { canViewGestaoAmpliaEquipe, isAmpliaFullAdmin } from './adminPermissions';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 import { useAdminStaffView } from './AdminStaffViewContext';
@@ -48,8 +50,13 @@ function staffTypeLabel(t: string): string {
     return t;
 }
 
-function isSellerRole(t: string): boolean {
+function isSellerRole(t: string | null | undefined): boolean {
     return t === 'VENDEDOR';
+}
+
+function memberRoleLabel(m: InternalStaffMember): string {
+    if (m.ampliaStaffRoleName) return m.ampliaStaffRoleName;
+    return staffTypeLabel(m.ampliaStaffType || '');
 }
 
 const StatCard = ({
@@ -129,7 +136,7 @@ const IndividualDashboardModal = ({
                                         seller ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
                                     }`}
                                 >
-                                    {staffTypeLabel(member.ampliaStaffType)}
+                                    {memberRoleLabel(member)}
                                 </span>
                             </div>
                             <div className="flex items-center gap-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -296,13 +303,23 @@ const AdminGestaoEquipe: React.FC = () => {
     const [dashData, setDashData] = useState<InternalStaffMemberDashboard | null>(null);
     const [dashLoading, setDashLoading] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
+    const [roleOptions, setRoleOptions] = useState<AmpliaStaffRoleRow[]>([]);
     const [createForm, setCreateForm] = useState<CreateInternalStaffPayload>({
         name: '',
         email: '',
-        ampliaStaffType: 'VENDEDOR',
+        ampliaStaffRoleId: '',
         password: '',
     });
     const [saving, setSaving] = useState(false);
+
+    const storageUser = useMemo(() => {
+        try {
+            const s = localStorage.getItem('win_user');
+            return s ? JSON.parse(s) : null;
+        } catch {
+            return null;
+        }
+    }, []);
 
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
@@ -313,15 +330,27 @@ const AdminGestaoEquipe: React.FC = () => {
         }
         try {
             const u = JSON.parse(userStr);
-            if (u.role !== 'ADMIN' && u.role !== 'SUPER_ADMIN') {
-                setAuth(false);
-                return;
-            }
-            setAuth(true);
+            setAuth(canViewGestaoAmpliaEquipe(u));
         } catch {
             setAuth(false);
         }
     }, []);
+
+    useEffect(() => {
+        if (auth !== true) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const opts = await adminService.listAmpliaStaffRoleOptions();
+                if (!cancelled) setRoleOptions(opts);
+            } catch {
+                if (!cancelled) setRoleOptions([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [auth]);
 
     const load = useCallback(async () => {
         try {
@@ -367,7 +396,7 @@ const AdminGestaoEquipe: React.FC = () => {
     }, [members, headerStaffId]);
 
     if (auth === false) {
-        return <Navigate to="/admin/login" replace />;
+        return <Navigate to="/admin" replace />;
     }
 
     if (auth === null) {
@@ -382,7 +411,7 @@ const AdminGestaoEquipe: React.FC = () => {
         const q = searchTerm.toLowerCase();
         const matchSearch =
             m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
-        const matchRole = filterRole === 'all' || m.ampliaStaffType === filterRole;
+        const matchRole = filterRole === 'all' || (m.ampliaStaffType ?? '') === filterRole;
         return matchSearch && matchRole;
     });
 
@@ -392,13 +421,13 @@ const AdminGestaoEquipe: React.FC = () => {
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!createForm.name.trim() || !createForm.email.trim()) return;
+        if (!createForm.name.trim() || !createForm.email.trim() || !createForm.ampliaStaffRoleId) return;
         try {
             setSaving(true);
             const payload: CreateInternalStaffPayload = {
                 name: createForm.name.trim(),
                 email: createForm.email.trim(),
-                ampliaStaffType: createForm.ampliaStaffType,
+                ampliaStaffRoleId: createForm.ampliaStaffRoleId,
             };
             if (createForm.password?.trim()) payload.password = createForm.password.trim();
             const res = await adminService.createInternalStaff(payload);
@@ -412,7 +441,7 @@ const AdminGestaoEquipe: React.FC = () => {
                 showToast('Colaborador criado.', 'success');
             }
             setShowCreate(false);
-            setCreateForm({ name: '', email: '', ampliaStaffType: 'VENDEDOR', password: '' });
+            setCreateForm({ name: '', email: '', ampliaStaffRoleId: '', password: '' });
             await load();
         } catch (err) {
             showToast(getErrorMessage(err, 'Erro ao criar'), 'error');
@@ -429,6 +458,14 @@ const AdminGestaoEquipe: React.FC = () => {
                     <p className="text-sm text-gray-400 font-medium">Colaboradores internos Amplia e desempenho</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {isAmpliaFullAdmin(storageUser) && (
+                        <Link
+                            to="/admin/gestao-equipe/papeis"
+                            className="flex items-center gap-2 px-6 py-3 bg-white border border-emerald-200 text-emerald-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-50 shadow-sm"
+                        >
+                            Papéis e permissões
+                        </Link>
+                    )}
                     <button
                         type="button"
                         onClick={() => void load()}
@@ -439,7 +476,13 @@ const AdminGestaoEquipe: React.FC = () => {
                     </button>
                     <button
                         type="button"
-                        onClick={() => setShowCreate(true)}
+                        onClick={() => {
+                            setShowCreate(true);
+                            setCreateForm((p) => ({
+                                ...p,
+                                ampliaStaffRoleId: roleOptions[0]?.id ?? '',
+                            }));
+                        }}
                         className="flex items-center gap-2 px-6 py-3 bg-[#141414] text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black shadow-lg"
                     >
                         <Plus size={16} className="text-[#00FF00]" />
@@ -530,7 +573,7 @@ const AdminGestaoEquipe: React.FC = () => {
                                                         seller ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
                                                     }`}
                                                 >
-                                                    {staffTypeLabel(member.ampliaStaffType)}
+                                                    {memberRoleLabel(member)}
                                                 </span>
                                             </div>
                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
@@ -646,15 +689,20 @@ const AdminGestaoEquipe: React.FC = () => {
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase">Papel</label>
                                 <select
+                                    required
                                     className="w-full mt-1 px-4 py-3 rounded-xl border border-black/10 font-bold text-sm"
-                                    value={createForm.ampliaStaffType}
+                                    value={createForm.ampliaStaffRoleId}
                                     onChange={(e) =>
-                                        setCreateForm((p) => ({ ...p, ampliaStaffType: e.target.value as CreateInternalStaffPayload['ampliaStaffType'] }))
+                                        setCreateForm((p) => ({ ...p, ampliaStaffRoleId: e.target.value }))
                                     }
                                 >
-                                    <option value="VENDEDOR">Vendedor</option>
-                                    <option value="CONSULTOR">Consultor</option>
-                                    <option value="GESTOR">Gestor</option>
+                                    <option value="">Selecione...</option>
+                                    {roleOptions.map((r) => (
+                                        <option key={r.id} value={r.id}>
+                                            {r.name}
+                                            {!r.active ? ' (inativo)' : ''}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             <div>

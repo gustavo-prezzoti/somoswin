@@ -120,13 +120,27 @@ export interface InternalStaffMember {
     id: string;
     name: string;
     email: string;
-    ampliaStaffType: string;
+    ampliaStaffType: string | null;
+    ampliaStaffRoleId?: string | null;
+    ampliaStaffRoleName?: string | null;
+    ampliaStaffPermissions?: string[];
+    ampliaStaffFullAccess?: boolean;
     active: boolean;
     lastLogin: string | null;
     leadsTotal: number;
     leadsWon: number;
     meetingsThisWeek: number;
     conversionPercent: number;
+}
+
+export interface AmpliaStaffRoleRow {
+    id: string;
+    name: string;
+    description: string | null;
+    active: boolean;
+    fullAccess: boolean;
+    permissions: Record<string, boolean>;
+    legacyStaffType: string | null;
 }
 
 export interface InternalStaffMonthlyPoint {
@@ -139,6 +153,8 @@ export interface InternalStaffMemberDashboard {
     name: string;
     email: string;
     ampliaStaffType: string | null;
+    ampliaStaffRoleId?: string | null;
+    ampliaStaffRoleName?: string | null;
     leadsTotal: number;
     leadsWon: number;
     meetingsThisWeek: number;
@@ -149,7 +165,7 @@ export interface InternalStaffMemberDashboard {
 export interface CreateInternalStaffPayload {
     name: string;
     email: string;
-    ampliaStaffType: string;
+    ampliaStaffRoleId: string;
     password?: string;
 }
 
@@ -157,14 +173,31 @@ export interface CreateInternalStaffResult {
     id: string;
     name: string;
     email: string;
-    ampliaStaffType: string;
+    ampliaStaffType: string | null;
+    ampliaStaffRoleId?: string;
+    ampliaStaffRoleName?: string;
     tempPassword?: string | null;
 }
 
 export interface PatchInternalStaffPayload {
-    ampliaStaffType?: string;
+    ampliaStaffRoleId?: string;
     isActive?: boolean;
     password?: string;
+}
+
+export interface CreateAmpliaStaffRolePayload {
+    name: string;
+    description?: string;
+    fullAccess: boolean;
+    permissions: Record<string, boolean>;
+}
+
+export interface PatchAmpliaStaffRolePayload {
+    name?: string;
+    description?: string;
+    active?: boolean;
+    fullAccess?: boolean;
+    permissions?: Record<string, boolean>;
 }
 
 export interface SpringPage<T> {
@@ -572,6 +605,22 @@ const adminService = {
         }
         if (params.staffUserId) sp.set('staffUserId', params.staffUserId);
         return await httpClient.get<AdminFinanceOverview>(`/admin/finance/overview?${sp.toString()}`);
+    },
+
+    listAmpliaStaffRoles: async (): Promise<AmpliaStaffRoleRow[]> => {
+        return await httpClient.get<AmpliaStaffRoleRow[]>('/admin/internal-staff-roles');
+    },
+
+    listAmpliaStaffRoleOptions: async (): Promise<AmpliaStaffRoleRow[]> => {
+        return await httpClient.get<AmpliaStaffRoleRow[]>('/admin/internal-staff-roles/select-options');
+    },
+
+    createAmpliaStaffRole: async (data: CreateAmpliaStaffRolePayload): Promise<AmpliaStaffRoleRow> => {
+        return await httpClient.post<AmpliaStaffRoleRow>('/admin/internal-staff-roles', data);
+    },
+
+    patchAmpliaStaffRole: async (id: string, data: PatchAmpliaStaffRolePayload): Promise<AmpliaStaffRoleRow> => {
+        return await httpClient.patch<AmpliaStaffRoleRow>(`/admin/internal-staff-roles/${id}`, data);
     },
 
     listInternalStaff: async (): Promise<InternalStaffMember[]> => {

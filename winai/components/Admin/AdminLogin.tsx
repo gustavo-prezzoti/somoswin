@@ -19,8 +19,15 @@ const AdminLogin: React.FC = () => {
         try {
             const response = await authService.login({ email, password });
 
-            const role = response.user.role;
-            if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+            const u = response.user;
+            const role = u.role;
+            const allowedFullAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
+            const internalOk =
+                role === 'USER' &&
+                u.ampliaInternalStaff &&
+                (u.ampliaStaffFullAccess ||
+                    (Array.isArray(u.ampliaStaffPermissions) && u.ampliaStaffPermissions.length > 0));
+            if (!allowedFullAdmin && !internalOk) {
                 setError('NEGADO: CREDENCIAIS SEM NÍVEL DE ACESSO ADMINISTRATIVO.');
                 localStorage.removeItem('win_user');
                 localStorage.removeItem('win_access_token');
