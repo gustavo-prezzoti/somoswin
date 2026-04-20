@@ -3,6 +3,15 @@ import adminService, { InternalStaffMember } from '../../services/adminService';
 
 const STORAGE_KEY = 'admin_super_staff_view_id';
 
+/** Aceita SUPER_ADMIN vindo da API com variações de string. */
+export function isSuperAdminRole(role: unknown): boolean {
+    const r = String(role ?? '')
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '_');
+    return r === 'SUPER_ADMIN' || r === 'ROLE_SUPER_ADMIN';
+}
+
 export type AdminStaffViewContextValue = {
     /** null = visão global (Todos) */
     selectedStaffUserId: string | null;
@@ -29,7 +38,7 @@ export const AdminStaffViewProvider: React.FC<{ children: React.ReactNode; userR
     children,
     userRole,
 }) => {
-    const isSuperAdmin = userRole === 'SUPER_ADMIN';
+    const isSuperAdmin = isSuperAdminRole(userRole);
     const [selectedStaffUserId, setSelectedStaffUserIdState] = useState<string | null>(() =>
         isSuperAdmin ? readStoredId() : null
     );

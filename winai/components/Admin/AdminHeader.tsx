@@ -2,7 +2,7 @@ import React from 'react';
 import { LogOut, Menu, ShieldCheck, Bell, ChevronDown } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getAdminRouteMeta } from './adminRouteMeta';
-import { useAdminStaffView } from './AdminStaffViewContext';
+import { isSuperAdminRole, useAdminStaffView } from './AdminStaffViewContext';
 
 interface AdminHeaderProps {
     user: any;
@@ -21,7 +21,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
     const location = useLocation();
     const { title, subtitle } = getAdminRouteMeta(location.pathname);
     const staffView = useAdminStaffView();
-    const showTeamSelect = Boolean(user?.role === 'SUPER_ADMIN' && staffView?.isSuperAdmin);
+    const superAdmin = isSuperAdminRole(user?.role);
 
     const handleLogout = () => {
         localStorage.removeItem('win_access_token');
@@ -34,8 +34,8 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
         user?.role === 'SUPER_ADMIN' ? 'SUPER ADMIN' : user?.role === 'ADMIN' ? 'ADMINISTRADOR' : String(user?.role || 'ADMIN').toUpperCase();
 
     return (
-        <header className="h-20 bg-white border-b border-black/5 flex items-center justify-between px-8 sticky top-0 z-40 shrink-0">
-            <div className="flex items-center gap-4 min-w-0 flex-1">
+        <header className="min-h-[4.25rem] sm:h-20 bg-white border-b border-black/5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-y-3 gap-x-4 px-4 sm:px-8 py-3 sm:py-0 sticky top-0 z-40 shrink-0 overflow-visible">
+            <div className="flex items-center gap-4 min-w-0 flex-1 basis-[min(100%,20rem)] sm:basis-auto">
                 <button
                     type="button"
                     onClick={onMenuClick}
@@ -49,9 +49,9 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
                 </div>
             </div>
 
-            <div className="flex items-center gap-3 sm:gap-6 shrink-0 flex-wrap justify-end">
-                {showTeamSelect && staffView && (
-                    <div className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-2 rounded-xl border border-black/5 max-w-[min(100vw-2rem,22rem)]">
+            <div className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0 flex-nowrap justify-end w-full sm:w-auto overflow-x-auto pb-0.5 sm:pb-0 [-webkit-overflow-scrolling:touch]">
+                {superAdmin && staffView && (
+                    <div className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-2 rounded-xl border border-black/5 shrink-0 max-w-[min(100vw-2rem,22rem)]">
                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap shrink-0 hidden sm:inline">
                             Selecionar equipe:
                         </span>

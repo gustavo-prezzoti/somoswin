@@ -3,7 +3,7 @@ import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import { ModalProvider } from './ModalContext';
-import { AdminStaffViewProvider } from './AdminStaffViewContext';
+import { AdminStaffViewProvider, isSuperAdminRole } from './AdminStaffViewContext';
 import { loadSidebarCollapsed, saveSidebarCollapsed } from './adminAmpliaRoutes';
 import './AdminLayout.css';
 
@@ -47,7 +47,8 @@ const AdminLayout: React.FC = () => {
     }
 
     // Verifica se o usuário tem role ADMIN ou SUPER_ADMIN
-    if (!user || !user.role || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
+    const canAccessAdmin = user?.role === 'ADMIN' || isSuperAdminRole(user?.role);
+    if (!user || !user.role || !canAccessAdmin) {
         console.log('[AdminLayout] Usuário não é ADMIN - redirecionando para login');
         // Limpa dados pois não é admin
         localStorage.removeItem('win_access_token');
