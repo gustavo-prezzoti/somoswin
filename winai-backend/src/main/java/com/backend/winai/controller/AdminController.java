@@ -149,6 +149,14 @@ public class AdminController {
         return ResponseEntity.ok(ampliaStaffRoleService.update(id, request));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @Operation(summary = "Papéis internos Amplia — excluir", description = "Recusado se houver colaborador vinculado ou papel legado seed.")
+    @DeleteMapping("/internal-staff-roles/{id}")
+    public ResponseEntity<Void> deleteAmpliaStaffRole(@PathVariable UUID id) {
+        ampliaStaffRoleService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PreAuthorize("@adminSecurity.hasPermission(authentication, 'gestao_equipe', 'list')")
     @Operation(summary = "Papéis ativos — opções para atribuir colaborador", description = "Lista papéis ativos para select no cadastro de interno.")
     @GetMapping("/internal-staff-roles/select-options")

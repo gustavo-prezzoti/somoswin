@@ -61,4 +61,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.ampliaStaffRole WHERE u.id = :id")
     Optional<User> findByIdWithAmpliaStaffRole(@Param("id") UUID id);
+
+    /** Colaboradores internos vinculados a este papel (para impedir exclusão). */
+    long countByAmpliaStaffRole_Id(UUID ampliaStaffRoleId);
 }

@@ -6,6 +6,7 @@ import com.backend.winai.dto.response.AmpliaStaffRoleResponse;
 import com.backend.winai.entity.AmpliaAdminPermissionCatalog;
 import com.backend.winai.entity.AmpliaStaffRole;
 import com.backend.winai.repository.AmpliaStaffRoleRepository;
+import com.backend.winai.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 public class AmpliaStaffRoleService {
 
     private final AmpliaStaffRoleRepository roleRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<AmpliaStaffRoleResponse> listForAdmin() {
@@ -85,6 +87,21 @@ public class AmpliaStaffRoleService {
         }
         role = roleRepository.save(role);
         return toResponse(role);
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+        AmpliaStaffRole role = roleRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Papel não encontrado"));
+        if (role.getLegacyStaffType() != null) {
+            throw new RuntimeException("Não é possível excluir um papel de sistema legado.");
+        }
+        long inUse = userRepository.countByAmpliaStaffRole_Id(id);
+        if (inUse > 0) {
+            throw new RuntimeException(
+                    "Existem colaboradores usando este papel. Reatribua o papel deles antes de excluir.");
+        }
+        roleRepository.delete(role);
     }
 
     private void validatePermissions(boolean fullAccess, Map<String, Boolean> perms) {
