@@ -37,16 +37,27 @@ public class UserService {
                     .build();
         }
 
+        String planName;
+        if (Boolean.TRUE.equals(fullUser.getAmpliaInternalStaff())) {
+            planName = "INTERNAL_STAFF";
+        } else if (fullUser.getCompany() != null) {
+            planName = fullUser.getCompany().getPlan().name();
+        } else {
+            planName = "STARTER";
+        }
+
         return AuthResponse.UserDTO.builder()
                 .id(fullUser.getId())
                 .email(fullUser.getEmail())
                 .name(fullUser.getName())
                 .role(fullUser.getRole().name())
-                .plan(fullUser.getCompany() != null ? fullUser.getCompany().getPlan().name() : "STARTER")
+                .plan(planName)
                 .company(companyDTO)
                 .avatarUrl(fullUser.getAvatarUrl())
                 .phone(fullUser.getPhone())
                 .jobTitle(fullUser.getJobTitle())
+                .ampliaInternalStaff(Boolean.TRUE.equals(fullUser.getAmpliaInternalStaff()))
+                .ampliaStaffType(fullUser.getAmpliaStaffType() != null ? fullUser.getAmpliaStaffType().name() : null)
                 .build();
     }
 

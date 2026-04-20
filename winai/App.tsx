@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -60,6 +60,7 @@ import AdminMetaAds from './components/Admin/AdminMetaAds';
 import AdminMetasObjetivos from './components/Admin/AdminMetasObjetivos';
 import AdminAlertas from './components/Admin/AdminAlertas';
 import AdminPerformance from './components/Admin/AdminPerformance';
+import AdminGestaoEquipe from './components/Admin/AdminGestaoEquipe';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
@@ -278,7 +279,9 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
               >
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-black text-gray-800 tracking-tight truncate max-w-[200px]">{user?.name || 'Diretor Executivo'}</p>
-                  <p className="text-[9px] uppercase tracking-wider text-emerald-600 font-black">{user?.plan || 'Amplia Ultra'}</p>
+                  <p className="text-[9px] uppercase tracking-wider text-emerald-600 font-black">
+                    {user?.ampliaInternalStaff ? 'Equipe Amplia' : user?.plan || 'Amplia Ultra'}
+                  </p>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden border-2 border-emerald-500 shadow-lg shadow-emerald-500/10">
                   {user?.avatarUrl ? (
@@ -343,6 +346,14 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const token = localStorage.getItem('win_access_token');
   const location = useLocation();
 
+  const isAmpliaInternalStaff = useMemo(() => {
+    try {
+      return JSON.parse(user || '{}').ampliaInternalStaff === true;
+    } catch {
+      return false;
+    }
+  }, [user]);
+
   const [sessionNextAction, setSessionNextAction] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
   const [needsContractInfo, setNeedsContractInfo] = useState(false);
@@ -379,6 +390,10 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
           endDate: status.subscriptionEndDate,
         });
       }
+      if (isAmpliaInternalStaff) {
+        setSubscriptionExpired(false);
+        setNeedsContractInfo(false);
+      }
     } catch (error) {
       console.error('Failed to check terms status:', error);
       setTermsAccepted(true);
@@ -394,7 +409,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   }
 
   /** Membro convidado: assinatura da empresa inativa — só o dono regulariza; sem valores nem pagamento. */
-  if (sessionNextAction === 'SUBSCRIPTION_INACTIVE_MEMBER') {
+  if (sessionNextAction === 'SUBSCRIPTION_INACTIVE_MEMBER' && !isAmpliaInternalStaff) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-[#003d2b] to-gray-900 flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
         <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl">
@@ -441,7 +456,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   }
 
   // Se precisa preencher dados do contrato, mostra mensagem de bloqueio
-  if (needsContractInfo) {
+  if (needsContractInfo && !isAmpliaInternalStaff) {
     return (
       <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
         <div className="bg-white rounded-2xl w-full max-w-lg p-8 text-center shadow-2xl">
@@ -479,7 +494,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   }
 
   // Responsável financeiro: assinatura inativa — pode abrir pagamento (demais usuários não chegam aqui)
-  if (subscriptionExpired && isBillingOwner) {
+  if (subscriptionExpired && isBillingOwner && !isAmpliaInternalStaff) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
         <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl">
@@ -565,7 +580,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
     );
   }
 
-  if (subscriptionExpired && !isBillingOwner) {
+  if (subscriptionExpired && !isBillingOwner && !isAmpliaInternalStaff) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-[#003d2b] to-gray-900 flex items-center justify-center z-[10050] p-4 sm:p-6 overflow-y-auto min-h-0">
         <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl">
@@ -636,6 +651,7 @@ const App: React.FC = () => {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="em-breve" element={<AdminComingSoon />} />
+          <Route path="gestao-equipe" element={<AdminGestaoEquipe />} />
           <Route path="clientes" element={<AdminClientes />} />
           <Route path="meta-ads" element={<AdminMetaAds />} />
           <Route path="metas" element={<AdminMetasObjetivos />} />

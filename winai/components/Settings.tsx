@@ -84,6 +84,7 @@ const Settings: React.FC = () => {
   const [isBillingOwnerFlag, setIsBillingOwnerFlag] = useState<boolean | null>(null);
 
   const isCompanyAdmin = user?.role === 'ADMIN';
+  const isInternalStaff = user?.ampliaInternalStaff === true;
   /** Convites, revogar e remoção: pagante ou ADMIN (SUPER_ADMIN incluído). */
   const canManageTeam =
     isBillingOwnerFlag === true ||
@@ -144,6 +145,12 @@ const Settings: React.FC = () => {
       setActiveTab('profile');
     }
   }, [isBillingOwnerFlag, activeTab]);
+
+  useEffect(() => {
+    if (isInternalStaff && (activeTab === 'team' || activeTab === 'subscription')) {
+      setActiveTab('profile');
+    }
+  }, [isInternalStaff, activeTab]);
 
   useEffect(() => {
     if (isBillingOwnerFlag === true) {
@@ -223,7 +230,9 @@ const Settings: React.FC = () => {
         phone: userData.phone || '',
         jobTitle: userData.jobTitle || ''
       });
-      await loadCompanyProfile();
+      if (!userData.ampliaInternalStaff) {
+        await loadCompanyProfile();
+      }
     } catch (error) {
       console.error('Failed to load user', error);
       const savedUser = localStorage.getItem('win_user');
@@ -241,10 +250,10 @@ const Settings: React.FC = () => {
   };
 
   useEffect(() => {
-    if (activeTab === 'team') {
+    if (activeTab === 'team' && user && !user.ampliaInternalStaff) {
       void loadTeamData();
     }
-  }, [activeTab]);
+  }, [activeTab, user?.ampliaInternalStaff, user?.id]);
 
   const checkGoogleConnection = async () => {
     try {
@@ -782,7 +791,11 @@ const Settings: React.FC = () => {
     { id: 'integrations', label: 'Conexões / Integrações', icon: Globe },
     { id: 'agendamento', label: 'Agendamento', icon: Clock },
     { id: 'subscription', label: 'Plano & Faturamento', icon: CreditCard }
-  ].filter((tab) => tab.id !== 'subscription' || isBillingOwnerFlag === true);
+  ].filter((tab) => {
+    if (tab.id === 'subscription' && isBillingOwnerFlag !== true) return false;
+    if (tab.id === 'team' && isInternalStaff) return false;
+    return true;
+  });
 
   return (
     <>
@@ -901,6 +914,20 @@ const Settings: React.FC = () => {
                   </div>
                 </div>
 
+                {isInternalStaff ? (
+                <section className="space-y-4 pt-8 border-t border-gray-50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <Zap size={20} />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-900 uppercase italic tracking-tighter">Conta interna</h3>
+                  </div>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Esta sessão é de colaborador interno da Amplia. Não há empresa de cliente vinculada — dados comerciais e
+                    faturamento não se aplicam.
+                  </p>
+                </section>
+                ) : (
                 <section className="space-y-8 pt-8 border-t border-gray-50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -1034,6 +1061,7 @@ const Settings: React.FC = () => {
                     </div>
                   </div>
                 </section>
+                )}
               </div>
             )}
 

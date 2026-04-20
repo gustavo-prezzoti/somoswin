@@ -307,7 +307,19 @@ public class AdminService {
 
     // ========== PERFORMANCE (SNAPSHOT AGREGADO) ==========
 
-    public AdminPerformanceSnapshotResponse getAdminPerformanceSnapshot() {
+    public AdminPerformanceSnapshotResponse getAdminPerformanceSnapshot(UUID staffUserId) {
+        if (staffUserId != null) {
+            User staff = userRepository.findById(staffUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+            if (!Boolean.TRUE.equals(staff.getAmpliaInternalStaff())) {
+                throw new RuntimeException("Filtro disponível apenas para colaboradores internos");
+            }
+            return buildPerformanceSnapshotForStaff(staffUserId);
+        }
+        return buildPerformanceSnapshotGlobal();
+    }
+
+    private AdminPerformanceSnapshotResponse buildPerformanceSnapshotGlobal() {
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
@@ -374,6 +386,36 @@ public class AdminService {
                 .ctrGlobal(ctrGlobal)
                 .activeGoalsTotal(activeGoalsTotal)
                 .topCompaniesBySpend(topCompanies)
+                .build();
+    }
+
+    /** Métricas restritas aos leads/reuniões atribuídos ao colaborador (owner em Lead). */
+    private AdminPerformanceSnapshotResponse buildPerformanceSnapshotForStaff(UUID staffUserId) {
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+
+        long totalLeads = leadRepository.countByOwnerUser_Id(staffUserId);
+        long leadsWon = leadRepository.countByOwnerUser_IdAndStatus(staffUserId, LeadStatus.WON);
+        long meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(staffUserId, startWeek, endWeek);
+
+        return AdminPerformanceSnapshotResponse.builder()
+                .totalCompanies(0L)
+                .newCompaniesThisMonth(0L)
+                .totalLeads(totalLeads)
+                .leadsWon(leadsWon)
+                .meetingsThisWeek(meetingsWeek)
+                .incompleteDashboardTasks(0L)
+                .metaCampaignsCount(0L)
+                .metaAccountsConnected(0L)
+                .totalSpend(0.0)
+                .totalImpressions(0L)
+                .totalClicks(0L)
+                .totalReach(0L)
+                .totalConversions(0L)
+                .ctrGlobal(0.0)
+                .activeGoalsTotal(0L)
+                .topCompaniesBySpend(Collections.emptyList())
                 .build();
     }
 

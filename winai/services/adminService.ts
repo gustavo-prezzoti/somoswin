@@ -85,6 +85,57 @@ export interface AdminPerformanceSnapshot {
     topCompaniesBySpend: AdminCompanyPerformanceRow[];
 }
 
+export interface InternalStaffMember {
+    id: string;
+    name: string;
+    email: string;
+    ampliaStaffType: string;
+    active: boolean;
+    lastLogin: string | null;
+    leadsTotal: number;
+    leadsWon: number;
+    meetingsThisWeek: number;
+    conversionPercent: number;
+}
+
+export interface InternalStaffMonthlyPoint {
+    name: string;
+    value: number;
+}
+
+export interface InternalStaffMemberDashboard {
+    userId: string;
+    name: string;
+    email: string;
+    ampliaStaffType: string | null;
+    leadsTotal: number;
+    leadsWon: number;
+    meetingsThisWeek: number;
+    conversionRateDisplay: string;
+    monthlyLeads: InternalStaffMonthlyPoint[];
+}
+
+export interface CreateInternalStaffPayload {
+    name: string;
+    email: string;
+    ampliaStaffType: string;
+    password?: string;
+}
+
+export interface CreateInternalStaffResult {
+    id: string;
+    name: string;
+    email: string;
+    ampliaStaffType: string;
+    tempPassword?: string | null;
+}
+
+export interface PatchInternalStaffPayload {
+    ampliaStaffType?: string;
+    isActive?: boolean;
+    password?: string;
+}
+
 export interface SpringPage<T> {
     content: T[];
     totalElements: number;
@@ -459,8 +510,28 @@ const adminService = {
         await httpClient.patch(`/admin/alerts/notifications/${notificationId}/read`);
     },
 
-    getPerformanceSnapshot: async (): Promise<AdminPerformanceSnapshot> => {
-        return await httpClient.get<AdminPerformanceSnapshot>('/admin/performance/snapshot');
+    getPerformanceSnapshot: async (staffUserId?: string | null): Promise<AdminPerformanceSnapshot> => {
+        const qs =
+            staffUserId && staffUserId.length > 0
+                ? `?staffUserId=${encodeURIComponent(staffUserId)}`
+                : '';
+        return await httpClient.get<AdminPerformanceSnapshot>(`/admin/performance/snapshot${qs}`);
+    },
+
+    listInternalStaff: async (): Promise<InternalStaffMember[]> => {
+        return await httpClient.get<InternalStaffMember[]>('/admin/internal-staff');
+    },
+
+    createInternalStaff: async (data: CreateInternalStaffPayload): Promise<CreateInternalStaffResult> => {
+        return await httpClient.post<CreateInternalStaffResult>('/admin/internal-staff', data);
+    },
+
+    patchInternalStaff: async (id: string, data: PatchInternalStaffPayload): Promise<InternalStaffMember> => {
+        return await httpClient.patch<InternalStaffMember>(`/admin/internal-staff/${id}`, data);
+    },
+
+    getInternalStaffDashboard: async (id: string): Promise<InternalStaffMemberDashboard> => {
+        return await httpClient.get<InternalStaffMemberDashboard>(`/admin/internal-staff/${id}/dashboard`);
     },
 
     // ========== CRUD DE USUÁRIOS ==========

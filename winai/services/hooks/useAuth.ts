@@ -56,6 +56,7 @@ export function useAuth(): UseAuthReturn {
                     plan: getPlanDisplayName(response.user.plan),
                     isLoggedIn: true,
                     company: response.user.company,
+                    ampliaInternalStaff: response.user.ampliaInternalStaff,
                 },
                 isAuthenticated: true,
                 isLoading: false,
@@ -79,6 +80,7 @@ export function useAuth(): UseAuthReturn {
                     plan: getPlanDisplayName(response.user.plan),
                     isLoggedIn: true,
                     company: response.user.company,
+                    ampliaInternalStaff: response.user.ampliaInternalStaff,
                 },
                 isAuthenticated: true,
                 isLoading: false,
@@ -115,6 +117,7 @@ export function useAuth(): UseAuthReturn {
                     plan: getPlanDisplayName(user.plan),
                     isLoggedIn: true,
                     company: user.company,
+                    ampliaInternalStaff: user.ampliaInternalStaff,
                 },
             }));
         } catch {
@@ -138,6 +141,7 @@ function getPlanDisplayName(plan: UserDTO['plan']): string {
         PROFESSIONAL: 'Plano Profissional',
         ULTRA: 'Plano Ultra',
         ENTERPRISE: 'Plano Enterprise',
+        INTERNAL_STAFF: 'Equipe interna Amplia',
     };
     return planNames[plan] || 'Plano Starter';
 }

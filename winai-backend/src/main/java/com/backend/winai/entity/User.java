@@ -75,6 +75,15 @@ public class User implements UserDetails {
     @Column(name = "job_title")
     private String jobTitle;
 
+    /** Colaborador interno Amplia: acesso ao app sem empresa/assinatura. */
+    @Column(name = "amplia_internal_staff")
+    @Builder.Default
+    private Boolean ampliaInternalStaff = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "amplia_staff_type")
+    private AmpliaStaffType ampliaStaffType;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;
@@ -112,5 +121,10 @@ public class User implements UserDetails {
     @Override
     public boolean isEnabled() {
         return isActive;
+    }
+
+    /** Super admin ou colaborador interno Amplia não dependem de assinatura de empresa. */
+    public boolean isSubscriptionExempt() {
+        return role == UserRole.SUPER_ADMIN || Boolean.TRUE.equals(ampliaInternalStaff);
     }
 }

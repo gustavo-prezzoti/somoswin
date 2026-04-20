@@ -29,12 +29,15 @@ export interface UserDTO {
     email: string;
     name: string;
     role: UserRole;
-    plan: PlanType;
+    plan: PlanType | 'INTERNAL_STAFF';
     company: CompanyDTO | null;
     avatarUrl?: string | null;
     phone?: string | null;
     jobTitle?: string | null;
     mustChangePassword?: boolean;
+    /** Colaborador interno Amplia (sem assinatura). */
+    ampliaInternalStaff?: boolean;
+    ampliaStaffType?: string | null;
 }
 
 export interface CompanyDTO {
@@ -161,6 +164,7 @@ export interface StoredUser {
     isLoggedIn: boolean;
     company: CompanyDTO | null;
     mustChangePassword?: boolean;
+    ampliaInternalStaff?: boolean;
 }
 
 // ============================================

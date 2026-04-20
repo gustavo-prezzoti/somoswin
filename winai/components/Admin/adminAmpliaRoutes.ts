@@ -10,7 +10,7 @@
  * | metas               | /admin/metas               | Metas e objetivos                  |
  * | alertas             | /admin/alertas             | Notificações (badge opcional)      |
  * | performance         | /admin/performance         | Snapshot agregado                  |
- * | gestao_equipe…financas | /admin/em-breve?m=…     | Placeholder                        |
+ * | gestao_equipe     | /admin/gestao-equipe      | Colaboradores internos             |
  * | contratos           | /admin/companies           | Contratos / empresas               |
  * | instancias…followup | /admin/instances, etc.     | Rotas técnicas                     |
  * | prompts             | /admin/em-breve?m=prompts  | Placeholder Prompts IA             |
@@ -56,9 +56,8 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         label: 'ADMINISTRATIVO',
         accentClass: 'text-blue-500',
         items: [
-            { id: 'gestao_equipe', label: 'Gestão de Equipe', to: '/admin/em-breve?m=gestao_equipe' },
+            { id: 'gestao_equipe', label: 'Gestão de Equipe', to: '/admin/gestao-equipe', implemented: true },
             { id: 'contratos', label: 'Contratos', to: '/admin/companies', implemented: true },
-            { id: 'equipe', label: 'Equipe Admin', to: '/admin/em-breve?m=equipe' },
             { id: 'financas', label: 'Finanças', to: '/admin/em-breve?m=financas' },
         ],
     },

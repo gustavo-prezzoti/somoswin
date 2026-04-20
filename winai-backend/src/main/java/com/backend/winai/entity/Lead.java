@@ -43,6 +43,10 @@ public class Lead {
     @Column(name = "owner_name")
     private String ownerName;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_user_id")
+    private User ownerUser;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

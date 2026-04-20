@@ -35,7 +35,6 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
     performance: BarChart3,
     gestao_equipe: Users,
     contratos: Building2,
-    equipe: Users,
     financas: DollarSign,
     instancias: Smartphone,
     conexoes: LinkIcon,

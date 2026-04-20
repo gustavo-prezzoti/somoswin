@@ -138,6 +138,15 @@ public class TermsOfServiceService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
+        if (Boolean.TRUE.equals(user.getAmpliaInternalStaff())) {
+            response.put("isBillingOwner", false);
+            response.put("hasRequiredContractFields", true);
+            response.put("needsContractInfo", false);
+            response.put("hasAccepted", acceptanceRepository.hasUserAcceptedActiveTerms(userId));
+            response.put("subscriptionExpired", false);
+            return response;
+        }
+
         boolean billingOwner = subscriptionBillingService.isBillingOwner(user);
         response.put("isBillingOwner", billingOwner);
 
@@ -168,11 +177,12 @@ public class TermsOfServiceService {
             });
         }
 
-        // Verificar vigência da assinatura (apenas SUPER_ADMIN é isento)
+        // Verificar vigência da assinatura (SUPER_ADMIN e equipe interna isentos)
         boolean isSuperAdmin = user.getRole() != null
                 && user.getRole().name().equals("SUPER_ADMIN");
+        boolean internalStaff = Boolean.TRUE.equals(user.getAmpliaInternalStaff());
 
-        if (!isSuperAdmin && user.getCompany() != null) {
+        if (!isSuperAdmin && !internalStaff && user.getCompany() != null) {
             var company = user.getCompany();
             boolean blocked = subscriptionBillingService.isCompanySubscriptionBlocked(company);
 

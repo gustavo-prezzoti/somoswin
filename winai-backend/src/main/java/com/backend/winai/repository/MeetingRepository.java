@@ -157,4 +157,9 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
 
         @Query("SELECT m FROM Meeting m JOIN FETCH m.company c LEFT JOIN FETCH m.lead l WHERE m.id IN :ids")
         List<Meeting> findByIdsWithFetch(@Param("ids") List<UUID> ids);
+
+        @Query("SELECT COUNT(m) FROM Meeting m JOIN m.lead l WHERE l.ownerUser.id = :userId "
+                        + "AND m.meetingDate BETWEEN :start AND :end")
+        long countMeetingsForLeadOwnerBetween(@Param("userId") UUID userId, @Param("start") LocalDate start,
+                        @Param("end") LocalDate end);
 }

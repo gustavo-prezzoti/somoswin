@@ -4,8 +4,6 @@ import { Construction } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const MODULE_LABELS: Record<string, string> = {
-    gestao_equipe: 'Gestão de Equipe',
-    equipe: 'Equipe Admin',
     financas: 'Finanças',
     prompts: 'Prompts IA',
 };

@@ -66,4 +66,13 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
                     + "LOWER(COALESCE(l.phone, '')) LIKE CONCAT('%', :q, '%') OR "
                     + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%'))")
     Page<Lead> searchAllLeads(@Param("q") String q, Pageable pageable);
+
+    long countByOwnerUser_Id(UUID ownerUserId);
+
+    long countByOwnerUser_IdAndStatus(UUID ownerUserId, LeadStatus status);
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.ownerUser.id = :userId AND l.createdAt >= :start AND l.createdAt < :end")
+    long countByOwnerUserAndCreatedAtRange(@Param("userId") UUID userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 }

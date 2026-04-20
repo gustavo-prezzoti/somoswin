@@ -289,6 +289,15 @@ public class AuthService {
                     .build();
         }
 
+        String planName;
+        if (Boolean.TRUE.equals(user.getAmpliaInternalStaff())) {
+            planName = "INTERNAL_STAFF";
+        } else if (user.getCompany() != null) {
+            planName = user.getCompany().getPlan().name();
+        } else {
+            planName = "STARTER";
+        }
+
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -299,11 +308,13 @@ public class AuthService {
                         .email(user.getEmail())
                         .name(user.getName())
                         .role(user.getRole().name())
-                        .plan(user.getCompany() != null ? user.getCompany().getPlan().name() : "STARTER")
+                        .plan(planName)
                         .company(companyDTO)
                         .avatarUrl(user.getAvatarUrl())
                         .phone(user.getPhone())
                         .jobTitle(user.getJobTitle())
+                        .ampliaInternalStaff(Boolean.TRUE.equals(user.getAmpliaInternalStaff()))
+                        .ampliaStaffType(user.getAmpliaStaffType() != null ? user.getAmpliaStaffType().name() : null)
                         .build())
                 .build();
     }
@@ -338,6 +349,9 @@ public class AuthService {
      */
     private void assertMemberMayAccessAfterAuth(User user) {
         if (user.getRole() != null && user.getRole().name().equals("SUPER_ADMIN")) {
+            return;
+        }
+        if (Boolean.TRUE.equals(user.getAmpliaInternalStaff())) {
             return;
         }
         Map<String, Object> st = termsOfServiceService.getAcceptanceStatus(user.getId());

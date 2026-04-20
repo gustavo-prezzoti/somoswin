@@ -1,5 +1,7 @@
 package com.backend.winai.controller;
 
+import com.backend.winai.dto.request.CreateInternalStaffRequest;
+import com.backend.winai.dto.request.PatchInternalStaffRequest;
 import com.backend.winai.dto.request.AdminMeetingCreateRequest;
 import com.backend.winai.dto.request.AdminCreateUserRequest;
 import com.backend.winai.dto.request.AdminEscutaStartRequest;
@@ -21,6 +23,9 @@ import com.backend.winai.dto.response.AdminInstanceResponse;
 import com.backend.winai.dto.response.AdminMeetingRowResponse;
 import com.backend.winai.dto.response.AdminLeadResponse;
 import com.backend.winai.dto.response.AdminUserResponse;
+import com.backend.winai.dto.response.CreateInternalStaffResponse;
+import com.backend.winai.dto.response.InternalStaffMemberDashboardResponse;
+import com.backend.winai.dto.response.InternalStaffMemberResponse;
 import com.backend.winai.dto.response.MeetingResponse;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
 import com.backend.winai.entity.LeadStatus;
@@ -28,6 +33,7 @@ import com.backend.winai.entity.MeetingStatus;
 import com.backend.winai.dto.response.TermsOfServiceResponse;
 import com.backend.winai.dto.response.UserTermsAcceptanceResponse;
 import com.backend.winai.service.AdminService;
+import com.backend.winai.service.InternalStaffService;
 import com.backend.winai.service.TermsOfServiceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -58,6 +64,7 @@ public class AdminController {
 
     private final AdminService adminService;
     private final TermsOfServiceService termsOfServiceService;
+    private final InternalStaffService internalStaffService;
 
     // ========== ESTATÍSTICAS ==========
 
@@ -90,10 +97,38 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Performance — snapshot agregado", description = "CRM, metas, reuniões, Meta Ads (somas) e top empresas por investimento")
+    @Operation(summary = "Performance — snapshot agregado", description = "CRM, metas, reuniões, Meta Ads (somas) e top empresas por investimento. Opcional: staffUserId = colaborador interno (leads/reuniões atribuídas).")
     @GetMapping("/performance/snapshot")
-    public ResponseEntity<AdminPerformanceSnapshotResponse> getPerformanceSnapshot() {
-        return ResponseEntity.ok(adminService.getAdminPerformanceSnapshot());
+    public ResponseEntity<AdminPerformanceSnapshotResponse> getPerformanceSnapshot(
+            @RequestParam(required = false) UUID staffUserId) {
+        return ResponseEntity.ok(adminService.getAdminPerformanceSnapshot(staffUserId));
+    }
+
+    @Operation(summary = "Equipe interna Amplia — listar")
+    @GetMapping("/internal-staff")
+    public ResponseEntity<List<InternalStaffMemberResponse>> listInternalStaff() {
+        return ResponseEntity.ok(internalStaffService.listInternalStaff());
+    }
+
+    @Operation(summary = "Equipe interna Amplia — criar")
+    @PostMapping("/internal-staff")
+    public ResponseEntity<CreateInternalStaffResponse> createInternalStaff(
+            @Valid @RequestBody CreateInternalStaffRequest request) {
+        return ResponseEntity.ok(internalStaffService.create(request));
+    }
+
+    @Operation(summary = "Equipe interna Amplia — atualizar")
+    @PatchMapping("/internal-staff/{id}")
+    public ResponseEntity<InternalStaffMemberResponse> patchInternalStaff(
+            @PathVariable UUID id,
+            @RequestBody PatchInternalStaffRequest request) {
+        return ResponseEntity.ok(internalStaffService.patch(id, request));
+    }
+
+    @Operation(summary = "Equipe interna Amplia — dashboard individual (gráficos)")
+    @GetMapping("/internal-staff/{id}/dashboard")
+    public ResponseEntity<InternalStaffMemberDashboardResponse> getInternalStaffDashboard(@PathVariable UUID id) {
+        return ResponseEntity.ok(internalStaffService.getMemberDashboard(id));
     }
 
     @Operation(summary = "CRM — listar leads (global)", description = "Leads de todas as empresas, com busca e filtro por status")

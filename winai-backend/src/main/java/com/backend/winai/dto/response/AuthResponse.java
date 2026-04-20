@@ -35,6 +35,10 @@ public class AuthResponse {
         private String avatarUrl;
         private String phone;
         private String jobTitle;
+        /** Colaborador interno Amplia (sem assinatura no app cliente). */
+        private Boolean ampliaInternalStaff;
+        /** VENDEDOR, CONSULTOR, GESTOR — quando ampliaInternalStaff. */
+        private String ampliaStaffType;
     }
 
     @Data

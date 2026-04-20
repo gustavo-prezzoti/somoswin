@@ -14,12 +14,13 @@ const STORAGE_KEYS = {
 /**
  * Converte o tipo do plano para nome amigável
  */
-const getPlanDisplayName = (plan: PlanType): string => {
-    const planNames: Record<PlanType, string> = {
+const getPlanDisplayName = (plan: PlanType | 'INTERNAL_STAFF'): string => {
+    const planNames: Record<string, string> = {
         STARTER: 'Plano Starter',
         PROFESSIONAL: 'Plano Profissional',
         ULTRA: 'Plano Ultra',
         ENTERPRISE: 'Plano Enterprise',
+        INTERNAL_STAFF: 'Equipe interna Amplia',
     };
     return planNames[plan] || 'Plano Starter';
 };
@@ -88,10 +89,11 @@ export const storageService = {
             email: user.email,
             name: user.name,
             role: user.role,
-            plan: getPlanDisplayName(user.plan),
+            plan: getPlanDisplayName(user.plan as PlanType | 'INTERNAL_STAFF'),
             isLoggedIn: true,
             company: user.company,
             mustChangePassword: user.mustChangePassword,
+            ampliaInternalStaff: user.ampliaInternalStaff,
         };
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(storedUser));
     },

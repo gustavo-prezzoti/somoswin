@@ -53,4 +53,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /** Primeiro usuário da empresa (responsável financeiro / dono da conta). */
     Optional<User> findFirstByCompany_IdOrderByCreatedAtAscIdAsc(UUID companyId);
+
+    List<User> findByAmpliaInternalStaffTrueOrderByNameAsc();
 }
