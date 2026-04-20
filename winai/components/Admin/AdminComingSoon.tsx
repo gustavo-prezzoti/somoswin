@@ -17,7 +17,6 @@ const MODULE_LABELS: Record<string, string> = {
     gestao_equipe: 'Gestão de Equipe',
     equipe: 'Equipe Admin',
     financas: 'Finanças',
-    prompts: 'Prompts IA',
 };
 
 const AdminComingSoon: React.FC = () => {

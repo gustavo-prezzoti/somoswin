@@ -17,7 +17,6 @@ import {
     Link as LinkIcon,
     Bot,
     Clock,
-    Terminal,
     ChevronDown,
     ChevronRight,
     X,
@@ -50,7 +49,6 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
     conexoes: LinkIcon,
     agentes: Bot,
     followup: Clock,
-    prompts: Terminal,
 };
 
 function isNavActive(to: string, pathname: string, search: string): boolean {

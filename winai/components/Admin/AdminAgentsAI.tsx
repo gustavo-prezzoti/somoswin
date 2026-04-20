@@ -301,7 +301,7 @@ const AdminAgentsAI = () => {
                 });
             };
 
-            if (loading) return <div className="py-20 text-center animate-pulse font-black text-gray-300 uppercase italic">Sincronizando Canais...</div>;
+            if (loading) return <div className="py-20 text-center animate-pulse font-black text-gray-600 uppercase italic">Sincronizando Canais...</div>;
 
             return (
                 <div className="space-y-8">
@@ -309,7 +309,7 @@ const AdminAgentsAI = () => {
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Conexões Ativas</label>
                         {linked.length === 0 ? (
                             <div className="p-8 text-center bg-gray-50 rounded-[2rem] border border-gray-100">
-                                <p className="text-xs font-bold text-gray-300 uppercase tracking-widest italic leading-none">Nenhuma conexão</p>
+                                <p className="text-xs font-bold text-gray-600 uppercase tracking-widest italic leading-none">Nenhuma conexão</p>
                             </div>
                         ) : (
                             <div className="grid gap-3">
@@ -351,7 +351,7 @@ const AdminAgentsAI = () => {
                             <button
                                 onClick={handleLink}
                                 disabled={!selConn}
-                                className="px-8 bg-gray-900 text-white rounded-2xl font-black hover:bg-black transition-all disabled:opacity-30 active:scale-95 flex items-center justify-center"
+                                className="px-8 bg-emerald-600 text-black rounded-2xl font-black hover:brightness-110 transition-all disabled:opacity-30 active:scale-95 flex items-center justify-center"
                             >
                                 <LinkIcon size={20} strokeWidth={3} />
                             </button>
@@ -392,8 +392,8 @@ const AdminAgentsAI = () => {
     if (isLoading && !selectedCompanyId) {
         return (
             <div className="flex flex-col items-center justify-center h-96 gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Sincronizando Unidades Neurais...</span>
+                <div className="w-12 h-12 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-600 uppercase tracking-widest">Sincronizando Unidades Neurais...</span>
             </div>
         );
     }
@@ -403,14 +403,14 @@ const AdminAgentsAI = () => {
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-12">
                 <div className="relative">
                     <h1 className="text-4xl font-black text-[#141414] tracking-tighter uppercase italic leading-none">Agentes IA</h1>
-                    <p className="text-gray-500 font-bold text-sm tracking-tight mt-2 opacity-70 flex items-center gap-2">
+                    <p className="text-gray-600 font-medium text-sm tracking-tight mt-2 flex items-center gap-2">
                         Gerencie os agentes de IA de cada empresa
                     </p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full lg:w-auto">
-                    <div className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-50 rounded-2xl shadow-xl shadow-gray-200/50">
-                        <Building2 size={16} className="text-gray-300" />
+                    <div className="flex items-center gap-3 px-6 py-4 bg-white border border-black/5 rounded-2xl shadow-sm">
+                        <Building2 size={16} className="text-emerald-600 shrink-0" />
                         <select
                             value={selectedCompanyId}
                             onChange={(e) => setSelectedCompanyId(e.target.value)}
@@ -426,7 +426,7 @@ const AdminAgentsAI = () => {
                     <button
                         onClick={() => openAgentModal()}
                         disabled={!selectedCompanyId}
-                        className="flex items-center justify-center gap-3 px-8 py-4 bg-gray-900 text-white rounded-2xl hover:bg-black transition-all font-black uppercase text-xs tracking-widest disabled:opacity-20 active:scale-95"
+                        className="flex items-center justify-center gap-3 px-8 py-4 bg-emerald-600 text-black rounded-2xl hover:brightness-110 transition-all font-black uppercase text-xs tracking-widest disabled:opacity-30 active:scale-95"
                     >
                         <Plus size={20} strokeWidth={3} />
                         Novo Agente
@@ -436,7 +436,7 @@ const AdminAgentsAI = () => {
 
             {selectedCompanyId && (
                 <div className="mb-10 relative group">
-                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-emerald-500 transition-colors" size={20} />
+                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-emerald-600 transition-colors" size={20} />
                     <input
                         type="text"
                         placeholder="Pesquisar agentes..."
@@ -449,7 +449,7 @@ const AdminAgentsAI = () => {
 
             {isLoading && selectedCompanyId && (
                 <div className="flex justify-center py-20">
-                    <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                    <div className="w-10 h-10 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
                 </div>
             )}
 
@@ -458,7 +458,7 @@ const AdminAgentsAI = () => {
                     {filteredBases.map(base => (
                         <div key={base.id} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all group flex flex-col h-full">
                             <div className="flex justify-between items-start mb-8">
-                                <div className="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 group-hover:bg-emerald-600 group-hover:text-emerald-700 transition-all">
+                                <div className="w-14 h-14 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all">
                                     <Bot size={28} />
                                 </div>
                                 <div className="flex gap-2">
@@ -499,7 +499,7 @@ const AdminAgentsAI = () => {
 
                                     <button
                                         onClick={() => openConnectionsModal(base)}
-                                        className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-black transition-all text-[10px] font-bold uppercase"
+                                        className="flex items-center gap-2 px-5 py-2.5 bg-[#141414] text-white rounded-xl hover:bg-black transition-all text-[10px] font-bold uppercase"
                                     >
                                         <LinkIcon size={12} />
                                         Vincular
@@ -513,22 +513,24 @@ const AdminAgentsAI = () => {
             )}
 
             {!isLoading && selectedCompanyId && filteredBases.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-32 bg-white rounded-[2rem] border border-gray-100">
-                    <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 text-gray-200">
+                <div className="flex flex-col items-center justify-center py-32 bg-gray-50/80 rounded-[2rem] border border-black/5">
+                    <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mb-6 text-emerald-600 border border-black/5 shadow-sm">
                         <Bot size={40} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-800 uppercase">Nenhum Agente</h3>
-                    <p className="text-gray-400 text-sm mt-1">Nenhum agente encontrado para esta empresa.</p>
+                    <h3 className="text-xl font-black text-[#141414] uppercase tracking-tight">Nenhum Agente</h3>
+                    <p className="text-gray-600 text-sm mt-2 max-w-md text-center">Nenhum agente encontrado para esta empresa.</p>
                 </div>
             )}
 
             {!isLoading && !selectedCompanyId && (
-                <div className="flex flex-col items-center justify-center py-40 bg-gray-500 rounded-[2rem] border border-gray-100">
-                    <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6">
+                <div className="flex flex-col items-center justify-center py-40 bg-gray-50/80 rounded-[2rem] border border-black/5">
+                    <div className="w-16 h-16 bg-white text-emerald-600 rounded-2xl flex items-center justify-center mb-6 border border-black/5 shadow-sm">
                         <Building2 size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-400 uppercase">Selecione uma Empresa</h3>
-                    <p className="text-gray-400 text-sm mt-1">Selecione uma empresa para gerenciar os agentes correspondentes.</p>
+                    <h3 className="text-xl font-black text-[#141414] uppercase tracking-tight">Selecione uma Empresa</h3>
+                    <p className="text-gray-600 text-sm mt-2 max-w-md text-center leading-relaxed">
+                        Selecione uma empresa para gerenciar os agentes correspondentes.
+                    </p>
                 </div>
             )}
         </div>

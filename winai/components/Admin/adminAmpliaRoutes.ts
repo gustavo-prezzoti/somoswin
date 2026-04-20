@@ -17,7 +17,6 @@
  * | equipe / gestao_*   | /admin/em-breve      | membros / permissões             |
  * | financas            | /admin/em-breve      | Asaas / billing                  |
  * | instancias…followup | rotas técnicas       | instâncias UAZAP, KB, etc.       |
- * | prompts             | /admin/em-breve      | prompts IA                       |
  * | consultoria         | /admin/consultancy   | ConsultancyCallRequest, vídeo    |
  */
 
@@ -78,7 +77,6 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
             { id: 'conexoes', label: 'Conexões', to: '/admin/user-connections', implemented: true },
             { id: 'agentes', label: 'Agentes IA', to: '/admin/agents', implemented: true },
             { id: 'followup', label: 'Follow-up', to: '/admin/followup', implemented: true },
-            { id: 'prompts', label: 'Prompts IA', to: '/admin/em-breve?m=prompts' },
         ],
     },
 ];
