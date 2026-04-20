@@ -705,6 +705,15 @@ public class AdminService {
         return whatsAppChatService.getMessagesByConversation(conversationId, page, limit);
     }
 
+    /**
+     * Zera não lidas ao abrir a conversa no painel admin (global).
+     * Reutiliza a mesma regra de {@link WhatsAppChatService#markConversationAsRead(UUID)}.
+     */
+    @Transactional
+    public void markAdminAtendimentoConversationRead(UUID conversationId) {
+        whatsAppChatService.markConversationAsRead(conversationId);
+    }
+
     private AdminLeadResponse toAdminLeadResponse(Lead lead) {
         UUID cid = null;
         String cname = "—";
@@ -748,7 +757,7 @@ public class AdminService {
                 .contactName(c.getContactName())
                 .lastMessageText(c.getLastMessageText())
                 .lastMessageTimestamp(c.getLastMessageTimestamp())
-                .unreadCount(c.getUnreadCount())
+                .unreadCount(c.getUnreadCount() != null ? c.getUnreadCount() : 0)
                 .profilePictureUrl(c.getProfilePictureUrl())
                 .uazapInstance(c.getUazapInstance())
                 .build();

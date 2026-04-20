@@ -91,6 +91,14 @@ const AdminAtendimento: React.FC = () => {
             setLoadingMsgs(true);
             const list = await adminService.getAtendimentoMessages(conversationId, 0, 100);
             setMessages(list);
+            try {
+                await adminService.markAtendimentoConversationRead(conversationId);
+                setConversations((prev) =>
+                    prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
+                );
+            } catch {
+                /* não bloqueia o chat se só o mark read falhar */
+            }
         } catch (e) {
             setError(getErrorMessage(e, 'Erro ao carregar mensagens'));
         } finally {
@@ -224,11 +232,17 @@ const AdminAtendimento: React.FC = () => {
                                         <p className="text-xs text-gray-500 truncate mt-1">{c.lastMessageText || '—'}</p>
                                     </div>
                                     <div className="flex flex-col items-end gap-1 shrink-0">
-                                        {(c.unreadCount ?? 0) > 0 && (
-                                            <span className="text-[10px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full">
-                                                {c.unreadCount}
-                                            </span>
-                                        )}
+                                        {(() => {
+                                            const displayUnread =
+                                                selectedId === c.id ? 0 : Math.max(0, c.unreadCount ?? 0);
+                                            return (
+                                                displayUnread > 0 && (
+                                                    <span className="text-[10px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                                                        {displayUnread > 99 ? '99+' : displayUnread}
+                                                    </span>
+                                                )
+                                            );
+                                        })()}
                                         <MessageCircle size={14} className="text-gray-600" />
                                     </div>
                                 </div>

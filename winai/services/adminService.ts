@@ -613,6 +613,11 @@ const adminService = {
         );
     },
 
+    /** Zera não lidas ao abrir a conversa no admin (alinhado ao WhatsApp interno). */
+    markAtendimentoConversationRead: async (conversationId: string): Promise<void> => {
+        await httpClient.put<void>(`/admin/atendimento/conversations/${conversationId}/read`);
+    },
+
     getEscutaSessions: async (params: { page?: number; size?: number; q?: string }) => {
         const sp = new URLSearchParams();
         if (params.page != null) sp.set('page', String(params.page));

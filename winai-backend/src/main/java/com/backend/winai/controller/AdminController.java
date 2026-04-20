@@ -133,6 +133,13 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getAdminConversationMessages(conversationId, page, limit));
     }
 
+    @Operation(summary = "Atendimento — marcar conversa como lida", description = "Zera o contador de não lidas (painel admin global)")
+    @PutMapping("/atendimento/conversations/{conversationId}/read")
+    public ResponseEntity<Void> markAtendimentoConversationRead(@PathVariable UUID conversationId) {
+        adminService.markAdminAtendimentoConversationRead(conversationId);
+        return ResponseEntity.ok().build();
+    }
+
     @Operation(summary = "Escuta Inteligente — listar sessões (global)", description = "Sessões de análise de áudio/transcrição em todas as empresas")
     @GetMapping("/escuta/sessions")
     public ResponseEntity<Page<AdminEscutaSessionResponse>> listEscutaSessions(
