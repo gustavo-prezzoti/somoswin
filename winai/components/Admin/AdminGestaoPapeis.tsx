@@ -6,8 +6,8 @@ import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 import {
     AMPLIA_ADMIN_ACTION_LABELS,
-    AMPLIA_ADMIN_ACTIONS,
     AMPLIA_ADMIN_MODULE_SECTIONS,
+    actionsForModule,
     ampliaPermissionKey,
     emptyGranularPermissions,
     type AmpliaAdminAction,
@@ -23,7 +23,7 @@ function mergeRolePermissionsIntoForm(r: AmpliaStaffRoleRow): Record<string, boo
         if (k.includes(':')) {
             if (Object.prototype.hasOwnProperty.call(next, k)) next[k] = true;
         } else {
-            for (const a of AMPLIA_ADMIN_ACTIONS) {
+            for (const a of actionsForModule(k)) {
                 const key = ampliaPermissionKey(k, a);
                 if (Object.prototype.hasOwnProperty.call(next, key)) next[key] = true;
             }
@@ -175,7 +175,7 @@ const AdminGestaoPapeis: React.FC = () => {
                     <div>
                         <h2 className="text-3xl font-black italic tracking-tighter uppercase text-[#141414]">Papéis e permissões</h2>
                         <p className="text-sm text-gray-400 font-medium">
-                            Por módulo: listar, ver detalhe, criar, atualizar e excluir (alinhado às rotas da API)
+                            Por módulo e ação — apenas o que existe nas rotas da API (varia por tela).
                         </p>
                     </div>
                 </div>
@@ -293,29 +293,45 @@ const AdminGestaoPapeis: React.FC = () => {
                                                     className="rounded-xl border border-black/5 bg-gray-50/80 p-3 space-y-2"
                                                 >
                                                     <div className="text-xs font-black uppercase text-[#141414]">{opt.label}</div>
-                                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                                                        {AMPLIA_ADMIN_ACTIONS.map((action: AmpliaAdminAction) => {
-                                                            const key = ampliaPermissionKey(opt.id, action);
-                                                            return (
-                                                                <label
-                                                                    key={key}
-                                                                    className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-gray-700"
-                                                                >
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={!!formPerms[key]}
-                                                                        onChange={(e) =>
-                                                                            setFormPerms((p) => ({
-                                                                                ...p,
-                                                                                [key]: e.target.checked,
-                                                                            }))
-                                                                        }
-                                                                    />
-                                                                    <span>{AMPLIA_ADMIN_ACTION_LABELS[action]}</span>
-                                                                </label>
-                                                            );
-                                                        })}
-                                                    </div>
+                                                    {opt.actions.length === 0 ? (
+                                                        <p className="text-[11px] text-gray-500 italic py-1">
+                                                            Em breve — ainda não há rotas de permissão para este módulo.
+                                                        </p>
+                                                    ) : (
+                                                        <div
+                                                            className={`grid gap-2 ${
+                                                                opt.actions.length === 1
+                                                                    ? 'grid-cols-1'
+                                                                    : opt.actions.length === 2
+                                                                      ? 'grid-cols-2'
+                                                                      : opt.actions.length <= 4
+                                                                        ? 'grid-cols-2 sm:grid-cols-3'
+                                                                        : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+                                                            }`}
+                                                        >
+                                                            {opt.actions.map((action: AmpliaAdminAction) => {
+                                                                const key = ampliaPermissionKey(opt.id, action);
+                                                                return (
+                                                                    <label
+                                                                        key={key}
+                                                                        className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-gray-700"
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={!!formPerms[key]}
+                                                                            onChange={(e) =>
+                                                                                setFormPerms((p) => ({
+                                                                                    ...p,
+                                                                                    [key]: e.target.checked,
+                                                                                }))
+                                                                            }
+                                                                        />
+                                                                        <span>{AMPLIA_ADMIN_ACTION_LABELS[action]}</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -334,7 +350,7 @@ const AdminGestaoPapeis: React.FC = () => {
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="flex-1 py-3 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase disabled:opacity-50"
+                                className="flex-1 py-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-black uppercase disabled:opacity-50"
                             >
                                 {saving ? 'Salvando…' : 'Salvar'}
                             </button>
