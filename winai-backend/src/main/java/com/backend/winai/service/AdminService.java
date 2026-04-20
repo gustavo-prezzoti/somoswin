@@ -777,6 +777,15 @@ public class AdminService {
     }
 
     /**
+     * Lista usuários com paginação e busca por nome, e-mail ou empresa (admin).
+     */
+    public Page<AdminUserResponse> getAdminUsersPage(int page, int size, String q) {
+        String qq = q != null ? q.trim() : "";
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return userRepository.findAdminUsersPage(qq, pageable).map(this::mapToAdminUserResponse);
+    }
+
+    /**
      * Busca um usuário por ID
      */
     public AdminUserResponse getUserById(UUID userId) {

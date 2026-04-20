@@ -256,9 +256,19 @@ public class AdminController {
 
     // ========== CRUD DE USUÁRIOS ==========
 
-    @Operation(summary = "Listar Usuários", description = "Lista todos os usuários do sistema")
+    @Operation(
+            summary = "Listar Usuários",
+            description = "Sem page/size: lista completa (ex.: tela Clientes). Com page e/ou size: página com busca opcional q (nome, e-mail, empresa).")
     @GetMapping("/users")
-    public ResponseEntity<List<AdminUserResponse>> getAllUsers() {
+    public ResponseEntity<?> getUsers(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String q) {
+        if (page != null || size != null) {
+            int p = page != null ? page : 0;
+            int s = size != null ? Math.min(Math.max(size, 1), 100) : 12;
+            return ResponseEntity.ok(adminService.getAdminUsersPage(p, s, q));
+        }
         return ResponseEntity.ok(adminService.getAllUsers());
     }
 

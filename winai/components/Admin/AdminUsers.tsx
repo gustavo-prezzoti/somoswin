@@ -1,7 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Pencil, Trash2, Lock, Unlock, User as UserIcon, Building2, Shield, Mail, Key, Search, Copy, Check } from 'lucide-react';
+import {
+    Plus,
+    Pencil,
+    Trash2,
+    Lock,
+    Unlock,
+    User as UserIcon,
+    Building2,
+    Shield,
+    Mail,
+    Key,
+    Search,
+    Copy,
+    Check,
+    ChevronLeft,
+    ChevronRight,
+} from 'lucide-react';
 import adminService, { AdminUser, CreateUserRequest, UpdateUserRequest, Company } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
@@ -18,6 +34,8 @@ function roleBadgeClass(role: string): string {
     return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25';
 }
 
+const PAGE_SIZE = 12;
+
 const AdminUsers: React.FC = () => {
     const navigate = useNavigate();
     const { showAlert, showConfirm, showToast } = useModal();
@@ -25,6 +43,10 @@ const AdminUsers: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [companies, setCompanies] = useState<Company[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedQ, setDebouncedQ] = useState('');
+    const [listPage, setListPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalElements, setTotalElements] = useState(0);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
     const meRole = useMemo(() => {
@@ -55,38 +77,72 @@ const AdminUsers: React.FC = () => {
                 return;
             }
             setIsAuthenticated(true);
-            loadData();
         } catch {
             setIsAuthenticated(false);
         }
     }, []);
 
-    const loadData = async () => {
-        try {
-            setLoading(true);
-            const [usersData, companiesData] = await Promise.all([adminService.getAllUsers(), adminService.getAllCompanies()]);
-            setUsers(usersData || []);
-            setCompanies(companiesData || []);
-        } catch (err: any) {
-            console.error('Erro ao carregar dados:', err);
-            if (err.status === 401 || err.status === 403) {
-                localStorage.removeItem('win_access_token');
-                localStorage.removeItem('win_user');
-                navigate('/admin/login');
-                return;
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedQ(searchTerm.trim()), 350);
+        return () => clearTimeout(t);
+    }, [searchTerm]);
+
+    useLayoutEffect(() => {
+        setListPage(0);
+    }, [debouncedQ]);
+
+    useEffect(() => {
+        if (isAuthenticated !== true) return;
+        (async () => {
+            try {
+                const companiesData = await adminService.getAllCompanies();
+                setCompanies(companiesData || []);
+            } catch {
+                /* modal usa empresas vazias */
             }
-            setUsers([]);
-        } finally {
-            setLoading(false);
-        }
-    };
+        })();
+    }, [isAuthenticated]);
+
+    const loadUsers = useCallback(
+        async (opts?: { page?: number }) => {
+            if (isAuthenticated !== true) return;
+            const pageToUse = opts?.page ?? listPage;
+            try {
+                setLoading(true);
+                const res = await adminService.getAdminUsersPage({
+                    page: pageToUse,
+                    size: PAGE_SIZE,
+                    q: debouncedQ || undefined,
+                });
+                setUsers(res.content);
+                setTotalPages(res.totalPages);
+                setTotalElements(res.totalElements);
+            } catch (err: any) {
+                console.error('Erro ao carregar usuários:', err);
+                if (err.status === 401 || err.status === 403) {
+                    localStorage.removeItem('win_access_token');
+                    localStorage.removeItem('win_user');
+                    navigate('/admin/login');
+                    return;
+                }
+                setUsers([]);
+            } finally {
+                setLoading(false);
+            }
+        },
+        [isAuthenticated, debouncedQ, listPage, navigate],
+    );
+
+    useEffect(() => {
+        if (isAuthenticated !== true) return;
+        loadUsers();
+    }, [isAuthenticated, loadUsers]);
 
     const handleToggleStatus = async (userId: string) => {
         try {
             await adminService.toggleUserStatus(userId);
             showToast('Status do usuário alterado.');
-            const data = await adminService.getAllUsers();
-            setUsers(data || []);
+            await loadUsers();
         } catch (err: any) {
             showToast(getErrorMessage(err, 'Falha ao alterar o status do usuário.'), 'error');
         }
@@ -108,8 +164,7 @@ const AdminUsers: React.FC = () => {
                         await adminService.deleteUser(userId);
                         showToast('Usuário desativado com sucesso.');
                     }
-                    const data = await adminService.getAllUsers();
-                    setUsers(data || []);
+                    await loadUsers();
                 } catch (err: any) {
                     showToast(getErrorMessage(err, 'Não foi possível processar a exclusão.'), 'error');
                 }
@@ -210,6 +265,7 @@ const AdminUsers: React.FC = () => {
                 if (formData.password) updateData.password = formData.password;
                 await adminService.updateUser(editingUser.id, updateData);
                 showToast('Dados do usuário atualizados.');
+                await loadUsers();
             } else {
                 const newUser = await adminService.createUser(formData);
                 showToast('Usuário criado com sucesso.');
@@ -217,9 +273,9 @@ const AdminUsers: React.FC = () => {
                 if (newUser.tempPassword) {
                     showTempPasswordModal(newUser.name, newUser.email, newUser.tempPassword);
                 }
+                setListPage(0);
+                await loadUsers({ page: 0 });
             }
-            const data = await adminService.getAllUsers();
-            setUsers(data || []);
         } catch (err: any) {
             showToast(getErrorMessage(err, 'Falha ao salvar o usuário.'), 'error');
             throw err;
@@ -340,22 +396,18 @@ const AdminUsers: React.FC = () => {
         });
     };
 
-    const q = searchTerm.toLowerCase().trim();
-    const filteredUsers = users.filter(
-        (user) =>
-            user.name.toLowerCase().includes(q) ||
-            user.email.toLowerCase().includes(q) ||
-            (user.companyName && user.companyName.toLowerCase().includes(q))
-    );
+    const showListPagination = totalPages > 1;
+    const fromIdx = totalElements === 0 ? 0 : listPage * PAGE_SIZE + 1;
+    const toIdx = Math.min((listPage + 1) * PAGE_SIZE, totalElements);
 
     if (isAuthenticated === false) {
         return <Navigate to="/admin/login" replace />;
     }
 
-    if (isAuthenticated === null || loading) {
+    if (isAuthenticated === null || (loading && users.length === 0)) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando usuários…</span>
             </div>
         );
@@ -365,9 +417,9 @@ const AdminUsers: React.FC = () => {
         <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-6 max-w-[1800px] mx-auto"
+            className="flex flex-col min-h-0 gap-4 max-w-[1800px] mx-auto w-full h-[calc(100dvh-13rem)] max-h-[calc(100dvh-13rem)]"
         >
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 shrink-0">
                 <div>
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Usuários</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
@@ -387,7 +439,7 @@ const AdminUsers: React.FC = () => {
                 </button>
             </div>
 
-            <div className="relative">
+            <div className="relative shrink-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
                     type="search"
@@ -398,8 +450,14 @@ const AdminUsers: React.FC = () => {
                 />
             </div>
 
-            <div className="glass-card rounded-2xl border border-black/5 overflow-hidden">
-                <div className="overflow-x-auto">
+            {totalElements > 0 && (
+                <p className="text-[10px] font-bold text-gray-500 shrink-0">
+                    {fromIdx}–{toIdx} de {totalElements} usuário(s)
+                </p>
+            )}
+
+            <div className="glass-card rounded-2xl border border-black/5 overflow-hidden flex flex-col flex-1 min-h-0">
+                <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
                     <table className="w-full text-left border-collapse hidden md:table">
                         <thead>
                             <tr className="border-b border-black/5 bg-gray-50">
@@ -411,14 +469,14 @@ const AdminUsers: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {filteredUsers.length === 0 ? (
+                            {users.length === 0 && !loading ? (
                                 <tr>
                                     <td colSpan={5} className="px-5 py-16 text-center text-gray-500 text-sm">
                                         Nenhum usuário encontrado.
                                     </td>
                                 </tr>
                             ) : (
-                                filteredUsers.map((user) => (
+                                users.map((user) => (
                                     <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
                                         <td className="px-5 py-4">
                                             <div className="flex items-center gap-3">
@@ -456,7 +514,7 @@ const AdminUsers: React.FC = () => {
                                         <td className="px-5 py-4">
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <Building2 size={12} className="text-gray-600 shrink-0" />
-                                                <span className="text-xs text-gray-300 truncate max-w-[180px]">
+                                                <span className="text-xs text-gray-600 truncate max-w-[180px]">
                                                     {user.companyName || '—'}
                                                 </span>
                                             </div>
@@ -513,7 +571,10 @@ const AdminUsers: React.FC = () => {
                     </table>
 
                     <div className="md:hidden grid grid-cols-1 gap-3 p-4">
-                        {filteredUsers.map((user) => (
+                        {users.length === 0 && !loading && (
+                            <p className="text-center text-gray-500 text-sm py-8 col-span-full">Nenhum usuário encontrado.</p>
+                        )}
+                        {users.map((user) => (
                             <div key={user.id} className="rounded-xl border border-black/5 bg-gray-50 p-4 space-y-3">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="flex items-center gap-3 min-w-0">
@@ -541,7 +602,7 @@ const AdminUsers: React.FC = () => {
                                     <button
                                         type="button"
                                         onClick={() => openUserModal(user)}
-                                        className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-gray-300 border border-black/5"
+                                        className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-gray-700 border border-black/5"
                                     >
                                         Editar
                                     </button>
@@ -564,6 +625,31 @@ const AdminUsers: React.FC = () => {
                         ))}
                     </div>
                 </div>
+                {showListPagination && (
+                    <div className="flex items-center justify-center gap-2 py-3 px-4 border-t border-black/5 bg-gray-50/80 shrink-0 flex-wrap">
+                        <button
+                            type="button"
+                            onClick={() => setListPage((p) => Math.max(0, p - 1))}
+                            disabled={listPage <= 0 || loading}
+                            className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-black/5 bg-white text-[#141414] hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                        >
+                            <ChevronLeft size={14} />
+                            Anterior
+                        </button>
+                        <span className="text-[10px] font-bold text-gray-500 tabular-nums px-1">
+                            Página {listPage + 1} / {totalPages}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setListPage((p) => Math.min(totalPages - 1, p + 1))}
+                            disabled={totalPages <= 0 || listPage >= totalPages - 1 || loading}
+                            className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-black/5 bg-white text-[#141414] hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                        >
+                            Próxima
+                            <ChevronRight size={14} />
+                        </button>
+                    </div>
+                )}
             </div>
         </motion.div>
     );

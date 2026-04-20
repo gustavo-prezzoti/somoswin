@@ -469,6 +469,15 @@ const adminService = {
         return await httpClient.get<AdminUser[]>('/admin/users');
     },
 
+    getAdminUsersPage: async (params: { page?: number; size?: number; q?: string }): Promise<SpringPage<AdminUser>> => {
+        const sp = new URLSearchParams();
+        if (params.page != null) sp.set('page', String(params.page));
+        if (params.size != null) sp.set('size', String(params.size));
+        if (params.q) sp.set('q', params.q);
+        const qs = sp.toString();
+        return await httpClient.get<SpringPage<AdminUser>>(`/admin/users${qs ? `?${qs}` : ''}`);
+    },
+
     getUserById: async (userId: string): Promise<AdminUser> => {
         return await httpClient.get<AdminUser>(`/admin/users/${userId}`);
     },

@@ -2,8 +2,11 @@ package com.backend.winai.repository;
 
 import com.backend.winai.entity.User;
 import com.backend.winai.entity.UserRole;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -29,6 +32,17 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.company")
     List<User> findAllWithCompany();
+
+    @Query(
+            value = "SELECT u FROM User u LEFT JOIN u.company c WHERE "
+                    + "(LOWER(u.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "(c IS NOT NULL AND LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%'))))",
+            countQuery = "SELECT COUNT(u) FROM User u LEFT JOIN u.company c WHERE "
+                    + "(LOWER(u.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "(c IS NOT NULL AND LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%'))))")
+    Page<User> findAdminUsersPage(@Param("q") String q, Pageable pageable);
 
     @Query("SELECT u FROM User u WHERE u.company.id = :companyId")
     List<User> findByCompanyId(UUID companyId);
