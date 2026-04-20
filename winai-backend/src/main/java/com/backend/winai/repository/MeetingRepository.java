@@ -108,6 +108,13 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
         List<Meeting> searchAdminAgendaWithoutText(@Param("start") LocalDate start, @Param("end") LocalDate end,
                         @Param("companyId") UUID companyId);
 
+        /** Mesmo filtro {@link #searchAdminAgendaWithoutText} com paginação (sem FETCH — lazy dentro da transação). */
+        @Query("SELECT m FROM Meeting m JOIN m.company c LEFT JOIN m.lead l "
+                        + "WHERE m.meetingDate >= :start AND m.meetingDate <= :end "
+                        + "AND (:companyId IS NULL OR c.id = :companyId)")
+        Page<Meeting> searchAdminAgendaWithoutTextPage(@Param("start") LocalDate start, @Param("end") LocalDate end,
+                        @Param("companyId") UUID companyId, Pageable pageable);
+
         /**
          * IDs ordenados para busca textual — usa ILIKE (PostgreSQL), sem LOWER em colunas.
          */
@@ -123,6 +130,30 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
                         + "ORDER BY m.meeting_date ASC, m.meeting_time ASC", nativeQuery = true)
         List<UUID> searchAdminAgendaIdsWithText(@Param("start") LocalDate start,
                         @Param("end") LocalDate end, @Param("companyId") UUID companyId, @Param("q") String q);
+
+        @Query(value = "SELECT m.id FROM winai.meetings m "
+                        + "INNER JOIN winai.companies c ON c.id = m.company_id "
+                        + "LEFT JOIN winai.leads l ON l.id = m.lead_id "
+                        + "WHERE m.meeting_date BETWEEN :start AND :end "
+                        + "AND (:companyId IS NULL OR c.id = :companyId) "
+                        + "AND (m.title ILIKE '%' || :q || '%' "
+                        + "OR c.name ILIKE '%' || :q || '%' "
+                        + "OR m.contact_name ILIKE '%' || :q || '%' "
+                        + "OR (l.name IS NOT NULL AND l.name ILIKE '%' || :q || '%')) "
+                        + "ORDER BY m.meeting_date ASC, m.meeting_time ASC",
+                        countQuery = "SELECT count(m.id) FROM winai.meetings m "
+                        + "INNER JOIN winai.companies c ON c.id = m.company_id "
+                        + "LEFT JOIN winai.leads l ON l.id = m.lead_id "
+                        + "WHERE m.meeting_date BETWEEN :start AND :end "
+                        + "AND (:companyId IS NULL OR c.id = :companyId) "
+                        + "AND (m.title ILIKE '%' || :q || '%' "
+                        + "OR c.name ILIKE '%' || :q || '%' "
+                        + "OR m.contact_name ILIKE '%' || :q || '%' "
+                        + "OR (l.name IS NOT NULL AND l.name ILIKE '%' || :q || '%'))",
+                        nativeQuery = true)
+        Page<UUID> searchAdminAgendaIdsWithTextPage(@Param("start") LocalDate start,
+                        @Param("end") LocalDate end, @Param("companyId") UUID companyId, @Param("q") String q,
+                        Pageable pageable);
 
         @Query("SELECT m FROM Meeting m JOIN FETCH m.company c LEFT JOIN FETCH m.lead l WHERE m.id IN :ids")
         List<Meeting> findByIdsWithFetch(@Param("ids") List<UUID> ids);

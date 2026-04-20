@@ -700,6 +700,24 @@ const adminService = {
         return await httpClient.get<AdminMeetingRow[]>(`/admin/agenda/meetings?${sp.toString()}`);
     },
 
+    getAgendaMeetingsPage: async (params: {
+        start: string;
+        end: string;
+        companyId?: string;
+        q?: string;
+        page?: number;
+        size?: number;
+    }): Promise<SpringPage<AdminMeetingRow>> => {
+        const sp = new URLSearchParams();
+        sp.set('start', params.start);
+        sp.set('end', params.end);
+        if (params.companyId) sp.set('companyId', params.companyId);
+        if (params.q) sp.set('q', params.q);
+        if (params.page != null) sp.set('page', String(params.page));
+        if (params.size != null) sp.set('size', String(params.size));
+        return await httpClient.get<SpringPage<AdminMeetingRow>>(`/admin/agenda/meetings?${sp.toString()}`);
+    },
+
     createAgendaMeeting: async (body: AdminMeetingCreateBody): Promise<MeetingData> => {
         return await httpClient.post<MeetingData>('/admin/agenda/meetings', body);
     },

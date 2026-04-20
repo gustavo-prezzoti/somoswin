@@ -223,13 +223,22 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getAdminGoalsForCompany(companyId, year, planningMonth));
     }
 
-    @Operation(summary = "Agenda comercial — listar reuniões", description = "Todas as empresas no período; filtro opcional por empresa e busca")
+    @Operation(
+            summary = "Agenda comercial — listar reuniões",
+            description = "Sem page/size: lista completa no período. Com page e/ou size: resposta paginada (ordem: data e hora).")
     @GetMapping("/agenda/meetings")
-    public ResponseEntity<List<AdminMeetingRowResponse>> listAgendaMeetings(
+    public ResponseEntity<?> listAgendaMeetings(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
             @RequestParam(required = false) UUID companyId,
-            @RequestParam(required = false) String q) {
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null || size != null) {
+            int p = page != null ? page : 0;
+            int s = size != null ? Math.min(Math.max(size, 1), 100) : 12;
+            return ResponseEntity.ok(adminService.getAdminAgendaPage(start, end, companyId, q, p, s));
+        }
         return ResponseEntity.ok(adminService.getAdminAgenda(start, end, companyId, q));
     }
 

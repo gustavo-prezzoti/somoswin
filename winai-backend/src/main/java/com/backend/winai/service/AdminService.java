@@ -78,6 +78,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -583,6 +584,37 @@ public class AdminService {
             }
         }
         return meetings.stream().map(this::toAdminMeetingRow).collect(Collectors.toList());
+    }
+
+    /**
+     * Agenda admin paginada — mesmos filtros de {@link #getAdminAgenda(LocalDate, LocalDate, UUID, String)}.
+     */
+    public Page<AdminMeetingRowResponse> getAdminAgendaPage(
+            LocalDate start, LocalDate end, UUID companyId, String q, int page, int size) {
+        if (start == null || end == null) {
+            throw new RuntimeException("Informe data inicial e final");
+        }
+        String qf = (q != null && !q.trim().isEmpty()) ? q.trim() : null;
+        Pageable pageable =
+                PageRequest.of(page, size, Sort.by(Sort.Order.asc("meetingDate"), Sort.Order.asc("meetingTime")));
+        if (qf == null) {
+            return meetingRepository.searchAdminAgendaWithoutTextPage(start, end, companyId, pageable)
+                    .map(this::toAdminMeetingRow);
+        }
+        Page<UUID> idPage = meetingRepository.searchAdminAgendaIdsWithTextPage(start, end, companyId, qf, pageable);
+        List<UUID> ids = idPage.getContent();
+        if (ids.isEmpty()) {
+            return new PageImpl<>(Collections.emptyList(), idPage.getPageable(), idPage.getTotalElements());
+        }
+        List<Meeting> fetched = meetingRepository.findByIdsWithFetch(ids);
+        Map<UUID, Meeting> byId =
+                fetched.stream().collect(Collectors.toMap(Meeting::getId, m -> m, (a, b) -> a));
+        List<AdminMeetingRowResponse> content = ids.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .map(this::toAdminMeetingRow)
+                .toList();
+        return new PageImpl<>(content, idPage.getPageable(), idPage.getTotalElements());
     }
 
     private AdminMeetingRowResponse toAdminMeetingRow(Meeting m) {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
     CalendarRange,
@@ -10,6 +10,8 @@ import {
     Building2,
     User,
     Clock,
+    ChevronLeft,
+    ChevronRight,
 } from 'lucide-react';
 import adminService, { AdminMeetingRow, Company } from '../../services/adminService';
 import { MEETING_STATUS_LABELS, MeetingStatusType } from '../../services/api/meeting.service';
@@ -68,6 +70,8 @@ const BADGE: Record<MeetingStatusType, string> = {
     RESCHEDULED: 'bg-amber-500/15 text-amber-200 border-amber-500/35',
 };
 
+const PAGE_SIZE = 12;
+
 const AdminAgendaComercial: React.FC = () => {
     const today = useMemo(() => new Date(), []);
     const [start, setStart] = useState(() => toYMD(startOfMonth(today)));
@@ -79,6 +83,9 @@ const AdminAgendaComercial: React.FC = () => {
     const [debouncedQ, setDebouncedQ] = useState('');
 
     const [rows, setRows] = useState<AdminMeetingRow[]>([]);
+    const [listPage, setListPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalElements, setTotalElements] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [savingId, setSavingId] = useState<string | null>(null);
@@ -105,6 +112,10 @@ const AdminAgendaComercial: React.FC = () => {
         return () => clearTimeout(t);
     }, [search]);
 
+    useLayoutEffect(() => {
+        setListPage(0);
+    }, [debouncedQ, start, end, companyId]);
+
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -120,23 +131,31 @@ const AdminAgendaComercial: React.FC = () => {
         };
     }, []);
 
-    const load = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const data = await adminService.getAgendaMeetings({
-                start,
-                end,
-                companyId: companyId || undefined,
-                q: debouncedQ || undefined,
-            });
-            setRows(data);
-        } catch (e) {
-            setError(getErrorMessage(e, 'Erro ao carregar agenda'));
-        } finally {
-            setLoading(false);
-        }
-    }, [start, end, companyId, debouncedQ]);
+    const load = useCallback(
+        async (opts?: { page?: number }) => {
+            const pageToUse = opts?.page ?? listPage;
+            try {
+                setLoading(true);
+                setError(null);
+                const res = await adminService.getAgendaMeetingsPage({
+                    start,
+                    end,
+                    companyId: companyId || undefined,
+                    q: debouncedQ || undefined,
+                    page: pageToUse,
+                    size: PAGE_SIZE,
+                });
+                setRows(res.content);
+                setTotalPages(res.totalPages);
+                setTotalElements(res.totalElements);
+            } catch (e) {
+                setError(getErrorMessage(e, 'Erro ao carregar agenda'));
+            } finally {
+                setLoading(false);
+            }
+        },
+        [start, end, companyId, debouncedQ, listPage],
+    );
 
     useEffect(() => {
         load();
@@ -188,7 +207,8 @@ const AdminAgendaComercial: React.FC = () => {
                 meetingKind: form.meetingKind,
             });
             setModalOpen(false);
-            await load();
+            setListPage(0);
+            await load({ page: 0 });
         } catch (err) {
             setError(getErrorMessage(err, 'Não foi possível criar a reunião'));
         } finally {
@@ -234,7 +254,7 @@ const AdminAgendaComercial: React.FC = () => {
         setSavingId(meetingId);
         try {
             await adminService.deleteAgendaMeeting(meetingId);
-            setRows((list) => list.filter((r) => r.id !== meetingId));
+            await load();
         } catch (err) {
             setError(getErrorMessage(err, 'Não foi possível excluir'));
         } finally {
@@ -250,10 +270,14 @@ const AdminAgendaComercial: React.FC = () => {
         });
     }, [rows]);
 
+    const showListPagination = totalPages > 1;
+    const fromIdx = totalElements === 0 ? 0 : listPage * PAGE_SIZE + 1;
+    const toIdx = Math.min((listPage + 1) * PAGE_SIZE, totalElements);
+
     if (loading && rows.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando agenda…</span>
             </div>
         );
@@ -263,9 +287,9 @@ const AdminAgendaComercial: React.FC = () => {
         <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-6 max-w-[1800px] mx-auto"
+            className="flex flex-col min-h-0 gap-4 max-w-[1800px] mx-auto w-full h-[calc(100dvh-13rem)] max-h-[calc(100dvh-13rem)]"
         >
-            <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+            <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 shrink-0">
                 <div>
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Agenda comercial</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
@@ -276,21 +300,21 @@ const AdminAgendaComercial: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setPreset('week')}
-                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-black/5 text-gray-300 hover:bg-gray-50"
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-black/5 text-gray-600 hover:bg-gray-50"
                     >
                         Esta semana
                     </button>
                     <button
                         type="button"
                         onClick={() => setPreset('month')}
-                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-black/5 text-gray-300 hover:bg-gray-50"
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-black/5 text-gray-600 hover:bg-gray-50"
                     >
                         Este mês
                     </button>
                     <button
                         type="button"
                         onClick={() => setPreset('next7')}
-                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-black/5 text-gray-300 hover:bg-gray-50"
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-black/5 text-gray-600 hover:bg-gray-50"
                     >
                         Próx. 7 dias
                     </button>
@@ -314,12 +338,12 @@ const AdminAgendaComercial: React.FC = () => {
             </div>
 
             {error && (
-                <div className="glass-card rounded-xl px-4 py-3 border border-rose-500/40 bg-rose-500/10 text-sm text-rose-200">
+                <div className="glass-card rounded-xl px-4 py-3 border border-rose-200 bg-rose-50 text-sm text-rose-900 shrink-0">
                     {error}
                 </div>
             )}
 
-            <div className="glass-card rounded-xl p-4 border border-black/5 space-y-4">
+            <div className="glass-card rounded-xl p-4 border border-black/5 space-y-4 shrink-0">
                 <div className="flex flex-col lg:flex-row flex-wrap gap-4 lg:items-end">
                     <div className="flex flex-wrap gap-3 items-end">
                         <label className="flex flex-col gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -373,8 +397,14 @@ const AdminAgendaComercial: React.FC = () => {
                 </div>
             </div>
 
-            <div className="glass-card rounded-xl border border-black/5 overflow-hidden">
-                <div className="overflow-x-auto">
+            {totalElements > 0 && (
+                <p className="text-[10px] font-bold text-gray-500 shrink-0">
+                    {fromIdx}–{toIdx} de {totalElements} reunião(ões) no período
+                </p>
+            )}
+
+            <div className="glass-card rounded-xl border border-black/5 overflow-hidden flex flex-col flex-1 min-h-0">
+                <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="border-b border-black/5 text-xs font-black uppercase tracking-widest text-gray-500">
@@ -390,7 +420,7 @@ const AdminAgendaComercial: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {sortedRows.length === 0 ? (
+                            {sortedRows.length === 0 && !loading ? (
                                 <tr>
                                     <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
                                         Nenhuma reunião no período. Ajuste as datas ou cadastre uma nova reunião.
@@ -494,6 +524,31 @@ const AdminAgendaComercial: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
+                {showListPagination && (
+                    <div className="flex items-center justify-center gap-2 py-3 px-4 border-t border-black/5 bg-gray-50/80 shrink-0 flex-wrap">
+                        <button
+                            type="button"
+                            onClick={() => setListPage((p) => Math.max(0, p - 1))}
+                            disabled={listPage <= 0 || loading}
+                            className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-black/5 bg-white text-[#141414] hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                        >
+                            <ChevronLeft size={14} />
+                            Anterior
+                        </button>
+                        <span className="text-[10px] font-bold text-gray-500 tabular-nums px-1">
+                            Página {listPage + 1} / {totalPages}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setListPage((p) => Math.min(totalPages - 1, p + 1))}
+                            disabled={totalPages <= 0 || listPage >= totalPages - 1 || loading}
+                            className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-black/5 bg-white text-[#141414] hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                        >
+                            Próxima
+                            <ChevronRight size={14} />
+                        </button>
+                    </div>
+                )}
             </div>
 
             {modalOpen && (
