@@ -160,8 +160,8 @@ const AdminMetasObjetivos: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6 max-w-[1800px] mx-auto"
         >
-            <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
-                <div>
+            <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-6">
+                <div className="min-w-0 flex-1">
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Metas e objetivos</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
                         Visão global por empresa — mesmo modelo do dashboard (ciclo anual, tarefas e marcos). Edição continua
@@ -174,54 +174,66 @@ const AdminMetasObjetivos: React.FC = () => {
                         )}
                     </p>
                 </div>
-                <div className="flex flex-wrap gap-3 items-center">
-                    <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Ano</label>
-                        <select
-                            value={year}
-                            onChange={(e) => setYear(Number(e.target.value))}
-                            className="px-3 py-2 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] focus:outline-none focus:border-emerald-200"
-                        >
-                            {YEARS.map((y) => (
-                                <option key={y} value={y}>
-                                    {y}
-                                </option>
-                            ))}
-                        </select>
+
+                <div className="flex w-full shrink-0 flex-col gap-3 xl:max-w-xl xl:items-end">
+                    <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+                        <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">
+                                Ano
+                            </label>
+                            <select
+                                value={year}
+                                onChange={(e) => setYear(Number(e.target.value))}
+                                className="min-w-[5.5rem] px-3 py-2.5 rounded-xl bg-gray-50 border border-black/10 text-sm text-[#141414] focus:outline-none focus:border-emerald-200"
+                            >
+                                {YEARS.map((y) => (
+                                    <option key={y} value={y}>
+                                        {y}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">
+                                Trimestre (opc.)
+                            </label>
+                            <select
+                                value={planningMonth === '' ? '' : String(planningMonth)}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    setPlanningMonth(v === '' ? '' : Number(v));
+                                }}
+                                className="min-w-[4.5rem] px-3 py-2.5 rounded-xl bg-gray-50 border border-black/10 text-sm text-[#141414] focus:outline-none focus:border-emerald-200"
+                            >
+                                <option value="">—</option>
+                                <option value="1">T1</option>
+                                <option value="2">T2</option>
+                                <option value="3">T3</option>
+                            </select>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Trimestre (opc.)</label>
-                        <select
-                            value={planningMonth === '' ? '' : String(planningMonth)}
-                            onChange={(e) => {
-                                const v = e.target.value;
-                                setPlanningMonth(v === '' ? '' : Number(v));
-                            }}
-                            className="px-3 py-2 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] focus:outline-none focus:border-emerald-200"
-                        >
-                            <option value="">—</option>
-                            <option value="1">T1</option>
-                            <option value="2">T2</option>
-                            <option value="3">T3</option>
-                        </select>
+
+                    <div className="flex w-full flex-col gap-3 border-t border-black/5 pt-3 sm:flex-row sm:items-center sm:justify-between sm:border-0 sm:pt-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 text-center sm:flex-1 sm:text-left">
+                            {totalGoals} metas ativas no ano
+                        </span>
+                        <div className="flex items-center justify-center gap-2 sm:shrink-0">
+                            <Link
+                                to="/admin/clientes"
+                                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50 min-h-[2.75rem]"
+                            >
+                                <Building2 size={14} /> Clientes
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => loadRows()}
+                                className="inline-flex items-center justify-center gap-2 min-w-[7.5rem] px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest shadow-sm hover:bg-emerald-700 transition-colors min-h-[2.75rem]"
+                            >
+                                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                                Atualizar
+                            </button>
+                        </div>
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                        {totalGoals} metas ativas no ano
-                    </span>
-                    <Link
-                        to="/admin/clientes"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
-                    >
-                        <Building2 size={14} /> Clientes
-                    </Link>
-                    <button
-                        type="button"
-                        onClick={() => loadRows()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[#141414] hover:bg-gray-50"
-                    >
-                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                        <span className="text-xs font-black uppercase tracking-widest">Atualizar</span>
-                    </button>
                 </div>
             </div>
 
@@ -256,7 +268,7 @@ const AdminMetasObjetivos: React.FC = () => {
                                 className={`w-full text-left rounded-xl p-4 border transition-colors ${
                                     selectedId === r.companyId
                                         ? 'border-emerald-200 bg-emerald-600/5'
-                                        : 'border-black/5 bg-gray-50 hover:border-white/20'
+                                        : 'border-black/5 bg-gray-50 hover:border-black/15'
                                 }`}
                             >
                                 <p className="text-sm font-bold text-[#141414] truncate">{r.companyName}</p>
@@ -345,31 +357,34 @@ function GoalCard({
             >
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-white/10 text-emerald-600">
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-100">
                             {goalTypeLabel(goal.type)}
                         </span>
                         {highlighted && (
-                            <span className="text-[9px] font-black uppercase text-amber-400">Destaque</span>
+                            <span className="text-[9px] font-black uppercase text-amber-800">Destaque</span>
                         )}
                     </div>
                     <h4 className="text-base font-bold text-[#141414] leading-tight">{goal.title}</h4>
                     {goal.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{goal.description}</p>}
-                    <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-gray-400">
+                    <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-gray-600">
                         <span>
-                            Meta: <strong className="text-gray-200">{goal.targetValue ?? '—'}</strong>
-                            {goal.unit ? ` ${goal.unit}` : ''}
+                            Meta:{' '}
+                            <strong className="text-[#141414] font-bold">
+                                {goal.targetValue ?? '—'}
+                                {goal.unit ? ` ${goal.unit}` : ''}
+                            </strong>
                         </span>
                         <span>
-                            Atual: <strong className="text-emerald-600">{goal.currentValue ?? 0}</strong>
+                            Atual: <strong className="text-emerald-700">{goal.currentValue ?? 0}</strong>
                         </span>
                         {(goal.startDate || goal.endDate) && (
-                            <span className="flex items-center gap-1">
-                                <Calendar size={12} />
+                            <span className="flex items-center gap-1 text-gray-700">
+                                <Calendar size={12} className="text-gray-500 shrink-0" />
                                 {goal.startDate ?? '—'} → {goal.endDate ?? '—'}
                             </span>
                         )}
                     </div>
-                    <div className="mt-3 h-2 rounded-full bg-black/40 overflow-hidden border border-black/5">
+                    <div className="mt-3 h-2 rounded-full bg-gray-200 overflow-hidden border border-black/5">
                         <div
                             className="h-full rounded-full bg-emerald-600/80 transition-all"
                             style={{ width: `${mainPct}%` }}
@@ -394,7 +409,7 @@ function GoalCard({
                                 {goal.tasks.map((t) => (
                                     <li
                                         key={t.id}
-                                        className="flex items-start gap-2 text-sm text-gray-300 border border-white/5 rounded-lg p-2"
+                                        className="flex items-start gap-2 text-sm text-[#141414] border border-black/10 rounded-lg p-2 bg-gray-50/80"
                                     >
                                         {t.completed ? (
                                             <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
@@ -410,14 +425,14 @@ function GoalCard({
                     {goal.checkpoints && goal.checkpoints.length > 0 && (
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Marcos</p>
-                            <ul className="space-y-1 text-xs text-gray-400">
+                            <ul className="space-y-1 text-xs text-gray-700">
                                 {goal.checkpoints.map((c) => (
-                                    <li key={c.id} className="flex justify-between gap-2 border-b border-white/5 pb-1">
-                                        <span>Sem. {c.semana ?? '—'}</span>
-                                        <span>
+                                    <li key={c.id} className="flex justify-between gap-2 border-b border-black/10 pb-1">
+                                        <span className="text-[#141414]">Sem. {c.semana ?? '—'}</span>
+                                        <span className="text-gray-700">
                                             {c.dataPrevista ?? '—'} → {c.dataRealizada ?? '—'}
                                         </span>
-                                        <span className="text-gray-500">{c.status}</span>
+                                        <span className="text-gray-600">{c.status}</span>
                                     </li>
                                 ))}
                             </ul>
