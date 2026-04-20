@@ -1,16 +1,24 @@
 import React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { Construction } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+/** Módulos que já têm rota dedicada — redireciona URLs antigas (?m=). */
+const LEGACY_REDIRECT: Record<string, string> = {
+    financas: '/admin/financas',
+};
+
 const MODULE_LABELS: Record<string, string> = {
-    financas: 'Finanças',
     prompts: 'Prompts IA',
 };
 
 const AdminComingSoon: React.FC = () => {
     const [params] = useSearchParams();
     const m = params.get('m') || '';
+    const legacyTo = LEGACY_REDIRECT[m];
+    if (legacyTo) {
+        return <Navigate to={legacyTo} replace />;
+    }
     const label = MODULE_LABELS[m] || 'Este módulo';
 
     return (
