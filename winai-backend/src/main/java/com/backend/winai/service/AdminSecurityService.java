@@ -25,8 +25,15 @@ public class AdminSecurityService {
         if (moduleId == null || moduleId.isBlank()) {
             return false;
         }
-        for (AmpliaAdminAction a : AmpliaAdminAction.values()) {
-            if (hasPermission(authentication, moduleId.trim(), a.name())) {
+        String trimmed = moduleId.trim();
+        AmpliaAdminModule mod;
+        try {
+            mod = AmpliaAdminModule.valueOf(trimmed);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        for (AmpliaAdminAction a : AmpliaAdminPermissionCatalog.actionsFor(mod)) {
+            if (hasPermission(authentication, trimmed, a.name())) {
                 return true;
             }
         }
@@ -139,9 +146,14 @@ public class AdminSecurityService {
                 out.addAll(AmpliaAdminPermissionCatalog.allGranularKeys());
                 continue;
             }
-            if (AmpliaAdminModule.isValid(k)) {
-                for (AmpliaAdminAction a : AmpliaAdminAction.values()) {
-                    out.add(k + ":" + a.name());
+            if (AmpliaAdminModule.isValid(k) && !k.contains(":")) {
+                try {
+                    AmpliaAdminModule mod = AmpliaAdminModule.valueOf(k);
+                    for (AmpliaAdminAction a : AmpliaAdminPermissionCatalog.actionsFor(mod)) {
+                        out.add(k + ":" + a.name());
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    /* omitido */
                 }
             }
         }
