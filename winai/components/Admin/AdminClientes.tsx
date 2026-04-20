@@ -32,6 +32,10 @@ function subscriptionLabel(status?: string | null): string {
 const AdminClientes: React.FC = () => {
     const staffView = useAdminStaffView();
     const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
+    const staffName =
+        staffFilterId && staffView?.staffList?.length
+            ? staffView.staffList.find((s) => s.id === staffFilterId)?.name ?? null
+            : null;
     const [companies, setCompanies] = useState<Company[]>([]);
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [leads, setLeads] = useState<AdminLeadRow[]>([]);
@@ -50,10 +54,11 @@ const AdminClientes: React.FC = () => {
         try {
             setLoading(true);
             setError(null);
+            setLeads([]);
             const [co, us, crm] = await Promise.all([
                 adminService.getAllCompanies(),
                 adminService.getAllUsers(),
-                adminService.getCrmLeads({ page: 0, size: 800, staffUserId: staffFilterId ?? undefined }),
+                adminService.getCrmLeads({ page: 0, size: 1000, staffUserId: staffFilterId ?? undefined }),
             ]);
             setCompanies(co || []);
             setUsers(us || []);
@@ -69,16 +74,35 @@ const AdminClientes: React.FC = () => {
         load();
     }, [load]);
 
+    /** Empresas onde existe lead com companyId (carteira do colaborador quando há filtro). */
+    const leadsCompanyIds = useMemo(() => {
+        const ids = new Set<string>();
+        leads.forEach((l) => {
+            if (l.companyId) ids.add(l.companyId);
+        });
+        return ids;
+    }, [leads]);
+
+    const companiesForList = useMemo(() => {
+        if (!staffFilterId) return companies;
+        return companies.filter((c) => leadsCompanyIds.has(c.id));
+    }, [companies, staffFilterId, leadsCompanyIds]);
+
+    const usersForList = useMemo(() => {
+        if (!staffFilterId) return users;
+        return users.filter((u) => u.companyId && leadsCompanyIds.has(u.companyId));
+    }, [users, staffFilterId, leadsCompanyIds]);
+
     const usersByCompany = useMemo(() => {
         const m = new Map<string, AdminUser[]>();
-        users.forEach((u) => {
+        usersForList.forEach((u) => {
             const cid = u.companyId;
             if (!cid) return;
             if (!m.has(cid)) m.set(cid, []);
             m.get(cid)!.push(u);
         });
         return m;
-    }, [users]);
+    }, [usersForList]);
 
     const leadCountByCompany = useMemo(() => {
         const m = new Map<string, number>();
@@ -92,14 +116,15 @@ const AdminClientes: React.FC = () => {
 
     const filteredCompanies = useMemo(() => {
         const q = debounced.toLowerCase();
-        if (!q) return companies;
-        return companies.filter(
+        const base = companiesForList;
+        if (!q) return base;
+        return base.filter(
             (c) =>
                 c.name.toLowerCase().includes(q) ||
                 (c.documento && c.documento.toLowerCase().includes(q)) ||
                 (c.contratante && c.contratante.toLowerCase().includes(q))
         );
-    }, [companies, debounced]);
+    }, [companiesForList, debounced]);
 
     useEffect(() => {
         setSelectedId((prev) => {
@@ -135,6 +160,12 @@ const AdminClientes: React.FC = () => {
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Clientes</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
                         Visão por empresa — usuários, leads e plano. Contratos e faturas ficam em Contratos.
+                        {staffFilterId && staffName && (
+                            <span className="block mt-2 text-emerald-600/90 font-medium">
+                                Colaborador selecionado: somente empresas em que {staffName} tem leads como responsável; usuários
+                                listados são só dessas empresas.
+                            </span>
+                        )}
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -206,7 +237,11 @@ const AdminClientes: React.FC = () => {
                             );
                         })}
                         {filteredCompanies.length === 0 && (
-                            <p className="text-sm text-gray-500 text-center py-10">Nenhum cliente encontrado.</p>
+                            <p className="text-sm text-gray-500 text-center py-10">
+                                {staffFilterId && !debounced
+                                    ? 'Nenhuma empresa com lead atribuído a este colaborador (ou busca sem resultado).'
+                                    : 'Nenhum cliente encontrado.'}
+                            </p>
                         )}
                     </div>
                 </div>

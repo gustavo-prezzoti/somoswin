@@ -86,7 +86,9 @@ function StaffTeamDropdown({ staffView }: { staffView: AdminStaffViewContextValu
                                   setOpen(false);
                               }}
                               className={`w-full px-4 py-2.5 text-center text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition-colors ${
-                                  selectedId === '' ? 'bg-[#141414] text-white' : 'text-gray-700 hover:bg-gray-50'
+                                  selectedId === ''
+                                      ? 'bg-emerald-50/90 text-gray-900 shadow-[inset_3px_0_0_#00FF00]'
+                                      : 'text-gray-700 hover:bg-gray-50'
                               }`}
                           >
                               Todos
@@ -103,13 +105,15 @@ function StaffTeamDropdown({ staffView }: { staffView: AdminStaffViewContextValu
                                           setOpen(false);
                                       }}
                                       className={`w-full px-4 py-2.5 text-center transition-colors ${
-                                          active ? 'bg-[#141414] text-white' : 'text-gray-800 hover:bg-gray-50'
+                                          active
+                                              ? 'bg-emerald-50/90 text-gray-900 shadow-[inset_3px_0_0_#00FF00]'
+                                              : 'text-gray-800 hover:bg-gray-50'
                                       }`}
                                   >
                                       <span className="block text-[10px] sm:text-[11px] font-black uppercase tracking-wide">{s.name}</span>
                                       <span
                                           className={`mt-0.5 block text-[9px] font-bold uppercase tracking-wider ${
-                                              active ? 'text-emerald-300/90' : 'text-gray-500'
+                                              active ? 'text-emerald-700' : 'text-gray-500'
                                           }`}
                                       >
                                           {s.ampliaStaffType}

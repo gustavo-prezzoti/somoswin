@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import adminService, { AdminMetaAdsCompanyRow, MetaCampaignsListResponse } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
+import { useAdminStaffView } from './AdminStaffViewContext';
 
 function formatMoney(n: number | null | undefined): string {
     if (n == null || Number.isNaN(n)) return '—';
@@ -35,6 +36,13 @@ function statusTone(status: string): string {
 }
 
 const AdminMetaAds: React.FC = () => {
+    const staffView = useAdminStaffView();
+    const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
+    const staffName =
+        staffFilterId && staffView?.staffList?.length
+            ? staffView.staffList.find((s) => s.id === staffFilterId)?.name ?? null
+            : null;
+
     const [rows, setRows] = useState<AdminMetaAdsCompanyRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -54,18 +62,28 @@ const AdminMetaAds: React.FC = () => {
         try {
             setLoading(true);
             setError(null);
-            const list = await adminService.getMetaAdsCompanies();
-            setRows(list);
+            if (staffFilterId) setRows([]);
+            const [list, crm] = await Promise.all([
+                adminService.getMetaAdsCompanies(),
+                adminService.getCrmLeads({ page: 0, size: 1000, staffUserId: staffFilterId ?? undefined }),
+            ]);
+            const leadCompanyIds = new Set<string>();
+            (crm.content ?? []).forEach((l) => {
+                if (l.companyId) leadCompanyIds.add(l.companyId);
+            });
+            const scoped =
+                staffFilterId ? list.filter((r) => leadCompanyIds.has(r.companyId)) : list;
+            setRows(scoped);
             setSelectedId((prev) => {
-                if (prev && list.some((r) => r.companyId === prev)) return prev;
-                return list[0]?.companyId ?? null;
+                if (prev && scoped.some((r) => r.companyId === prev)) return prev;
+                return scoped[0]?.companyId ?? null;
             });
         } catch (e) {
             setError(getErrorMessage(e, 'Erro ao carregar empresas Meta'));
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [staffFilterId]);
 
     useEffect(() => {
         loadCompanies();
@@ -147,6 +165,11 @@ const AdminMetaAds: React.FC = () => {
                         Visão global por empresa — campanhas sincronizadas (mesma base que Campanhas no app). A conexão OAuth
                         com a Meta é feita pelo cliente em{' '}
                         <span className="text-gray-300">Configurações</span>.
+                        {staffFilterId && staffName && (
+                            <span className="block mt-2 text-emerald-600/90 font-medium">
+                                Colaborador selecionado: só empresas em que {staffName} tem leads como responsável.
+                            </span>
+                        )}
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2 items-center">
@@ -218,7 +241,11 @@ const AdminMetaAds: React.FC = () => {
                             </button>
                         ))}
                         {filtered.length === 0 && (
-                            <p className="text-sm text-gray-500 text-center py-8">Nenhuma empresa encontrada.</p>
+                            <p className="text-sm text-gray-500 text-center py-8">
+                                {staffFilterId && !debounced
+                                    ? 'Nenhuma empresa com lead atribuído a este colaborador (ou busca sem resultado).'
+                                    : 'Nenhuma empresa encontrada.'}
+                            </p>
                         )}
                     </div>
                 </div>
