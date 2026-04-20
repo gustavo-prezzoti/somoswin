@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { LogOut, Menu, ShieldCheck, Bell, ChevronDown } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getAdminRouteMeta } from './adminRouteMeta';
@@ -13,10 +14,37 @@ interface AdminHeaderProps {
 function StaffTeamDropdown({ staffView }: { staffView: AdminStaffViewContextValue }) {
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLUListElement>(null);
+    const [menuBox, setMenuBox] = useState<{ top: number; left: number; width: number } | null>(null);
+
+    const updateMenuPosition = useCallback(() => {
+        const el = buttonRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        setMenuBox({ top: r.bottom + 6, left: r.left, width: r.width });
+    }, []);
+
+    useLayoutEffect(() => {
+        if (!open) {
+            setMenuBox(null);
+            return;
+        }
+        updateMenuPosition();
+        window.addEventListener('scroll', updateMenuPosition, true);
+        window.addEventListener('resize', updateMenuPosition);
+        return () => {
+            window.removeEventListener('scroll', updateMenuPosition, true);
+            window.removeEventListener('resize', updateMenuPosition);
+        };
+    }, [open, updateMenuPosition]);
 
     useEffect(() => {
         const onDoc = (e: MouseEvent) => {
-            if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+            const t = e.target as Node;
+            if (rootRef.current?.contains(t)) return;
+            if (menuRef.current?.contains(t)) return;
+            setOpen(false);
         };
         const onKey = (e: KeyboardEvent) => {
             if (e.key === 'Escape') setOpen(false);
@@ -35,9 +63,70 @@ function StaffTeamDropdown({ staffView }: { staffView: AdminStaffViewContextValu
             ? 'Todos'
             : staffView.staffList.find((s) => s.id === selectedId)?.name ?? 'Todos';
 
+    const dropdown =
+        open && !staffView.staffLoading && menuBox
+            ? createPortal(
+                  <ul
+                      ref={menuRef}
+                      role="listbox"
+                      style={{
+                          position: 'fixed',
+                          top: menuBox.top,
+                          left: menuBox.left,
+                          width: menuBox.width,
+                          zIndex: 10000,
+                      }}
+                      className="max-h-60 overflow-y-auto rounded-xl border border-black/10 bg-white py-1.5 shadow-xl shadow-black/10"
+                  >
+                      <li role="option" aria-selected={selectedId === ''}>
+                          <button
+                              type="button"
+                              onClick={() => {
+                                  staffView.setSelectedStaffUserId(null);
+                                  setOpen(false);
+                              }}
+                              className={`w-full px-4 py-2.5 text-center text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition-colors ${
+                                  selectedId === '' ? 'bg-[#141414] text-white' : 'text-gray-700 hover:bg-gray-50'
+                              }`}
+                          >
+                              Todos
+                          </button>
+                      </li>
+                      {staffView.staffList.map((s) => {
+                          const active = selectedId === s.id;
+                          return (
+                              <li key={s.id} role="option" aria-selected={active}>
+                                  <button
+                                      type="button"
+                                      onClick={() => {
+                                          staffView.setSelectedStaffUserId(s.id);
+                                          setOpen(false);
+                                      }}
+                                      className={`w-full px-4 py-2.5 text-center transition-colors ${
+                                          active ? 'bg-[#141414] text-white' : 'text-gray-800 hover:bg-gray-50'
+                                      }`}
+                                  >
+                                      <span className="block text-[10px] sm:text-[11px] font-black uppercase tracking-wide">{s.name}</span>
+                                      <span
+                                          className={`mt-0.5 block text-[9px] font-bold uppercase tracking-wider ${
+                                              active ? 'text-emerald-300/90' : 'text-gray-500'
+                                          }`}
+                                      >
+                                          {s.ampliaStaffType}
+                                      </span>
+                                  </button>
+                              </li>
+                          );
+                      })}
+                  </ul>,
+                  document.body
+              )
+            : null;
+
     return (
         <div ref={rootRef} className="relative w-full min-w-[11rem] sm:min-w-[13rem] max-w-[15rem]">
             <button
+                ref={buttonRef}
                 type="button"
                 disabled={staffView.staffLoading}
                 onClick={() => setOpen((o) => !o)}
@@ -54,54 +143,7 @@ function StaffTeamDropdown({ staffView }: { staffView: AdminStaffViewContextValu
                     aria-hidden
                 />
             </button>
-
-            {open && !staffView.staffLoading && (
-                <ul
-                    role="listbox"
-                    className="absolute right-0 left-0 z-[200] mt-1.5 max-h-60 overflow-y-auto rounded-xl border border-black/10 bg-white py-1.5 shadow-xl shadow-black/10"
-                >
-                    <li role="option" aria-selected={selectedId === ''}>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                staffView.setSelectedStaffUserId(null);
-                                setOpen(false);
-                            }}
-                            className={`w-full px-4 py-2.5 text-center text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition-colors ${
-                                selectedId === '' ? 'bg-[#141414] text-white' : 'text-gray-700 hover:bg-gray-50'
-                            }`}
-                        >
-                            Todos
-                        </button>
-                    </li>
-                    {staffView.staffList.map((s) => {
-                        const active = selectedId === s.id;
-                        return (
-                            <li key={s.id} role="option" aria-selected={active}>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        staffView.setSelectedStaffUserId(s.id);
-                                        setOpen(false);
-                                    }}
-                                    className={`w-full px-4 py-2.5 text-center transition-colors ${
-                                        active ? 'bg-[#141414] text-white' : 'text-gray-800 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    <span className="block text-[10px] sm:text-[11px] font-black uppercase tracking-wide">{s.name}</span>
-                                    <span
-                                        className={`mt-0.5 block text-[9px] font-bold uppercase tracking-wider ${
-                                            active ? 'text-emerald-300/90' : 'text-gray-500'
-                                        }`}
-                                    >
-                                        {s.ampliaStaffType}
-                                    </span>
-                                </button>
-                            </li>
-                        );
-                    })}
-                </ul>
-            )}
+            {dropdown}
         </div>
     );
 }
