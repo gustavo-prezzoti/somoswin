@@ -11,6 +11,8 @@ import com.backend.winai.dto.response.AdminEscutaSessionResponse;
 import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
 import com.backend.winai.dto.response.AdminGoalsForCompanyResponse;
 import com.backend.winai.dto.response.AdminMetaAdsCompanyResponse;
+import com.backend.winai.dto.response.AdminNotificationRowResponse;
+import com.backend.winai.dto.response.AdminPerformanceSnapshotResponse;
 import com.backend.winai.dto.response.AdminDashboardResponse;
 import com.backend.winai.dto.response.DashboardResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
@@ -256,6 +258,121 @@ public class AdminService {
                 .kpis(kpis)
                 .upcomingMeetings(meetingRows)
                 .priorityAlerts(alerts)
+                .build();
+    }
+
+    // ========== ALERTAS (NOTIFICAÇÕES) ==========
+
+    public Page<AdminNotificationRowResponse> getAdminNotifications(int page, int size, UUID companyId, Boolean read) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return notificationRepository.findAdminPage(companyId, read, pageable).map(this::toAdminNotificationRow);
+    }
+
+    private AdminNotificationRowResponse toAdminNotificationRow(Notification n) {
+        String companyIdStr = null;
+        String companyName = null;
+        if (n.getCompany() != null) {
+            companyIdStr = n.getCompany().getId().toString();
+            companyName = n.getCompany().getName();
+        }
+        String userName = null;
+        String userEmail = null;
+        if (n.getUser() != null) {
+            userName = n.getUser().getName();
+            userEmail = n.getUser().getEmail();
+        }
+        return AdminNotificationRowResponse.builder()
+                .id(n.getId().toString())
+                .title(n.getTitle())
+                .message(n.getMessage() != null ? n.getMessage() : "")
+                .type(n.getType() != null ? n.getType() : "INFO")
+                .createdAt(n.getCreatedAt() != null ? n.getCreatedAt().toString() : "")
+                .read(Boolean.TRUE.equals(n.getRead()))
+                .companyId(companyIdStr)
+                .companyName(companyName)
+                .userName(userName)
+                .userEmail(userEmail)
+                .relatedEntityType(n.getRelatedEntityType())
+                .actionUrl(n.getActionUrl())
+                .build();
+    }
+
+    @Transactional
+    public void markAdminNotificationRead(UUID id) {
+        Notification n = notificationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Notificação não encontrada"));
+        n.setRead(true);
+    }
+
+    // ========== PERFORMANCE (SNAPSHOT AGREGADO) ==========
+
+    public AdminPerformanceSnapshotResponse getAdminPerformanceSnapshot() {
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+        ZonedDateTime monthStart = today.withDayOfMonth(1).atStartOfDay(ZoneId.systemDefault());
+
+        long totalCompanies = companyRepository.count();
+        long newCompaniesMonth = companyRepository.countByCreatedAtAfter(monthStart);
+        long totalLeads = leadRepository.count();
+        long leadsWon = leadRepository.countByStatus(LeadStatus.WON);
+        long meetingsWeek = meetingRepository.countByMeetingDateBetween(startWeek, endWeek);
+        long incompleteTasks = dashboardTaskRepository.countByCompletedFalse();
+
+        Double spend = metaCampaignRepository.sumTotalSpend();
+        Long impressions = metaCampaignRepository.sumTotalImpressions();
+        Long clicks = metaCampaignRepository.sumTotalClicks();
+        Long reach = metaCampaignRepository.sumTotalReach();
+        Long conversions = metaCampaignRepository.sumTotalConversions();
+        long campaignCount = metaCampaignRepository.count();
+        long metaAccountsConnected = metaConnectionRepository.countByIsConnectedTrueAndAdAccountIdIsNotNull();
+
+        double ctrGlobal = (impressions != null && impressions > 0 && clicks != null)
+                ? (clicks * 100.0 / impressions)
+                : 0.0;
+
+        long activeGoalsTotal = getAdminGoalCompanyRows(null).stream()
+                .mapToLong(AdminGoalCompanyRowResponse::getActiveGoalsCount)
+                .sum();
+
+        List<AdminPerformanceSnapshotResponse.CompanyPerformanceRow> topCompanies = metaCampaignRepository
+                .aggregateSpendByCompany()
+                .stream()
+                .limit(10)
+                .map(row -> {
+                    UUID cid = (UUID) row[0];
+                    double sp = row[2] != null ? ((Number) row[2]).doubleValue() : 0.0;
+                    long im = row[3] != null ? ((Number) row[3]).longValue() : 0L;
+                    long cl = row[4] != null ? ((Number) row[4]).longValue() : 0L;
+                    long cnt = row[5] != null ? ((Number) row[5]).longValue() : 0L;
+                    return AdminPerformanceSnapshotResponse.CompanyPerformanceRow.builder()
+                            .companyId(cid.toString())
+                            .companyName((String) row[1])
+                            .spend(sp)
+                            .impressions(im)
+                            .clicks(cl)
+                            .campaignCount((int) Math.min(cnt, Integer.MAX_VALUE))
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        return AdminPerformanceSnapshotResponse.builder()
+                .totalCompanies(totalCompanies)
+                .newCompaniesThisMonth(newCompaniesMonth)
+                .totalLeads(totalLeads)
+                .leadsWon(leadsWon)
+                .meetingsThisWeek(meetingsWeek)
+                .incompleteDashboardTasks(incompleteTasks)
+                .metaCampaignsCount(campaignCount)
+                .metaAccountsConnected(metaAccountsConnected)
+                .totalSpend(spend != null ? spend : 0.0)
+                .totalImpressions(impressions != null ? impressions : 0L)
+                .totalClicks(clicks != null ? clicks : 0L)
+                .totalReach(reach != null ? reach : 0L)
+                .totalConversions(conversions != null ? conversions : 0L)
+                .ctrGlobal(ctrGlobal)
+                .activeGoalsTotal(activeGoalsTotal)
+                .topCompaniesBySpend(topCompanies)
                 .build();
     }
 

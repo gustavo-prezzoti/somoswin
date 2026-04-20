@@ -63,6 +63,8 @@ import AdminMetaAds from './components/Admin/AdminMetaAds';
 import AdminMetasObjetivos from './components/Admin/AdminMetasObjetivos';
 import AdminAgendaComercial from './components/Admin/AdminAgendaComercial';
 import AdminDiagnosticoComercial from './components/Admin/AdminDiagnosticoComercial';
+import AdminAlertas from './components/Admin/AdminAlertas';
+import AdminPerformance from './components/Admin/AdminPerformance';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
@@ -647,6 +649,8 @@ const App: React.FC = () => {
           <Route path="metas" element={<AdminMetasObjetivos />} />
           <Route path="agenda" element={<AdminAgendaComercial />} />
           <Route path="diagnostico" element={<AdminDiagnosticoComercial />} />
+          <Route path="alertas" element={<AdminAlertas />} />
+          <Route path="performance" element={<AdminPerformance />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="companies" element={<AdminCompanies />} />
           <Route path="instances" element={<AdminInstances />} />

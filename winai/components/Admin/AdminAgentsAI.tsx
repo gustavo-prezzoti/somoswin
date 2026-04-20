@@ -160,7 +160,7 @@ const AdminAgentsAI = () => {
                             <button
                                 type="button"
                                 onClick={() => toggleCompanyMode('HUMAN')}
-                                className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'HUMAN' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'HUMAN' ? 'bg-rose-500 text-gray-900 shadow-lg shadow-rose-500/30' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 Humano
                             </button>
@@ -324,7 +324,7 @@ const AdminAgentsAI = () => {
                                                 <p className="text-[9px] font-black uppercase tracking-widest mt-1 opacity-60">Status: Operational</p>
                                             </div>
                                         </div>
-                                        <button onClick={() => handleUnlink(conn.id)} className="p-3 text-rose-500 hover:bg-rose-500 hover:text-white rounded-xl transition-all">
+                                        <button onClick={() => handleUnlink(conn.id)} className="p-3 text-rose-500 hover:bg-rose-500 hover:text-emerald-700 rounded-xl transition-all">
                                             <Unlink size={20} />
                                         </button>
                                     </div>
@@ -458,7 +458,7 @@ const AdminAgentsAI = () => {
                     {filteredBases.map(base => (
                         <div key={base.id} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all group flex flex-col h-full">
                             <div className="flex justify-between items-start mb-8">
-                                <div className="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                                <div className="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 group-hover:bg-emerald-600 group-hover:text-emerald-700 transition-all">
                                     <Bot size={28} />
                                 </div>
                                 <div className="flex gap-2">
@@ -523,7 +523,7 @@ const AdminAgentsAI = () => {
             )}
 
             {!isLoading && !selectedCompanyId && (
-                <div className="flex flex-col items-center justify-center py-40 bg-white/50 rounded-[2rem] border border-gray-100">
+                <div className="flex flex-col items-center justify-center py-40 bg-gray-500 rounded-[2rem] border border-gray-100">
                     <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6">
                         <Building2 size={32} />
                     </div>

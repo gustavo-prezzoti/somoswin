@@ -126,7 +126,7 @@ const AdminCRM: React.FC = () => {
     if (loading && leads.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando CRM…</span>
             </div>
         );
@@ -135,15 +135,15 @@ const AdminCRM: React.FC = () => {
     return (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-[1800px] mx-auto">
             {companyIdFilter && (
-                <div className="glass-card rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 border border-[#00FF00]/25 bg-[#00FF00]/[0.06]">
+                <div className="glass-card rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 border border-emerald-200 bg-emerald-50">
                     <span className="text-xs text-gray-300">
                         Filtrando por cliente:{' '}
-                        <strong className="text-white">{filteredCompanyName || `ID ${companyIdFilter.slice(0, 8)}…`}</strong>
+                        <strong className="text-gray-900">{filteredCompanyName || `ID ${companyIdFilter.slice(0, 8)}…`}</strong>
                     </span>
                     <button
                         type="button"
                         onClick={clearCompanyFilter}
-                        className="text-xs font-black uppercase tracking-widest text-[#00FF00] hover:underline"
+                        className="text-xs font-black uppercase tracking-widest text-emerald-600 hover:underline"
                     >
                         Limpar filtro
                     </button>
@@ -157,7 +157,7 @@ const AdminCRM: React.FC = () => {
             )}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white">CRM e Leads</h2>
+                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900">CRM e Leads</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">Pipeline global — arraste os cards para mudar o estágio</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -168,15 +168,15 @@ const AdminCRM: React.FC = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Buscar nome, e-mail, telefone, empresa…"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00FF00]/40"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                         />
                     </div>
-                    <div className="flex rounded-xl border border-white/10 overflow-hidden">
+                    <div className="flex rounded-xl border border-gray-200 overflow-hidden">
                         <button
                             type="button"
                             onClick={() => setViewMode('kanban')}
                             className={`px-3 py-2.5 flex items-center gap-2 text-xs font-black uppercase tracking-widest ${
-                                viewMode === 'kanban' ? 'bg-[#00FF00] text-black' : 'text-gray-400 hover:bg-white/5'
+                                viewMode === 'kanban' ? 'bg-emerald-600 text-black' : 'text-gray-400 hover:bg-gray-50'
                             }`}
                         >
                             <LayoutGrid size={16} /> Kanban
@@ -185,7 +185,7 @@ const AdminCRM: React.FC = () => {
                             type="button"
                             onClick={() => setViewMode('list')}
                             className={`px-3 py-2.5 flex items-center gap-2 text-xs font-black uppercase tracking-widest ${
-                                viewMode === 'list' ? 'bg-[#00FF00] text-black' : 'text-gray-400 hover:bg-white/5'
+                                viewMode === 'list' ? 'bg-emerald-600 text-black' : 'text-gray-400 hover:bg-gray-50'
                             }`}
                         >
                             <ListIcon size={16} /> Lista
@@ -194,7 +194,7 @@ const AdminCRM: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => load()}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-300 hover:bg-gray-50"
                     >
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     </button>
@@ -221,12 +221,12 @@ const AdminCRM: React.FC = () => {
                                         ref={provided.innerRef}
                                         {...provided.droppableProps}
                                         className={`flex-shrink-0 w-[280px] rounded-2xl border p-3 min-h-[320px] transition-colors ${
-                                            snapshot.isDraggingOver ? 'border-[#00FF00]/50 bg-[#00FF00]/5' : 'border-white/10 bg-white/[0.02]'
+                                            snapshot.isDraggingOver ? 'border-emerald-500/50 bg-emerald-600/5' : 'border-gray-200 bg-gray-50'
                                         }`}
                                     >
                                         <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">
                                             {col.label}
-                                            <span className="text-[#00FF00] ml-2">({grouped[col.id]?.length ?? 0})</span>
+                                            <span className="text-emerald-600 ml-2">({grouped[col.id]?.length ?? 0})</span>
                                         </h3>
                                         {(grouped[col.id] ?? []).map((lead, index) => (
                                             <Draggable key={lead.id} draggableId={lead.id} index={index} isDragDisabled={!!movingId}>
@@ -235,14 +235,14 @@ const AdminCRM: React.FC = () => {
                                                         ref={p.innerRef}
                                                         {...p.draggableProps}
                                                         {...p.dragHandleProps}
-                                                        className="glass-card rounded-xl p-3 mb-2 border border-white/10 cursor-grab active:cursor-grabbing hover:border-[#00FF00]/25"
+                                                        className="glass-card rounded-xl p-3 mb-2 border border-gray-200 cursor-grab active:cursor-grabbing hover:border-emerald-200"
                                                     >
-                                                        <p className="text-sm font-bold text-white leading-tight">{lead.name}</p>
+                                                        <p className="text-sm font-bold text-gray-900 leading-tight">{lead.name}</p>
                                                         <p className="text-[10px] text-gray-500 flex items-center gap-1 mt-1">
                                                             <Building2 size={10} /> {lead.companyName}
                                                         </p>
                                                         {lead.estimatedValue != null && (
-                                                            <p className="text-[10px] text-[#00FF00] mt-1 flex items-center gap-1">
+                                                            <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1">
                                                                 <DollarSign size={10} />
                                                                 {Number(lead.estimatedValue).toLocaleString('pt-BR', {
                                                                     style: 'currency',
@@ -262,10 +262,10 @@ const AdminCRM: React.FC = () => {
                     </div>
                 </DragDropContext>
             ) : (
-                <div className="glass-card rounded-2xl overflow-hidden border border-white/10">
+                <div className="glass-card rounded-2xl overflow-hidden border border-gray-200">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
-                            <thead className="text-[10px] font-black uppercase tracking-widest text-gray-500 border-b border-white/10">
+                            <thead className="text-[10px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-200">
                                 <tr>
                                     <th className="p-4">Lead</th>
                                     <th className="p-4">Empresa</th>
@@ -274,13 +274,13 @@ const AdminCRM: React.FC = () => {
                                     <th className="p-4">Valor</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
+                            <tbody className="divide-y divide-gray-100">
                                 {leads.map((lead) => (
-                                    <tr key={lead.id} className="hover:bg-white/[0.02]">
-                                        <td className="p-4 font-bold text-white">{lead.name}</td>
+                                    <tr key={lead.id} className="hover:bg-gray-50">
+                                        <td className="p-4 font-bold text-gray-900">{lead.name}</td>
                                         <td className="p-4 text-gray-400">{lead.companyName}</td>
                                         <td className="p-4">
-                                            <span className="text-[10px] font-black uppercase px-2 py-1 rounded-lg bg-white/10 text-[#00FF00]">
+                                            <span className="text-[10px] font-black uppercase px-2 py-1 rounded-lg bg-white/10 text-emerald-600">
                                                 {lead.statusLabel}
                                             </span>
                                         </td>

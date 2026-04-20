@@ -125,7 +125,7 @@ const AdminLogin: React.FC = () => {
                     </form>
 
                     <div className="mt-10 pt-8 border-t border-gray-50 flex flex-col items-center gap-4">
-                        <Link to="/" className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-900 transition-colors">
+                        <Link to="/" className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-emerald-700 transition-colors">
                             <ArrowLeft size={14} />
                             Voltar ao Terminal Público
                         </Link>

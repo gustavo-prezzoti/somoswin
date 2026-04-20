@@ -141,7 +141,7 @@ const AdminAtendimento: React.FC = () => {
     if (loading && conversations.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando atendimento…</span>
             </div>
         );
@@ -151,7 +151,7 @@ const AdminAtendimento: React.FC = () => {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 max-w-[1600px] mx-auto min-h-[70vh]">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white">Atendimento</h2>
+                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900">Atendimento</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">Conversas WhatsApp em todas as empresas</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -161,7 +161,7 @@ const AdminAtendimento: React.FC = () => {
                             setCompanyId(e.target.value);
                             setSelectedId(null);
                         }}
-                        className="rounded-xl bg-white/5 border border-white/10 text-sm text-white px-3 py-2.5 min-w-[180px] focus:outline-none focus:border-[#00FF00]/40"
+                        className="rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 px-3 py-2.5 min-w-[180px] focus:outline-none focus:border-emerald-200"
                     >
                         <option value="">Todas empresas</option>
                         {companies.map((c) => (
@@ -173,7 +173,7 @@ const AdminAtendimento: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => loadConversations()}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-300 hover:bg-gray-50"
                     >
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     </button>
@@ -188,8 +188,8 @@ const AdminAtendimento: React.FC = () => {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4 min-h-[560px]">
-                <div className="glass-card rounded-2xl border border-white/10 flex flex-col overflow-hidden max-h-[70vh] lg:max-h-none">
-                    <div className="p-3 border-b border-white/10">
+                <div className="glass-card rounded-2xl border border-gray-200 flex flex-col overflow-hidden max-h-[70vh] lg:max-h-none">
+                    <div className="p-3 border-b border-gray-200">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                             <input
@@ -197,7 +197,7 @@ const AdminAtendimento: React.FC = () => {
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Filtrar conversas…"
-                                className="w-full pl-10 pr-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none"
+                                className="w-full pl-10 pr-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none"
                             />
                         </div>
                     </div>
@@ -208,12 +208,12 @@ const AdminAtendimento: React.FC = () => {
                                 type="button"
                                 onClick={() => setSelectedId(c.id)}
                                 className={`w-full text-left px-4 py-3 border-b border-white/5 hover:bg-white/[0.04] transition-colors ${
-                                    selectedId === c.id ? 'bg-[#00FF00]/10 border-l-2 border-l-[#00FF00]' : ''
+                                    selectedId === c.id ? 'bg-emerald-50 border-l-2 border-l-[#00FF00]' : ''
                                 }`}
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0">
-                                        <p className="text-sm font-bold text-white truncate">{c.contactName || c.phoneNumber}</p>
+                                        <p className="text-sm font-bold text-gray-900 truncate">{c.contactName || c.phoneNumber}</p>
                                         <p className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5">
                                             <Building2 size={10} /> {c.companyName}
                                         </p>
@@ -234,12 +234,12 @@ const AdminAtendimento: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="glass-card rounded-2xl border border-white/10 flex flex-col min-h-[480px] max-h-[70vh]">
+                <div className="glass-card rounded-2xl border border-gray-200 flex flex-col min-h-[480px] max-h-[70vh]">
                     {selected ? (
                         <>
-                            <div className="p-4 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
+                            <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
                                 <div>
-                                    <p className="text-lg font-black text-white uppercase italic tracking-tight">
+                                    <p className="text-lg font-black text-gray-900 uppercase italic tracking-tight">
                                         {selected.contactName || 'Contato'}
                                     </p>
                                     <div className="flex flex-wrap gap-3 text-xs text-gray-400 mt-1">
@@ -250,14 +250,14 @@ const AdminAtendimento: React.FC = () => {
                                             <Building2 size={12} /> {selected.companyName}
                                         </span>
                                         {selected.leadName && (
-                                            <span className="flex items-center gap-1 text-[#00FF00]">
+                                            <span className="flex items-center gap-1 text-emerald-600">
                                                 <User size={12} /> Lead: {selected.leadName}
                                             </span>
                                         )}
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-black/20">
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-gray-100">
                                 {loadingMsgs ? (
                                     <p className="text-center text-gray-500 text-sm py-8">Carregando mensagens…</p>
                                 ) : (
@@ -269,8 +269,8 @@ const AdminAtendimento: React.FC = () => {
                                             <div
                                                 className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${
                                                     m.fromMe
-                                                        ? 'bg-[#00FF00]/20 text-white border border-[#00FF00]/30'
-                                                        : 'bg-white/10 text-gray-100 border border-white/10'
+                                                        ? 'bg-emerald-600/20 text-gray-900 border border-emerald-200'
+                                                        : 'bg-white/10 text-gray-100 border border-gray-200'
                                                 }`}
                                             >
                                                 <p className="whitespace-pre-wrap break-words">{m.content || '(mídia)'}</p>
@@ -282,17 +282,17 @@ const AdminAtendimento: React.FC = () => {
                                 <div ref={bottomRef} />
                             </div>
                             {!selected.companyId ? (
-                                <div className="p-4 border-t border-white/10 text-xs text-amber-200">
+                                <div className="p-4 border-t border-gray-200 text-xs text-amber-200">
                                     Sem empresa vinculada — envio desativado.
                                 </div>
                             ) : (
-                                <div className="p-4 border-t border-white/10 flex gap-2">
+                                <div className="p-4 border-t border-gray-200 flex gap-2">
                                     <textarea
                                         value={sendText}
                                         onChange={(e) => setSendText(e.target.value)}
                                         placeholder="Digite uma mensagem…"
                                         rows={2}
-                                        className="flex-1 rounded-xl bg-white/5 border border-white/10 text-sm text-white px-3 py-2 resize-none focus:outline-none focus:border-[#00FF00]/40"
+                                        className="flex-1 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 px-3 py-2 resize-none focus:outline-none focus:border-emerald-200"
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' && !e.shiftKey) {
                                                 e.preventDefault();
@@ -304,7 +304,7 @@ const AdminAtendimento: React.FC = () => {
                                         type="button"
                                         onClick={handleSend}
                                         disabled={sending || !sendText.trim()}
-                                        className="self-end px-4 py-3 rounded-xl bg-[#00FF00] text-black font-black disabled:opacity-40"
+                                        className="self-end px-4 py-3 rounded-xl bg-emerald-600 text-black font-black disabled:opacity-40"
                                     >
                                         <Send size={18} />
                                     </button>

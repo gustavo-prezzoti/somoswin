@@ -159,7 +159,7 @@ const AdminDiagnosticoComercial: React.FC = () => {
     if (auth === null || loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Montando diagnóstico…</span>
             </div>
         );
@@ -169,11 +169,11 @@ const AdminDiagnosticoComercial: React.FC = () => {
         return (
             <div className="max-w-xl mx-auto glass-card rounded-2xl p-8 border border-rose-500/30 text-center">
                 <AlertTriangle className="w-12 h-12 text-rose-400 mx-auto mb-4" />
-                <p className="text-white font-bold mb-4">{error}</p>
+                <p className="text-gray-900 font-bold mb-4">{error}</p>
                 <button
                     type="button"
                     onClick={() => void load()}
-                    className="px-6 py-3 bg-[#00FF00] text-black rounded-xl text-xs font-black uppercase tracking-widest"
+                    className="px-6 py-3 bg-emerald-600 text-black rounded-xl text-xs font-black uppercase tracking-widest"
                 >
                     Tentar novamente
                 </button>
@@ -248,8 +248,8 @@ const AdminDiagnosticoComercial: React.FC = () => {
         >
             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white flex items-center gap-3">
-                        <ClipboardCheck className="w-8 h-8 text-[#00FF00]" />
+                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900 flex items-center gap-3">
+                        <ClipboardCheck className="w-8 h-8 text-emerald-600" />
                         Diagnóstico comercial
                     </h2>
                     <p className="text-sm text-gray-400 font-medium mt-1 max-w-2xl">
@@ -260,19 +260,19 @@ const AdminDiagnosticoComercial: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => void load()}
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-white/10 text-xs font-black uppercase tracking-widest text-white hover:bg-white/5 hover:border-[#00FF00]/30"
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-200 text-xs font-black uppercase tracking-widest text-gray-900 hover:bg-gray-50 hover:border-emerald-200"
                 >
-                    <RefreshCw size={16} className="text-[#00FF00]" />
+                    <RefreshCw size={16} className="text-emerald-600" />
                     Atualizar
                 </button>
             </div>
 
-            <div className="glass-card rounded-2xl p-6 border border-white/10">
+            <div className="glass-card rounded-2xl p-6 border border-gray-200">
                 <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Resumo executivo</h3>
                 <ul className="space-y-3">
                     {insights.map((line, i) => (
                         <li key={i} className="text-sm text-gray-200 leading-relaxed flex gap-2">
-                            <span className="text-[#00FF00] font-black shrink-0">•</span>
+                            <span className="text-emerald-600 font-black shrink-0">•</span>
                             <span>{line}</span>
                         </li>
                     ))}
@@ -292,10 +292,10 @@ const AdminDiagnosticoComercial: React.FC = () => {
                         >
                             <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-10 h-10 rounded-xl bg-black/30 flex items-center justify-center text-[#00FF00] shrink-0">
+                                    <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-emerald-600 shrink-0">
                                         <Icon size={20} />
                                     </div>
-                                    <span className="text-sm font-black text-white uppercase tracking-tight leading-tight">
+                                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight leading-tight">
                                         {p.title}
                                     </span>
                                 </div>
@@ -314,7 +314,7 @@ const AdminDiagnosticoComercial: React.FC = () => {
                             <p className="text-xs text-gray-400 leading-relaxed">{p.summary}</p>
                             <Link
                                 to={p.to}
-                                className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[#00FF00] hover:underline mt-auto"
+                                className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-600 hover:underline mt-auto"
                             >
                                 {p.cta}
                                 <ArrowRight size={14} />
@@ -324,16 +324,16 @@ const AdminDiagnosticoComercial: React.FC = () => {
                 })}
             </div>
 
-            <div className="glass-card rounded-2xl p-6 border border-white/10 flex flex-wrap items-center gap-4 justify-between">
+            <div className="glass-card rounded-2xl p-6 border border-gray-200 flex flex-wrap items-center gap-4 justify-between">
                 <div className="flex items-center gap-3 text-sm text-gray-400">
                     <Building2 size={20} className="text-gray-500" />
                     <span>
-                        Base: <strong className="text-white">{companiesCount}</strong> empresa(s) cadastrada(s) no admin.
+                        Base: <strong className="text-gray-900">{companiesCount}</strong> empresa(s) cadastrada(s) no admin.
                     </span>
                 </div>
                 <Link
                     to="/admin/clientes"
-                    className="text-xs font-black uppercase tracking-widest text-gray-500 hover:text-[#00FF00]"
+                    className="text-xs font-black uppercase tracking-widest text-gray-500 hover:text-emerald-600"
                 >
                     Clientes →
                 </Link>

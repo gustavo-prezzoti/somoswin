@@ -269,7 +269,7 @@ const AdminEscutaInteligente: React.FC = () => {
     if (loading && sessions.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando escuta…</span>
             </div>
         );
@@ -283,7 +283,7 @@ const AdminEscutaInteligente: React.FC = () => {
         >
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white">Escuta Inteligente</h2>
+                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900">Escuta Inteligente</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
                         Sessões globais — áudio, transcrição e análise IA por empresa
                     </p>
@@ -291,7 +291,7 @@ const AdminEscutaInteligente: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => loadList()}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 self-start"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-300 hover:bg-gray-50 self-start"
                 >
                     <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     <span className="text-xs font-black uppercase tracking-widest">Sincronizar</span>
@@ -308,8 +308,8 @@ const AdminEscutaInteligente: React.FC = () => {
                 </div>
             )}
 
-            <div className="glass-card rounded-2xl border border-white/10 p-5 space-y-4">
-                <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#00FF00]">
+            <div className="glass-card rounded-2xl border border-gray-200 p-5 space-y-4">
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600">
                     <Mic size={14} /> Nova sessão
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -323,7 +323,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                     setNewCompanyId(e.target.value);
                                     setNewLeadId('');
                                 }}
-                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-[#00FF00]/40"
+                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-emerald-200"
                             >
                                 <option value="">Selecione…</option>
                                 {companies.map((c) => (
@@ -342,7 +342,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                 value={newLeadId}
                                 onChange={(e) => setNewLeadId(e.target.value)}
                                 disabled={!newCompanyId}
-                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-[#00FF00]/40 disabled:opacity-40"
+                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-emerald-200 disabled:opacity-40"
                             >
                                 <option value="">{newCompanyId ? 'Selecione o lead…' : 'Escolha a empresa primeiro'}</option>
                                 {leadsForCompany.map((l) => (
@@ -360,7 +360,7 @@ const AdminEscutaInteligente: React.FC = () => {
                             value={newTitle}
                             onChange={(e) => setNewTitle(e.target.value)}
                             placeholder="Ex.: Follow-up proposta — Acme"
-                            className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00FF00]/40"
+                            className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                         />
                     </div>
                 </div>
@@ -368,7 +368,7 @@ const AdminEscutaInteligente: React.FC = () => {
                     type="button"
                     disabled={starting || !newCompanyId || !newLeadId}
                     onClick={onStart}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#00FF00] text-black text-xs font-black uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
                 >
                     {starting ? (
                         <RefreshCw size={16} className="animate-spin" />
@@ -388,7 +388,7 @@ const AdminEscutaInteligente: React.FC = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Buscar empresa, lead, título…"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00FF00]/40"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                         />
                     </div>
                     <div className="space-y-2 max-h-[62vh] overflow-y-auto custom-scrollbar pr-1">
@@ -399,11 +399,11 @@ const AdminEscutaInteligente: React.FC = () => {
                                 onClick={() => setSelectedId(s.id)}
                                 className={`w-full text-left rounded-xl p-4 border transition-colors ${
                                     selectedId === s.id
-                                        ? 'border-[#00FF00]/40 bg-[#00FF00]/5'
-                                        : 'border-white/10 bg-white/[0.02] hover:border-white/20'
+                                        ? 'border-emerald-200 bg-emerald-600/5'
+                                        : 'border-gray-200 bg-gray-50 hover:border-white/20'
                                 }`}
                             >
-                                <p className="text-sm font-bold text-white truncate">{s.title || 'Escuta Inteligente'}</p>
+                                <p className="text-sm font-bold text-gray-900 truncate">{s.title || 'Escuta Inteligente'}</p>
                                 <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
                                     <Building2 size={12} className="shrink-0" />
                                     <span className="truncate">{s.companyName}</span>
@@ -413,7 +413,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                     {s.leadName}
                                 </p>
                                 <div className="flex items-center justify-between mt-2">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-[#00FF00]/90">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/90">
                                         {s.statusLabel || s.status}
                                     </span>
                                     <span className="text-[10px] text-gray-600 flex items-center gap-1">
@@ -431,7 +431,7 @@ const AdminEscutaInteligente: React.FC = () => {
 
                 <div className="lg:col-span-8 space-y-4 min-h-[480px]">
                     {!selectedId && (
-                        <div className="glass-card rounded-2xl border border-white/10 p-10 text-center text-gray-500 text-sm">
+                        <div className="glass-card rounded-2xl border border-gray-200 p-10 text-center text-gray-500 text-sm">
                             Selecione uma sessão à esquerda ou crie uma nova acima.
                         </div>
                     )}
@@ -439,18 +439,18 @@ const AdminEscutaInteligente: React.FC = () => {
                         <>
                             {loadingDetail && !detail ? (
                                 <div className="flex justify-center py-20">
-                                    <div className="w-10 h-10 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                                    <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
                                 </div>
                             ) : detail ? (
                                 <>
-                                    <div className="glass-card rounded-2xl border border-white/10 p-5 flex flex-col gap-4">
+                                    <div className="glass-card rounded-2xl border border-gray-200 p-5 flex flex-col gap-4">
                                         <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
                                             <div>
-                                                <h3 className="text-xl font-black text-white tracking-tight">
+                                                <h3 className="text-xl font-black text-gray-900 tracking-tight">
                                                     {detail.title || 'Escuta Inteligente'}
                                                 </h3>
                                                 <p className="text-sm text-gray-400 mt-1">
-                                                    <span className="text-[#00FF00] font-bold">{detail.companyName}</span>
+                                                    <span className="text-emerald-600 font-bold">{detail.companyName}</span>
                                                     {' · '}
                                                     {detail.leadName}
                                                 </p>
@@ -470,7 +470,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                     type="button"
                                                     disabled={!!busy}
                                                     onClick={() => fileRef.current?.click()}
-                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 text-xs font-black uppercase tracking-widest text-white hover:bg-white/5"
+                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 text-xs font-black uppercase tracking-widest text-gray-900 hover:bg-gray-50"
                                                 >
                                                     <FileAudio size={14} />
                                                     {busy === 'upload' ? 'Enviando…' : 'Enviar áudio'}
@@ -479,7 +479,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                     type="button"
                                                     disabled={!!busy}
                                                     onClick={onAnalyze}
-                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/10 text-xs font-black uppercase tracking-widest text-white hover:bg-white/15"
+                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-gray-200 text-xs font-black uppercase tracking-widest text-gray-900 hover:bg-white/15"
                                                 >
                                                     <BrainCircuit size={14} />
                                                     {busy === 'analyze' ? 'Analisando…' : 'Analisar IA'}
@@ -488,7 +488,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                     type="button"
                                                     disabled={!!busy}
                                                     onClick={onComplete}
-                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-[#00FF00]/15 border border-[#00FF00]/40 text-xs font-black uppercase tracking-widest text-[#00FF00] hover:bg-[#00FF00]/25"
+                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-black uppercase tracking-widest text-emerald-600 hover:bg-emerald-600/25"
                                                 >
                                                     <CheckCircle2 size={14} />
                                                     {busy === 'complete' ? 'Salvando…' : 'Concluir no CRM'}
@@ -505,11 +505,11 @@ const AdminEscutaInteligente: React.FC = () => {
                                             </div>
                                         </div>
                                         {detail.negotiatedValueBrl != null && (
-                                            <div className="rounded-xl bg-black/30 border border-[#00FF00]/20 px-4 py-3 text-sm">
+                                            <div className="rounded-xl bg-gray-100 border border-emerald-500/20 px-4 py-3 text-sm">
                                                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
                                                     Valor mencionado (est.)
                                                 </span>
-                                                <p className="text-lg font-black text-[#00FF00] mt-1">
+                                                <p className="text-lg font-black text-emerald-600 mt-1">
                                                     {formatBrl(detail.negotiatedValueBrl)}
                                                 </p>
                                             </div>
@@ -520,9 +520,9 @@ const AdminEscutaInteligente: React.FC = () => {
                                         {parsed ? (
                                             <>
                                                 {parsed.resumo && (
-                                                    <div className="glass-card rounded-2xl border border-white/10 p-5">
+                                                    <div className="glass-card rounded-2xl border border-gray-200 p-5">
                                                         <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2 flex items-center gap-2">
-                                                            <Sparkles size={14} className="text-[#00FF00]" /> Resumo
+                                                            <Sparkles size={14} className="text-emerald-600" /> Resumo
                                                         </h4>
                                                         <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">
                                                             {parsed.resumo}
@@ -531,14 +531,14 @@ const AdminEscutaInteligente: React.FC = () => {
                                                 )}
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     {parsed.pontos_fortes.length > 0 && (
-                                                        <div className="glass-card rounded-2xl border border-white/10 p-5">
+                                                        <div className="glass-card rounded-2xl border border-gray-200 p-5">
                                                             <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3 flex items-center gap-2">
                                                                 <Target size={14} className="text-emerald-400" /> Pontos fortes
                                                             </h4>
                                                             <ul className="space-y-2 text-sm text-gray-300">
                                                                 {parsed.pontos_fortes.map((x, i) => (
                                                                     <li key={i} className="flex gap-2">
-                                                                        <span className="text-[#00FF00]">•</span>
+                                                                        <span className="text-emerald-600">•</span>
                                                                         <span>{x}</span>
                                                                     </li>
                                                                 ))}
@@ -546,7 +546,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                         </div>
                                                     )}
                                                     {parsed.pontos_fracos.length > 0 && (
-                                                        <div className="glass-card rounded-2xl border border-white/10 p-5">
+                                                        <div className="glass-card rounded-2xl border border-gray-200 p-5">
                                                             <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3 flex items-center gap-2">
                                                                 <AlertCircle size={14} className="text-amber-400" /> Pontos de atenção
                                                             </h4>
@@ -562,7 +562,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                     )}
                                                 </div>
                                                 {parsed.melhorias.length > 0 && (
-                                                    <div className="glass-card rounded-2xl border border-white/10 p-5">
+                                                    <div className="glass-card rounded-2xl border border-gray-200 p-5">
                                                         <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">
                                                             Melhorias sugeridas
                                                         </h4>
@@ -577,14 +577,14 @@ const AdminEscutaInteligente: React.FC = () => {
                                                     </div>
                                                 )}
                                                 {parsed.proximos_passos.length > 0 && (
-                                                    <div className="glass-card rounded-2xl border border-[#00FF00]/20 p-5 bg-[#00FF00]/[0.03]">
-                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-[#00FF00] mb-3 flex items-center gap-2">
+                                                    <div className="glass-card rounded-2xl border border-emerald-500/20 p-5 bg-emerald-600/[0.03]">
+                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-3 flex items-center gap-2">
                                                             <ListChecks size={14} /> Próximos passos
                                                         </h4>
                                                         <ul className="space-y-2 text-sm text-gray-200">
                                                             {parsed.proximos_passos.map((x, i) => (
                                                                 <li key={i} className="flex gap-2">
-                                                                    <span className="text-[#00FF00] font-bold">{i + 1}.</span>
+                                                                    <span className="text-emerald-600 font-bold">{i + 1}.</span>
                                                                     <span>{x}</span>
                                                                 </li>
                                                             ))}
@@ -593,7 +593,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                 )}
                                             </>
                                         ) : detail.aiSummary ? (
-                                            <div className="glass-card rounded-2xl border border-white/10 p-5">
+                                            <div className="glass-card rounded-2xl border border-gray-200 p-5">
                                                 <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">
                                                     Análise (texto bruto)
                                                 </h4>
@@ -602,12 +602,12 @@ const AdminEscutaInteligente: React.FC = () => {
                                                 </pre>
                                             </div>
                                         ) : (
-                                            <div className="glass-card rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-gray-500">
+                                            <div className="glass-card rounded-2xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
                                                 Ainda não há análise. Envie áudio e rode &quot;Analisar IA&quot;.
                                             </div>
                                         )}
 
-                                        <div className="glass-card rounded-2xl border border-white/10 p-5">
+                                        <div className="glass-card rounded-2xl border border-gray-200 p-5">
                                             <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">
                                                 Transcrição completa
                                             </h4>

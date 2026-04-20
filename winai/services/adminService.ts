@@ -41,6 +41,50 @@ export interface AdminDashboard {
     priorityAlerts: AdminDashboardAlert[];
 }
 
+/** Notificação — lista admin (paginada) */
+export interface AdminNotificationRow {
+    id: string;
+    title: string;
+    message: string;
+    type: string;
+    createdAt: string;
+    read: boolean;
+    companyId: string | null;
+    companyName: string | null;
+    userName: string | null;
+    userEmail: string | null;
+    relatedEntityType: string | null;
+    actionUrl: string | null;
+}
+
+export interface AdminCompanyPerformanceRow {
+    companyId: string;
+    companyName: string;
+    spend: number;
+    impressions: number;
+    clicks: number;
+    campaignCount: number;
+}
+
+export interface AdminPerformanceSnapshot {
+    totalCompanies: number;
+    newCompaniesThisMonth: number;
+    totalLeads: number;
+    leadsWon: number;
+    meetingsThisWeek: number;
+    incompleteDashboardTasks: number;
+    metaCampaignsCount: number;
+    metaAccountsConnected: number;
+    totalSpend: number;
+    totalImpressions: number;
+    totalClicks: number;
+    totalReach: number;
+    totalConversions: number;
+    ctrGlobal: number;
+    activeGoalsTotal: number;
+    topCompaniesBySpend: AdminCompanyPerformanceRow[];
+}
+
 export interface SpringPage<T> {
     content: T[];
     totalElements: number;
@@ -397,6 +441,26 @@ const adminService = {
 
     getDashboard: async (): Promise<AdminDashboard> => {
         return await httpClient.get<AdminDashboard>('/admin/dashboard');
+    },
+
+    getAdminNotifications: async (params: { page?: number; size?: number; companyId?: string; read?: boolean | null }) => {
+        const sp = new URLSearchParams();
+        if (params.page != null) sp.set('page', String(params.page));
+        if (params.size != null) sp.set('size', String(params.size));
+        if (params.companyId) sp.set('companyId', params.companyId);
+        if (params.read === true || params.read === false) sp.set('read', String(params.read));
+        const qs = sp.toString();
+        return await httpClient.get<SpringPage<AdminNotificationRow>>(
+            `/admin/alerts/notifications${qs ? `?${qs}` : ''}`
+        );
+    },
+
+    markAdminNotificationRead: async (notificationId: string): Promise<void> => {
+        await httpClient.patch(`/admin/alerts/notifications/${notificationId}/read`);
+    },
+
+    getPerformanceSnapshot: async (): Promise<AdminPerformanceSnapshot> => {
+        return await httpClient.get<AdminPerformanceSnapshot>('/admin/performance/snapshot');
     },
 
     // ========== CRUD DE USUÁRIOS ==========

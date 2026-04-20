@@ -15,6 +15,8 @@ import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
 import com.backend.winai.dto.response.AdminGoalsForCompanyResponse;
 import com.backend.winai.dto.response.AdminMetaAdsCompanyResponse;
 import com.backend.winai.dto.response.AdminDashboardResponse;
+import com.backend.winai.dto.response.AdminNotificationRowResponse;
+import com.backend.winai.dto.response.AdminPerformanceSnapshotResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
 import com.backend.winai.dto.response.AdminMeetingRowResponse;
 import com.backend.winai.dto.response.AdminLeadResponse;
@@ -69,6 +71,29 @@ public class AdminController {
     @GetMapping("/dashboard")
     public ResponseEntity<AdminDashboardResponse> getAdminDashboard() {
         return ResponseEntity.ok(adminService.getAdminDashboard());
+    }
+
+    @Operation(summary = "Alertas — notificações (paginado)", description = "Todas as notificações do sistema; filtros opcionais por empresa e lidas/não lidas")
+    @GetMapping("/alerts/notifications")
+    public ResponseEntity<Page<AdminNotificationRowResponse>> listAdminNotifications(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "30") int size,
+            @RequestParam(required = false) UUID companyId,
+            @RequestParam(required = false) Boolean read) {
+        return ResponseEntity.ok(adminService.getAdminNotifications(page, size, companyId, read));
+    }
+
+    @Operation(summary = "Alertas — marcar como lida")
+    @PatchMapping("/alerts/notifications/{id}/read")
+    public ResponseEntity<Void> markAdminNotificationRead(@PathVariable UUID id) {
+        adminService.markAdminNotificationRead(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Performance — snapshot agregado", description = "CRM, metas, reuniões, Meta Ads (somas) e top empresas por investimento")
+    @GetMapping("/performance/snapshot")
+    public ResponseEntity<AdminPerformanceSnapshotResponse> getPerformanceSnapshot() {
+        return ResponseEntity.ok(adminService.getAdminPerformanceSnapshot());
     }
 
     @Operation(summary = "CRM — listar leads (global)", description = "Leads de todas as empresas, com busca e filtro por status")

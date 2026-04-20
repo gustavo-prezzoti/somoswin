@@ -81,21 +81,21 @@ const AdminConsultancyOperations: React.FC = () => {
   return (
     <div className="space-y-8">
       {message && (
-        <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-200">{message}</div>
+        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-200">{message}</div>
       )}
 
-      <section className="glass-card rounded-2xl border border-white/10 overflow-hidden">
-        <div className="p-4 sm:p-6 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-            <Link2 size={18} className="text-[#00FF00]" /> Pedidos de call (todas as empresas)
+      <section className="glass-card rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+            <Link2 size={18} className="text-emerald-600" /> Pedidos de call (todas as empresas)
           </h2>
           <button
             type="button"
             onClick={() => void loadAllRequests()}
             disabled={loadingRequests}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-xs font-bold text-gray-200 hover:bg-white/5 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-200 hover:bg-gray-50 disabled:opacity-50"
           >
-            <RefreshCw size={14} className={loadingRequests ? 'animate-spin text-[#00FF00]' : ''} />
+            <RefreshCw size={14} className={loadingRequests ? 'animate-spin text-emerald-600' : ''} />
             Atualizar lista
           </button>
         </div>
@@ -109,7 +109,7 @@ const AdminConsultancyOperations: React.FC = () => {
           ) : (
             <table className="w-full text-left text-sm min-w-[720px]">
               <thead>
-                <tr className="bg-black/30 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                <tr className="bg-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-500">
                   <th className="px-4 py-3">Empresa</th>
                   <th className="px-4 py-3">Solicitante</th>
                   <th className="px-4 py-3">Assunto</th>
@@ -119,16 +119,16 @@ const AdminConsultancyOperations: React.FC = () => {
                   <th className="px-4 py-3 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-gray-100">
                 {requests.map((r) => (
-                  <tr key={r.id} className="hover:bg-white/[0.03] align-top text-gray-300">
-                    <td className="px-4 py-3 font-bold text-white">{r.companyName}</td>
+                  <tr key={r.id} className="hover:bg-gray-50 align-top text-gray-300">
+                    <td className="px-4 py-3 font-bold text-gray-900">{r.companyName}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-200">{r.requestedByName ?? '—'}</div>
                       <div className="text-xs text-gray-500 break-all">{r.requestedByEmail ?? ''}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-white">{r.subject}</div>
+                      <div className="font-semibold text-gray-900">{r.subject}</div>
                       <div className="text-xs text-gray-500 line-clamp-2 mt-1">{r.topics}</div>
                     </td>
                     <td className="px-4 py-3 capitalize text-gray-400">{r.urgency}</td>
@@ -141,7 +141,7 @@ const AdminConsultancyOperations: React.FC = () => {
                     <td className="px-4 py-3">
                       <input
                         type="url"
-                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-mono text-white placeholder:text-gray-600"
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono text-gray-900 placeholder:text-gray-600"
                         placeholder="https://meet.google.com/..."
                         value={editMeetById[r.id] ?? ''}
                         onChange={(e) => setEditMeetById((prev) => ({ ...prev, [r.id]: e.target.value }))}
@@ -151,7 +151,7 @@ const AdminConsultancyOperations: React.FC = () => {
                           href={(editMeetById[r.id] || r.meetLink) as string}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-[#00FF00] hover:underline"
+                          className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-emerald-600 hover:underline"
                         >
                           <ExternalLink size={12} /> Abrir link
                         </a>
@@ -162,7 +162,7 @@ const AdminConsultancyOperations: React.FC = () => {
                         type="button"
                         disabled={savingRequestId === r.id}
                         onClick={() => void handleSaveMeetLink(r)}
-                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-[#00FF00] text-black text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-600 text-black text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
                       >
                         {savingRequestId === r.id ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
                         Salvar

@@ -17,6 +17,8 @@ const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
         pattern: '/admin/diagnostico',
         meta: { title: 'Diagnóstico Comercial', subtitle: 'Leitura unificada de pipeline, metas e riscos' },
     },
+    { pattern: '/admin/alertas', meta: { title: 'Alertas', subtitle: 'Notificações de todo o sistema' } },
+    { pattern: '/admin/performance', meta: { title: 'Performance', subtitle: 'Indicadores agregados e Meta Ads' } },
     { pattern: '/admin/consultancy/aparencia', meta: { title: 'Consultoria', subtitle: 'Aparência global' } },
     { pattern: '/admin/consultancy', meta: { title: 'Consultoria', subtitle: 'Operações e aparência' } },
     { pattern: '/admin/users', meta: { title: 'Usuários', subtitle: 'Gestão de contas e permissões' } },

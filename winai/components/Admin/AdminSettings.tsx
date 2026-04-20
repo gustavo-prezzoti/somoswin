@@ -117,7 +117,7 @@ const AdminSettings: React.FC = () => {
                     <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
                         <div className="p-10 border-b border-gray-100 bg-gray-50/30 flex flex-col md:flex-row items-center justify-between gap-6">
                             <div className="flex items-center gap-6">
-                                <div className="w-16 h-16 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg">
+                                <div className="w-16 h-16 rounded-xl bg-indigo-600 text-gray-900 flex items-center justify-center shadow-lg">
                                     <Globe size={32} />
                                 </div>
                                 <div className="text-center md:text-left">

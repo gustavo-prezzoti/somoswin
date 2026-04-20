@@ -12,6 +12,8 @@
  * | metas               | /admin/metas         | Goal + tasks (ciclo anual)       |
  * | contratos           | /admin/companies     | Company + termos                 |
  * | usuarios            | /admin/users         | User                             |
+ * | alertas             | /admin/alertas       | Notification (paginado)          |
+ * | performance         | /admin/performance   | Snapshot CRM + Meta agregado     |
  * | equipe / gestao_*   | /admin/em-breve      | membros / permissões             |
  * | financas            | /admin/em-breve      | Asaas / billing                  |
  * | instancias…followup | rotas técnicas       | instâncias UAZAP, KB, etc.       |
@@ -52,8 +54,8 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
             { id: 'metas', label: 'Metas e Objetivos', to: '/admin/metas', implemented: true },
             { id: 'agenda', label: 'Agenda Comercial', to: '/admin/agenda', implemented: true },
             { id: 'diagnostico', label: 'Diagnóstico Comercial', to: '/admin/diagnostico', implemented: true },
-            { id: 'alertas', label: 'Alertas', to: '/admin/em-breve?m=alertas' },
-            { id: 'performance', label: 'Performance', to: '/admin/em-breve?m=performance' },
+            { id: 'alertas', label: 'Alertas', to: '/admin/alertas', implemented: true },
+            { id: 'performance', label: 'Performance', to: '/admin/performance', implemented: true },
         ],
     },
     {

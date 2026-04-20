@@ -419,7 +419,7 @@ const AdminCompanies: React.FC = () => {
                 {filteredCompanies.map(company => (
                     <div key={company.id} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all group flex flex-col h-full">
                         <div className="flex items-start justify-between mb-8">
-                            <div className="w-14 h-14 rounded-xl flex items-center justify-center bg-gray-50 text-gray-400 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                            <div className="w-14 h-14 rounded-xl flex items-center justify-center bg-gray-50 text-gray-400 group-hover:bg-emerald-600 group-hover:text-emerald-700 transition-all">
                                 <Building2 size={28} />
                             </div>
                             <div className="flex gap-2">

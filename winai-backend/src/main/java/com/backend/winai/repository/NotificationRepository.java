@@ -3,6 +3,8 @@ package com.backend.winai.repository;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Notification;
 import com.backend.winai.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -42,4 +44,8 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     void deleteByUser(User user);
 
     List<Notification> findTop12ByOrderByCreatedAtDesc();
+
+    @Query("SELECT n FROM Notification n WHERE (:companyId IS NULL OR n.company.id = :companyId) "
+            + "AND (:read IS NULL OR n.read = :read) ORDER BY n.createdAt DESC")
+    Page<Notification> findAdminPage(@Param("companyId") UUID companyId, @Param("read") Boolean read, Pageable pageable);
 }

@@ -62,9 +62,9 @@ const STATUS_OPTIONS: MeetingStatusType[] = [
 const BADGE: Record<MeetingStatusType, string> = {
     SCHEDULED: 'bg-blue-500/15 text-blue-300 border-blue-500/35',
     CONFIRMED: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35',
-    COMPLETED: 'bg-[#00FF00]/15 text-[#00FF00] border-[#00FF00]/35',
+    COMPLETED: 'bg-emerald-50 text-emerald-600 border-emerald-200',
     NO_SHOW: 'bg-rose-500/15 text-rose-300 border-rose-500/35',
-    CANCELLED: 'bg-white/5 text-gray-400 border-white/15',
+    CANCELLED: 'bg-gray-50 text-gray-400 border-gray-200',
     RESCHEDULED: 'bg-amber-500/15 text-amber-200 border-amber-500/35',
 };
 
@@ -253,7 +253,7 @@ const AdminAgendaComercial: React.FC = () => {
     if (loading && rows.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando agenda…</span>
             </div>
         );
@@ -267,7 +267,7 @@ const AdminAgendaComercial: React.FC = () => {
         >
             <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white">Agenda comercial</h2>
+                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900">Agenda comercial</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
                         Reuniões de todas as empresas — período, filtros e ações em tempo real
                     </p>
@@ -276,28 +276,28 @@ const AdminAgendaComercial: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setPreset('week')}
-                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-white/10 text-gray-300 hover:bg-white/5"
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-gray-200 text-gray-300 hover:bg-gray-50"
                     >
                         Esta semana
                     </button>
                     <button
                         type="button"
                         onClick={() => setPreset('month')}
-                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-white/10 text-gray-300 hover:bg-white/5"
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-gray-200 text-gray-300 hover:bg-gray-50"
                     >
                         Este mês
                     </button>
                     <button
                         type="button"
                         onClick={() => setPreset('next7')}
-                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-white/10 text-gray-300 hover:bg-white/5"
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-gray-200 text-gray-300 hover:bg-gray-50"
                     >
                         Próx. 7 dias
                     </button>
                     <button
                         type="button"
                         onClick={() => load()}
-                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-[#00FF00]/30 text-[#00FF00] hover:bg-[#00FF00]/10 flex items-center gap-2"
+                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-emerald-200 text-emerald-600 hover:bg-emerald-50 flex items-center gap-2"
                     >
                         <RefreshCw className="w-3.5 h-3.5" />
                         Atualizar
@@ -305,7 +305,7 @@ const AdminAgendaComercial: React.FC = () => {
                     <button
                         type="button"
                         onClick={openCreate}
-                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-[#00FF00] text-black hover:bg-[#00FF00]/90 flex items-center gap-2"
+                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 text-black hover:bg-emerald-700 flex items-center gap-2"
                     >
                         <Plus className="w-4 h-4" />
                         Nova reunião
@@ -319,7 +319,7 @@ const AdminAgendaComercial: React.FC = () => {
                 </div>
             )}
 
-            <div className="glass-card rounded-xl p-4 border border-white/10 space-y-4">
+            <div className="glass-card rounded-xl p-4 border border-gray-200 space-y-4">
                 <div className="flex flex-col lg:flex-row flex-wrap gap-4 lg:items-end">
                     <div className="flex flex-wrap gap-3 items-end">
                         <label className="flex flex-col gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -330,7 +330,7 @@ const AdminAgendaComercial: React.FC = () => {
                                 type="date"
                                 value={start}
                                 onChange={(e) => setStart(e.target.value)}
-                                className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00FF00]/40"
+                                className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-emerald-200"
                             />
                         </label>
                         <label className="flex flex-col gap-1 text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -339,7 +339,7 @@ const AdminAgendaComercial: React.FC = () => {
                                 type="date"
                                 value={end}
                                 onChange={(e) => setEnd(e.target.value)}
-                                className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00FF00]/40"
+                                className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-emerald-200"
                             />
                         </label>
                     </div>
@@ -350,7 +350,7 @@ const AdminAgendaComercial: React.FC = () => {
                         <select
                             value={companyId}
                             onChange={(e) => setCompanyId(e.target.value)}
-                            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00FF00]/40"
+                            className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-emerald-200"
                         >
                             <option value="">Todas</option>
                             {companies.map((c) => (
@@ -367,17 +367,17 @@ const AdminAgendaComercial: React.FC = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Buscar título, cliente, contato, lead…"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00FF00]/40"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                         />
                     </div>
                 </div>
             </div>
 
-            <div className="glass-card rounded-xl border border-white/10 overflow-hidden">
+            <div className="glass-card rounded-xl border border-gray-200 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead>
-                            <tr className="border-b border-white/10 text-xs font-black uppercase tracking-widest text-gray-500">
+                            <tr className="border-b border-gray-200 text-xs font-black uppercase tracking-widest text-gray-500">
                                 <th className="px-4 py-3 whitespace-nowrap">Data / hora</th>
                                 <th className="px-4 py-3 whitespace-nowrap">Empresa</th>
                                 <th className="px-4 py-3 whitespace-nowrap">Título</th>
@@ -404,10 +404,10 @@ const AdminAgendaComercial: React.FC = () => {
                                     return (
                                         <tr
                                             key={r.id}
-                                            className="border-b border-white/5 hover:bg-white/[0.03] text-gray-200"
+                                            className="border-b border-white/5 hover:bg-gray-50 text-gray-200"
                                         >
                                             <td className="px-4 py-3 whitespace-nowrap">
-                                                <div className="font-semibold text-white">
+                                                <div className="font-semibold text-gray-900">
                                                     {r.meetingDate?.split('-').reverse().join('/') ?? '—'}
                                                 </div>
                                                 <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
@@ -417,7 +417,7 @@ const AdminAgendaComercial: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 min-w-[140px]">
-                                                <span className="text-white font-medium">{r.companyName}</span>
+                                                <span className="text-gray-900 font-medium">{r.companyName}</span>
                                             </td>
                                             <td className="px-4 py-3 max-w-[200px]">
                                                 <span className="line-clamp-2">{r.title || '—'}</span>
@@ -445,10 +445,10 @@ const AdminAgendaComercial: React.FC = () => {
                                                     onChange={(e) =>
                                                         onStatusChange(r.id, e.target.value as MeetingStatusType)
                                                     }
-                                                    className={`max-w-[160px] rounded-lg border px-2 py-1.5 text-xs font-bold uppercase tracking-wide bg-black/40 focus:outline-none focus:border-[#00FF00]/40 ${BADGE[st]}`}
+                                                    className={`max-w-[160px] rounded-lg border px-2 py-1.5 text-xs font-bold uppercase tracking-wide bg-black/40 focus:outline-none focus:border-emerald-200 ${BADGE[st]}`}
                                                 >
                                                     {STATUS_OPTIONS.map((opt) => (
-                                                        <option key={opt} value={opt} className="bg-[#141414] text-white">
+                                                        <option key={opt} value={opt} className="bg-white text-gray-900">
                                                             {MEETING_STATUS_LABELS[opt]}
                                                         </option>
                                                     ))}
@@ -463,7 +463,7 @@ const AdminAgendaComercial: React.FC = () => {
                                                         href={r.meetingLink}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-1 text-[#00FF00] hover:underline text-xs"
+                                                        className="inline-flex items-center gap-1 text-emerald-600 hover:underline text-xs"
                                                     >
                                                         Abrir <ExternalLink className="w-3 h-3" />
                                                     </a>
@@ -481,7 +481,7 @@ const AdminAgendaComercial: React.FC = () => {
                                                     type="button"
                                                     disabled={savingId === r.id}
                                                     onClick={() => onDelete(r.id)}
-                                                    className="p-2 rounded-lg border border-white/10 text-gray-400 hover:text-rose-400 hover:border-rose-500/40 disabled:opacity-40"
+                                                    className="p-2 rounded-lg border border-gray-200 text-gray-400 hover:text-rose-400 hover:border-rose-500/40 disabled:opacity-40"
                                                     title="Excluir"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
@@ -501,9 +501,9 @@ const AdminAgendaComercial: React.FC = () => {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.96 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="glass-card w-full max-w-lg rounded-2xl border border-[#00FF00]/25 p-6 max-h-[90vh] overflow-y-auto"
+                        className="glass-card w-full max-w-lg rounded-2xl border border-emerald-200 p-6 max-h-[90vh] overflow-y-auto"
                     >
-                        <h3 className="text-xl font-black italic uppercase text-white tracking-tight mb-1">
+                        <h3 className="text-xl font-black italic uppercase text-gray-900 tracking-tight mb-1">
                             Nova reunião
                         </h3>
                         <p className="text-xs text-gray-500 mb-6">A reunião é criada na empresa selecionada (Google Calendar se conectado).</p>
@@ -514,7 +514,7 @@ const AdminAgendaComercial: React.FC = () => {
                                     required
                                     value={form.companyId}
                                     onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}
-                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
                                 >
                                     <option value="">Selecione…</option>
                                     {companies.map((c) => (
@@ -530,7 +530,7 @@ const AdminAgendaComercial: React.FC = () => {
                                     type="text"
                                     value={form.title}
                                     onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white placeholder:text-gray-600"
+                                    className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-600"
                                     placeholder="Ex.: Apresentação comercial"
                                 />
                             </label>
@@ -542,7 +542,7 @@ const AdminAgendaComercial: React.FC = () => {
                                         type="text"
                                         value={form.contactName}
                                         onChange={(e) => setForm((f) => ({ ...f, contactName: e.target.value }))}
-                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                        className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
                                     />
                                 </label>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -555,7 +555,7 @@ const AdminAgendaComercial: React.FC = () => {
                                                 meetingKind: e.target.value as typeof form.meetingKind,
                                             }))
                                         }
-                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                        className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
                                     >
                                         <option value="STANDARD">Padrão</option>
                                         <option value="CONSULTANCY">Consultoria</option>
@@ -570,7 +570,7 @@ const AdminAgendaComercial: React.FC = () => {
                                         type="email"
                                         value={form.contactEmail}
                                         onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))}
-                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                        className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
                                     />
                                 </label>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -579,7 +579,7 @@ const AdminAgendaComercial: React.FC = () => {
                                         type="text"
                                         value={form.contactPhone}
                                         onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))}
-                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                        className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
                                     />
                                 </label>
                             </div>
@@ -591,7 +591,7 @@ const AdminAgendaComercial: React.FC = () => {
                                         type="date"
                                         value={form.meetingDate}
                                         onChange={(e) => setForm((f) => ({ ...f, meetingDate: e.target.value }))}
-                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                        className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
                                     />
                                 </label>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -601,7 +601,7 @@ const AdminAgendaComercial: React.FC = () => {
                                         type="time"
                                         value={form.meetingTime}
                                         onChange={(e) => setForm((f) => ({ ...f, meetingTime: e.target.value }))}
-                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                        className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
                                     />
                                 </label>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -614,7 +614,7 @@ const AdminAgendaComercial: React.FC = () => {
                                         onChange={(e) =>
                                             setForm((f) => ({ ...f, durationMinutes: Number(e.target.value) || 30 }))
                                         }
-                                        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                        className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
                                     />
                                 </label>
                             </div>
@@ -624,7 +624,7 @@ const AdminAgendaComercial: React.FC = () => {
                                     type="text"
                                     value={form.leadId}
                                     onChange={(e) => setForm((f) => ({ ...f, leadId: e.target.value }))}
-                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-xs text-white font-mono"
+                                    className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-xs text-gray-900 font-mono"
                                     placeholder="UUID do CRM"
                                 />
                             </label>
@@ -634,7 +634,7 @@ const AdminAgendaComercial: React.FC = () => {
                                     type="url"
                                     value={form.meetingLink}
                                     onChange={(e) => setForm((f) => ({ ...f, meetingLink: e.target.value }))}
-                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white"
+                                    className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
                                     placeholder="https://"
                                 />
                             </label>
@@ -644,21 +644,21 @@ const AdminAgendaComercial: React.FC = () => {
                                     value={form.notes}
                                     onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                                     rows={3}
-                                    className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white resize-none"
+                                    className="mt-1 w-full rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900 resize-none"
                                 />
                             </label>
                             <div className="flex flex-wrap gap-2 justify-end pt-2">
                                 <button
                                     type="button"
                                     onClick={() => setModalOpen(false)}
-                                    className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-white/15 text-gray-300 hover:bg-white/5"
+                                    className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-gray-200 text-gray-300 hover:bg-gray-50"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={creating}
-                                    className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-[#00FF00] text-black hover:bg-[#00FF00]/90 disabled:opacity-50"
+                                    className="px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 text-black hover:bg-emerald-700 disabled:opacity-50"
                                 >
                                     {creating ? 'Salvando…' : 'Criar reunião'}
                                 </button>

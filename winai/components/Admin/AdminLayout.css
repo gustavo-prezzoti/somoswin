@@ -1,14 +1,14 @@
-/* Admin Layout — Amplia (escuro) */
+/* Admin Layout — Amplia (light, alinhado ao painel principal App.tsx) */
 :root {
   --admin-sidebar-width: 256px;
   --admin-sidebar-width-narrow: 80px;
-  --admin-primary: #00ff00;
-  --admin-bg: #141414;
-  --admin-surface: #1a1a1a;
-  --admin-text-main: #fafafa;
-  --admin-text-muted: #9ca3af;
-  --admin-border: rgba(255, 255, 255, 0.06);
-  --admin-radius: 2rem;
+  --admin-primary: #10b981;
+  --admin-bg: #f8fafc;
+  --admin-surface: #ffffff;
+  --admin-text-main: #0f172a;
+  --admin-text-muted: #64748b;
+  --admin-border: #e2e8f0;
+  --admin-radius: 1rem;
 }
 
 .admin-layout {
@@ -24,11 +24,12 @@
   color: var(--admin-text-main);
 }
 
+/* Card padrão — mesmo espírito do conteúdo principal (branco + borda suave) */
 .admin-layout--amplia .glass-card {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1rem;
+  background: #ffffff;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 .admin-main {
@@ -65,7 +66,6 @@
   }
 }
 
-/* Scrollbar Ultra Clean */
 .admin-content::-webkit-scrollbar {
   width: 8px;
 }
@@ -75,20 +75,19 @@
 }
 
 .admin-content::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
+  background: #cbd5e1;
   border-radius: 100px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 .admin-content::-webkit-scrollbar-thumb:hover {
-  background: #cbd5e1;
+  background: #94a3b8;
   background-clip: content-box;
 }
 
-/* Sidebar fixa Amplia */
 .admin-sidebar-amplia {
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
 }
 
 @media (max-width: 1024px) {
@@ -99,7 +98,7 @@
 
   .admin-sidebar-amplia.open {
     transform: translateX(0);
-    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.25);
+    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.15);
   }
 
   .admin-main,
@@ -108,46 +107,39 @@
   }
 }
 
-/* Responsive - HD */
 @media (max-width: 1400px) {
   .admin-content {
     padding: 40px;
   }
 }
 
-/* Responsive - Tablet/HD */
 @media (max-width: 1024px) {
   .admin-content {
     padding: 32px;
   }
 }
 
-/* Responsive - Mobile */
 @media (max-width: 640px) {
   .admin-content {
     padding: 20px;
   }
 }
 
-/* Global Enhancements */
 button,
 a {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Focus States */
 *:focus-visible {
   outline: 2px solid var(--admin-primary);
   outline-offset: 2px;
 }
 
-/* Selection Color */
 ::selection {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(16, 185, 129, 0.2);
   color: #0f172a;
 }
 
-/* Custom scrollbar for all scrollables */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -157,10 +149,10 @@ a {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
+  background: #cbd5e1;
   border-radius: 100px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #cbd5e1;
+  background: #94a3b8;
 }

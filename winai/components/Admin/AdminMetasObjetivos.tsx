@@ -131,7 +131,7 @@ const AdminMetasObjetivos: React.FC = () => {
     if (loading && rows.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando metas…</span>
             </div>
         );
@@ -145,7 +145,7 @@ const AdminMetasObjetivos: React.FC = () => {
         >
             <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-white">Metas e objetivos</h2>
+                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900">Metas e objetivos</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
                         Visão global por empresa — mesmo modelo do dashboard (ciclo anual, tarefas e marcos). Edição continua
                         no app do cliente.
@@ -157,7 +157,7 @@ const AdminMetasObjetivos: React.FC = () => {
                         <select
                             value={year}
                             onChange={(e) => setYear(Number(e.target.value))}
-                            className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-[#00FF00]/40"
+                            className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-emerald-200"
                         >
                             {YEARS.map((y) => (
                                 <option key={y} value={y}>
@@ -174,7 +174,7 @@ const AdminMetasObjetivos: React.FC = () => {
                                 const v = e.target.value;
                                 setPlanningMonth(v === '' ? '' : Number(v));
                             }}
-                            className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-[#00FF00]/40"
+                            className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-emerald-200"
                         >
                             <option value="">—</option>
                             <option value="1">T1</option>
@@ -187,14 +187,14 @@ const AdminMetasObjetivos: React.FC = () => {
                     </span>
                     <Link
                         to="/admin/clientes"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-xs font-black uppercase tracking-widest text-gray-300 hover:bg-white/5"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-black uppercase tracking-widest text-gray-300 hover:bg-gray-50"
                     >
                         <Building2 size={14} /> Clientes
                     </Link>
                     <button
                         type="button"
                         onClick={() => loadRows()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-300 hover:bg-gray-50"
                     >
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                         <span className="text-xs font-black uppercase tracking-widest">Atualizar</span>
@@ -221,7 +221,7 @@ const AdminMetasObjetivos: React.FC = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Buscar empresa…"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00FF00]/40"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                         />
                     </div>
                     <div className="space-y-2 max-h-[56vh] overflow-y-auto custom-scrollbar pr-1">
@@ -232,13 +232,13 @@ const AdminMetasObjetivos: React.FC = () => {
                                 onClick={() => setSelectedId(r.companyId)}
                                 className={`w-full text-left rounded-xl p-4 border transition-colors ${
                                     selectedId === r.companyId
-                                        ? 'border-[#00FF00]/40 bg-[#00FF00]/5'
-                                        : 'border-white/10 bg-white/[0.02] hover:border-white/20'
+                                        ? 'border-emerald-200 bg-emerald-600/5'
+                                        : 'border-gray-200 bg-gray-50 hover:border-white/20'
                                 }`}
                             >
-                                <p className="text-sm font-bold text-white truncate">{r.companyName}</p>
+                                <p className="text-sm font-bold text-gray-900 truncate">{r.companyName}</p>
                                 <p className="text-[10px] text-gray-500 mt-2 font-bold uppercase tracking-widest flex items-center gap-2">
-                                    <Flag size={10} className="text-[#00FF00]" />
+                                    <Flag size={10} className="text-emerald-600" />
                                     {r.activeGoalsCount} meta{r.activeGoalsCount === 1 ? '' : 's'} · ciclo {r.year}
                                 </p>
                             </button>
@@ -251,23 +251,23 @@ const AdminMetasObjetivos: React.FC = () => {
 
                 <div className="lg:col-span-8 space-y-4 min-h-[400px]">
                     {!selectedId && (
-                        <div className="glass-card rounded-2xl border border-white/10 p-10 text-center text-gray-500 text-sm">
+                        <div className="glass-card rounded-2xl border border-gray-200 p-10 text-center text-gray-500 text-sm">
                             Selecione uma empresa.
                         </div>
                     )}
                     {selectedId && loadingDetail && !detail && (
                         <div className="flex justify-center py-20">
-                            <div className="w-10 h-10 border-4 border-[#00FF00]/20 border-t-[#00FF00] rounded-full animate-spin" />
+                            <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
                         </div>
                     )}
                     {detail && (
                         <>
-                            <div className="glass-card rounded-2xl border border-white/10 p-5">
-                                <div className="flex items-center gap-2 text-[#00FF00] mb-1">
+                            <div className="glass-card rounded-2xl border border-gray-200 p-5">
+                                <div className="flex items-center gap-2 text-emerald-600 mb-1">
                                     <Target size={18} />
                                     <span className="text-[10px] font-black uppercase tracking-widest">Empresa</span>
                                 </div>
-                                <h3 className="text-xl font-black text-white">{detail.companyName}</h3>
+                                <h3 className="text-xl font-black text-gray-900">{detail.companyName}</h3>
                                 <p className="text-xs text-gray-500 mt-1">
                                     Ciclo {detail.year}
                                     {planningMonth !== '' && ` · filtro trimestre T${planningMonth}`}
@@ -275,7 +275,7 @@ const AdminMetasObjetivos: React.FC = () => {
                             </div>
 
                             {detail.goals.length === 0 ? (
-                                <div className="glass-card rounded-2xl border border-dashed border-white/15 p-10 text-center text-sm text-gray-500">
+                                <div className="glass-card rounded-2xl border border-dashed border-gray-200 p-10 text-center text-sm text-gray-500">
                                     Nenhuma meta ativa neste ciclo para esta empresa.
                                 </div>
                             ) : (
@@ -308,7 +308,7 @@ function GoalCard({
     return (
         <div
             className={`glass-card rounded-2xl border overflow-hidden ${
-                highlighted ? 'border-[#00FF00]/35 bg-[#00FF00]/[0.04]' : 'border-white/10'
+                highlighted ? 'border-emerald-200 bg-emerald-600/[0.04]' : 'border-gray-200'
             }`}
         >
             <button
@@ -318,14 +318,14 @@ function GoalCard({
             >
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-white/10 text-[#00FF00]">
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-white/10 text-emerald-600">
                             {goalTypeLabel(goal.type)}
                         </span>
                         {highlighted && (
                             <span className="text-[9px] font-black uppercase text-amber-400">Destaque</span>
                         )}
                     </div>
-                    <h4 className="text-base font-bold text-white leading-tight">{goal.title}</h4>
+                    <h4 className="text-base font-bold text-gray-900 leading-tight">{goal.title}</h4>
                     {goal.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{goal.description}</p>}
                     <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-gray-400">
                         <span>
@@ -333,7 +333,7 @@ function GoalCard({
                             {goal.unit ? ` ${goal.unit}` : ''}
                         </span>
                         <span>
-                            Atual: <strong className="text-[#00FF00]">{goal.currentValue ?? 0}</strong>
+                            Atual: <strong className="text-emerald-600">{goal.currentValue ?? 0}</strong>
                         </span>
                         {(goal.startDate || goal.endDate) && (
                             <span className="flex items-center gap-1">
@@ -342,9 +342,9 @@ function GoalCard({
                             </span>
                         )}
                     </div>
-                    <div className="mt-3 h-2 rounded-full bg-black/40 overflow-hidden border border-white/10">
+                    <div className="mt-3 h-2 rounded-full bg-black/40 overflow-hidden border border-gray-200">
                         <div
-                            className="h-full rounded-full bg-[#00FF00]/80 transition-all"
+                            className="h-full rounded-full bg-emerald-600/80 transition-all"
                             style={{ width: `${mainPct}%` }}
                         />
                     </div>
@@ -359,7 +359,7 @@ function GoalCard({
             </button>
 
             {expanded && (
-                <div className="px-5 pb-5 border-t border-white/10 space-y-4">
+                <div className="px-5 pb-5 border-t border-gray-200 space-y-4">
                     {goal.tasks && goal.tasks.length > 0 && (
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Tarefas</p>
@@ -370,7 +370,7 @@ function GoalCard({
                                         className="flex items-start gap-2 text-sm text-gray-300 border border-white/5 rounded-lg p-2"
                                     >
                                         {t.completed ? (
-                                            <CheckCircle2 size={16} className="text-[#00FF00] shrink-0 mt-0.5" />
+                                            <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
                                         ) : (
                                             <Circle size={16} className="text-gray-600 shrink-0 mt-0.5" />
                                         )}

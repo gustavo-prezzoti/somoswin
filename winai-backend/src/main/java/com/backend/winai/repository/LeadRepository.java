@@ -18,6 +18,8 @@ import java.util.UUID;
 @Repository
 public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
+    long countByStatus(LeadStatus status);
+
     Page<Lead> findByCompanyOrderByCreatedAtDesc(Company company, Pageable pageable);
 
     List<Lead> findByCompanyOrderByCreatedAtDesc(Company company);

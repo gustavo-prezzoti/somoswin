@@ -236,7 +236,7 @@ const AdminFollowUp = () => {
             </div>
 
             {!selectedCompanyId ? (
-                <div className="flex flex-col items-center justify-center py-40 bg-white/50 rounded-[2rem] border border-gray-100">
+                <div className="flex flex-col items-center justify-center py-40 bg-gray-500 rounded-[2rem] border border-gray-100">
                     <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6">
                         <Building2 size={32} />
                     </div>
