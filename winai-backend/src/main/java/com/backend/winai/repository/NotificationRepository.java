@@ -45,6 +45,9 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     List<Notification> findTop12ByOrderByCreatedAtDesc();
 
+    /** Alertas prioritários do dashboard — mesmo critério de {@link #findAdminPage} com userId definido. */
+    List<Notification> findByUser_IdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
     @Query("SELECT n FROM Notification n WHERE (:companyId IS NULL OR n.company.id = :companyId) "
             + "AND (:read IS NULL OR n.read = :read) "
             + "AND (:userId IS NULL OR n.user.id = :userId) ORDER BY n.createdAt DESC")

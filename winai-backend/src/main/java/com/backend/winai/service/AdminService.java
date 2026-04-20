@@ -326,7 +326,8 @@ public class AdminService {
                         .build())
                 .collect(Collectors.toList());
 
-        List<Notification> notifs = notificationRepository.findTop12ByOrderByCreatedAtDesc();
+        Pageable alertsPage = PageRequest.of(0, 12);
+        List<Notification> notifs = notificationRepository.findByUser_IdOrderByCreatedAtDesc(staffUserId, alertsPage);
         List<AdminDashboardResponse.AlertRow> alerts = notifs.stream()
                 .map(n -> AdminDashboardResponse.AlertRow.builder()
                         .id(n.getId().toString())

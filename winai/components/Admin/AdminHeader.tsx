@@ -1,12 +1,109 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LogOut, Menu, ShieldCheck, Bell, ChevronDown } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getAdminRouteMeta } from './adminRouteMeta';
-import { useAdminStaffView } from './AdminStaffViewContext';
+import { AdminStaffViewContextValue, useAdminStaffView } from './AdminStaffViewContext';
 
 interface AdminHeaderProps {
     user: any;
     onMenuClick?: () => void;
+}
+
+/** Dropdown customizado — texto centralizado no gatilho e nas opções. */
+function StaffTeamDropdown({ staffView }: { staffView: AdminStaffViewContextValue }) {
+    const [open, setOpen] = useState(false);
+    const rootRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const onDoc = (e: MouseEvent) => {
+            if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setOpen(false);
+        };
+        document.addEventListener('mousedown', onDoc);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDoc);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, []);
+
+    const selectedId = staffView.selectedStaffUserId ?? '';
+    const selectedLabel =
+        !selectedId || selectedId === ''
+            ? 'Todos'
+            : staffView.staffList.find((s) => s.id === selectedId)?.name ?? 'Todos';
+
+    return (
+        <div ref={rootRef} className="relative w-full min-w-[11rem] sm:min-w-[13rem] max-w-[15rem]">
+            <button
+                type="button"
+                disabled={staffView.staffLoading}
+                onClick={() => setOpen((o) => !o)}
+                aria-expanded={open}
+                aria-haspopup="listbox"
+                className="relative w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-center shadow-sm transition-all hover:border-emerald-500/35 hover:bg-emerald-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-55"
+            >
+                <span className="block w-full px-6 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-[#141414] truncate text-center">
+                    {staffView.staffLoading ? '…' : selectedLabel}
+                </span>
+                <ChevronDown
+                    size={15}
+                    className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`}
+                    aria-hidden
+                />
+            </button>
+
+            {open && !staffView.staffLoading && (
+                <ul
+                    role="listbox"
+                    className="absolute right-0 left-0 z-[200] mt-1.5 max-h-60 overflow-y-auto rounded-xl border border-black/10 bg-white py-1.5 shadow-xl shadow-black/10"
+                >
+                    <li role="option" aria-selected={selectedId === ''}>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                staffView.setSelectedStaffUserId(null);
+                                setOpen(false);
+                            }}
+                            className={`w-full px-4 py-2.5 text-center text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition-colors ${
+                                selectedId === '' ? 'bg-[#141414] text-white' : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                        >
+                            Todos
+                        </button>
+                    </li>
+                    {staffView.staffList.map((s) => {
+                        const active = selectedId === s.id;
+                        return (
+                            <li key={s.id} role="option" aria-selected={active}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        staffView.setSelectedStaffUserId(s.id);
+                                        setOpen(false);
+                                    }}
+                                    className={`w-full px-4 py-2.5 text-center transition-colors ${
+                                        active ? 'bg-[#141414] text-white' : 'text-gray-800 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <span className="block text-[10px] sm:text-[11px] font-black uppercase tracking-wide">{s.name}</span>
+                                    <span
+                                        className={`mt-0.5 block text-[9px] font-bold uppercase tracking-wider ${
+                                            active ? 'text-emerald-300/90' : 'text-gray-500'
+                                        }`}
+                                    >
+                                        {s.ampliaStaffType}
+                                    </span>
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </div>
+    );
 }
 
 function initialsFromName(name: string | undefined): string {
@@ -50,37 +147,14 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
 
             <div className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0 flex-nowrap justify-end w-full sm:w-auto overflow-x-auto pb-0.5 sm:pb-0 [-webkit-overflow-scrolling:touch]">
                 {staffView && staffView.canUseStaffTeam && (
-                    <div className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-2 rounded-xl border border-black/5 shrink-0 max-w-[min(100vw-2rem,22rem)]">
-                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap shrink-0 hidden sm:inline">
+                    <div className="flex flex-col items-stretch sm:flex-row sm:items-center gap-2 bg-gray-50 px-3 sm:px-4 py-2.5 rounded-2xl border border-black/8 shrink-0 max-w-[min(100vw-1.5rem,24rem)] shadow-sm">
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-center sm:text-left sm:whitespace-nowrap shrink-0 hidden sm:block">
                             Selecionar equipe:
                         </span>
-                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap shrink-0 sm:hidden">
-                            Equipe:
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-center sm:hidden">
+                            Equipe
                         </span>
-                        <div className="relative min-w-0 flex-1 sm:flex-initial sm:min-w-[10rem]">
-                            <select
-                                value={staffView.selectedStaffUserId ?? ''}
-                                onChange={(e) => {
-                                    const v = e.target.value;
-                                    staffView.setSelectedStaffUserId(v === '' ? null : v);
-                                }}
-                                disabled={staffView.staffLoading}
-                                className="w-full max-w-[11rem] sm:max-w-[14rem] appearance-none bg-transparent text-[10px] sm:text-xs font-black uppercase tracking-wide text-[#141414] pr-7 py-0.5 border-0 outline-none cursor-pointer hover:text-emerald-700 transition-colors truncate disabled:opacity-50"
-                                aria-label="Selecionar equipe interna"
-                            >
-                                <option value="">Todos</option>
-                                {staffView.staffList.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                        {s.name}
-                                    </option>
-                                ))}
-                            </select>
-                            <ChevronDown
-                                size={14}
-                                className="absolute right-0 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                                aria-hidden
-                            />
-                        </div>
+                        <StaffTeamDropdown staffView={staffView} />
                     </div>
                 )}
                 <Link
