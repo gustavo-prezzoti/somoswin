@@ -304,7 +304,7 @@ const AdminAlertas: React.FC = () => {
                                                 type="button"
                                                 disabled={markingId === n.id || loading}
                                                 onClick={() => void onMarkRead(n.id)}
-                                                className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-600 text-black hover:bg-emerald-700 disabled:opacity-50"
+                                                className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
                                             >
                                                 {markingId === n.id ? '…' : 'Marcar lida'}
                                             </button>

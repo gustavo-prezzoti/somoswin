@@ -92,4 +92,7 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
                     + "LOWER(COALESCE(l.phone, '')) LIKE CONCAT('%', :q, '%') OR "
                     + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')))")
     Page<Lead> searchAllLeadsForOwner(@Param("ownerId") UUID ownerId, @Param("q") String q, Pageable pageable);
+
+    @Query("SELECT DISTINCT l.company.id FROM Lead l WHERE l.ownerUser.id = :ownerId AND l.company IS NOT NULL")
+    List<UUID> findDistinctCompanyIdsByOwnerUserId(@Param("ownerId") UUID ownerId);
 }

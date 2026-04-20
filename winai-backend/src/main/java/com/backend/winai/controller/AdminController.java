@@ -17,6 +17,7 @@ import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
 import com.backend.winai.dto.response.AdminGoalsForCompanyResponse;
 import com.backend.winai.dto.response.AdminMetaAdsCompanyResponse;
 import com.backend.winai.dto.response.AdminDashboardResponse;
+import com.backend.winai.dto.response.AdminFinanceOverviewResponse;
 import com.backend.winai.dto.response.AdminNotificationRowResponse;
 import com.backend.winai.dto.response.AdminPerformanceSnapshotResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
@@ -79,6 +80,15 @@ public class AdminController {
     public ResponseEntity<AdminDashboardResponse> getAdminDashboard(
             @RequestParam(required = false) UUID staffUserId) {
         return ResponseEntity.ok(adminService.getAdminDashboard(staffUserId));
+    }
+
+    @Operation(summary = "Finanças — visão consolidada", description = "MRR, inadimplência e linhas por empresa a partir de planos e assinaturas (cadastro). Opcional: mês para filtrar vencimentos; staffUserId = carteira do colaborador.")
+    @GetMapping("/finance/overview")
+    public ResponseEntity<AdminFinanceOverviewResponse> getAdminFinanceOverview(
+            @RequestParam int year,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) UUID staffUserId) {
+        return ResponseEntity.ok(adminService.getAdminFinanceOverview(year, month, staffUserId));
     }
 
     @Operation(summary = "Alertas — notificações (paginado)", description = "Todas as notificações do sistema; filtros opcionais por empresa, lidas/não lidas e usuário (colaborador interno).")

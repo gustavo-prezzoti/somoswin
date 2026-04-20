@@ -13,6 +13,9 @@ import com.backend.winai.dto.response.AdminGoalsForCompanyResponse;
 import com.backend.winai.dto.response.AdminMetaAdsCompanyResponse;
 import com.backend.winai.dto.response.AdminNotificationRowResponse;
 import com.backend.winai.dto.response.AdminPerformanceSnapshotResponse;
+import com.backend.winai.dto.response.AdminFinanceCompanyRowResponse;
+import com.backend.winai.dto.response.AdminFinanceKpisResponse;
+import com.backend.winai.dto.response.AdminFinanceOverviewResponse;
 import com.backend.winai.dto.response.AdminDashboardResponse;
 import com.backend.winai.dto.response.DashboardResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
@@ -24,6 +27,7 @@ import com.backend.winai.dto.response.IntelligentListeningSessionResponse;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
 import com.backend.winai.dto.uazap.UazapInstanceDTO;
 import com.backend.winai.entity.Company;
+import com.backend.winai.entity.Plan;
 import com.backend.winai.entity.User;
 import com.backend.winai.entity.UserRole;
 import com.backend.winai.repository.CompanyRepository;
@@ -87,6 +91,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -96,10 +102,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -1722,6 +1730,154 @@ public class AdminService {
             throw new RuntimeException("Conexão não encontrada");
         }
         connectionRepository.deleteById(connectionId);
+    }
+
+    // ========== FINANÇAS (admin — dados reais empresa/plano/assinatura) ==========
+
+    public AdminFinanceOverviewResponse getAdminFinanceOverview(int year, Integer month, UUID staffUserId) {
+        if (staffUserId != null) {
+            User staff = userRepository.findById(staffUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+            if (!Boolean.TRUE.equals(staff.getAmpliaInternalStaff())) {
+                throw new RuntimeException("Filtro disponível apenas para colaboradores internos");
+            }
+        }
+
+        List<Company> companies = new ArrayList<>(companyRepository.findAllWithPlanFetched());
+        if (staffUserId != null) {
+            Set<UUID> allowed = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserId));
+            companies = companies.stream().filter(c -> allowed.contains(c.getId())).collect(Collectors.toList());
+        }
+
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+
+        BigDecimal mrr = BigDecimal.ZERO;
+        int mrrCount = 0;
+        BigDecimal overdueTotal = BigDecimal.ZERO;
+        long overdueCount = 0;
+        long cancelledCount = 0;
+
+        for (Company c : companies) {
+            Plan p = c.getPlanEntity();
+            BigDecimal price = p != null ? p.getPrice() : BigDecimal.ZERO;
+            String stRaw = c.getSubscriptionStatus() != null ? c.getSubscriptionStatus() : "";
+
+            if ("ACTIVE".equalsIgnoreCase(stRaw) && p != null) {
+                mrr = mrr.add(price);
+                mrrCount++;
+            }
+            if ("CANCELLED".equalsIgnoreCase(stRaw)) {
+                cancelledCount++;
+            }
+            if (p != null && "ATRASADO".equals(resolveBillingStatus(c, today))) {
+                overdueTotal = overdueTotal.add(price);
+                overdueCount++;
+            }
+        }
+
+        BigDecimal avgTicket = BigDecimal.ZERO;
+        if (mrrCount > 0) {
+            avgTicket = mrr.divide(BigDecimal.valueOf(mrrCount), 2, RoundingMode.HALF_UP);
+        }
+        BigDecimal arrr = mrr.multiply(BigDecimal.valueOf(12)).setScale(2, RoundingMode.HALF_UP);
+
+        long denomChurn = (long) mrrCount + cancelledCount;
+        BigDecimal churnPct = BigDecimal.ZERO;
+        if (denomChurn > 0) {
+            churnPct = BigDecimal.valueOf(cancelledCount * 100.0 / denomChurn).setScale(1, RoundingMode.HALF_UP);
+        }
+
+        AdminFinanceKpisResponse kpis = AdminFinanceKpisResponse.builder()
+                .mrr(mrr.setScale(2, RoundingMode.HALF_UP))
+                .mrrCompanyCount(mrrCount)
+                .overdueTotal(overdueTotal.setScale(2, RoundingMode.HALF_UP))
+                .overdueCompanyCount(overdueCount)
+                .averageTicket(avgTicket)
+                .arrr(arrr)
+                .cancelledCompanyCount(cancelledCount)
+                .churnRatePercent(churnPct)
+                .companiesConsidered(companies.size())
+                .build();
+
+        List<AdminFinanceCompanyRowResponse> rows = new ArrayList<>();
+        for (Company c : companies) {
+            if (!includeAdminFinanceRowForPeriod(c, year, month)) {
+                continue;
+            }
+            rows.add(toAdminFinanceCompanyRow(c, today));
+        }
+        rows.sort(Comparator.comparing(AdminFinanceCompanyRowResponse::getCompanyName, String.CASE_INSENSITIVE_ORDER));
+
+        return AdminFinanceOverviewResponse.builder()
+                .year(year)
+                .month(month)
+                .kpis(kpis)
+                .rows(rows)
+                .build();
+    }
+
+    private boolean includeAdminFinanceRowForPeriod(Company c, int year, Integer month) {
+        if (month != null && month >= 1 && month <= 12) {
+            if (c.getSubscriptionDueDate() == null) {
+                return false;
+            }
+            return c.getSubscriptionDueDate().getYear() == year
+                    && c.getSubscriptionDueDate().getMonthValue() == month;
+        }
+        return c.getPlanEntity() != null
+                || (c.getAsaasSubscriptionId() != null && !c.getAsaasSubscriptionId().isBlank())
+                || (c.getSubscriptionStatus() != null && !c.getSubscriptionStatus().isBlank());
+    }
+
+    private AdminFinanceCompanyRowResponse toAdminFinanceCompanyRow(Company c, LocalDate today) {
+        Plan p = c.getPlanEntity();
+        BigDecimal monthly = p != null ? p.getPrice() : BigDecimal.ZERO;
+        String planName = p != null ? p.getDisplayName() : "—";
+        String due = c.getSubscriptionDueDate() != null ? c.getSubscriptionDueDate().toString() : null;
+        String stRaw = c.getSubscriptionStatus() != null ? c.getSubscriptionStatus() : "";
+        return AdminFinanceCompanyRowResponse.builder()
+                .companyId(c.getId())
+                .companyName(c.getName())
+                .planName(planName)
+                .monthlyValue(monthly.setScale(2, RoundingMode.HALF_UP))
+                .dueDate(due)
+                .billingStatus(resolveBillingStatus(c, today))
+                .subscriptionStatusRaw(stRaw)
+                .hasAsaasCustomer(c.getAsaasCustomerId() != null && !c.getAsaasCustomerId().isBlank())
+                .hasAsaasSubscription(c.getAsaasSubscriptionId() != null && !c.getAsaasSubscriptionId().isBlank())
+                .build();
+    }
+
+    /**
+     * EM_DIA | PENDENTE | ATRASADO | CANCELADO | SEM_PLANO
+     */
+    private String resolveBillingStatus(Company c, LocalDate today) {
+        String st = c.getSubscriptionStatus() != null ? c.getSubscriptionStatus() : "";
+        if ("CANCELLED".equalsIgnoreCase(st)) {
+            return "CANCELADO";
+        }
+        Plan p = c.getPlanEntity();
+        boolean hasSubId = c.getAsaasSubscriptionId() != null && !c.getAsaasSubscriptionId().isBlank();
+        if (p == null && !hasSubId) {
+            return "SEM_PLANO";
+        }
+        if ("OVERDUE".equalsIgnoreCase(st)) {
+            return "ATRASADO";
+        }
+        LocalDate due = c.getSubscriptionDueDate();
+        if ("PENDING".equalsIgnoreCase(st)) {
+            return "PENDENTE";
+        }
+        if ("ACTIVE".equalsIgnoreCase(st)) {
+            if (due != null && due.isBefore(today)) {
+                return "ATRASADO";
+            }
+            return "EM_DIA";
+        }
+        if (due != null && due.isBefore(today)) {
+            return "ATRASADO";
+        }
+        return "PENDENTE";
     }
 
     private String generateRandomPassword() {

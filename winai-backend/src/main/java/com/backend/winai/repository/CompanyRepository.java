@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,4 +25,7 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
 
     @Query("SELECT COUNT(c) FROM Company c WHERE c.createdAt >= :since")
     long countByCreatedAtAfter(@Param("since") ZonedDateTime since);
+
+    @Query("SELECT c FROM Company c LEFT JOIN FETCH c.planEntity")
+    List<Company> findAllWithPlanFetched();
 }
