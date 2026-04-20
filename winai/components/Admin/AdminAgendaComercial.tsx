@@ -62,12 +62,12 @@ const STATUS_OPTIONS: MeetingStatusType[] = [
 ];
 
 const BADGE: Record<MeetingStatusType, string> = {
-    SCHEDULED: 'bg-blue-500/15 text-blue-300 border-blue-500/35',
-    CONFIRMED: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35',
-    COMPLETED: 'bg-emerald-50 text-emerald-600 border-emerald-200',
-    NO_SHOW: 'bg-rose-500/15 text-rose-300 border-rose-500/35',
-    CANCELLED: 'bg-gray-50 text-gray-400 border-black/5',
-    RESCHEDULED: 'bg-amber-500/15 text-amber-200 border-amber-500/35',
+    SCHEDULED: 'bg-blue-50 text-blue-900 border-blue-200',
+    CONFIRMED: 'bg-emerald-50 text-emerald-900 border-emerald-200',
+    COMPLETED: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    NO_SHOW: 'bg-rose-50 text-rose-900 border-rose-200',
+    CANCELLED: 'bg-gray-100 text-gray-800 border-black/10',
+    RESCHEDULED: 'bg-amber-50 text-amber-950 border-amber-200',
 };
 
 const PAGE_SIZE = 12;
@@ -292,7 +292,7 @@ const AdminAgendaComercial: React.FC = () => {
             <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 shrink-0">
                 <div>
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Agenda comercial</h2>
-                    <p className="text-sm text-gray-400 font-medium mt-1">
+                    <p className="text-sm text-gray-600 font-medium mt-1">
                         Reuniões de todas as empresas — período, filtros e ações em tempo real
                     </p>
                 </div>
@@ -434,14 +434,14 @@ const AdminAgendaComercial: React.FC = () => {
                                     return (
                                         <tr
                                             key={r.id}
-                                            className="border-b border-white/5 hover:bg-gray-50 text-gray-200"
+                                            className="border-b border-black/5 hover:bg-gray-50 text-[#141414]"
                                         >
                                             <td className="px-4 py-3 whitespace-nowrap">
                                                 <div className="font-semibold text-[#141414]">
                                                     {r.meetingDate?.split('-').reverse().join('/') ?? '—'}
                                                 </div>
-                                                <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                                                    <Clock className="w-3 h-3" />
+                                                <div className="text-xs text-gray-600 flex items-center gap-1 mt-0.5">
+                                                    <Clock className="w-3 h-3 text-gray-600 shrink-0" />
                                                     {formatTimeHm(r.meetingTime)}
                                                     {r.durationMinutes != null ? ` · ${r.durationMinutes} min` : ''}
                                                 </div>
@@ -450,15 +450,15 @@ const AdminAgendaComercial: React.FC = () => {
                                                 <span className="text-[#141414] font-medium">{r.companyName}</span>
                                             </td>
                                             <td className="px-4 py-3 max-w-[200px]">
-                                                <span className="line-clamp-2">{r.title || '—'}</span>
+                                                <span className="line-clamp-2 text-[#141414]">{r.title || '—'}</span>
                                             </td>
                                             <td className="px-4 py-3 min-w-[160px]">
                                                 <div className="flex items-start gap-1.5">
-                                                    <User className="w-3.5 h-3.5 text-gray-500 shrink-0 mt-0.5" />
+                                                    <User className="w-3.5 h-3.5 text-gray-600 shrink-0 mt-0.5" />
                                                     <div>
-                                                        <div>{r.contactName || '—'}</div>
+                                                        <div className="text-[#141414] font-medium">{r.contactName || '—'}</div>
                                                         {(r.contactEmail || r.contactPhone) && (
-                                                            <div className="text-xs text-gray-500">
+                                                            <div className="text-xs text-gray-600">
                                                                 {[r.contactEmail, r.contactPhone].filter(Boolean).join(' · ')}
                                                             </div>
                                                         )}
@@ -466,7 +466,7 @@ const AdminAgendaComercial: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 max-w-[140px]">
-                                                <span className="line-clamp-2 text-gray-400">{r.leadName || '—'}</span>
+                                                <span className="line-clamp-2 text-gray-700">{r.leadName || '—'}</span>
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap">
                                                 <select
@@ -475,7 +475,7 @@ const AdminAgendaComercial: React.FC = () => {
                                                     onChange={(e) =>
                                                         onStatusChange(r.id, e.target.value as MeetingStatusType)
                                                     }
-                                                    className={`max-w-[160px] rounded-lg border px-2 py-1.5 text-xs font-bold uppercase tracking-wide bg-black/40 focus:outline-none focus:border-emerald-200 ${BADGE[st]}`}
+                                                    className={`max-w-[160px] rounded-lg border px-2 py-1.5 text-xs font-bold uppercase tracking-wide bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200/60 ${BADGE[st]}`}
                                                 >
                                                     {STATUS_OPTIONS.map((opt) => (
                                                         <option key={opt} value={opt} className="bg-white text-[#141414]">
@@ -484,7 +484,7 @@ const AdminAgendaComercial: React.FC = () => {
                                                     ))}
                                                 </select>
                                             </td>
-                                            <td className="px-4 py-3 text-xs text-gray-400 uppercase">
+                                            <td className="px-4 py-3 text-xs text-gray-800 uppercase font-medium">
                                                 {r.meetingKind?.replace(/_/g, ' ') ?? '—'}
                                             </td>
                                             <td className="px-4 py-3">
@@ -511,7 +511,7 @@ const AdminAgendaComercial: React.FC = () => {
                                                     type="button"
                                                     disabled={savingId === r.id}
                                                     onClick={() => onDelete(r.id)}
-                                                    className="p-2 rounded-lg border border-black/5 text-gray-400 hover:text-rose-400 hover:border-rose-500/40 disabled:opacity-40"
+                                                    className="p-2 rounded-lg border border-black/5 text-gray-600 hover:text-rose-600 hover:border-rose-300 disabled:opacity-40"
                                                     title="Excluir"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
@@ -706,7 +706,7 @@ const AdminAgendaComercial: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => setModalOpen(false)}
-                                    className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-black/5 text-gray-300 hover:bg-gray-50"
+                                    className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-black/5 text-gray-700 hover:bg-gray-50"
                                 >
                                     Cancelar
                                 </button>
