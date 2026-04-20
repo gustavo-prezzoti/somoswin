@@ -490,16 +490,27 @@ const adminService = {
         return await httpClient.get<AdminStats>('/admin/stats');
     },
 
-    getDashboard: async (): Promise<AdminDashboard> => {
-        return await httpClient.get<AdminDashboard>('/admin/dashboard');
+    getDashboard: async (staffUserId?: string | null): Promise<AdminDashboard> => {
+        const qs =
+            staffUserId && staffUserId.length > 0
+                ? `?staffUserId=${encodeURIComponent(staffUserId)}`
+                : '';
+        return await httpClient.get<AdminDashboard>(`/admin/dashboard${qs}`);
     },
 
-    getAdminNotifications: async (params: { page?: number; size?: number; companyId?: string; read?: boolean | null }) => {
+    getAdminNotifications: async (params: {
+        page?: number;
+        size?: number;
+        companyId?: string;
+        read?: boolean | null;
+        staffUserId?: string | null;
+    }) => {
         const sp = new URLSearchParams();
         if (params.page != null) sp.set('page', String(params.page));
         if (params.size != null) sp.set('size', String(params.size));
         if (params.companyId) sp.set('companyId', params.companyId);
         if (params.read === true || params.read === false) sp.set('read', String(params.read));
+        if (params.staffUserId) sp.set('staffUserId', params.staffUserId);
         const qs = sp.toString();
         return await httpClient.get<SpringPage<AdminNotificationRow>>(
             `/admin/alerts/notifications${qs ? `?${qs}` : ''}`
@@ -664,12 +675,13 @@ const adminService = {
 
     // ========== CRM / ATENDIMENTO (ADMIN GLOBAL) ==========
 
-    getCrmLeads: async (params: { page?: number; size?: number; status?: string; q?: string }) => {
+    getCrmLeads: async (params: { page?: number; size?: number; status?: string; q?: string; staffUserId?: string | null }) => {
         const sp = new URLSearchParams();
         if (params.page != null) sp.set('page', String(params.page));
         if (params.size != null) sp.set('size', String(params.size));
         if (params.status) sp.set('status', params.status);
         if (params.q) sp.set('q', params.q);
+        if (params.staffUserId) sp.set('staffUserId', params.staffUserId);
         const qs = sp.toString();
         return await httpClient.get<SpringPage<AdminLeadRow>>(`/admin/crm/leads${qs ? `?${qs}` : ''}`);
     },

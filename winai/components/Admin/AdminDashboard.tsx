@@ -4,16 +4,44 @@ import { RefreshCw, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import adminService, { AdminDashboard as AdminDashboardData } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
+import { useAdminStaffView } from './AdminStaffViewContext';
 import DashboardSummaryCards from './amplia/DashboardSummaryCards';
 import DashboardAgendaSection from './amplia/DashboardAgendaSection';
 import DashboardPriorityAlerts from './amplia/DashboardPriorityAlerts';
 
 const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
+    const staffView = useAdminStaffView();
+    const staffFilterId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId : null;
+    const staffName =
+        staffFilterId && staffView?.staffList?.length
+            ? staffView.staffList.find((s) => s.id === staffFilterId)?.name ?? null
+            : null;
     const [data, setData] = useState<AdminDashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+    const loadDashboard = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const res = await adminService.getDashboard(staffFilterId);
+            setData(res);
+        } catch (err: unknown) {
+            console.error('Erro ao carregar dashboard:', err);
+            const e = err as { status?: number };
+            if (e.status === 401 || e.status === 403) {
+                localStorage.removeItem('win_access_token');
+                localStorage.removeItem('win_user');
+                navigate('/admin/login');
+                return;
+            }
+            setError(getErrorMessage(err, 'Erro ao carregar dashboard'));
+        } finally {
+            setLoading(false);
+        }
+    }, [navigate, staffFilterId]);
 
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
@@ -31,32 +59,15 @@ const AdminDashboard: React.FC = () => {
                 return;
             }
             setIsAuthenticated(true);
-            loadDashboard();
         } catch {
             setIsAuthenticated(false);
         }
     }, []);
 
-    const loadDashboard = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const res = await adminService.getDashboard();
-            setData(res);
-        } catch (err: unknown) {
-            console.error('Erro ao carregar dashboard:', err);
-            const e = err as { status?: number };
-            if (e.status === 401 || e.status === 403) {
-                localStorage.removeItem('win_access_token');
-                localStorage.removeItem('win_user');
-                navigate('/admin/login');
-                return;
-            }
-            setError(getErrorMessage(err, 'Erro ao carregar dashboard'));
-        } finally {
-            setLoading(false);
-        }
-    }, [navigate]);
+    useEffect(() => {
+        if (isAuthenticated !== true) return;
+        void loadDashboard();
+    }, [isAuthenticated, loadDashboard]);
 
     if (isAuthenticated === false) {
         return <Navigate to="/admin/login" replace />;
@@ -102,7 +113,11 @@ const AdminDashboard: React.FC = () => {
             <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Dashboard</h2>
-                    <p className="text-sm text-gray-400 font-medium mt-1">Visão geral estratégica e operacional</p>
+                    <p className="text-sm text-gray-400 font-medium mt-1">
+                        {staffName
+                            ? `Dados atribuídos a ${staffName} (leads como responsável)`
+                            : 'Visão geral estratégica e operacional'}
+                    </p>
                 </div>
                 <button
                     type="button"

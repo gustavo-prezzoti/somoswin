@@ -13,11 +13,10 @@ import {
     Eye,
     DollarSign,
     BarChart3,
-    ChevronDown,
-    User,
 } from 'lucide-react';
-import adminService, { AdminPerformanceSnapshot, InternalStaffMember } from '../../services/adminService';
+import adminService, { AdminPerformanceSnapshot } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
+import { useAdminStaffView } from './AdminStaffViewContext';
 
 function fmtMoney(n: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
@@ -28,11 +27,9 @@ function fmtInt(n: number): string {
 }
 
 const AdminPerformance: React.FC = () => {
+    const staffView = useAdminStaffView();
     const [auth, setAuth] = useState<boolean | null>(null);
-    const [userRole, setUserRole] = useState<string | null>(null);
-    const [internalStaff, setInternalStaff] = useState<InternalStaffMember[]>([]);
-    const [selectedStaffId, setSelectedStaffId] = useState<string>('');
-    const [staffMenuOpen, setStaffMenuOpen] = useState(false);
+    const selectedStaffId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId ?? '' : '';
     const [data, setData] = useState<AdminPerformanceSnapshot | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -50,28 +47,11 @@ const AdminPerformance: React.FC = () => {
                 setAuth(false);
                 return;
             }
-            setUserRole(user.role);
             setAuth(true);
         } catch {
             setAuth(false);
         }
     }, []);
-
-    useEffect(() => {
-        if (userRole !== 'SUPER_ADMIN') return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const list = await adminService.listInternalStaff();
-                if (!cancelled) setInternalStaff(list);
-            } catch {
-                if (!cancelled) setInternalStaff([]);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [userRole]);
 
     const load = useCallback(async () => {
         try {
@@ -175,58 +155,11 @@ const AdminPerformance: React.FC = () => {
                     </h2>
                     <p className="text-sm text-gray-600 font-medium mt-1 leading-relaxed max-w-2xl">
                         {selectedStaffId
-                            ? 'Indicadores do colaborador interno (leads e reuniões atribuídos).'
-                            : 'Indicadores agregados: CRM, operação, metas e Meta Ads (dados sincronizados)'}
+                            ? 'Indicadores do colaborador interno (leads e reuniões atribuídos). Troque em “Selecionar equipe” no topo.'
+                            : 'Indicadores agregados: CRM, operação, metas e Meta Ads (dados sincronizados). SUPER_ADMIN filtra pelo topo.'}
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    {userRole === 'SUPER_ADMIN' && internalStaff.length > 0 && (
-                        <div className="relative">
-                            <button
-                                type="button"
-                                onClick={() => setStaffMenuOpen((o) => !o)}
-                                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-black/5 bg-white text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50 shadow-sm"
-                            >
-                                <User size={16} className="text-emerald-600" />
-                                {selectedStaffId
-                                    ? internalStaff.find((s) => s.id === selectedStaffId)?.name ?? 'Colaborador'
-                                    : 'Todos'}
-                                <ChevronDown size={14} className={`text-gray-400 transition-transform ${staffMenuOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                            {staffMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-black/5 p-2 z-50 max-h-80 overflow-y-auto">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedStaffId('');
-                                            setStaffMenuOpen(false);
-                                        }}
-                                        className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold ${
-                                            !selectedStaffId ? 'bg-gray-900 text-white' : 'hover:bg-gray-50 text-gray-700'
-                                        }`}
-                                    >
-                                        Todos (visão global)
-                                    </button>
-                                    {internalStaff.map((s) => (
-                                        <button
-                                            key={s.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedStaffId(s.id);
-                                                setStaffMenuOpen(false);
-                                            }}
-                                            className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold ${
-                                                selectedStaffId === s.id ? 'bg-gray-900 text-white' : 'hover:bg-gray-50 text-gray-700'
-                                            }`}
-                                        >
-                                            {s.name}
-                                            <span className="block text-[10px] font-medium opacity-70">{s.ampliaStaffType}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
                     <button
                         type="button"
                         onClick={() => void load()}

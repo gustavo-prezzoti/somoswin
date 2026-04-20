@@ -188,8 +188,21 @@ public class AdminService {
 
     /**
      * Painel admin estilo Amplia: KPIs, próximos encontros e alertas recentes.
+     * {@code staffUserId} opcional: visão filtrada por colaborador interno (leads/reuniões como responsável).
      */
-    public AdminDashboardResponse getAdminDashboard() {
+    public AdminDashboardResponse getAdminDashboard(UUID staffUserId) {
+        if (staffUserId != null) {
+            User staff = userRepository.findById(staffUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+            if (!Boolean.TRUE.equals(staff.getAmpliaInternalStaff())) {
+                throw new RuntimeException("Visão por colaborador disponível apenas para equipe interna Amplia");
+            }
+            return buildAdminDashboardForStaff(staffUserId);
+        }
+        return buildAdminDashboardGlobal();
+    }
+
+    private AdminDashboardResponse buildAdminDashboardGlobal() {
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
@@ -262,11 +275,91 @@ public class AdminService {
                 .build();
     }
 
+    private AdminDashboardResponse buildAdminDashboardForStaff(UUID staffUserId) {
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+        LocalDate horizonEnd = today.plusWeeks(2);
+
+        long leadsTotal = leadRepository.countByOwnerUser_Id(staffUserId);
+        long leadsWon = leadRepository.countByOwnerUser_IdAndStatus(staffUserId, LeadStatus.WON);
+        long meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(staffUserId, startWeek, endWeek);
+
+        String leadsSubtitle = leadsWon + " ganhos no funil";
+
+        List<AdminDashboardResponse.Kpi> kpis = List.of(
+                AdminDashboardResponse.Kpi.builder()
+                        .label("LEADS ATRIBUÍDOS")
+                        .value(String.valueOf(leadsTotal))
+                        .subtitle(leadsSubtitle)
+                        .icon("USERS")
+                        .build(),
+                AdminDashboardResponse.Kpi.builder()
+                        .label("CHECKPOINTS")
+                        .value("—")
+                        .subtitle("Tarefas globais (não filtradas por colaborador)")
+                        .icon("CLOCK")
+                        .build(),
+                AdminDashboardResponse.Kpi.builder()
+                        .label("ENCONTROS SEMANA")
+                        .value(String.valueOf(meetingsWeek))
+                        .subtitle("Leads com você como responsável")
+                        .icon("CALENDAR")
+                        .build(),
+                AdminDashboardResponse.Kpi.builder()
+                        .label("FATURAMENTO")
+                        .value("—")
+                        .subtitle("Em breve")
+                        .icon("DOLLAR")
+                        .build());
+
+        List<Meeting> rawMeetings = meetingRepository.findForLeadOwnerDateRange(staffUserId, today, horizonEnd);
+        List<AdminDashboardResponse.MeetingRow> meetingRows = rawMeetings.stream()
+                .limit(15)
+                .map(m -> AdminDashboardResponse.MeetingRow.builder()
+                        .id(m.getId().toString())
+                        .title(m.getTitle())
+                        .companyName(m.getCompany() != null ? m.getCompany().getName() : "—")
+                        .meetingDate(m.getMeetingDate().toString())
+                        .meetingTime(m.getMeetingTime().toString())
+                        .status(m.getStatus() != null ? m.getStatus().name() : "")
+                        .build())
+                .collect(Collectors.toList());
+
+        List<Notification> notifs = notificationRepository.findTop12ByOrderByCreatedAtDesc();
+        List<AdminDashboardResponse.AlertRow> alerts = notifs.stream()
+                .map(n -> AdminDashboardResponse.AlertRow.builder()
+                        .id(n.getId().toString())
+                        .title(n.getTitle())
+                        .message(n.getMessage() != null ? n.getMessage() : "")
+                        .type(n.getType() != null ? n.getType() : "INFO")
+                        .createdAt(n.getCreatedAt() != null ? n.getCreatedAt().toString() : "")
+                        .read(Boolean.TRUE.equals(n.getRead()))
+                        .build())
+                .collect(Collectors.toList());
+
+        return AdminDashboardResponse.builder()
+                .kpis(kpis)
+                .upcomingMeetings(meetingRows)
+                .priorityAlerts(alerts)
+                .build();
+    }
+
     // ========== ALERTAS (NOTIFICAÇÕES) ==========
 
-    public Page<AdminNotificationRowResponse> getAdminNotifications(int page, int size, UUID companyId, Boolean read) {
+    public Page<AdminNotificationRowResponse> getAdminNotifications(int page, int size, UUID companyId, Boolean read,
+            UUID staffUserId) {
+        UUID filterUserId = null;
+        if (staffUserId != null) {
+            User staff = userRepository.findById(staffUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+            if (!Boolean.TRUE.equals(staff.getAmpliaInternalStaff())) {
+                throw new RuntimeException("Filtro disponível apenas para colaboradores internos");
+            }
+            filterUserId = staffUserId;
+        }
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return notificationRepository.findAdminPage(companyId, read, pageable).map(this::toAdminNotificationRow);
+        return notificationRepository.findAdminPage(companyId, read, filterUserId, pageable).map(this::toAdminNotificationRow);
     }
 
     private AdminNotificationRowResponse toAdminNotificationRow(Notification n) {
@@ -731,10 +824,27 @@ public class AdminService {
     }
 
     /**
-     * Lista leads de todas as empresas (paginado).
+     * Lista leads de todas as empresas (paginado). Opcional: staffUserId = só leads com responsável = colaborador interno.
      */
-    public Page<AdminLeadResponse> getAdminLeads(int page, int size, String status, String q) {
+    public Page<AdminLeadResponse> getAdminLeads(int page, int size, String status, String q, UUID staffUserId) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (staffUserId != null) {
+            User staff = userRepository.findById(staffUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+            if (!Boolean.TRUE.equals(staff.getAmpliaInternalStaff())) {
+                throw new RuntimeException("Filtro disponível apenas para colaboradores internos");
+            }
+            Page<Lead> leads;
+            if (q != null && !q.trim().isEmpty()) {
+                leads = leadRepository.searchAllLeadsForOwner(staffUserId, q.trim(), pageable);
+            } else if (status != null && !status.trim().isEmpty()) {
+                LeadStatus st = LeadStatus.valueOf(status.trim().toUpperCase());
+                leads = leadRepository.findByOwnerUser_IdAndStatusOrderByCreatedAtDesc(staffUserId, st, pageable);
+            } else {
+                leads = leadRepository.findByOwnerUser_IdOrderByCreatedAtDesc(staffUserId, pageable);
+            }
+            return leads.map(this::toAdminLeadResponse);
+        }
         Page<Lead> leads;
         if (q != null && !q.trim().isEmpty()) {
             leads = leadRepository.searchAllLeads(q.trim(), pageable);

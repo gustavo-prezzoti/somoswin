@@ -3,6 +3,7 @@ import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import { ModalProvider } from './ModalContext';
+import { AdminStaffViewProvider } from './AdminStaffViewContext';
 import { loadSidebarCollapsed, saveSidebarCollapsed } from './adminAmpliaRoutes';
 import './AdminLayout.css';
 
@@ -58,31 +59,33 @@ const AdminLayout: React.FC = () => {
     // Usuário autenticado e é ADMIN - renderiza o painel
     return (
         <ModalProvider>
-            <div className={`admin-layout admin-layout--amplia ${isSidebarOpen ? 'sidebar-open' : ''}`}>
-                <AdminSidebar
-                    isOpen={isSidebarOpen}
-                    onClose={() => setIsSidebarOpen(false)}
-                    narrow={sidebarNarrow}
-                    onNarrowChange={setSidebarNarrow}
-                />
-
-                {/* Mobile Overlay */}
-                {isSidebarOpen && (
-                    <div
-                        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[950] lg:hidden"
-                        onClick={() => setIsSidebarOpen(false)}
+            <AdminStaffViewProvider userRole={user.role}>
+                <div className={`admin-layout admin-layout--amplia ${isSidebarOpen ? 'sidebar-open' : ''}`}>
+                    <AdminSidebar
+                        isOpen={isSidebarOpen}
+                        onClose={() => setIsSidebarOpen(false)}
+                        narrow={sidebarNarrow}
+                        onNarrowChange={setSidebarNarrow}
                     />
-                )}
 
-                <div className={`admin-main ${sidebarNarrow ? 'admin-main--narrow' : ''}`}>
-                    <AdminHeader user={user} onMenuClick={toggleSidebar} />
-                    <div className="admin-content">
-                        <div className="admin-content-inner">
-                            <Outlet />
+                    {/* Mobile Overlay */}
+                    {isSidebarOpen && (
+                        <div
+                            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[950] lg:hidden"
+                            onClick={() => setIsSidebarOpen(false)}
+                        />
+                    )}
+
+                    <div className={`admin-main ${sidebarNarrow ? 'admin-main--narrow' : ''}`}>
+                        <AdminHeader user={user} onMenuClick={toggleSidebar} />
+                        <div className="admin-content">
+                            <div className="admin-content-inner">
+                                <Outlet />
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </AdminStaffViewProvider>
         </ModalProvider>
     );
 };

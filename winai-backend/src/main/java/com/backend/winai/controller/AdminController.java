@@ -74,20 +74,22 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getSystemStats());
     }
 
-    @Operation(summary = "Dashboard admin (Amplia)", description = "KPIs, próximos encontros e alertas recentes")
+    @Operation(summary = "Dashboard admin (Amplia)", description = "KPIs, próximos encontros e alertas recentes. Opcional: staffUserId = colaborador interno (visão SUPER_ADMIN).")
     @GetMapping("/dashboard")
-    public ResponseEntity<AdminDashboardResponse> getAdminDashboard() {
-        return ResponseEntity.ok(adminService.getAdminDashboard());
+    public ResponseEntity<AdminDashboardResponse> getAdminDashboard(
+            @RequestParam(required = false) UUID staffUserId) {
+        return ResponseEntity.ok(adminService.getAdminDashboard(staffUserId));
     }
 
-    @Operation(summary = "Alertas — notificações (paginado)", description = "Todas as notificações do sistema; filtros opcionais por empresa e lidas/não lidas")
+    @Operation(summary = "Alertas — notificações (paginado)", description = "Todas as notificações do sistema; filtros opcionais por empresa, lidas/não lidas e usuário (colaborador interno).")
     @GetMapping("/alerts/notifications")
     public ResponseEntity<Page<AdminNotificationRowResponse>> listAdminNotifications(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "30") int size,
             @RequestParam(required = false) UUID companyId,
-            @RequestParam(required = false) Boolean read) {
-        return ResponseEntity.ok(adminService.getAdminNotifications(page, size, companyId, read));
+            @RequestParam(required = false) Boolean read,
+            @RequestParam(required = false) UUID staffUserId) {
+        return ResponseEntity.ok(adminService.getAdminNotifications(page, size, companyId, read, staffUserId));
     }
 
     @Operation(summary = "Alertas — marcar como lida")
@@ -131,14 +133,15 @@ public class AdminController {
         return ResponseEntity.ok(internalStaffService.getMemberDashboard(id));
     }
 
-    @Operation(summary = "CRM — listar leads (global)", description = "Leads de todas as empresas, com busca e filtro por status")
+    @Operation(summary = "CRM — listar leads (global)", description = "Leads de todas as empresas, com busca e filtro por status. Opcional: staffUserId = só leads com responsável = colaborador interno.")
     @GetMapping("/crm/leads")
     public ResponseEntity<Page<AdminLeadResponse>> getCrmLeads(
             @Parameter(description = "Página (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Tamanho") @RequestParam(defaultValue = "50") int size,
             @Parameter(description = "Filtrar por status (enum LeadStatus)") @RequestParam(required = false) String status,
-            @Parameter(description = "Busca em nome, email, telefone e empresa") @RequestParam(required = false) String q) {
-        return ResponseEntity.ok(adminService.getAdminLeads(page, size, status, q));
+            @Parameter(description = "Busca em nome, email, telefone e empresa") @RequestParam(required = false) String q,
+            @Parameter(description = "Colaborador interno (responsável pelo lead)") @RequestParam(required = false) UUID staffUserId) {
+        return ResponseEntity.ok(adminService.getAdminLeads(page, size, status, q, staffUserId));
     }
 
     @Operation(summary = "CRM — atualizar status do lead", description = "Atualiza estágio do funil (marca qualificação manual)")

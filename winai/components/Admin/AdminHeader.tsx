@@ -1,7 +1,8 @@
 import React from 'react';
-import { LogOut, Menu, ShieldCheck, Bell } from 'lucide-react';
+import { LogOut, Menu, ShieldCheck, Bell, ChevronDown } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getAdminRouteMeta } from './adminRouteMeta';
+import { useAdminStaffView } from './AdminStaffViewContext';
 
 interface AdminHeaderProps {
     user: any;
@@ -19,6 +20,8 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { title, subtitle } = getAdminRouteMeta(location.pathname);
+    const staffView = useAdminStaffView();
+    const showTeamSelect = Boolean(user?.role === 'SUPER_ADMIN' && staffView?.isSuperAdmin);
 
     const handleLogout = () => {
         localStorage.removeItem('win_access_token');
@@ -46,7 +49,41 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
                 </div>
             </div>
 
-            <div className="flex items-center gap-6 shrink-0">
+            <div className="flex items-center gap-3 sm:gap-6 shrink-0 flex-wrap justify-end">
+                {showTeamSelect && staffView && (
+                    <div className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-2 rounded-xl border border-black/5 max-w-[min(100vw-2rem,22rem)]">
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap shrink-0 hidden sm:inline">
+                            Selecionar equipe:
+                        </span>
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap shrink-0 sm:hidden">
+                            Equipe:
+                        </span>
+                        <div className="relative min-w-0 flex-1 sm:flex-initial sm:min-w-[10rem]">
+                            <select
+                                value={staffView.selectedStaffUserId ?? ''}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    staffView.setSelectedStaffUserId(v === '' ? null : v);
+                                }}
+                                disabled={staffView.staffLoading}
+                                className="w-full max-w-[11rem] sm:max-w-[14rem] appearance-none bg-transparent text-[10px] sm:text-xs font-black uppercase tracking-wide text-[#141414] pr-7 py-0.5 border-0 outline-none cursor-pointer hover:text-emerald-700 transition-colors truncate disabled:opacity-50"
+                                aria-label="Selecionar equipe interna"
+                            >
+                                <option value="">Todos</option>
+                                {staffView.staffList.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronDown
+                                size={14}
+                                className="absolute right-0 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                                aria-hidden
+                            />
+                        </div>
+                    </div>
+                )}
                 <Link
                     to="/admin/notifications"
                     className="relative p-2 text-gray-400 hover:text-black transition-colors hidden sm:flex"

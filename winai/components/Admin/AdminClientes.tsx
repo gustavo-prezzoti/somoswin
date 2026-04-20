@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import adminService, { AdminLeadRow, AdminUser, Company } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
+import { useAdminStaffView } from './AdminStaffViewContext';
 
 function subscriptionLabel(status?: string | null): string {
     if (!status) return '—';
@@ -29,6 +30,8 @@ function subscriptionLabel(status?: string | null): string {
 }
 
 const AdminClientes: React.FC = () => {
+    const staffView = useAdminStaffView();
+    const staffFilterId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId : null;
     const [companies, setCompanies] = useState<Company[]>([]);
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [leads, setLeads] = useState<AdminLeadRow[]>([]);
@@ -50,7 +53,7 @@ const AdminClientes: React.FC = () => {
             const [co, us, crm] = await Promise.all([
                 adminService.getAllCompanies(),
                 adminService.getAllUsers(),
-                adminService.getCrmLeads({ page: 0, size: 800 }),
+                adminService.getCrmLeads({ page: 0, size: 800, staffUserId: staffFilterId ?? undefined }),
             ]);
             setCompanies(co || []);
             setUsers(us || []);
@@ -60,7 +63,7 @@ const AdminClientes: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [staffFilterId]);
 
     useEffect(() => {
         load();

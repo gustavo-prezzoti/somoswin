@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -39,6 +39,7 @@ import adminService, {
 } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
+import { useAdminStaffView } from './AdminStaffViewContext';
 
 function staffTypeLabel(t: string): string {
     if (t === 'VENDEDOR') return 'Vendedor';
@@ -284,6 +285,8 @@ const IndividualDashboardModal = ({
 
 const AdminGestaoEquipe: React.FC = () => {
     const { showAlert, showToast } = useModal();
+    const staffView = useAdminStaffView();
+    const headerStaffId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId : null;
     const [auth, setAuth] = useState<boolean | null>(null);
     const [members, setMembers] = useState<InternalStaffMember[]>([]);
     const [loading, setLoading] = useState(true);
@@ -358,6 +361,11 @@ const AdminGestaoEquipe: React.FC = () => {
         };
     }, [selectedMember, showToast]);
 
+    const scopeMembers = useMemo(() => {
+        if (!headerStaffId) return members;
+        return members.filter((m) => m.id === headerStaffId);
+    }, [members, headerStaffId]);
+
     if (auth === false) {
         return <Navigate to="/admin/login" replace />;
     }
@@ -370,7 +378,7 @@ const AdminGestaoEquipe: React.FC = () => {
         );
     }
 
-    const filteredMembers = members.filter((m) => {
+    const filteredMembers = scopeMembers.filter((m) => {
         const q = searchTerm.toLowerCase();
         const matchSearch =
             m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
@@ -378,9 +386,9 @@ const AdminGestaoEquipe: React.FC = () => {
         return matchSearch && matchRole;
     });
 
-    const vendedores = members.filter((m) => m.ampliaStaffType === 'VENDEDOR').length;
-    const consultores = members.filter((m) => m.ampliaStaffType === 'CONSULTOR' || m.ampliaStaffType === 'GESTOR').length;
-    const onlineish = members.filter((m) => m.active).length;
+    const vendedores = scopeMembers.filter((m) => m.ampliaStaffType === 'VENDEDOR').length;
+    const consultores = scopeMembers.filter((m) => m.ampliaStaffType === 'CONSULTOR' || m.ampliaStaffType === 'GESTOR').length;
+    const onlineish = scopeMembers.filter((m) => m.active).length;
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -442,7 +450,7 @@ const AdminGestaoEquipe: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {[
-                    { label: 'Total da Equipe', value: members.length, icon: Users, color: 'text-blue-500' },
+                    { label: 'Total da Equipe', value: scopeMembers.length, icon: Users, color: 'text-blue-500' },
                     { label: 'Vendedores', value: vendedores, icon: TrendingUp, color: 'text-emerald-500' },
                     { label: 'Consultores', value: consultores, icon: MessageSquare, color: 'text-orange-500' },
                     { label: 'Ativos', value: onlineish, icon: Clock, color: 'text-purple-500' },

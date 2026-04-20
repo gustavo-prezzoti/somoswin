@@ -162,4 +162,10 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
                         + "AND m.meetingDate BETWEEN :start AND :end")
         long countMeetingsForLeadOwnerBetween(@Param("userId") UUID userId, @Param("start") LocalDate start,
                         @Param("end") LocalDate end);
+
+        /** Agenda admin — encontros cujo lead tem responsável = colaborador (próximas semanas). */
+        @Query("SELECT m FROM Meeting m JOIN FETCH m.company c LEFT JOIN FETCH m.lead l WHERE l.ownerUser.id = :userId "
+                        + "AND m.meetingDate >= :start AND m.meetingDate <= :end ORDER BY m.meetingDate ASC, m.meetingTime ASC")
+        List<Meeting> findForLeadOwnerDateRange(@Param("userId") UUID userId, @Param("start") LocalDate start,
+                        @Param("end") LocalDate end);
 }

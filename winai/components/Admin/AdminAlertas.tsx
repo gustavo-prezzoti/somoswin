@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import adminService, { AdminNotificationRow, Company } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
+import { useAdminStaffView } from './AdminStaffViewContext';
 
 function typeStyle(t: string): { card: string; iconWrap: string; Icon: typeof Info } {
     const u = (t || 'INFO').toUpperCase();
@@ -46,6 +47,8 @@ function typeStyle(t: string): { card: string; iconWrap: string; Icon: typeof In
 const PAGE_SIZE = 12;
 
 const AdminAlertas: React.FC = () => {
+    const staffView = useAdminStaffView();
+    const staffFilterId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId : null;
     const [auth, setAuth] = useState<boolean | null>(null);
     const [companies, setCompanies] = useState<Company[]>([]);
     const [companyId, setCompanyId] = useState('');
@@ -103,6 +106,7 @@ const AdminAlertas: React.FC = () => {
                 size: PAGE_SIZE,
                 companyId: companyId || undefined,
                 read: readParam,
+                staffUserId: staffFilterId ?? undefined,
             });
             setRows(res.content);
             setTotalPages(res.totalPages);
@@ -112,7 +116,7 @@ const AdminAlertas: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [page, companyId, readFilter]);
+    }, [page, companyId, readFilter, staffFilterId]);
 
     useEffect(() => {
         if (auth === true) void load();

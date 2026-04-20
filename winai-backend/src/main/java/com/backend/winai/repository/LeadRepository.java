@@ -75,4 +75,21 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
     long countByOwnerUserAndCreatedAtRange(@Param("userId") UUID userId,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
+
+    Page<Lead> findByOwnerUser_IdOrderByCreatedAtDesc(UUID ownerUserId, Pageable pageable);
+
+    Page<Lead> findByOwnerUser_IdAndStatusOrderByCreatedAtDesc(UUID ownerUserId, LeadStatus status, Pageable pageable);
+
+    /** Busca global admin restrita a leads cujo responsável é o colaborador. */
+    @Query(value = "SELECT l FROM Lead l LEFT JOIN l.company c WHERE l.ownerUser.id = :ownerId AND ("
+            + "LOWER(l.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+            + "LOWER(l.email) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+            + "LOWER(COALESCE(l.phone, '')) LIKE CONCAT('%', :q, '%') OR "
+            + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')))",
+            countQuery = "SELECT count(l) FROM Lead l LEFT JOIN l.company c WHERE l.ownerUser.id = :ownerId AND ("
+                    + "LOWER(l.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "LOWER(l.email) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "LOWER(COALESCE(l.phone, '')) LIKE CONCAT('%', :q, '%') OR "
+                    + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<Lead> searchAllLeadsForOwner(@Param("ownerId") UUID ownerId, @Param("q") String q, Pageable pageable);
 }

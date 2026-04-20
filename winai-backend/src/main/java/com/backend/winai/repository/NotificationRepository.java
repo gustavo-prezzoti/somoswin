@@ -46,6 +46,11 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     List<Notification> findTop12ByOrderByCreatedAtDesc();
 
     @Query("SELECT n FROM Notification n WHERE (:companyId IS NULL OR n.company.id = :companyId) "
-            + "AND (:read IS NULL OR n.read = :read) ORDER BY n.createdAt DESC")
-    Page<Notification> findAdminPage(@Param("companyId") UUID companyId, @Param("read") Boolean read, Pageable pageable);
+            + "AND (:read IS NULL OR n.read = :read) "
+            + "AND (:userId IS NULL OR n.user.id = :userId) ORDER BY n.createdAt DESC")
+    Page<Notification> findAdminPage(
+            @Param("companyId") UUID companyId,
+            @Param("read") Boolean read,
+            @Param("userId") UUID userId,
+            Pageable pageable);
 }
