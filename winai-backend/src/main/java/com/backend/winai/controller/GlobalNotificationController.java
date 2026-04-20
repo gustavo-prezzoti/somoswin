@@ -13,7 +13,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/admin/global-notifications")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@adminSecurity.canAccess(authentication, 'alertas')")
 public class GlobalNotificationController {
 
     private final GlobalNotificationService service;

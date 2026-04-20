@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -17,7 +18,12 @@ public class InternalStaffMemberResponse {
     private UUID id;
     private String name;
     private String email;
+    /** Legado: VENDEDOR, CONSULTOR, GESTOR quando o papel define legacyStaffType. */
     private String ampliaStaffType;
+    private UUID ampliaStaffRoleId;
+    private String ampliaStaffRoleName;
+    private List<String> ampliaStaffPermissions;
+    private Boolean ampliaStaffFullAccess;
     private boolean active;
     private ZonedDateTime lastLogin;
     private long leadsTotal;

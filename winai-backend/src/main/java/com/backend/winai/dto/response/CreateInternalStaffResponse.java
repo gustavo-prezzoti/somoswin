@@ -17,6 +17,8 @@ public class CreateInternalStaffResponse {
     private String name;
     private String email;
     private String ampliaStaffType;
+    private UUID ampliaStaffRoleId;
+    private String ampliaStaffRoleName;
     /** Somente na criação, se senha foi gerada automaticamente. */
     private String tempPassword;
 }

@@ -22,7 +22,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/admin/followup")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@adminSecurity.canAccess(authentication, 'followup')")
 public class FollowUpController {
 
     private final FollowUpService followUpService;

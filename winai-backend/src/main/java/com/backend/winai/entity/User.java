@@ -84,6 +84,10 @@ public class User implements UserDetails {
     @Column(name = "amplia_staff_type")
     private AmpliaStaffType ampliaStaffType;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "amplia_staff_role_id")
+    private AmpliaStaffRole ampliaStaffRole;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;

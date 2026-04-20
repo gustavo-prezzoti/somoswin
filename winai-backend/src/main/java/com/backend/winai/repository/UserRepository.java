@@ -24,10 +24,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByPasswordResetToken(String token);
 
-    @Query("SELECT u FROM User u LEFT JOIN FETCH u.company WHERE u.email = :email")
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.company LEFT JOIN FETCH u.ampliaStaffRole WHERE u.email = :email")
     Optional<User> findByEmailWithCompany(String email);
 
-    @Query("SELECT u FROM User u LEFT JOIN FETCH u.company WHERE u.id = :id")
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.company LEFT JOIN FETCH u.ampliaStaffRole WHERE u.id = :id")
     Optional<User> findByIdWithCompany(UUID id);
 
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.company")
@@ -55,4 +55,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findFirstByCompany_IdOrderByCreatedAtAscIdAsc(UUID companyId);
 
     List<User> findByAmpliaInternalStaffTrueOrderByNameAsc();
+
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.ampliaStaffRole WHERE u.ampliaInternalStaff = true ORDER BY u.name ASC")
+    List<User> findByAmpliaInternalStaffTrueWithRoleOrderByNameAsc();
+
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.ampliaStaffRole WHERE u.id = :id")
+    Optional<User> findByIdWithAmpliaStaffRole(@Param("id") UUID id);
 }

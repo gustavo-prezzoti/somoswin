@@ -20,7 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Admin Consultoria", description = "Upload de gravações e transcrições (consultoria estratégica)")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+@PreAuthorize("@adminSecurity.canAccess(authentication, 'consultoria')")
 public class AdminConsultancyController {
 
     private final ConsultancyService consultancyService;

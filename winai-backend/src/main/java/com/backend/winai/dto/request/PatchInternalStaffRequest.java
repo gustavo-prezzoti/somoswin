@@ -2,11 +2,12 @@ package com.backend.winai.dto.request;
 
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 public class PatchInternalStaffRequest {
 
-    /** VENDEDOR, CONSULTOR ou GESTOR */
-    private String ampliaStaffType;
+    private UUID ampliaStaffRoleId;
 
     private Boolean isActive;
 

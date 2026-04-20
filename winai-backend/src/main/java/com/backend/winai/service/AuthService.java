@@ -1,6 +1,7 @@
 package com.backend.winai.service;
 
 import com.backend.winai.dto.request.*;
+import com.backend.winai.dto.mapper.UserAuthDtoMapper;
 import com.backend.winai.dto.response.AuthResponse;
 import com.backend.winai.dto.response.InvitationPreviewResponse;
 import com.backend.winai.dto.response.MessageResponse;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZonedDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -268,54 +270,31 @@ public class AuthService {
     }
 
     private AuthResponse generateAuthResponse(User user) {
-        String accessToken = jwtService.generateToken(user);
-        String refreshToken = jwtService.generateRefreshToken(user);
+        User full = userRepository.findByEmailWithCompany(user.getEmail()).orElse(user);
 
-        // Salva o refresh token no banco
+        Map<String, Object> extraClaims = new HashMap<>();
+        if (Boolean.TRUE.equals(full.getAmpliaInternalStaff()) && full.getAmpliaStaffRole() != null) {
+            extraClaims.put(
+                    "staffPerms",
+                    AdminSecurityService.effectivePermissionKeys(full.getAmpliaStaffRole()));
+        }
+
+        String accessToken = jwtService.generateToken(extraClaims, full);
+        String refreshToken = jwtService.generateRefreshToken(full);
+
         RefreshToken refreshTokenEntity = RefreshToken.builder()
-                .user(user)
+                .user(full)
                 .token(refreshToken)
                 .expiresAt(ZonedDateTime.now().plusSeconds(jwtService.getRefreshExpiration() / 1000))
                 .build();
         refreshTokenRepository.save(refreshTokenEntity);
-
-        AuthResponse.CompanyDTO companyDTO = null;
-        if (user.getCompany() != null) {
-            companyDTO = AuthResponse.CompanyDTO.builder()
-                    .id(user.getCompany().getId())
-                    .name(user.getCompany().getName())
-                    .segment(user.getCompany().getSegment())
-                    .plan(user.getCompany().getPlan())
-                    .build();
-        }
-
-        String planName;
-        if (Boolean.TRUE.equals(user.getAmpliaInternalStaff())) {
-            planName = "INTERNAL_STAFF";
-        } else if (user.getCompany() != null) {
-            planName = user.getCompany().getPlan().name();
-        } else {
-            planName = "STARTER";
-        }
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(jwtService.getJwtExpiration() / 1000)
-                .user(AuthResponse.UserDTO.builder()
-                        .id(user.getId())
-                        .email(user.getEmail())
-                        .name(user.getName())
-                        .role(user.getRole().name())
-                        .plan(planName)
-                        .company(companyDTO)
-                        .avatarUrl(user.getAvatarUrl())
-                        .phone(user.getPhone())
-                        .jobTitle(user.getJobTitle())
-                        .ampliaInternalStaff(Boolean.TRUE.equals(user.getAmpliaInternalStaff()))
-                        .ampliaStaffType(user.getAmpliaStaffType() != null ? user.getAmpliaStaffType().name() : null)
-                        .build())
+                .user(UserAuthDtoMapper.toDto(full))
                 .build();
     }
 

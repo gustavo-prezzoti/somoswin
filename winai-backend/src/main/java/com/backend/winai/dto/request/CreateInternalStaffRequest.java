@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 public class CreateInternalStaffRequest {
 
@@ -15,9 +17,8 @@ public class CreateInternalStaffRequest {
     @Email
     private String email;
 
-    /** VENDEDOR, CONSULTOR ou GESTOR */
     @NotNull
-    private String ampliaStaffType;
+    private UUID ampliaStaffRoleId;
 
     /** Se vazio, o sistema gera senha temporária (retornada na resposta). */
     private String password;

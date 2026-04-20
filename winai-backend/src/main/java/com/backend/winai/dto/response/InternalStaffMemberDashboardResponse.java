@@ -18,6 +18,8 @@ public class InternalStaffMemberDashboardResponse {
     private String name;
     private String email;
     private String ampliaStaffType;
+    private UUID ampliaStaffRoleId;
+    private String ampliaStaffRoleName;
 
     private long leadsTotal;
     private long leadsWon;

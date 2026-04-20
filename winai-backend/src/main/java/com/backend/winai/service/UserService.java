@@ -1,5 +1,6 @@
 package com.backend.winai.service;
 
+import com.backend.winai.dto.mapper.UserAuthDtoMapper;
 import com.backend.winai.dto.request.UpdateProfileRequest;
 import com.backend.winai.dto.response.AuthResponse;
 import com.backend.winai.entity.User;
@@ -27,38 +28,7 @@ public class UserService {
         User fullUser = userRepository.findByEmailWithCompany(user.getEmail())
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
-        AuthResponse.CompanyDTO companyDTO = null;
-        if (fullUser.getCompany() != null) {
-            companyDTO = AuthResponse.CompanyDTO.builder()
-                    .id(fullUser.getCompany().getId())
-                    .name(fullUser.getCompany().getName())
-                    .segment(fullUser.getCompany().getSegment())
-                    .plan(fullUser.getCompany().getPlan())
-                    .build();
-        }
-
-        String planName;
-        if (Boolean.TRUE.equals(fullUser.getAmpliaInternalStaff())) {
-            planName = "INTERNAL_STAFF";
-        } else if (fullUser.getCompany() != null) {
-            planName = fullUser.getCompany().getPlan().name();
-        } else {
-            planName = "STARTER";
-        }
-
-        return AuthResponse.UserDTO.builder()
-                .id(fullUser.getId())
-                .email(fullUser.getEmail())
-                .name(fullUser.getName())
-                .role(fullUser.getRole().name())
-                .plan(planName)
-                .company(companyDTO)
-                .avatarUrl(fullUser.getAvatarUrl())
-                .phone(fullUser.getPhone())
-                .jobTitle(fullUser.getJobTitle())
-                .ampliaInternalStaff(Boolean.TRUE.equals(fullUser.getAmpliaInternalStaff()))
-                .ampliaStaffType(fullUser.getAmpliaStaffType() != null ? fullUser.getAmpliaStaffType().name() : null)
-                .build();
+        return UserAuthDtoMapper.toDto(fullUser);
     }
 
     /**

@@ -5,7 +5,7 @@ import com.backend.winai.dto.request.PatchInternalStaffRequest;
 import com.backend.winai.dto.response.CreateInternalStaffResponse;
 import com.backend.winai.dto.response.InternalStaffMemberDashboardResponse;
 import com.backend.winai.dto.response.InternalStaffMemberResponse;
-import com.backend.winai.entity.AmpliaStaffType;
+import com.backend.winai.entity.AmpliaStaffRole;
 import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.entity.User;
 import com.backend.winai.entity.UserRole;
@@ -42,9 +42,10 @@ public class InternalStaffService {
     private final LeadRepository leadRepository;
     private final MeetingRepository meetingRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AmpliaStaffRoleService ampliaStaffRoleService;
 
     public List<InternalStaffMemberResponse> listInternalStaff() {
-        List<User> users = userRepository.findByAmpliaInternalStaffTrueOrderByNameAsc();
+        List<User> users = userRepository.findByAmpliaInternalStaffTrueWithRoleOrderByNameAsc();
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
@@ -61,7 +62,8 @@ public class InternalStaffService {
         long won = leadRepository.countByOwnerUser_IdAndStatus(id, LeadStatus.WON);
         long meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(id, startWeek, endWeek);
         int conv = total > 0 ? (int) Math.min(100, Math.round(won * 100.0 / total)) : 0;
-        return InternalStaffMemberResponse.builder()
+        AmpliaStaffRole sr = u.getAmpliaStaffRole();
+        InternalStaffMemberResponse.InternalStaffMemberResponseBuilder b = InternalStaffMemberResponse.builder()
                 .id(id)
                 .name(u.getName())
                 .email(u.getEmail())
@@ -71,8 +73,14 @@ public class InternalStaffService {
                 .leadsTotal(total)
                 .leadsWon(won)
                 .meetingsThisWeek(meetingsWeek)
-                .conversionPercent(conv)
-                .build();
+                .conversionPercent(conv);
+        if (sr != null) {
+            b.ampliaStaffRoleId(sr.getId())
+                    .ampliaStaffRoleName(sr.getName())
+                    .ampliaStaffPermissions(AdminSecurityService.effectivePermissionKeys(sr))
+                    .ampliaStaffFullAccess(sr.getFullAccess());
+        }
+        return b.build();
     }
 
     @Transactional
@@ -80,7 +88,7 @@ public class InternalStaffService {
         if (userRepository.findByEmail(request.getEmail().trim()).isPresent()) {
             throw new RuntimeException("Email já está em uso");
         }
-        AmpliaStaffType type = parseStaffType(request.getAmpliaStaffType());
+        AmpliaStaffRole role = ampliaStaffRoleService.requireActiveRole(request.getAmpliaStaffRoleId());
         String plainPassword = request.getPassword() != null && !request.getPassword().isBlank()
                 ? request.getPassword()
                 : generateRandomPassword();
@@ -92,33 +100,38 @@ public class InternalStaffService {
                 .role(UserRole.USER)
                 .company(null)
                 .ampliaInternalStaff(true)
-                .ampliaStaffType(type)
+                .ampliaStaffRole(role)
+                .ampliaStaffType(role.getLegacyStaffType())
                 .isActive(true)
                 .emailVerified(true)
                 .mustChangePassword(request.getPassword() == null || request.getPassword().isBlank())
                 .build();
 
         user = userRepository.save(user);
-        log.info("Colaborador interno criado: {} ({})", user.getEmail(), type);
+        log.info("Colaborador interno criado: {} (papel {})", user.getEmail(), role.getName());
 
         return CreateInternalStaffResponse.builder()
                 .id(user.getId())
                 .name(user.getName())
                 .email(user.getEmail())
-                .ampliaStaffType(type.name())
+                .ampliaStaffType(user.getAmpliaStaffType() != null ? user.getAmpliaStaffType().name() : null)
+                .ampliaStaffRoleId(role.getId())
+                .ampliaStaffRoleName(role.getName())
                 .tempPassword(request.getPassword() == null || request.getPassword().isBlank() ? plainPassword : null)
                 .build();
     }
 
     @Transactional
     public InternalStaffMemberResponse patch(UUID id, PatchInternalStaffRequest request) {
-        User user = userRepository.findById(id)
+        User user = userRepository.findByIdWithAmpliaStaffRole(id)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
         if (!Boolean.TRUE.equals(user.getAmpliaInternalStaff())) {
             throw new RuntimeException("Usuário não é colaborador interno");
         }
-        if (request.getAmpliaStaffType() != null && !request.getAmpliaStaffType().isBlank()) {
-            user.setAmpliaStaffType(parseStaffType(request.getAmpliaStaffType()));
+        if (request.getAmpliaStaffRoleId() != null) {
+            AmpliaStaffRole role = ampliaStaffRoleService.requireActiveRole(request.getAmpliaStaffRoleId());
+            user.setAmpliaStaffRole(role);
+            user.setAmpliaStaffType(role.getLegacyStaffType());
         }
         if (request.getIsActive() != null) {
             user.setIsActive(request.getIsActive());
@@ -135,7 +148,7 @@ public class InternalStaffService {
     }
 
     public InternalStaffMemberDashboardResponse getMemberDashboard(UUID userId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdWithAmpliaStaffRole(userId)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
         if (!Boolean.TRUE.equals(user.getAmpliaInternalStaff())) {
             throw new RuntimeException("Usuário não é colaborador interno");
@@ -163,25 +176,22 @@ public class InternalStaffService {
                     .build());
         }
 
-        return InternalStaffMemberDashboardResponse.builder()
-                .userId(user.getId())
-                .name(user.getName())
-                .email(user.getEmail())
-                .ampliaStaffType(user.getAmpliaStaffType() != null ? user.getAmpliaStaffType().name() : null)
-                .leadsTotal(total)
-                .leadsWon(won)
-                .meetingsThisWeek(meetingsWeek)
-                .conversionRateDisplay(conv)
-                .monthlyLeads(monthly)
-                .build();
-    }
-
-    private static AmpliaStaffType parseStaffType(String raw) {
-        try {
-            return AmpliaStaffType.valueOf(raw.trim().toUpperCase());
-        } catch (Exception e) {
-            throw new RuntimeException("Tipo inválido. Use: VENDEDOR, CONSULTOR ou GESTOR");
+        AmpliaStaffRole sr = user.getAmpliaStaffRole();
+        InternalStaffMemberDashboardResponse.InternalStaffMemberDashboardResponseBuilder db =
+                InternalStaffMemberDashboardResponse.builder()
+                        .userId(user.getId())
+                        .name(user.getName())
+                        .email(user.getEmail())
+                        .ampliaStaffType(user.getAmpliaStaffType() != null ? user.getAmpliaStaffType().name() : null)
+                        .leadsTotal(total)
+                        .leadsWon(won)
+                        .meetingsThisWeek(meetingsWeek)
+                        .conversionRateDisplay(conv)
+                        .monthlyLeads(monthly);
+        if (sr != null) {
+            db.ampliaStaffRoleId(sr.getId()).ampliaStaffRoleName(sr.getName());
         }
+        return db.build();
     }
 
     private static String generateRandomPassword() {

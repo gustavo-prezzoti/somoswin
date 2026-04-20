@@ -62,6 +62,115 @@ public class DatabaseMigrationConfig {
                             e.getMessage());
                 }
 
+                try {
+                    jdbcTemplate.execute(
+                            """
+                            CREATE TABLE IF NOT EXISTS winai.amplia_staff_roles (
+                                id UUID PRIMARY KEY,
+                                name VARCHAR(120) NOT NULL,
+                                description TEXT,
+                                active BOOLEAN NOT NULL DEFAULT TRUE,
+                                full_access BOOLEAN NOT NULL DEFAULT FALSE,
+                                permissions_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                                legacy_staff_type VARCHAR(32),
+                                created_at TIMESTAMPTZ,
+                                updated_at TIMESTAMPTZ,
+                                CONSTRAINT uk_amplia_staff_roles_name UNIQUE (name)
+                            )
+                            """);
+                    jdbcTemplate.execute(
+                            "ALTER TABLE winai.users ADD COLUMN IF NOT EXISTS amplia_staff_role_id UUID "
+                                    + "REFERENCES winai.amplia_staff_roles(id)");
+                    jdbcTemplate.execute(
+                            """
+                            CREATE INDEX IF NOT EXISTS idx_users_amplia_staff_role
+                            ON winai.users(amplia_staff_role_id)
+                            """);
+                    int seeded = jdbcTemplate.update(
+                            """
+                            INSERT INTO winai.amplia_staff_roles (
+                                id, name, description, active, full_access, permissions_json, legacy_staff_type, created_at, updated_at
+                            )
+                            SELECT 'a1111111-1111-1111-1111-111111111101'::uuid,
+                                   'Vendedor',
+                                   'Papel padrão (equipe comercial)',
+                                   TRUE,
+                                   FALSE,
+                                   '{"dashboard": true, "clientes": true, "metaads": true, "metas": true, "alertas": true, "performance": true}'::jsonb,
+                                   'VENDEDOR',
+                                   now(), now()
+                            WHERE NOT EXISTS (SELECT 1 FROM winai.amplia_staff_roles WHERE name = 'Vendedor')
+                            """);
+                    int seeded2 = jdbcTemplate.update(
+                            """
+                            INSERT INTO winai.amplia_staff_roles (
+                                id, name, description, active, full_access, permissions_json, legacy_staff_type, created_at, updated_at
+                            )
+                            SELECT 'a1111111-1111-1111-1111-111111111102'::uuid,
+                                   'Consultor',
+                                   'Papel padrão (consultoria)',
+                                   TRUE,
+                                   FALSE,
+                                   '{"dashboard": true, "clientes": true, "usuarios": false, "metaads": true, "metas": true, "alertas": true, "performance": true, "contratos": true, "consultoria": true}'::jsonb,
+                                   'CONSULTOR',
+                                   now(), now()
+                            WHERE NOT EXISTS (SELECT 1 FROM winai.amplia_staff_roles WHERE name = 'Consultor')
+                            """);
+                    int seeded3 = jdbcTemplate.update(
+                            """
+                            INSERT INTO winai.amplia_staff_roles (
+                                id, name, description, active, full_access, permissions_json, legacy_staff_type, created_at, updated_at
+                            )
+                            SELECT 'a1111111-1111-1111-1111-111111111103'::uuid,
+                                   'Gestor',
+                                   'Papel padrão (visão ampla)',
+                                   TRUE,
+                                   TRUE,
+                                   '{}'::jsonb,
+                                   'GESTOR',
+                                   now(), now()
+                            WHERE NOT EXISTS (SELECT 1 FROM winai.amplia_staff_roles WHERE name = 'Gestor')
+                            """);
+                    int bf1 = jdbcTemplate.update(
+                            """
+                            UPDATE winai.users u SET amplia_staff_role_id = r.id
+                            FROM winai.amplia_staff_roles r
+                            WHERE u.amplia_internal_staff = true
+                              AND u.amplia_staff_type::text = 'VENDEDOR'
+                              AND r.legacy_staff_type = 'VENDEDOR'
+                              AND u.amplia_staff_role_id IS NULL
+                            """);
+                    int bf2 = jdbcTemplate.update(
+                            """
+                            UPDATE winai.users u SET amplia_staff_role_id = r.id
+                            FROM winai.amplia_staff_roles r
+                            WHERE u.amplia_internal_staff = true
+                              AND u.amplia_staff_type::text = 'CONSULTOR'
+                              AND r.legacy_staff_type = 'CONSULTOR'
+                              AND u.amplia_staff_role_id IS NULL
+                            """);
+                    int bf3 = jdbcTemplate.update(
+                            """
+                            UPDATE winai.users u SET amplia_staff_role_id = r.id
+                            FROM winai.amplia_staff_roles r
+                            WHERE u.amplia_internal_staff = true
+                              AND u.amplia_staff_type::text = 'GESTOR'
+                              AND r.legacy_staff_type = 'GESTOR'
+                              AND u.amplia_staff_role_id IS NULL
+                            """);
+
+                    log.info(
+                            "Migração amplia_staff_roles: tabela/seed/backfill ok (seed {}, {}, {}, bf {}, {}, {})",
+                            seeded,
+                            seeded2,
+                            seeded3,
+                            bf1,
+                            bf2,
+                            bf3);
+                } catch (Exception e) {
+                    log.warn("Erro na migração amplia_staff_roles: {}", e.getMessage());
+                }
+
             } catch (Exception e) {
                 log.warn("Erro geral na migração: {}", e.getMessage());
             }
