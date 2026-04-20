@@ -129,15 +129,15 @@ const AdminConsultancyGlobalAppearance: React.FC = () => {
   return (
     <div className="space-y-6">
       {message && (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-200">{message}</div>
+        <div className="rounded-xl border border-black/5 bg-gray-50 px-4 py-3 text-sm text-gray-200">{message}</div>
       )}
 
-      <div className="glass-card rounded-2xl border border-gray-200 p-4 sm:p-6 space-y-4">
-        <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+      <div className="glass-card rounded-2xl border border-black/5 p-4 sm:p-6 space-y-4">
+        <h2 className="text-sm font-black text-[#141414] uppercase tracking-widest flex items-center gap-2">
           <LayoutTemplate size={18} className="text-emerald-600" /> Aparência no app do cliente (global)
         </h2>
         <p className="text-xs text-gray-400">
-          Textos da tela &quot;Consultoria Estratégica&quot; e dados do consultor para <strong className="text-gray-900">todas</strong> as empresas.
+          Textos da tela &quot;Consultoria Estratégica&quot; e dados do consultor para <strong className="text-[#141414]">todas</strong> as empresas.
           Valores vazios usam o padrão da plataforma no app. A foto do consultor é enviada como arquivo (não é possível
           colar URL).
         </p>
@@ -153,25 +153,25 @@ const AdminConsultancyGlobalAppearance: React.FC = () => {
                 <User size={14} className="text-emerald-600" /> Consultor
               </div>
               <input
-                className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-600"
+                className="rounded-xl border border-black/5 bg-gray-50 px-4 py-2 text-sm text-[#141414] placeholder:text-gray-600"
                 placeholder="Nome exibido"
                 value={form.displayName}
                 onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
               />
               <input
-                className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-600"
+                className="rounded-xl border border-black/5 bg-gray-50 px-4 py-2 text-sm text-[#141414] placeholder:text-gray-600"
                 placeholder="Cargo / especialidade"
                 value={form.role}
                 onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
               />
 
-              <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-4 pt-2 pb-2 border-t border-gray-200">
+              <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-4 pt-2 pb-2 border-t border-black/5">
                 <div className="flex items-center gap-3 min-w-0">
                   {appearance?.consultant.avatarUrl ? (
                     <img
                       src={appearance.consultant.avatarUrl}
                       alt=""
-                      className="h-16 w-16 rounded-2xl object-cover border border-gray-200 shrink-0"
+                      className="h-16 w-16 rounded-2xl object-cover border border-black/5 shrink-0"
                     />
                   ) : (
                     <div className="h-16 w-16 rounded-2xl bg-gray-50 border border-dashed border-white/20 flex items-center justify-center text-gray-500 shrink-0">
@@ -202,37 +202,37 @@ const AdminConsultancyGlobalAppearance: React.FC = () => {
                 <LayoutTemplate size={14} className="text-emerald-600" /> Textos da página
               </div>
               <input
-                className="md:col-span-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-600"
+                className="md:col-span-2 rounded-xl border border-black/5 bg-gray-50 px-4 py-2 text-sm text-[#141414] placeholder:text-gray-600"
                 placeholder="Selo superior (ex.: Consultoria Estratégica)"
                 value={form.kicker}
                 onChange={(e) => setForm((f) => ({ ...f, kicker: e.target.value }))}
               />
               <input
-                className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-600"
+                className="rounded-xl border border-black/5 bg-gray-50 px-4 py-2 text-sm text-[#141414] placeholder:text-gray-600"
                 placeholder="Título — parte antes do destaque"
                 value={form.headlinePrefix}
                 onChange={(e) => setForm((f) => ({ ...f, headlinePrefix: e.target.value }))}
               />
               <input
-                className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-600"
+                className="rounded-xl border border-black/5 bg-gray-50 px-4 py-2 text-sm text-[#141414] placeholder:text-gray-600"
                 placeholder="Título — palavra em destaque (verde)"
                 value={form.headlineAccent}
                 onChange={(e) => setForm((f) => ({ ...f, headlineAccent: e.target.value }))}
               />
               <input
-                className="md:col-span-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-600"
+                className="md:col-span-2 rounded-xl border border-black/5 bg-gray-50 px-4 py-2 text-sm text-[#141414] placeholder:text-gray-600"
                 placeholder="Legenda abaixo de &quot;Próximo encontro&quot;"
                 value={form.nextSectionCaption}
                 onChange={(e) => setForm((f) => ({ ...f, nextSectionCaption: e.target.value }))}
               />
               <input
-                className="md:col-span-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-600"
+                className="md:col-span-2 rounded-xl border border-black/5 bg-gray-50 px-4 py-2 text-sm text-[#141414] placeholder:text-gray-600"
                 placeholder="Título do card &quot;Solicitar novo encontro&quot;"
                 value={form.requestCardTitle}
                 onChange={(e) => setForm((f) => ({ ...f, requestCardTitle: e.target.value }))}
               />
               <textarea
-                className="md:col-span-2 min-h-[80px] rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-600 resize-none"
+                className="md:col-span-2 min-h-[80px] rounded-xl border border-black/5 bg-gray-50 px-4 py-3 text-sm text-[#141414] placeholder:text-gray-600 resize-none"
                 placeholder="Descrição do card de solicitação"
                 value={form.requestCardDescription}
                 onChange={(e) => setForm((f) => ({ ...f, requestCardDescription: e.target.value }))}

@@ -209,7 +209,7 @@ const AdminFollowUp = () => {
             {/* Header */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-10">
                 <div>
-                    <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none flex items-center gap-3">
+                    <h1 className="text-4xl font-black text-[#141414] tracking-tighter uppercase italic leading-none flex items-center gap-3">
                         <Clock className="text-amber-500" size={36} />
                         Follow-up Sequencial
                     </h1>
@@ -262,7 +262,7 @@ const AdminFollowUp = () => {
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <p className="font-black text-gray-900 uppercase text-base tracking-tight">Status do Robô</p>
+                                            <p className="font-black text-[#141414] uppercase text-base tracking-tight">Status do Robô</p>
                                             <div className={`w-2 h-2 rounded-full ${formData.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
                                         </div>
                                         <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mt-0.5">
@@ -366,7 +366,7 @@ const AdminFollowUp = () => {
                             {/* STEPS SECTION */}
                             <div className="mb-10">
                                 <div className="flex items-center justify-between mb-6">
-                                    <h2 className="text-xl font-black text-gray-900 uppercase italic tracking-tight flex items-center gap-2">
+                                    <h2 className="text-xl font-black text-[#141414] uppercase italic tracking-tight flex items-center gap-2">
                                         <Settings className="text-amber-500" size={24} />
                                         Sequência de Mensagens
                                     </h2>
@@ -381,7 +381,7 @@ const AdminFollowUp = () => {
 
                                 <div className="space-y-4">
                                     {formData.steps.length === 0 ? (
-                                        <div className="p-10 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center text-center">
+                                        <div className="p-10 border-2 border-dashed border-black/5 rounded-3xl flex flex-col items-center justify-center text-center">
                                             <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400">
                                                 <Settings size={24} />
                                             </div>

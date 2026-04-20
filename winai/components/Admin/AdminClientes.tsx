@@ -129,7 +129,7 @@ const AdminClientes: React.FC = () => {
         >
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900">Clientes</h2>
+                    <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Clientes</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
                         Visão por empresa — usuários, leads e plano. Contratos e faturas ficam em Contratos.
                     </p>
@@ -137,7 +137,7 @@ const AdminClientes: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                     <Link
                         to="/admin/companies"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-300 hover:bg-gray-50 text-xs font-black uppercase tracking-widest"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-300 hover:bg-gray-50 text-xs font-black uppercase tracking-widest"
                     >
                         <FileText size={14} />
                         Contratos e faturas
@@ -145,7 +145,7 @@ const AdminClientes: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => load()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-300 hover:bg-gray-50"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-300 hover:bg-gray-50"
                     >
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                         <span className="text-xs font-black uppercase tracking-widest">Sincronizar</span>
@@ -172,7 +172,7 @@ const AdminClientes: React.FC = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Buscar nome, CNPJ/CPF, contratante…"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                         />
                     </div>
                     <div className="space-y-2 max-h-[62vh] overflow-y-auto custom-scrollbar pr-1">
@@ -187,10 +187,10 @@ const AdminClientes: React.FC = () => {
                                     className={`w-full text-left rounded-xl p-4 border transition-colors ${
                                         selectedId === c.id
                                             ? 'border-emerald-200 bg-emerald-600/5'
-                                            : 'border-gray-200 bg-gray-50 hover:border-white/20'
+                                            : 'border-black/5 bg-gray-50 hover:border-white/20'
                                     }`}
                                 >
-                                    <p className="text-sm font-bold text-gray-900 truncate">{c.name}</p>
+                                    <p className="text-sm font-bold text-[#141414] truncate">{c.name}</p>
                                     <div className="flex flex-wrap gap-3 mt-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                                         <span className="flex items-center gap-1">
                                             <Users size={10} /> {uCount} usuários
@@ -210,20 +210,20 @@ const AdminClientes: React.FC = () => {
 
                 <div className="lg:col-span-7 space-y-4 min-h-[400px]">
                     {!selected && (
-                        <div className="glass-card rounded-2xl border border-gray-200 p-10 text-center text-gray-500 text-sm">
+                        <div className="glass-card rounded-2xl border border-black/5 p-10 text-center text-gray-500 text-sm">
                             Selecione um cliente à esquerda.
                         </div>
                     )}
                     {selected && (
                         <>
-                            <div className="glass-card rounded-2xl border border-gray-200 p-6 space-y-5">
+                            <div className="glass-card rounded-2xl border border-black/5 p-6 space-y-5">
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                                     <div>
                                         <div className="flex items-center gap-2 text-emerald-600 mb-2">
                                             <Building2 size={20} />
                                             <span className="text-[10px] font-black uppercase tracking-widest">Cliente</span>
                                         </div>
-                                        <h3 className="text-2xl font-black text-gray-900 tracking-tight">{selected.name}</h3>
+                                        <h3 className="text-2xl font-black text-[#141414] tracking-tight">{selected.name}</h3>
                                         {selected.planName && (
                                             <p className="text-sm text-gray-400 mt-2 flex items-center gap-2">
                                                 <CreditCard size={14} className="text-violet-400" />
@@ -241,7 +241,7 @@ const AdminClientes: React.FC = () => {
                                         </Link>
                                         <Link
                                             to="/admin/users"
-                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-black uppercase tracking-widest text-gray-900 hover:bg-gray-50"
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
                                         >
                                             <Users size={14} />
                                             Usuários
@@ -250,17 +250,17 @@ const AdminClientes: React.FC = () => {
                                 </div>
 
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    <div className="rounded-xl bg-gray-100 border border-gray-200 px-4 py-3">
+                                    <div className="rounded-xl bg-gray-100 border border-black/5 px-4 py-3">
                                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Usuários</p>
-                                        <p className="text-xl font-black text-gray-900 mt-1">{companyUsers.length}</p>
+                                        <p className="text-xl font-black text-[#141414] mt-1">{companyUsers.length}</p>
                                     </div>
-                                    <div className="rounded-xl bg-gray-100 border border-gray-200 px-4 py-3">
+                                    <div className="rounded-xl bg-gray-100 border border-black/5 px-4 py-3">
                                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Leads</p>
                                         <p className="text-xl font-black text-emerald-600 mt-1">
                                             {leadCountByCompany.get(selected.id) ?? 0}
                                         </p>
                                     </div>
-                                    <div className="rounded-xl bg-gray-100 border border-gray-200 px-4 py-3 col-span-2">
+                                    <div className="rounded-xl bg-gray-100 border border-black/5 px-4 py-3 col-span-2">
                                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Assinatura</p>
                                         <p className="text-sm font-bold text-gray-200 mt-1">
                                             {subscriptionLabel(selected.subscriptionStatus)}
@@ -278,7 +278,7 @@ const AdminClientes: React.FC = () => {
                                 </div>
 
                                 {(selected.contratante || selected.documento || selected.emailContratante) && (
-                                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2">
+                                    <div className="rounded-xl border border-black/5 bg-gray-50 p-4 space-y-2">
                                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contratante</p>
                                         {selected.contratante && (
                                             <p className="text-sm text-gray-200">{selected.contratante}</p>
@@ -295,7 +295,7 @@ const AdminClientes: React.FC = () => {
                                 )}
                             </div>
 
-                            <div className="glass-card rounded-2xl border border-gray-200 p-5">
+                            <div className="glass-card rounded-2xl border border-black/5 p-5">
                                 <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3 flex items-center gap-2">
                                     <Users size={14} className="text-emerald-600" /> Equipe nesta empresa
                                 </h4>

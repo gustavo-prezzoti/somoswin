@@ -28,7 +28,6 @@ import {
     loadSectionCollapsedState,
     saveSectionCollapsedState,
 } from './adminAmpliaRoutes';
-import logoBlack from '../../logo_black.png';
 
 const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
     dashboard: Home,
@@ -68,14 +67,6 @@ interface AdminSidebarProps {
     onNarrowChange: (narrow: boolean) => void;
 }
 
-function navClassName(active: boolean, narrow: boolean): string {
-    const base = `w-full flex items-center ${narrow ? 'justify-center' : 'justify-between'} px-4 py-2.5 rounded-xl transition-all duration-200 group relative`;
-    if (active) {
-        return `${base} bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.06)]`;
-    }
-    return `${base} text-gray-400/90 hover:bg-white/5 hover:text-white`;
-}
-
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, onNarrowChange }) => {
     const location = useLocation();
     const [sectionFolded, setSectionFolded] = useState<Record<string, boolean>>(loadSectionCollapsedState);
@@ -88,17 +79,17 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
         <aside
             className={`admin-sidebar-amplia ${isOpen ? 'open' : ''} ${
                 narrow ? 'w-20' : 'w-64'
-            } h-screen bg-[#002a1e] border-r border-white/5 flex flex-col fixed left-0 top-0 z-[1000] transition-all duration-300 ease-in-out shadow-[10px_0_50px_rgba(0,0,0,0.12)]`}
+            } h-screen bg-white border-r border-black/5 flex flex-col fixed left-0 top-0 z-[1000] transition-all duration-300 ease-in-out`}
         >
-            <div className="p-6 flex items-center justify-between gap-2 overflow-hidden border-b border-white/5">
-                <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.35)]">
-                        <Bot size={20} className="text-white" />
+            <div className="p-6 flex items-center justify-between gap-2 overflow-hidden">
+                <div className="flex items-center gap-2 min-w-max">
+                    <div className="w-8 h-8 bg-[#00FF00] rounded-lg flex items-center justify-center shrink-0">
+                        <Bot size={20} className="text-black" />
                     </div>
                     {!narrow && (
-                        <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] font-bold text-emerald-400/90 tracking-widest leading-none uppercase">Sistema</span>
-                            <span className="text-lg font-black italic tracking-tighter leading-none truncate text-white">AMPLIA • ADMIN</span>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-emerald-500 tracking-widest leading-none uppercase">SISTEMA</span>
+                            <span className="text-lg font-black italic tracking-tighter leading-none text-[#141414]">AMPLIA • ADMIN</span>
                         </div>
                     )}
                 </div>
@@ -107,7 +98,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
                         <button
                             type="button"
                             onClick={() => onNarrowChange(true)}
-                            className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-all hidden lg:block"
+                            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 transition-all hidden lg:block"
                             aria-label="Recolher menu"
                         >
                             <ChevronRight size={16} className="rotate-180" />
@@ -125,11 +116,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
             </div>
 
             {narrow && (
-                <div className="px-4 mb-4 pt-2">
+                <div className="px-4 mb-4">
                     <button
                         type="button"
                         onClick={() => onNarrowChange(false)}
-                        className="w-full py-3 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-gray-400 hover:text-white transition-all"
+                        className="w-full py-3 flex items-center justify-center bg-gray-50 hover:bg-gray-100 border border-black/5 rounded-xl text-gray-400 transition-all"
                         aria-label="Expandir menu"
                     >
                         <ChevronRight size={18} />
@@ -137,7 +128,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
                 </div>
             )}
 
-            <nav className="flex-1 px-4 py-2 overflow-y-auto scrollbar-hide custom-scrollbar">
+            <div className="flex-1 px-4 py-2 overflow-y-auto scrollbar-hide custom-scrollbar">
                 {ADMIN_NAV_SECTIONS.map((section) => {
                     const folded = sectionFolded[section.label] ?? false;
                     const showItems = narrow || !folded;
@@ -178,21 +169,27 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
                                                 end={item.to === '/admin'}
                                                 title={narrow ? item.label : undefined}
                                                 onClick={onClose}
-                                                className={() => navClassName(active, narrow)}
+                                                className={`w-full flex items-center ${
+                                                    narrow ? 'justify-center' : 'justify-between'
+                                                } px-4 py-2.5 rounded-xl transition-all duration-200 group relative ${
+                                                    active
+                                                        ? 'bg-[#141414] text-white shadow-lg'
+                                                        : 'text-gray-500 hover:bg-gray-100'
+                                                }`}
                                             >
-                                                <div className="flex items-center gap-3 min-w-0">
+                                                <div className="flex items-center gap-3">
                                                     <Icon
                                                         size={18}
                                                         className={
-                                                            active ? 'text-emerald-400 shrink-0' : 'text-gray-400 group-hover:text-white shrink-0'
+                                                            active
+                                                                ? 'text-[#00FF00] shrink-0'
+                                                                : 'text-gray-400 group-hover:text-gray-600 shrink-0'
                                                         }
                                                     />
-                                                    {!narrow && (
-                                                        <span className="text-xs font-bold tracking-wide truncate">{item.label}</span>
-                                                    )}
+                                                    {!narrow && <span className="text-xs font-bold tracking-wide">{item.label}</span>}
                                                 </div>
                                                 {!narrow && active && (
-                                                    <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full shrink-0 shadow-[0_0_8px_#10b981]" />
+                                                    <div className="w-1.5 h-1.5 bg-[#00FF00] rounded-full shrink-0" />
                                                 )}
                                             </NavLink>
                                         );
@@ -202,26 +199,21 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
                         </div>
                     );
                 })}
-            </nav>
+            </div>
 
-            <div className="p-4 border-t border-white/5 bg-black/20">
+            <div className="p-4 border-t border-black/5">
                 <NavLink
                     to="/dashboard"
                     onClick={onClose}
                     className={({ isActive }) =>
-                        `w-full flex items-center ${narrow ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-xl transition-all group ${
-                            isActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                        `w-full flex items-center ${narrow ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-xl text-gray-500 hover:bg-gray-100 transition-all group ${
+                            isActive ? 'bg-gray-100 text-[#141414]' : ''
                         }`
                     }
                 >
-                    <ChevronRight size={18} className={`${narrow ? '' : 'rotate-180'} text-gray-400 group-hover:text-emerald-400`} />
-                    {!narrow && <span className="text-xs font-bold tracking-wide">Voltar ao App</span>}
+                    <ChevronRight size={18} className={`${narrow ? '' : 'rotate-180'} text-gray-400 group-hover:text-gray-600`} />
+                    {!narrow && <span className="text-xs font-bold tracking-wide">VOLTAR AO APP</span>}
                 </NavLink>
-                {!narrow && (
-                    <div className="mt-3 px-2 flex items-center gap-2 opacity-60">
-                        <img src={logoBlack} alt="" className="h-6 w-auto opacity-80" />
-                    </div>
-                )}
             </div>
         </aside>
     );

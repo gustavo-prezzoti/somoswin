@@ -1,21 +1,27 @@
-/* Admin Layout — Amplia (light, alinhado ao painel principal App.tsx) */
+/* Admin Layout — alinhado a amplia-painel/src/index.css */
 :root {
   --admin-sidebar-width: 256px;
   --admin-sidebar-width-narrow: 80px;
-  --admin-primary: #10b981;
-  --admin-bg: #f8fafc;
+  --admin-primary: #00ff00;
+  --admin-bg: #f8f9fa;
   --admin-surface: #ffffff;
-  --admin-text-main: #0f172a;
+  --admin-text-main: #141414;
   --admin-text-muted: #64748b;
-  --admin-border: #e2e8f0;
+  --admin-border: rgba(0, 0, 0, 0.05);
   --admin-radius: 1rem;
+  --admin-radius-2xl: 1.5rem;
 }
 
 .admin-layout {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
   background: var(--admin-bg);
-  overflow-x: hidden;
+  overflow: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -24,12 +30,19 @@
   color: var(--admin-text-main);
 }
 
-/* Card padrão — mesmo espírito do conteúdo principal (branco + borda suave) */
+/* glass-card — espelho de .glass-card no Amplia (tailwind @apply) */
 .admin-layout--amplia .glass-card {
   background: #ffffff;
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: var(--admin-radius-2xl);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.admin-content-inner {
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
 }
 
 .admin-main {
@@ -39,6 +52,8 @@
   margin-left: var(--admin-sidebar-width);
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .admin-main--narrow {
@@ -47,11 +62,14 @@
 
 .admin-content {
   flex: 1;
+  min-height: 0;
   padding: 48px;
   background: var(--admin-bg);
   animation: admin-page-enter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-x: hidden;
   overflow-y: auto;
-  min-height: calc(100vh - 80px);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 @keyframes admin-page-enter {
@@ -87,7 +105,8 @@
 }
 
 .admin-sidebar-amplia {
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 @media (max-width: 1024px) {
@@ -131,13 +150,13 @@ a {
 }
 
 *:focus-visible {
-  outline: 2px solid var(--admin-primary);
+  outline: 2px solid rgba(0, 255, 0, 0.5);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: rgba(16, 185, 129, 0.2);
-  color: #0f172a;
+  background: rgba(0, 255, 0, 0.2);
+  color: #141414;
 }
 
 .custom-scrollbar::-webkit-scrollbar {

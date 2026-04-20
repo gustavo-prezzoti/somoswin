@@ -283,7 +283,7 @@ const AdminEscutaInteligente: React.FC = () => {
         >
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900">Escuta Inteligente</h2>
+                    <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Escuta Inteligente</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
                         Sessões globais — áudio, transcrição e análise IA por empresa
                     </p>
@@ -291,7 +291,7 @@ const AdminEscutaInteligente: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => loadList()}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-300 hover:bg-gray-50 self-start"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-300 hover:bg-gray-50 self-start"
                 >
                     <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     <span className="text-xs font-black uppercase tracking-widest">Sincronizar</span>
@@ -308,7 +308,7 @@ const AdminEscutaInteligente: React.FC = () => {
                 </div>
             )}
 
-            <div className="glass-card rounded-2xl border border-gray-200 p-5 space-y-4">
+            <div className="glass-card rounded-2xl border border-black/5 p-5 space-y-4">
                 <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600">
                     <Mic size={14} /> Nova sessão
                 </div>
@@ -323,7 +323,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                     setNewCompanyId(e.target.value);
                                     setNewLeadId('');
                                 }}
-                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-emerald-200"
+                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] focus:outline-none focus:border-emerald-200"
                             >
                                 <option value="">Selecione…</option>
                                 {companies.map((c) => (
@@ -342,7 +342,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                 value={newLeadId}
                                 onChange={(e) => setNewLeadId(e.target.value)}
                                 disabled={!newCompanyId}
-                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 focus:outline-none focus:border-emerald-200 disabled:opacity-40"
+                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] focus:outline-none focus:border-emerald-200 disabled:opacity-40"
                             >
                                 <option value="">{newCompanyId ? 'Selecione o lead…' : 'Escolha a empresa primeiro'}</option>
                                 {leadsForCompany.map((l) => (
@@ -360,7 +360,7 @@ const AdminEscutaInteligente: React.FC = () => {
                             value={newTitle}
                             onChange={(e) => setNewTitle(e.target.value)}
                             placeholder="Ex.: Follow-up proposta — Acme"
-                            className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
+                            className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                         />
                     </div>
                 </div>
@@ -388,7 +388,7 @@ const AdminEscutaInteligente: React.FC = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Buscar empresa, lead, título…"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                         />
                     </div>
                     <div className="space-y-2 max-h-[62vh] overflow-y-auto custom-scrollbar pr-1">
@@ -400,10 +400,10 @@ const AdminEscutaInteligente: React.FC = () => {
                                 className={`w-full text-left rounded-xl p-4 border transition-colors ${
                                     selectedId === s.id
                                         ? 'border-emerald-200 bg-emerald-600/5'
-                                        : 'border-gray-200 bg-gray-50 hover:border-white/20'
+                                        : 'border-black/5 bg-gray-50 hover:border-white/20'
                                 }`}
                             >
-                                <p className="text-sm font-bold text-gray-900 truncate">{s.title || 'Escuta Inteligente'}</p>
+                                <p className="text-sm font-bold text-[#141414] truncate">{s.title || 'Escuta Inteligente'}</p>
                                 <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
                                     <Building2 size={12} className="shrink-0" />
                                     <span className="truncate">{s.companyName}</span>
@@ -431,7 +431,7 @@ const AdminEscutaInteligente: React.FC = () => {
 
                 <div className="lg:col-span-8 space-y-4 min-h-[480px]">
                     {!selectedId && (
-                        <div className="glass-card rounded-2xl border border-gray-200 p-10 text-center text-gray-500 text-sm">
+                        <div className="glass-card rounded-2xl border border-black/5 p-10 text-center text-gray-500 text-sm">
                             Selecione uma sessão à esquerda ou crie uma nova acima.
                         </div>
                     )}
@@ -443,10 +443,10 @@ const AdminEscutaInteligente: React.FC = () => {
                                 </div>
                             ) : detail ? (
                                 <>
-                                    <div className="glass-card rounded-2xl border border-gray-200 p-5 flex flex-col gap-4">
+                                    <div className="glass-card rounded-2xl border border-black/5 p-5 flex flex-col gap-4">
                                         <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
                                             <div>
-                                                <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                                                <h3 className="text-xl font-black text-[#141414] tracking-tight">
                                                     {detail.title || 'Escuta Inteligente'}
                                                 </h3>
                                                 <p className="text-sm text-gray-400 mt-1">
@@ -470,7 +470,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                     type="button"
                                                     disabled={!!busy}
                                                     onClick={() => fileRef.current?.click()}
-                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 text-xs font-black uppercase tracking-widest text-gray-900 hover:bg-gray-50"
+                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
                                                 >
                                                     <FileAudio size={14} />
                                                     {busy === 'upload' ? 'Enviando…' : 'Enviar áudio'}
@@ -479,7 +479,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                     type="button"
                                                     disabled={!!busy}
                                                     onClick={onAnalyze}
-                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-gray-200 text-xs font-black uppercase tracking-widest text-gray-900 hover:bg-white/15"
+                                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-white/15"
                                                 >
                                                     <BrainCircuit size={14} />
                                                     {busy === 'analyze' ? 'Analisando…' : 'Analisar IA'}
@@ -520,7 +520,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                         {parsed ? (
                                             <>
                                                 {parsed.resumo && (
-                                                    <div className="glass-card rounded-2xl border border-gray-200 p-5">
+                                                    <div className="glass-card rounded-2xl border border-black/5 p-5">
                                                         <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2 flex items-center gap-2">
                                                             <Sparkles size={14} className="text-emerald-600" /> Resumo
                                                         </h4>
@@ -531,7 +531,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                 )}
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     {parsed.pontos_fortes.length > 0 && (
-                                                        <div className="glass-card rounded-2xl border border-gray-200 p-5">
+                                                        <div className="glass-card rounded-2xl border border-black/5 p-5">
                                                             <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3 flex items-center gap-2">
                                                                 <Target size={14} className="text-emerald-400" /> Pontos fortes
                                                             </h4>
@@ -546,7 +546,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                         </div>
                                                     )}
                                                     {parsed.pontos_fracos.length > 0 && (
-                                                        <div className="glass-card rounded-2xl border border-gray-200 p-5">
+                                                        <div className="glass-card rounded-2xl border border-black/5 p-5">
                                                             <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3 flex items-center gap-2">
                                                                 <AlertCircle size={14} className="text-amber-400" /> Pontos de atenção
                                                             </h4>
@@ -562,7 +562,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                     )}
                                                 </div>
                                                 {parsed.melhorias.length > 0 && (
-                                                    <div className="glass-card rounded-2xl border border-gray-200 p-5">
+                                                    <div className="glass-card rounded-2xl border border-black/5 p-5">
                                                         <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">
                                                             Melhorias sugeridas
                                                         </h4>
@@ -593,7 +593,7 @@ const AdminEscutaInteligente: React.FC = () => {
                                                 )}
                                             </>
                                         ) : detail.aiSummary ? (
-                                            <div className="glass-card rounded-2xl border border-gray-200 p-5">
+                                            <div className="glass-card rounded-2xl border border-black/5 p-5">
                                                 <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">
                                                     Análise (texto bruto)
                                                 </h4>
@@ -602,12 +602,12 @@ const AdminEscutaInteligente: React.FC = () => {
                                                 </pre>
                                             </div>
                                         ) : (
-                                            <div className="glass-card rounded-2xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
+                                            <div className="glass-card rounded-2xl border border-dashed border-black/5 p-8 text-center text-sm text-gray-500">
                                                 Ainda não há análise. Envie áudio e rode &quot;Analisar IA&quot;.
                                             </div>
                                         )}
 
-                                        <div className="glass-card rounded-2xl border border-gray-200 p-5">
+                                        <div className="glass-card rounded-2xl border border-black/5 p-5">
                                             <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">
                                                 Transcrição completa
                                             </h4>

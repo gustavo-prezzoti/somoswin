@@ -42,9 +42,9 @@ const AdminLogin: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-6 relative overflow-hidden font-['Inter']">
+        <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center p-6 relative overflow-hidden font-['Inter']">
             {/* Background Decorations */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_20px_#10b981]" />
+            <div className="absolute top-0 left-0 w-full h-1 bg-[#00FF00] shadow-[0_0_20px_#00FF00]" />
             <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-500/5 blur-[120px] rounded-full" />
             <div className="absolute bottom-[-10%] left-[-10%] w-[30%] h-[30%] bg-indigo-500/5 blur-[120px] rounded-full" />
 
@@ -57,7 +57,7 @@ const AdminLogin: React.FC = () => {
                         <ShieldCheck size={14} className="text-emerald-500" />
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em]">Núcleo Administrativo</span>
                     </div>
-                    <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Acesso Restrito</h1>
+                    <h1 className="text-4xl font-black text-[#141414] tracking-tighter uppercase italic leading-none">Acesso Restrito</h1>
                 </div>
 
                 <div className="bg-white rounded-[2.5rem] p-10 shadow-2xl shadow-gray-200/50 border border-gray-100 relative group">

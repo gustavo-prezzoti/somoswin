@@ -104,7 +104,7 @@ const AdminSettings: React.FC = () => {
         <div className="p-6 max-w-[1400px] mx-auto min-h-screen">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
                 <div className="relative">
-                    <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Configurações</h1>
+                    <h1 className="text-4xl font-black text-[#141414] tracking-tighter uppercase italic leading-none">Configurações</h1>
                     <p className="text-gray-500 font-bold text-sm tracking-tight mt-2 opacity-70 flex items-center gap-2">
                         Configurações globais do sistema
                     </p>
@@ -117,11 +117,11 @@ const AdminSettings: React.FC = () => {
                     <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
                         <div className="p-10 border-b border-gray-100 bg-gray-50/30 flex flex-col md:flex-row items-center justify-between gap-6">
                             <div className="flex items-center gap-6">
-                                <div className="w-16 h-16 rounded-xl bg-indigo-600 text-gray-900 flex items-center justify-center shadow-lg">
+                                <div className="w-16 h-16 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg">
                                     <Globe size={32} />
                                 </div>
                                 <div className="text-center md:text-left">
-                                    <h2 className="text-2xl font-black text-gray-900 uppercase italic tracking-tighter leading-none">Webhook Global</h2>
+                                    <h2 className="text-2xl font-black text-[#141414] uppercase italic tracking-tighter leading-none">Webhook Global</h2>
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-2">Configuração de Webhook para monitoramento</p>
                                 </div>
                             </div>

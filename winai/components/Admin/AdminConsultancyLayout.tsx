@@ -39,20 +39,20 @@ const AdminConsultancyLayout: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-4 sm:p-6 pb-16">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-black italic uppercase text-gray-900 tracking-tight">Consultoria estratégica</h1>
+        <h1 className="text-3xl sm:text-4xl font-black italic uppercase text-[#141414] tracking-tight">Consultoria estratégica</h1>
         <p className="text-sm text-gray-400 mt-1 max-w-2xl">
           Pedidos de call e links Meet; textos e foto do consultor no app ficam em <strong className="text-emerald-600">Aparência global</strong>.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-1">
+      <div className="flex flex-wrap gap-2 border-b border-black/5 pb-1">
         <NavLink
           to="/admin/consultancy"
           end
           className={({ isActive }) =>
             `inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-xs font-black uppercase tracking-widest transition-colors ${
               isActive
-                ? 'bg-white border border-b-0 border-gray-200 text-emerald-700 shadow-sm'
+                ? 'bg-white border border-b-0 border-black/5 text-emerald-700 shadow-sm'
                 : 'text-gray-500 hover:text-emerald-600'
             }`
           }
@@ -65,7 +65,7 @@ const AdminConsultancyLayout: React.FC = () => {
           className={({ isActive }) =>
             `inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-xs font-black uppercase tracking-widest transition-colors ${
               isActive
-                ? 'bg-white border border-b-0 border-gray-200 text-emerald-700 shadow-sm'
+                ? 'bg-white border border-b-0 border-black/5 text-emerald-700 shadow-sm'
                 : 'text-gray-500 hover:text-emerald-600'
             }`
           }

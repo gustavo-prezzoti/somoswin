@@ -133,7 +133,7 @@ const AdminAlertas: React.FC = () => {
         >
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900 flex items-center gap-3">
+                    <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414] flex items-center gap-3">
                         <Bell className="w-8 h-8 text-emerald-600" />
                         Alertas
                     </h2>
@@ -144,7 +144,7 @@ const AdminAlertas: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => void load()}
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-200 text-xs font-black uppercase tracking-widest text-gray-900 hover:bg-gray-50"
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
                 >
                     <RefreshCw size={16} className="text-emerald-600" />
                     Atualizar
@@ -157,7 +157,7 @@ const AdminAlertas: React.FC = () => {
                 </div>
             )}
 
-            <div className="glass-card rounded-xl p-4 border border-gray-200 flex flex-col sm:flex-row flex-wrap gap-4 sm:items-end">
+            <div className="glass-card rounded-xl p-4 border border-black/5 flex flex-col sm:flex-row flex-wrap gap-4 sm:items-end">
                 <label className="flex flex-col gap-1 flex-1 min-w-[200px] text-xs font-bold text-gray-500 uppercase tracking-wider">
                     <span className="flex items-center gap-1">
                         <Building2 className="w-3.5 h-3.5" /> Empresa
@@ -168,7 +168,7 @@ const AdminAlertas: React.FC = () => {
                             setCompanyId(e.target.value);
                             setPage(0);
                         }}
-                        className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900"
+                        className="rounded-xl bg-gray-50 border border-black/5 px-3 py-2.5 text-sm text-[#141414]"
                     >
                         <option value="">Todas</option>
                         {companies.map((c) => (
@@ -186,7 +186,7 @@ const AdminAlertas: React.FC = () => {
                             setReadFilter(e.target.value as typeof readFilter);
                             setPage(0);
                         }}
-                        className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-sm text-gray-900 min-w-[160px]"
+                        className="rounded-xl bg-gray-50 border border-black/5 px-3 py-2.5 text-sm text-[#141414] min-w-[160px]"
                     >
                         <option value="all">Todas</option>
                         <option value="unread">Não lidas</option>
@@ -205,7 +205,7 @@ const AdminAlertas: React.FC = () => {
             ) : (
                 <div className="space-y-3">
                     {rows.length === 0 ? (
-                        <div className="glass-card rounded-xl p-12 text-center text-gray-500 border border-gray-200">
+                        <div className="glass-card rounded-xl p-12 text-center text-gray-500 border border-black/5">
                             Nenhuma notificação com os filtros atuais.
                         </div>
                     ) : (
@@ -225,7 +225,7 @@ const AdminAlertas: React.FC = () => {
                                         </div>
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <h3 className="text-sm font-black text-gray-900">{n.title}</h3>
+                                                <h3 className="text-sm font-black text-[#141414]">{n.title}</h3>
                                                 <span className="text-[10px] font-mono uppercase text-gray-500">{n.type}</span>
                                                 {n.read ? (
                                                     <span className="text-[10px] font-black uppercase text-gray-500">Lida</span>
@@ -279,7 +279,7 @@ const AdminAlertas: React.FC = () => {
                                         )}
                                         <Link
                                             to="/admin/crm"
-                                            className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-gray-200 text-gray-300 hover:bg-gray-50 text-center"
+                                            className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-black/5 text-gray-300 hover:bg-gray-50 text-center"
                                         >
                                             CRM
                                         </Link>
@@ -297,7 +297,7 @@ const AdminAlertas: React.FC = () => {
                         type="button"
                         disabled={page <= 0}
                         onClick={() => setPage((p) => Math.max(0, p - 1))}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-900 disabled:opacity-30"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-black/5 text-xs font-bold text-[#141414] disabled:opacity-30"
                     >
                         <ChevronLeft size={16} /> Anterior
                     </button>
@@ -308,7 +308,7 @@ const AdminAlertas: React.FC = () => {
                         type="button"
                         disabled={page >= totalPages - 1}
                         onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-900 disabled:opacity-30"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-black/5 text-xs font-bold text-[#141414] disabled:opacity-30"
                     >
                         Próxima <ChevronRight size={16} />
                     </button>

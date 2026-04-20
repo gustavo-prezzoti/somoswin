@@ -162,7 +162,7 @@ export const ModalProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                                 )}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-start gap-4">
-                                        <h3 className="font-black text-gray-900 text-xl uppercase tracking-tighter italic leading-tight">
+                                        <h3 className="font-black text-[#141414] text-xl uppercase tracking-tighter italic leading-tight">
                                             {currentModal.title}
                                         </h3>
                                         {!currentModal.body && (

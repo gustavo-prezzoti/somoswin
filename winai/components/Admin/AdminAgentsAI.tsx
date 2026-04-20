@@ -149,7 +149,7 @@ const AdminAgentsAI = () => {
                                 <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wide">Não definido — escolha após vincular o agente ou apague o último agente para limpar</span>
                             )}
                         </div>
-                        <div className="flex bg-white rounded-lg p-1 border border-gray-200 shrink-0">
+                        <div className="flex bg-white rounded-lg p-1 border border-black/5 shrink-0">
                             <button
                                 type="button"
                                 onClick={() => toggleCompanyMode('IA')}
@@ -160,7 +160,7 @@ const AdminAgentsAI = () => {
                             <button
                                 type="button"
                                 onClick={() => toggleCompanyMode('HUMAN')}
-                                className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'HUMAN' ? 'bg-rose-500 text-gray-900 shadow-lg shadow-rose-500/30' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${compMode === 'HUMAN' ? 'bg-rose-500 text-[#141414] shadow-lg shadow-rose-500/30' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 Humano
                             </button>
@@ -402,7 +402,7 @@ const AdminAgentsAI = () => {
         <div className="p-6 max-w-[1600px] mx-auto">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-12">
                 <div className="relative">
-                    <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Agentes IA</h1>
+                    <h1 className="text-4xl font-black text-[#141414] tracking-tighter uppercase italic leading-none">Agentes IA</h1>
                     <p className="text-gray-500 font-bold text-sm tracking-tight mt-2 opacity-70 flex items-center gap-2">
                         Gerencie os agentes de IA de cada empresa
                     </p>

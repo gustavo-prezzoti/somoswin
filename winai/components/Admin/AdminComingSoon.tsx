@@ -31,11 +31,11 @@ const AdminComingSoon: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             className="max-w-2xl mx-auto"
         >
-            <div className="glass-card rounded-2xl border border-gray-200 bg-gray-50 p-12 text-center">
+            <div className="glass-card rounded-2xl border border-black/5 bg-gray-50 p-12 text-center">
                 <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-emerald-50 flex items-center justify-center">
                     <Construction className="w-8 h-8 text-emerald-600" />
                 </div>
-                <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900 mb-2">{label}</h2>
+                <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414] mb-2">{label}</h2>
                 <p className="text-sm text-gray-400 font-medium">Em desenvolvimento — integração com banco e API virá nas próximas entregas.</p>
             </div>
         </motion.div>

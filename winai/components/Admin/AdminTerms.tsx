@@ -90,7 +90,7 @@ const AdminTerms: React.FC = () => {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Termos de Serviço</h1>
+                    <h1 className="text-2xl font-bold text-[#141414]">Termos de Serviço</h1>
                     <p className="text-gray-600">Gerencie os termos e visualize o status de aceitação</p>
                 </div>
                 <div className="flex gap-3">
@@ -113,21 +113,21 @@ const AdminTerms: React.FC = () => {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="bg-white rounded-xl p-4 border border-black/5">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                             <FileText className="text-blue-600" size={20} />
                         </div>
                         <div>
                             <p className="text-sm text-gray-500">Versão Atual</p>
-                            <p className="text-xl font-bold text-gray-900">
+                            <p className="text-xl font-bold text-[#141414]">
                                 {terms.find(t => t.active)?.version || '-'}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="bg-white rounded-xl p-4 border border-black/5">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
                             <CheckCircle className="text-emerald-600" size={20} />
@@ -139,7 +139,7 @@ const AdminTerms: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="bg-white rounded-xl p-4 border border-black/5">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
                             <XCircle className="text-amber-600" size={20} />
@@ -153,8 +153,8 @@ const AdminTerms: React.FC = () => {
             </div>
 
             {/* Tabs */}
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="flex border-b border-gray-200">
+            <div className="bg-white rounded-xl border border-black/5 overflow-hidden">
+                <div className="flex border-b border-black/5">
                     <button
                         onClick={() => setActiveTab('users')}
                         className={`flex-1 px-4 py-3 font-medium transition-colors ${activeTab === 'users'
@@ -198,7 +198,7 @@ const AdminTerms: React.FC = () => {
                                     <tr key={user.userId} className="hover:bg-gray-50">
                                         <td className="px-4 py-3">
                                             <div>
-                                                <p className="font-medium text-gray-900">{user.userName}</p>
+                                                <p className="font-medium text-[#141414]">{user.userName}</p>
                                                 <p className="text-sm text-gray-500">{user.userEmail}</p>
                                             </div>
                                         </td>
@@ -249,12 +249,12 @@ const AdminTerms: React.FC = () => {
                         {terms.map((term) => (
                             <div
                                 key={term.id}
-                                className={`border rounded-lg p-4 ${term.active ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
+                                className={`border rounded-lg p-4 ${term.active ? 'border-emerald-300 bg-emerald-50' : 'border-black/5'
                                     }`}
                             >
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-3">
-                                        <span className="text-lg font-bold text-gray-900">v{term.version}</span>
+                                        <span className="text-lg font-bold text-[#141414]">v{term.version}</span>
                                         {term.active && (
                                             <span className="px-2 py-1 bg-emerald-500 text-white text-xs font-bold rounded">
                                                 ATIVO
@@ -291,7 +291,7 @@ const AdminTerms: React.FC = () => {
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[10050] p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-0">
                     <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in duration-200">
                         <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
-                            <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Nova Versão dos Termos</h2>
+                            <h2 className="text-xl font-black text-[#141414] uppercase tracking-tight">Nova Versão dos Termos</h2>
                             <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-50 rounded-lg">
                                 <X size={24} />
                             </button>
@@ -365,7 +365,7 @@ const AdminTerms: React.FC = () => {
                     <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in duration-200">
                         <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
                             <div>
-                                <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Termos de Uso <span className="text-emerald-500">v{viewingTerm.version}</span></h2>
+                                <h2 className="text-xl font-black text-[#141414] uppercase tracking-tight">Termos de Uso <span className="text-emerald-500">v{viewingTerm.version}</span></h2>
                                 <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-wider">Criado em {formatDate(viewingTerm.createdAt)}</p>
                             </div>
                             <button onClick={() => setViewingTerm(null)} className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-50 rounded-lg">
@@ -374,7 +374,7 @@ const AdminTerms: React.FC = () => {
                         </div>
                         <div className="p-8 overflow-y-auto custom-scrollbar flex-1 bg-gray-50">
                             <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm max-w-3xl mx-auto">
-                                <article className="prose prose-sm md:prose-base max-w-none prose-headings:font-black prose-headings:tracking-tight prose-headings:text-gray-900 prose-p:text-gray-600 prose-strong:text-gray-900 prose-emerald">
+                                <article className="prose prose-sm md:prose-base max-w-none prose-headings:font-black prose-headings:tracking-tight prose-headings:text-[#141414] prose-p:text-gray-600 prose-strong:text-[#141414] prose-emerald">
                                     <pre className="whitespace-pre-wrap font-sans text-gray-700 leading-relaxed">
                                         {viewingTerm.content}
                                     </pre>

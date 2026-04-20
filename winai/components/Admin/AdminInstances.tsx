@@ -272,7 +272,7 @@ const AdminInstances: React.FC = () => {
         <div className="p-6 max-w-[1600px] mx-auto">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
                 <div className="relative">
-                    <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none">Instâncias</h1>
+                    <h1 className="text-4xl font-black text-[#141414] tracking-tighter uppercase italic leading-none">Instâncias</h1>
                     <p className="text-gray-500 font-bold text-sm tracking-tight mt-2 opacity-70 flex items-center gap-2">
                         Gerencie suas instâncias do WhatsApp
                     </p>

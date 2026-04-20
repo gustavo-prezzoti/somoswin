@@ -5,33 +5,31 @@ export interface AdminRouteMeta {
     subtitle: string;
 }
 
+/** Títulos/subtítulos alinhados a amplia-painel/src/App.tsx (getTabTitle / getTabSubtitle). */
 const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
-    { pattern: '/admin/crm', meta: { title: 'CRM e Leads', subtitle: 'Pipeline e qualificação' } },
-    { pattern: '/admin/atendimento', meta: { title: 'Atendimento', subtitle: 'Conversas WhatsApp' } },
-    { pattern: '/admin/escuta', meta: { title: 'Escuta Inteligente', subtitle: 'Análise de áudio e transcrições' } },
-    { pattern: '/admin/clientes', meta: { title: 'Clientes', subtitle: 'Empresas e relacionamento' } },
-    { pattern: '/admin/meta-ads', meta: { title: 'Meta Ads', subtitle: 'Campanhas e conexão por empresa' } },
-    { pattern: '/admin/metas', meta: { title: 'Metas e Objetivos', subtitle: 'Ciclo anual por empresa' } },
-    { pattern: '/admin/agenda', meta: { title: 'Agenda Comercial', subtitle: 'Reuniões e compromissos por empresa' } },
-    {
-        pattern: '/admin/diagnostico',
-        meta: { title: 'Diagnóstico Comercial', subtitle: 'Leitura unificada de pipeline, metas e riscos' },
-    },
-    { pattern: '/admin/alertas', meta: { title: 'Alertas', subtitle: 'Notificações de todo o sistema' } },
-    { pattern: '/admin/performance', meta: { title: 'Performance', subtitle: 'Indicadores agregados e Meta Ads' } },
+    { pattern: '/admin/crm', meta: { title: 'CRM e Leads', subtitle: 'Gestão de leads e pipeline' } },
+    { pattern: '/admin/atendimento', meta: { title: 'Atendimento', subtitle: 'Central de mensagens e chat' } },
+    { pattern: '/admin/escuta', meta: { title: 'Escuta Inteligente', subtitle: 'Análise de chamadas com IA' } },
+    { pattern: '/admin/clientes', meta: { title: 'Clientes', subtitle: 'Acompanhamento estratégico' } },
+    { pattern: '/admin/meta-ads', meta: { title: 'Meta Ads', subtitle: 'Gestão e Otimização IA' } },
+    { pattern: '/admin/metas', meta: { title: 'Metas e Objetivos', subtitle: 'Planejamento Estratégico' } },
+    { pattern: '/admin/agenda', meta: { title: 'Agenda Comercial', subtitle: 'Encontros da semana' } },
+    { pattern: '/admin/diagnostico', meta: { title: 'Diagnóstico Comercial', subtitle: 'Avaliação de Maturidade' } },
+    { pattern: '/admin/alertas', meta: { title: 'Alertas', subtitle: 'Ações prioritárias' } },
+    { pattern: '/admin/performance', meta: { title: 'Performance', subtitle: 'Performance do consultor' } },
     { pattern: '/admin/consultancy/aparencia', meta: { title: 'Consultoria', subtitle: 'Aparência global' } },
     { pattern: '/admin/consultancy', meta: { title: 'Consultoria', subtitle: 'Operações e aparência' } },
-    { pattern: '/admin/users', meta: { title: 'Usuários', subtitle: 'Gestão de contas e permissões' } },
-    { pattern: '/admin/companies', meta: { title: 'Contratos', subtitle: 'Empresas e contratos' } },
-    { pattern: '/admin/instances', meta: { title: 'Instâncias', subtitle: 'WhatsApp e instâncias' } },
-    { pattern: '/admin/user-connections', meta: { title: 'Conexões', subtitle: 'Conexões de usuários' } },
+    { pattern: '/admin/users', meta: { title: 'Usuários', subtitle: 'Gestão de acessos' } },
+    { pattern: '/admin/companies', meta: { title: 'Contratos', subtitle: 'Gestão de contratos e faturamento' } },
+    { pattern: '/admin/instances', meta: { title: 'Instâncias', subtitle: 'WhatsApp e integrações' } },
+    { pattern: '/admin/user-connections', meta: { title: 'Conexões', subtitle: 'Conexões e canais' } },
     { pattern: '/admin/agents', meta: { title: 'Agentes IA', subtitle: 'Agentes e automação' } },
-    { pattern: '/admin/followup', meta: { title: 'Follow-up', subtitle: 'Configuração de follow-up' } },
+    { pattern: '/admin/followup', meta: { title: 'Follow-up', subtitle: 'Automação de follow-up' } },
     { pattern: '/admin/settings', meta: { title: 'Configurações', subtitle: 'Configurações globais' } },
-    { pattern: '/admin/notifications', meta: { title: 'Notificações', subtitle: 'Notificações globais' } },
+    { pattern: '/admin/notifications', meta: { title: 'Notificações', subtitle: 'Centro de notificações' } },
     { pattern: '/admin/terms', meta: { title: 'Termos de Uso', subtitle: 'Termos e aceites' } },
     { pattern: '/admin/em-breve', meta: { title: 'Em desenvolvimento', subtitle: 'Módulo em construção' } },
-    { pattern: '/admin', end: true, meta: { title: 'Dashboard', subtitle: 'Visão geral estratégica e operacional' } },
+    { pattern: '/admin', end: true, meta: { title: 'Dashboard', subtitle: 'Visão geral do sistema Amplia' } },
 ];
 
 const DEFAULT_META: AdminRouteMeta = {

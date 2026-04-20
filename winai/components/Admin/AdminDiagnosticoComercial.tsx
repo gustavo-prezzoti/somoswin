@@ -169,7 +169,7 @@ const AdminDiagnosticoComercial: React.FC = () => {
         return (
             <div className="max-w-xl mx-auto glass-card rounded-2xl p-8 border border-rose-500/30 text-center">
                 <AlertTriangle className="w-12 h-12 text-rose-400 mx-auto mb-4" />
-                <p className="text-gray-900 font-bold mb-4">{error}</p>
+                <p className="text-[#141414] font-bold mb-4">{error}</p>
                 <button
                     type="button"
                     onClick={() => void load()}
@@ -248,7 +248,7 @@ const AdminDiagnosticoComercial: React.FC = () => {
         >
             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900 flex items-center gap-3">
+                    <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414] flex items-center gap-3">
                         <ClipboardCheck className="w-8 h-8 text-emerald-600" />
                         Diagnóstico comercial
                     </h2>
@@ -260,14 +260,14 @@ const AdminDiagnosticoComercial: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => void load()}
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-200 text-xs font-black uppercase tracking-widest text-gray-900 hover:bg-gray-50 hover:border-emerald-200"
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50 hover:border-emerald-200"
                 >
                     <RefreshCw size={16} className="text-emerald-600" />
                     Atualizar
                 </button>
             </div>
 
-            <div className="glass-card rounded-2xl p-6 border border-gray-200">
+            <div className="glass-card rounded-2xl p-6 border border-black/5">
                 <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Resumo executivo</h3>
                 <ul className="space-y-3">
                     {insights.map((line, i) => (
@@ -295,7 +295,7 @@ const AdminDiagnosticoComercial: React.FC = () => {
                                     <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-emerald-600 shrink-0">
                                         <Icon size={20} />
                                     </div>
-                                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight leading-tight">
+                                    <span className="text-sm font-black text-[#141414] uppercase tracking-tight leading-tight">
                                         {p.title}
                                     </span>
                                 </div>
@@ -324,11 +324,11 @@ const AdminDiagnosticoComercial: React.FC = () => {
                 })}
             </div>
 
-            <div className="glass-card rounded-2xl p-6 border border-gray-200 flex flex-wrap items-center gap-4 justify-between">
+            <div className="glass-card rounded-2xl p-6 border border-black/5 flex flex-wrap items-center gap-4 justify-between">
                 <div className="flex items-center gap-3 text-sm text-gray-400">
                     <Building2 size={20} className="text-gray-500" />
                     <span>
-                        Base: <strong className="text-gray-900">{companiesCount}</strong> empresa(s) cadastrada(s) no admin.
+                        Base: <strong className="text-[#141414]">{companiesCount}</strong> empresa(s) cadastrada(s) no admin.
                     </span>
                 </div>
                 <Link

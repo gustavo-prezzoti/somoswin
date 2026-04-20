@@ -14,7 +14,7 @@ function roleLabel(role: string): string {
 
 function roleBadgeClass(role: string): string {
     if (role === 'SUPER_ADMIN') return 'bg-emerald-50 text-emerald-600 border border-emerald-200';
-    if (role === 'ADMIN') return 'bg-gray-100 text-gray-800 border border-gray-200';
+    if (role === 'ADMIN') return 'bg-gray-100 text-gray-800 border border-black/5';
     return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25';
 }
 
@@ -369,7 +369,7 @@ const AdminUsers: React.FC = () => {
         >
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900">Usuários</h2>
+                    <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Usuários</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
                         Contas e permissões por empresa.{' '}
                         <Link to="/admin/clientes" className="text-emerald-600 hover:underline font-bold">
@@ -394,15 +394,15 @@ const AdminUsers: React.FC = () => {
                     placeholder="Buscar por nome, e-mail ou empresa…"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                 />
             </div>
 
-            <div className="glass-card rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="glass-card rounded-2xl border border-black/5 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse hidden md:table">
                         <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
+                            <tr className="border-b border-black/5 bg-gray-50">
                                 <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Usuário</th>
                                 <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Nível</th>
                                 <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Empresa</th>
@@ -429,7 +429,7 @@ const AdminUsers: React.FC = () => {
                                                             `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
                                                         }
                                                         alt={user.name}
-                                                        className="w-11 h-11 rounded-xl object-cover border border-gray-200"
+                                                        className="w-11 h-11 rounded-xl object-cover border border-black/5"
                                                     />
                                                     <div
                                                         className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
@@ -438,7 +438,7 @@ const AdminUsers: React.FC = () => {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-gray-900 text-sm leading-tight">{user.name}</p>
+                                                    <p className="font-bold text-[#141414] text-sm leading-tight">{user.name}</p>
                                                     <p className="text-[10px] text-gray-500 mt-0.5">{user.email}</p>
                                                 </div>
                                             </div>
@@ -475,7 +475,7 @@ const AdminUsers: React.FC = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => openUserModal(user)}
-                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-50 border border-transparent hover:border-gray-200"
+                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-50 border border-transparent hover:border-black/5"
                                                     title="Editar"
                                                 >
                                                     <Pencil size={16} />
@@ -483,7 +483,7 @@ const AdminUsers: React.FC = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleToggleStatus(user.id)}
-                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-gray-200"
+                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
                                                     title={user.active ? 'Bloquear' : 'Desbloquear'}
                                                 >
                                                     {user.active ? <Lock size={16} /> : <Unlock size={16} />}
@@ -491,7 +491,7 @@ const AdminUsers: React.FC = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDelete(user.id, true)}
-                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-gray-50 border border-transparent hover:border-gray-200"
+                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
                                                     title="Excluir"
                                                 >
                                                     <Trash2 size={16} />
@@ -499,7 +499,7 @@ const AdminUsers: React.FC = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleResetPassword(user.id, user.name, user.email)}
-                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-gray-200"
+                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
                                                     title="Resetar senha"
                                                 >
                                                     <Key size={16} />
@@ -514,7 +514,7 @@ const AdminUsers: React.FC = () => {
 
                     <div className="md:hidden grid grid-cols-1 gap-3 p-4">
                         {filteredUsers.map((user) => (
-                            <div key={user.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+                            <div key={user.id} className="rounded-xl border border-black/5 bg-gray-50 p-4 space-y-3">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="flex items-center gap-3 min-w-0">
                                         <img
@@ -523,10 +523,10 @@ const AdminUsers: React.FC = () => {
                                                 `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
                                             }
                                             alt={user.name}
-                                            className="w-12 h-12 rounded-xl object-cover border border-gray-200 shrink-0"
+                                            className="w-12 h-12 rounded-xl object-cover border border-black/5 shrink-0"
                                         />
                                         <div className="min-w-0">
-                                            <p className="font-bold text-gray-900 text-sm truncate">{user.name}</p>
+                                            <p className="font-bold text-[#141414] text-sm truncate">{user.name}</p>
                                             <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
                                         </div>
                                     </div>
@@ -541,14 +541,14 @@ const AdminUsers: React.FC = () => {
                                     <button
                                         type="button"
                                         onClick={() => openUserModal(user)}
-                                        className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-gray-300 border border-gray-200"
+                                        className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-gray-300 border border-black/5"
                                     >
                                         Editar
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => handleToggleStatus(user.id)}
-                                        className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-amber-400 border border-gray-200"
+                                        className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-amber-400 border border-black/5"
                                     >
                                         {user.active ? 'Bloquear' : 'Ativar'}
                                     </button>

@@ -127,7 +127,7 @@ const AdminGlobalNotifications = () => {
             {/* Header */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-10">
                 <div>
-                    <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase italic leading-none flex items-center gap-3">
+                    <h1 className="text-4xl font-black text-[#141414] tracking-tighter uppercase italic leading-none flex items-center gap-3">
                         <Bell className="text-amber-500" size={36} />
                         Notificações Globais
                     </h1>
@@ -181,7 +181,7 @@ const AdminGlobalNotifications = () => {
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <h3 className="font-black text-gray-900 uppercase text-lg italic tracking-tight">Transbordo para Humano</h3>
+                                                <h3 className="font-black text-[#141414] uppercase text-lg italic tracking-tight">Transbordo para Humano</h3>
                                                 {formData.humanHandoffNotificationEnabled && <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />}
                                             </div>
                                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">

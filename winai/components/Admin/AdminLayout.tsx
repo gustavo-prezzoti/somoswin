@@ -77,7 +77,9 @@ const AdminLayout: React.FC = () => {
                 <div className={`admin-main ${sidebarNarrow ? 'admin-main--narrow' : ''}`}>
                     <AdminHeader user={user} onMenuClick={toggleSidebar} />
                     <div className="admin-content">
-                        <Outlet />
+                        <div className="admin-content-inner">
+                            <Outlet />
+                        </div>
                     </div>
                 </div>
             </div>

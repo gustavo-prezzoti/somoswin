@@ -81,19 +81,19 @@ const AdminConsultancyOperations: React.FC = () => {
   return (
     <div className="space-y-8">
       {message && (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-200">{message}</div>
+        <div className="rounded-xl border border-black/5 bg-gray-50 px-4 py-3 text-sm text-gray-200">{message}</div>
       )}
 
-      <section className="glass-card rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="p-4 sm:p-6 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+      <section className="glass-card rounded-2xl border border-black/5 overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-black/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h2 className="text-sm font-black text-[#141414] uppercase tracking-widest flex items-center gap-2">
             <Link2 size={18} className="text-emerald-600" /> Pedidos de call (todas as empresas)
           </h2>
           <button
             type="button"
             onClick={() => void loadAllRequests()}
             disabled={loadingRequests}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-200 hover:bg-gray-50 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-black/5 text-xs font-bold text-gray-200 hover:bg-gray-50 disabled:opacity-50"
           >
             <RefreshCw size={14} className={loadingRequests ? 'animate-spin text-emerald-600' : ''} />
             Atualizar lista
@@ -122,13 +122,13 @@ const AdminConsultancyOperations: React.FC = () => {
               <tbody className="divide-y divide-gray-100">
                 {requests.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50 align-top text-gray-300">
-                    <td className="px-4 py-3 font-bold text-gray-900">{r.companyName}</td>
+                    <td className="px-4 py-3 font-bold text-[#141414]">{r.companyName}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-200">{r.requestedByName ?? '—'}</div>
                       <div className="text-xs text-gray-500 break-all">{r.requestedByEmail ?? ''}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-gray-900">{r.subject}</div>
+                      <div className="font-semibold text-[#141414]">{r.subject}</div>
                       <div className="text-xs text-gray-500 line-clamp-2 mt-1">{r.topics}</div>
                     </td>
                     <td className="px-4 py-3 capitalize text-gray-400">{r.urgency}</td>
@@ -141,7 +141,7 @@ const AdminConsultancyOperations: React.FC = () => {
                     <td className="px-4 py-3">
                       <input
                         type="url"
-                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono text-gray-900 placeholder:text-gray-600"
+                        className="w-full rounded-lg border border-black/5 bg-gray-50 px-3 py-2 text-xs font-mono text-[#141414] placeholder:text-gray-600"
                         placeholder="https://meet.google.com/..."
                         value={editMeetById[r.id] ?? ''}
                         onChange={(e) => setEditMeetById((prev) => ({ ...prev, [r.id]: e.target.value }))}
