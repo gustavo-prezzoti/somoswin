@@ -159,16 +159,16 @@ const AdminDiagnosticoComercial: React.FC = () => {
     if (auth === null || loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Montando diagnóstico…</span>
+                <div className="w-12 h-12 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-600 uppercase tracking-widest">Montando diagnóstico…</span>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="max-w-xl mx-auto glass-card rounded-2xl p-8 border border-rose-500/30 text-center">
-                <AlertTriangle className="w-12 h-12 text-rose-400 mx-auto mb-4" />
+            <div className="max-w-xl mx-auto glass-card rounded-2xl p-8 border border-rose-200 bg-rose-50/50 text-center">
+                <AlertTriangle className="w-12 h-12 text-rose-600 mx-auto mb-4" />
                 <p className="text-[#141414] font-bold mb-4">{error}</p>
                 <button
                     type="button"
@@ -252,7 +252,7 @@ const AdminDiagnosticoComercial: React.FC = () => {
                         <ClipboardCheck className="w-8 h-8 text-emerald-600" />
                         Diagnóstico comercial
                     </h2>
-                    <p className="text-sm text-gray-400 font-medium mt-1 max-w-2xl">
+                    <p className="text-sm text-gray-600 font-medium mt-1 max-w-2xl leading-relaxed">
                         Leitura unificada de CRM, metas, Meta Ads, agenda e alertas — dados reais do ambiente (mesma base do
                         dashboard admin).
                     </p>
@@ -268,10 +268,10 @@ const AdminDiagnosticoComercial: React.FC = () => {
             </div>
 
             <div className="glass-card rounded-2xl p-6 border border-black/5">
-                <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Resumo executivo</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest text-gray-600 mb-3">Resumo executivo</h3>
                 <ul className="space-y-3">
                     {insights.map((line, i) => (
-                        <li key={i} className="text-sm text-gray-200 leading-relaxed flex gap-2">
+                        <li key={i} className="text-sm text-[#141414] leading-relaxed flex gap-2">
                             <span className="text-emerald-600 font-black shrink-0">•</span>
                             <span>{line}</span>
                         </li>
@@ -300,18 +300,18 @@ const AdminDiagnosticoComercial: React.FC = () => {
                                     </span>
                                 </div>
                                 <span
-                                    className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md shrink-0 ${
+                                    className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md shrink-0 border ${
                                         p.status === 'ok'
-                                            ? 'bg-emerald-500/20 text-emerald-300'
+                                            ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
                                             : p.status === 'warn'
-                                              ? 'bg-amber-500/20 text-amber-200'
-                                              : 'bg-rose-500/20 text-rose-200'
+                                              ? 'bg-amber-50 text-amber-950 border-amber-200'
+                                              : 'bg-rose-50 text-rose-900 border-rose-200'
                                     }`}
                                 >
                                     {p.status === 'ok' ? 'OK' : p.status === 'warn' ? 'Atenção' : 'Crítico'}
                                 </span>
                             </div>
-                            <p className="text-xs text-gray-400 leading-relaxed">{p.summary}</p>
+                            <p className="text-xs text-gray-700 leading-relaxed">{p.summary}</p>
                             <Link
                                 to={p.to}
                                 className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-600 hover:underline mt-auto"
@@ -325,15 +325,15 @@ const AdminDiagnosticoComercial: React.FC = () => {
             </div>
 
             <div className="glass-card rounded-2xl p-6 border border-black/5 flex flex-wrap items-center gap-4 justify-between">
-                <div className="flex items-center gap-3 text-sm text-gray-400">
-                    <Building2 size={20} className="text-gray-500" />
+                <div className="flex items-center gap-3 text-sm text-gray-700">
+                    <Building2 size={20} className="text-gray-700 shrink-0" />
                     <span>
                         Base: <strong className="text-[#141414]">{companiesCount}</strong> empresa(s) cadastrada(s) no admin.
                     </span>
                 </div>
                 <Link
                     to="/admin/clientes"
-                    className="text-xs font-black uppercase tracking-widest text-gray-500 hover:text-emerald-600"
+                    className="text-xs font-black uppercase tracking-widest text-gray-700 hover:text-emerald-700"
                 >
                     Clientes →
                 </Link>
