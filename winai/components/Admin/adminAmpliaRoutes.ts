@@ -11,6 +11,7 @@
  * | alertas             | /admin/alertas             | Notificações (badge opcional)      |
  * | performance         | /admin/performance         | Snapshot agregado                  |
  * | gestao_equipe     | /admin/gestao-equipe      | Colaboradores internos             |
+ * | financas            | /admin/financas            | MRR, faturas, visão financeira     |
  * | contratos           | /admin/companies           | Contratos / empresas               |
  * | instancias…followup | /admin/instances, etc.     | Rotas técnicas                     |
  * | prompts             | /admin/em-breve?m=prompts  | Placeholder Prompts IA             |
@@ -58,7 +59,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         items: [
             { id: 'gestao_equipe', label: 'Gestão de Equipe', to: '/admin/gestao-equipe', implemented: true },
             { id: 'contratos', label: 'Contratos', to: '/admin/companies', implemented: true },
-            { id: 'financas', label: 'Finanças', to: '/admin/em-breve?m=financas' },
+            { id: 'financas', label: 'Finanças', to: '/admin/financas', implemented: true },
         ],
     },
     {

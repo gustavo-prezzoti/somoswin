@@ -47,6 +47,7 @@ import AdminInstances from './components/Admin/AdminInstances';
 import AdminSettings from './components/Admin/AdminSettings';
 import AdminUserConnections from './src/components/Admin/AdminUserConnections';
 import AdminAgentsAI from './components/Admin/AdminAgentsAI';
+import AdminFinancas from './components/Admin/AdminFinancas';
 import AdminCompanies from './components/Admin/AdminCompanies';
 import AdminFollowUp from './components/Admin/AdminFollowUp';
 import AdminGlobalNotifications from './components/Admin/AdminGlobalNotifications';
@@ -658,6 +659,7 @@ const App: React.FC = () => {
           <Route path="alertas" element={<AdminAlertas />} />
           <Route path="performance" element={<AdminPerformance />} />
           <Route path="users" element={<AdminUsers />} />
+          <Route path="financas" element={<AdminFinancas />} />
           <Route path="companies" element={<AdminCompanies />} />
           <Route path="instances" element={<AdminInstances />} />
           <Route path="user-connections" element={<AdminUserConnections />} />

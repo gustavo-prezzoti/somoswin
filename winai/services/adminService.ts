@@ -66,6 +66,37 @@ export interface AdminCompanyPerformanceRow {
     campaignCount: number;
 }
 
+export interface AdminFinanceKpis {
+    mrr: number;
+    mrrCompanyCount: number;
+    overdueTotal: number;
+    overdueCompanyCount: number;
+    averageTicket: number;
+    arrr: number;
+    cancelledCompanyCount: number;
+    churnRatePercent: number;
+    companiesConsidered: number;
+}
+
+export interface AdminFinanceCompanyRow {
+    companyId: string;
+    companyName: string;
+    planName: string;
+    monthlyValue: number;
+    dueDate: string | null;
+    billingStatus: string;
+    subscriptionStatusRaw: string;
+    hasAsaasCustomer: boolean;
+    hasAsaasSubscription: boolean;
+}
+
+export interface AdminFinanceOverview {
+    year: number;
+    month: number | null;
+    kpis: AdminFinanceKpis;
+    rows: AdminFinanceCompanyRow[];
+}
+
 export interface AdminPerformanceSnapshot {
     totalCompanies: number;
     newCompaniesThisMonth: number;
@@ -527,6 +558,20 @@ const adminService = {
                 ? `?staffUserId=${encodeURIComponent(staffUserId)}`
                 : '';
         return await httpClient.get<AdminPerformanceSnapshot>(`/admin/performance/snapshot${qs}`);
+    },
+
+    getFinanceOverview: async (params: {
+        year: number;
+        month?: number | null;
+        staffUserId?: string | null;
+    }): Promise<AdminFinanceOverview> => {
+        const sp = new URLSearchParams();
+        sp.set('year', String(params.year));
+        if (params.month != null && params.month >= 1 && params.month <= 12) {
+            sp.set('month', String(params.month));
+        }
+        if (params.staffUserId) sp.set('staffUserId', params.staffUserId);
+        return await httpClient.get<AdminFinanceOverview>(`/admin/finance/overview?${sp.toString()}`);
     },
 
     listInternalStaff: async (): Promise<InternalStaffMember[]> => {

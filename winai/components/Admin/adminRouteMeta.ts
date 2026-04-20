@@ -15,6 +15,7 @@ const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
     { pattern: '/admin/consultancy/aparencia', meta: { title: 'Consultoria', subtitle: 'Aparência global' } },
     { pattern: '/admin/consultancy', meta: { title: 'Consultoria', subtitle: 'Operações e aparência' } },
     { pattern: '/admin/users', meta: { title: 'Usuários', subtitle: 'Gestão de acessos' } },
+    { pattern: '/admin/financas', meta: { title: 'Finanças', subtitle: 'Controle financeiro' } },
     { pattern: '/admin/companies', meta: { title: 'Contratos', subtitle: 'Gestão de contratos e faturamento' } },
     { pattern: '/admin/instances', meta: { title: 'Instâncias', subtitle: 'WhatsApp e integrações' } },
     { pattern: '/admin/user-connections', meta: { title: 'Conexões', subtitle: 'Conexões e canais' } },
