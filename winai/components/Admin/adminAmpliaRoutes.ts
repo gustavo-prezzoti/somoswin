@@ -7,6 +7,7 @@
  * | crm                 | /admin/crm           | Lead, pipeline                   |
  * | clientes            | /admin/clientes      | Company / usuários / CRM         |
  * | agenda              | /admin/agenda          | Meeting (admin global)           |
+ * | diagnostico         | /admin/diagnostico     | Agregado CRM/metas/Meta/alertas  |
  * | metaads             | /admin/meta-ads      | MetaConnection + campanhas       |
  * | metas               | /admin/metas         | Goal + tasks (ciclo anual)       |
  * | contratos           | /admin/companies     | Company + termos                 |
@@ -50,7 +51,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
             { id: 'metaads', label: 'Meta Ads', to: '/admin/meta-ads', implemented: true },
             { id: 'metas', label: 'Metas e Objetivos', to: '/admin/metas', implemented: true },
             { id: 'agenda', label: 'Agenda Comercial', to: '/admin/agenda', implemented: true },
-            { id: 'diagnostico', label: 'Diagnóstico Comercial', to: '/admin/em-breve?m=diagnostico' },
+            { id: 'diagnostico', label: 'Diagnóstico Comercial', to: '/admin/diagnostico', implemented: true },
             { id: 'alertas', label: 'Alertas', to: '/admin/em-breve?m=alertas' },
             { id: 'performance', label: 'Performance', to: '/admin/em-breve?m=performance' },
         ],

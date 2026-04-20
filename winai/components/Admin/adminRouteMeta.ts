@@ -13,6 +13,10 @@ const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
     { pattern: '/admin/meta-ads', meta: { title: 'Meta Ads', subtitle: 'Campanhas e conexão por empresa' } },
     { pattern: '/admin/metas', meta: { title: 'Metas e Objetivos', subtitle: 'Ciclo anual por empresa' } },
     { pattern: '/admin/agenda', meta: { title: 'Agenda Comercial', subtitle: 'Reuniões e compromissos por empresa' } },
+    {
+        pattern: '/admin/diagnostico',
+        meta: { title: 'Diagnóstico Comercial', subtitle: 'Leitura unificada de pipeline, metas e riscos' },
+    },
     { pattern: '/admin/consultancy/aparencia', meta: { title: 'Consultoria', subtitle: 'Aparência global' } },
     { pattern: '/admin/consultancy', meta: { title: 'Consultoria', subtitle: 'Operações e aparência' } },
     { pattern: '/admin/users', meta: { title: 'Usuários', subtitle: 'Gestão de contas e permissões' } },

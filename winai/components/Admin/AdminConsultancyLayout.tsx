@@ -30,7 +30,7 @@ const AdminConsultancyLayout: React.FC = () => {
 
   if (auth === null) {
     return (
-      <div className="flex items-center justify-center py-24 text-gray-500 gap-2">
+      <div className="flex items-center justify-center py-24 text-gray-400 gap-2">
         <Loader2 className="animate-spin" size={24} />
       </div>
     );
@@ -39,19 +39,21 @@ const AdminConsultancyLayout: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-4 sm:p-6 pb-16">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Consultoria estratégica</h1>
-        <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-          Pedidos de call e links Meet; textos e foto do consultor no app ficam em <strong>Aparência global</strong>.
+        <h1 className="text-2xl sm:text-3xl font-black italic uppercase text-white tracking-tight">Consultoria estratégica</h1>
+        <p className="text-sm text-gray-400 mt-1 max-w-2xl">
+          Pedidos de call e links Meet; textos e foto do consultor no app ficam em <strong className="text-[#00FF00]">Aparência global</strong>.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-1">
+      <div className="flex flex-wrap gap-2 border-b border-white/10 pb-1">
         <NavLink
           to="/admin/consultancy"
           end
           className={({ isActive }) =>
             `inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-xs font-black uppercase tracking-widest transition-colors ${
-              isActive ? 'bg-white border border-b-0 border-gray-200 text-emerald-700' : 'text-gray-500 hover:text-gray-800'
+              isActive
+                ? 'bg-white/10 border border-b-0 border-white/15 text-[#00FF00]'
+                : 'text-gray-500 hover:text-white'
             }`
           }
         >
@@ -62,7 +64,9 @@ const AdminConsultancyLayout: React.FC = () => {
           to="/admin/consultancy/aparencia"
           className={({ isActive }) =>
             `inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-xs font-black uppercase tracking-widest transition-colors ${
-              isActive ? 'bg-white border border-b-0 border-gray-200 text-emerald-700' : 'text-gray-500 hover:text-gray-800'
+              isActive
+                ? 'bg-white/10 border border-b-0 border-white/15 text-[#00FF00]'
+                : 'text-gray-500 hover:text-white'
             }`
           }
         >

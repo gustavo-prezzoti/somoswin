@@ -96,14 +96,34 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
         Page<Meeting> searchByMeetingKindAndQuery(@Param("kind") MeetingKind kind, @Param("q") String q,
                         Pageable pageable);
 
-        /** Agenda admin: período global, filtro opcional por empresa e busca textual. */
-        @Query("SELECT m FROM Meeting m JOIN FETCH m.company c LEFT JOIN m.lead l WHERE m.meetingDate >= :start AND m.meetingDate <= :end "
+        /**
+         * Agenda admin — sem texto de busca (evita LOWER() no SQL: PostgreSQL pode avaliar o OR
+         * mesmo com :q nulo e colunas text/varchar mal tipadas como bytea disparam
+         * {@code function lower(bytea) does not exist}).
+         */
+        @Query("SELECT m FROM Meeting m JOIN FETCH m.company c LEFT JOIN FETCH m.lead l "
+                        + "WHERE m.meetingDate >= :start AND m.meetingDate <= :end "
                         + "AND (:companyId IS NULL OR c.id = :companyId) "
-                        + "AND (:q IS NULL OR LOWER(m.title) LIKE LOWER(CONCAT('%', :q, '%')) OR "
-                        + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
-                        + "LOWER(m.contactName) LIKE LOWER(CONCAT('%', :q, '%')) OR "
-                        + "LOWER(COALESCE(l.name,'')) LIKE LOWER(CONCAT('%', :q, '%'))) "
                         + "ORDER BY m.meetingDate ASC, m.meetingTime ASC")
-        List<Meeting> searchAdminAgenda(@Param("start") LocalDate start, @Param("end") LocalDate end,
-                        @Param("companyId") UUID companyId, @Param("q") String q);
+        List<Meeting> searchAdminAgendaWithoutText(@Param("start") LocalDate start, @Param("end") LocalDate end,
+                        @Param("companyId") UUID companyId);
+
+        /**
+         * IDs ordenados para busca textual — usa ILIKE (PostgreSQL), sem LOWER em colunas.
+         */
+        @Query(value = "SELECT m.id FROM winai.meetings m "
+                        + "INNER JOIN winai.companies c ON c.id = m.company_id "
+                        + "LEFT JOIN winai.leads l ON l.id = m.lead_id "
+                        + "WHERE m.meeting_date BETWEEN :start AND :end "
+                        + "AND (:companyId IS NULL OR c.id = :companyId) "
+                        + "AND (m.title ILIKE '%' || :q || '%' "
+                        + "OR c.name ILIKE '%' || :q || '%' "
+                        + "OR m.contact_name ILIKE '%' || :q || '%' "
+                        + "OR (l.name IS NOT NULL AND l.name ILIKE '%' || :q || '%')) "
+                        + "ORDER BY m.meeting_date ASC, m.meeting_time ASC", nativeQuery = true)
+        List<UUID> searchAdminAgendaIdsWithText(@Param("start") LocalDate start,
+                        @Param("end") LocalDate end, @Param("companyId") UUID companyId, @Param("q") String q);
+
+        @Query("SELECT m FROM Meeting m JOIN FETCH m.company c LEFT JOIN FETCH m.lead l WHERE m.id IN :ids")
+        List<Meeting> findByIdsWithFetch(@Param("ids") List<UUID> ids);
 }

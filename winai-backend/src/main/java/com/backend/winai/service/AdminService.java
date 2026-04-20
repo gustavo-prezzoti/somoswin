@@ -90,10 +90,12 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -449,7 +451,20 @@ public class AdminService {
             throw new RuntimeException("Informe data inicial e final");
         }
         String qf = (q != null && !q.trim().isEmpty()) ? q.trim() : null;
-        List<Meeting> meetings = meetingRepository.searchAdminAgenda(start, end, companyId, qf);
+        List<Meeting> meetings;
+        if (qf == null) {
+            meetings = meetingRepository.searchAdminAgendaWithoutText(start, end, companyId);
+        } else {
+            List<UUID> ids = meetingRepository.searchAdminAgendaIdsWithText(start, end, companyId, qf);
+            if (ids.isEmpty()) {
+                meetings = Collections.emptyList();
+            } else {
+                List<Meeting> fetched = meetingRepository.findByIdsWithFetch(ids);
+                Map<UUID, Meeting> byId = fetched.stream()
+                        .collect(Collectors.toMap(Meeting::getId, m -> m, (a, b) -> a));
+                meetings = ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+            }
+        }
         return meetings.stream().map(this::toAdminMeetingRow).collect(Collectors.toList());
     }
 
