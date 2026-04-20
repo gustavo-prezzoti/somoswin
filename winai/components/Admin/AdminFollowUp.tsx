@@ -198,8 +198,8 @@ const AdminFollowUp = () => {
     if (isLoading && !selectedCompanyId) {
         return (
             <div className="flex flex-col items-center justify-center h-96 gap-4">
-                <div className="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Carregando...</span>
+                <div className="w-12 h-12 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-600 uppercase tracking-widest">Carregando...</span>
             </div>
         );
     }
@@ -213,14 +213,14 @@ const AdminFollowUp = () => {
                         <Clock className="text-amber-500" size={36} />
                         Follow-up Sequencial
                     </h1>
-                    <p className="text-gray-500 font-bold text-sm tracking-tight mt-2 opacity-70">
+                    <p className="text-gray-600 font-medium text-sm tracking-tight mt-2">
                         Crie uma régua de contato automática para reengajar leads
                     </p>
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-3 px-6 py-4 bg-white border border-gray-50 rounded-2xl shadow-xl shadow-gray-200/50">
-                        <Building2 size={16} className="text-gray-300" />
+                    <div className="flex items-center gap-3 px-6 py-4 bg-white border border-black/5 rounded-2xl shadow-sm">
+                        <Building2 size={16} className="text-amber-600 shrink-0" />
                         <select
                             value={selectedCompanyId}
                             onChange={(e) => setSelectedCompanyId(e.target.value)}
@@ -236,18 +236,20 @@ const AdminFollowUp = () => {
             </div>
 
             {!selectedCompanyId ? (
-                <div className="flex flex-col items-center justify-center py-40 bg-gray-500 rounded-[2rem] border border-gray-100">
-                    <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6">
+                <div className="flex flex-col items-center justify-center py-40 bg-gray-50/80 rounded-[2rem] border border-black/5">
+                    <div className="w-16 h-16 bg-white text-amber-600 rounded-2xl flex items-center justify-center mb-6 border border-black/5 shadow-sm">
                         <Building2 size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-400 uppercase">Selecione uma Empresa</h3>
-                    <p className="text-gray-400 text-sm mt-1">Escolha uma empresa para configurar o follow-up.</p>
+                    <h3 className="text-xl font-black text-[#141414] uppercase tracking-tight">Selecione uma Empresa</h3>
+                    <p className="text-gray-600 text-sm mt-2 max-w-md text-center leading-relaxed">
+                        Escolha uma empresa para configurar o follow-up.
+                    </p>
                 </div>
             ) : (
                 <div className="animate-in fade-in duration-500">
                     {isLoading ? (
                         <div className="flex justify-center py-20">
-                            <div className="w-10 h-10 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+                            <div className="w-10 h-10 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
                         </div>
                     ) : (
                         <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm relative overflow-hidden">
