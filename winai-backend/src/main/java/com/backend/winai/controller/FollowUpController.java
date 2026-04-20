@@ -22,16 +22,11 @@ import java.util.UUID;
 @RequestMapping("/api/v1/admin/followup")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("@adminSecurity.canAccess(authentication, 'followup')")
 public class FollowUpController {
 
     private final FollowUpService followUpService;
 
-    // ========== CONFIGURAÇÃO ==========
-
-    /**
-     * Busca configuração de follow-up de uma empresa.
-     */
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'followup', 'read')")
     @GetMapping("/config/{companyId}")
     public ResponseEntity<FollowUpConfigResponse> getConfig(@PathVariable UUID companyId) {
         return followUpService.getConfigByCompany(companyId)
@@ -39,9 +34,7 @@ public class FollowUpController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * Cria ou atualiza configuração de follow-up.
-     */
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'followup', 'update')")
     @PostMapping("/config")
     public ResponseEntity<FollowUpConfigResponse> saveConfig(@Valid @RequestBody FollowUpConfigRequest request) {
         log.info("Salvando configuração de follow-up para empresa {}", request.getCompanyId());
@@ -49,20 +42,14 @@ public class FollowUpController {
         return ResponseEntity.ok(response);
     }
 
-    // ========== STATUS ==========
-
-    /**
-     * Lista status de follow-up de uma empresa.
-     */
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'followup', 'list')")
     @GetMapping("/status/{companyId}")
     public ResponseEntity<List<FollowUpStatusResponse>> getStatuses(@PathVariable UUID companyId) {
         List<FollowUpStatusResponse> statuses = followUpService.getStatusesByCompany(companyId);
         return ResponseEntity.ok(statuses);
     }
 
-    /**
-     * Pausa follow-up para uma conversa.
-     */
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'followup', 'update')")
     @PutMapping("/status/{conversationId}/pause")
     public ResponseEntity<Void> pauseFollowUp(@PathVariable UUID conversationId) {
         log.info("Pausando follow-up para conversa {}", conversationId);
@@ -70,9 +57,7 @@ public class FollowUpController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * Resume follow-up para uma conversa.
-     */
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'followup', 'update')")
     @PutMapping("/status/{conversationId}/resume")
     public ResponseEntity<Void> resumeFollowUp(@PathVariable UUID conversationId) {
         log.info("Resumindo follow-up para conversa {}", conversationId);
@@ -80,9 +65,7 @@ public class FollowUpController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * Reseta status de follow-up para uma conversa.
-     */
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'followup', 'delete')")
     @DeleteMapping("/status/{conversationId}")
     public ResponseEntity<Void> resetFollowUp(@PathVariable UUID conversationId) {
         log.info("Resetando follow-up para conversa {}", conversationId);

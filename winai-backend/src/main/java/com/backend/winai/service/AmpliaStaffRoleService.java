@@ -3,7 +3,7 @@ package com.backend.winai.service;
 import com.backend.winai.dto.request.CreateAmpliaStaffRoleRequest;
 import com.backend.winai.dto.request.PatchAmpliaStaffRoleRequest;
 import com.backend.winai.dto.response.AmpliaStaffRoleResponse;
-import com.backend.winai.entity.AmpliaAdminModule;
+import com.backend.winai.entity.AmpliaAdminPermissionCatalog;
 import com.backend.winai.entity.AmpliaStaffRole;
 import com.backend.winai.repository.AmpliaStaffRoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -91,7 +91,7 @@ public class AmpliaStaffRoleService {
         if (fullAccess) {
             return;
         }
-        AmpliaAdminModule.validatePermissionMap(perms);
+        AmpliaAdminPermissionCatalog.validatePermissionMap(perms);
     }
 
     private Map<String, Boolean> normalizePermissions(Map<String, Boolean> raw, boolean fullAccess) {

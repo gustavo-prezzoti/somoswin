@@ -11,6 +11,7 @@ import com.backend.winai.entity.UserWhatsAppConnection;
 import com.backend.winai.service.KnowledgeBaseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,6 +26,7 @@ public class KnowledgeBaseController {
 
     private final KnowledgeBaseService service;
 
+    @PreAuthorize("@adminSecurity.canUseKnowledgeBase(authentication, 'list')")
     @GetMapping
     public ResponseEntity<List<KnowledgeBaseResponse>> findAll(@AuthenticationPrincipal User user,
             @RequestParam(required = false) UUID companyId) {
@@ -32,6 +34,7 @@ public class KnowledgeBaseController {
         return ResponseEntity.ok(list.stream().map(this::toResponse).collect(Collectors.toList()));
     }
 
+    @PreAuthorize("@adminSecurity.canUseKnowledgeBase(authentication, 'create')")
     @PostMapping
     public ResponseEntity<KnowledgeBaseResponse> create(@AuthenticationPrincipal User user,
             @RequestBody CreateKnowledgeBaseRequest request,
@@ -41,6 +44,7 @@ public class KnowledgeBaseController {
         return ResponseEntity.ok(toResponse(kb));
     }
 
+    @PreAuthorize("@adminSecurity.canUseKnowledgeBase(authentication, 'update')")
     @PutMapping("/{id}")
     public ResponseEntity<KnowledgeBaseResponse> update(@AuthenticationPrincipal User user, @PathVariable UUID id,
             @RequestBody UpdateKnowledgeBaseRequest request) {
@@ -49,12 +53,14 @@ public class KnowledgeBaseController {
         return ResponseEntity.ok(toResponse(kb));
     }
 
+    @PreAuthorize("@adminSecurity.canUseKnowledgeBase(authentication, 'delete')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal User user, @PathVariable UUID id) {
         service.delete(user, id);
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("@adminSecurity.canUseKnowledgeBase(authentication, 'read')")
     @GetMapping("/{id}/connections")
     public ResponseEntity<List<UserWhatsAppConnectionResponse>> getConnections(@AuthenticationPrincipal User user,
             @PathVariable UUID id) {
@@ -67,6 +73,7 @@ public class KnowledgeBaseController {
         return ResponseEntity.ok(responses);
     }
 
+    @PreAuthorize("@adminSecurity.canUseKnowledgeBase(authentication, 'update')")
     @PostMapping("/{id}/connections")
     public ResponseEntity<Void> linkConnection(@AuthenticationPrincipal User user, @PathVariable UUID id,
             @RequestBody LinkConnectionRequest request) {
@@ -74,6 +81,7 @@ public class KnowledgeBaseController {
         return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("@adminSecurity.canUseKnowledgeBase(authentication, 'update')")
     @DeleteMapping("/{id}/connections/{connectionId}")
     public ResponseEntity<Void> unlinkConnection(@AuthenticationPrincipal User user, @PathVariable UUID id,
             @PathVariable UUID connectionId) {
