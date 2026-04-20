@@ -4,11 +4,11 @@ import { ArrowLeft, Loader2, Plus, Shield } from 'lucide-react';
 import adminService, { AmpliaStaffRoleRow } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
-import { AMPLIA_ADMIN_MODULE_OPTIONS } from './adminAmpliaModuleOptions';
+import { AMPLIA_ADMIN_MODULE_SECTIONS } from './adminAmpliaModuleOptions';
 import { isAmpliaFullAdmin } from './adminPermissions';
 
 const emptyPermissions = (): Record<string, boolean> =>
-    Object.fromEntries(AMPLIA_ADMIN_MODULE_OPTIONS.map((o) => [o.id, false]));
+    Object.fromEntries(AMPLIA_ADMIN_MODULE_SECTIONS.flatMap((s) => s.items).map((o) => [o.id, false]));
 
 const AdminGestaoPapeis: React.FC = () => {
     const { showToast } = useModal();
@@ -235,7 +235,7 @@ const AdminGestaoPapeis: React.FC = () => {
                 <div className="fixed inset-0 bg-black/50 z-[120] flex items-center justify-center p-4 overflow-y-auto">
                     <form
                         onSubmit={handleSave}
-                        className="bg-white rounded-2xl p-8 max-w-lg w-full space-y-4 shadow-2xl border border-black/5 my-8"
+                        className="bg-white rounded-2xl p-8 max-w-2xl w-full space-y-4 shadow-2xl border border-black/5 my-8"
                     >
                         <h3 className="text-xl font-black uppercase italic text-[#141414]">
                             {creating ? 'Novo papel' : 'Editar papel'}
@@ -262,21 +262,35 @@ const AdminGestaoPapeis: React.FC = () => {
                             <span className="text-sm font-bold">Acesso total (todos os módulos)</span>
                         </label>
                         {!formFull && (
-                            <div className="max-h-56 overflow-y-auto space-y-2 border border-black/5 rounded-xl p-3">
-                                {AMPLIA_ADMIN_MODULE_OPTIONS.map((opt) => (
-                                    <label key={opt.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                                        <input
-                                            type="checkbox"
-                                            checked={!!formPerms[opt.id]}
-                                            onChange={(e) =>
-                                                setFormPerms((p) => ({
-                                                    ...p,
-                                                    [opt.id]: e.target.checked,
-                                                }))
-                                            }
-                                        />
-                                        <span className="font-medium">{opt.label}</span>
-                                    </label>
+                            <div className="max-h-[min(70vh,520px)] overflow-y-auto space-y-5 border border-black/5 rounded-xl p-4">
+                                {AMPLIA_ADMIN_MODULE_SECTIONS.map((section) => (
+                                    <div key={section.id} className="space-y-2">
+                                        <h4
+                                            className={`text-[10px] font-black uppercase tracking-widest ${section.accentClass} border-b border-black/5 pb-2`}
+                                        >
+                                            {section.label}
+                                        </h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 pl-1">
+                                            {section.items.map((opt) => (
+                                                <label
+                                                    key={opt.id}
+                                                    className="flex items-center gap-2 cursor-pointer text-sm"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!formPerms[opt.id]}
+                                                        onChange={(e) =>
+                                                            setFormPerms((p) => ({
+                                                                ...p,
+                                                                [opt.id]: e.target.checked,
+                                                            }))
+                                                        }
+                                                    />
+                                                    <span className="font-medium text-gray-800">{opt.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         )}
