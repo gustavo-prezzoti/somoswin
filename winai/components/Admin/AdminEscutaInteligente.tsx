@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
     Search,
@@ -15,6 +15,8 @@ import {
     Sparkles,
     Target,
     ListChecks,
+    ChevronLeft,
+    ChevronRight,
 } from 'lucide-react';
 import adminService, { AdminEscutaSession, AdminLeadRow, Company } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
@@ -85,12 +87,17 @@ function formatSessionWhen(s: AdminEscutaSession): string {
     return '—';
 }
 
+const PAGE_SIZE = 12;
+
 const AdminEscutaInteligente: React.FC = () => {
     const [sessions, setSessions] = useState<AdminEscutaSession[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [debouncedQ, setDebouncedQ] = useState('');
+    const [listPage, setListPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalElements, setTotalElements] = useState(0);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [detail, setDetail] = useState<AdminEscutaSession | null>(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
@@ -110,22 +117,36 @@ const AdminEscutaInteligente: React.FC = () => {
         return () => clearTimeout(t);
     }, [search]);
 
-    const loadList = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const page = await adminService.getEscutaSessions({ page: 0, size: 60, q: debouncedQ || undefined });
-            setSessions(page.content);
-            setSelectedId((prev) => {
-                if (prev && page.content.some((s) => s.id === prev)) return prev;
-                return page.content[0]?.id ?? null;
-            });
-        } catch (e) {
-            setError(getErrorMessage(e, 'Erro ao carregar sessões'));
-        } finally {
-            setLoading(false);
-        }
+    useLayoutEffect(() => {
+        setListPage(0);
     }, [debouncedQ]);
+
+    const loadList = useCallback(
+        async (opts?: { page?: number }) => {
+            const pageToUse = opts?.page ?? listPage;
+            try {
+                setLoading(true);
+                setError(null);
+                const res = await adminService.getEscutaSessions({
+                    page: pageToUse,
+                    size: PAGE_SIZE,
+                    q: debouncedQ || undefined,
+                });
+                setSessions(res.content);
+                setTotalPages(res.totalPages);
+                setTotalElements(res.totalElements);
+                setSelectedId((prev) => {
+                    if (prev && res.content.some((s) => s.id === prev)) return prev;
+                    return res.content[0]?.id ?? null;
+                });
+            } catch (e) {
+                setError(getErrorMessage(e, 'Erro ao carregar sessões'));
+            } finally {
+                setLoading(false);
+            }
+        },
+        [debouncedQ, listPage],
+    );
 
     useEffect(() => {
         loadList();
@@ -193,7 +214,8 @@ const AdminEscutaInteligente: React.FC = () => {
             });
             setNewTitle('');
             setNewLeadId('');
-            await loadList();
+            setListPage(0);
+            await loadList({ page: 0 });
             setSelectedId(created.id);
             setDetail(created);
         } catch (e) {
@@ -266,10 +288,14 @@ const AdminEscutaInteligente: React.FC = () => {
         }
     };
 
+    const showListPagination = totalPages > 1;
+    const fromIdx = totalElements === 0 ? 0 : listPage * PAGE_SIZE + 1;
+    const toIdx = Math.min((listPage + 1) * PAGE_SIZE, totalElements);
+
     if (loading && sessions.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando escuta…</span>
             </div>
         );
@@ -279,9 +305,9 @@ const AdminEscutaInteligente: React.FC = () => {
         <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-6 max-w-[1800px] mx-auto"
+            className="flex flex-col min-h-0 gap-4 max-w-[1800px] mx-auto w-full h-[calc(100dvh-13rem)] max-h-[calc(100dvh-13rem)]"
         >
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 shrink-0">
                 <div>
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Escuta Inteligente</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">
@@ -291,7 +317,7 @@ const AdminEscutaInteligente: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => loadList()}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-300 hover:bg-gray-50 self-start"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-500 hover:bg-gray-50 self-start"
                 >
                     <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     <span className="text-xs font-black uppercase tracking-widest">Sincronizar</span>
@@ -299,7 +325,7 @@ const AdminEscutaInteligente: React.FC = () => {
             </div>
 
             {error && (
-                <div className="glass-card rounded-xl p-4 flex items-center gap-3 text-amber-200 border border-amber-500/30">
+                <div className="glass-card rounded-xl p-4 flex items-center gap-3 text-amber-900 border border-amber-200 bg-amber-50 shrink-0">
                     <AlertCircle size={20} />
                     <span className="text-sm">{error}</span>
                     <button type="button" className="ml-auto text-xs font-bold uppercase underline" onClick={() => setError(null)}>
@@ -308,7 +334,7 @@ const AdminEscutaInteligente: React.FC = () => {
                 </div>
             )}
 
-            <div className="glass-card rounded-2xl border border-black/5 p-5 space-y-4">
+            <div className="glass-card rounded-2xl border border-black/5 p-5 space-y-4 shrink-0">
                 <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600">
                     <Mic size={14} /> Nova sessão
                 </div>
@@ -379,9 +405,9 @@ const AdminEscutaInteligente: React.FC = () => {
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <div className="lg:col-span-4 space-y-4">
-                    <div className="relative">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0 overflow-hidden items-stretch">
+                <div className="lg:col-span-4 flex flex-col min-h-0 overflow-hidden gap-3">
+                    <div className="relative shrink-0">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input
                             type="search"
@@ -391,7 +417,12 @@ const AdminEscutaInteligente: React.FC = () => {
                             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
                         />
                     </div>
-                    <div className="space-y-2 max-h-[62vh] overflow-y-auto custom-scrollbar pr-1">
+                    {totalElements > 0 && (
+                        <p className="text-[10px] font-bold text-gray-500 shrink-0">
+                            {fromIdx}–{toIdx} de {totalElements} sessão(ões)
+                        </p>
+                    )}
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 space-y-2">
                         {sessions.map((s) => (
                             <button
                                 key={s.id}
@@ -423,13 +454,39 @@ const AdminEscutaInteligente: React.FC = () => {
                                 </div>
                             </button>
                         ))}
-                        {sessions.length === 0 && (
+                        {sessions.length === 0 && !loading && (
                             <p className="text-sm text-gray-500 text-center py-8">Nenhuma sessão encontrada.</p>
                         )}
                     </div>
+                    {showListPagination && (
+                        <div className="flex items-center justify-center gap-2 pt-2 border-t border-black/5 shrink-0 flex-wrap">
+                            <button
+                                type="button"
+                                onClick={() => setListPage((p) => Math.max(0, p - 1))}
+                                disabled={listPage <= 0 || loading}
+                                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-black/5 bg-white text-[#141414] hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                            >
+                                <ChevronLeft size={14} />
+                                Anterior
+                            </button>
+                            <span className="text-[10px] font-bold text-gray-500 tabular-nums px-1">
+                                Página {listPage + 1} / {totalPages}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setListPage((p) => Math.min(totalPages - 1, p + 1))}
+                                disabled={totalPages <= 0 || listPage >= totalPages - 1 || loading}
+                                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-black/5 bg-white text-[#141414] hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none"
+                            >
+                                Próxima
+                                <ChevronRight size={14} />
+                            </button>
+                        </div>
+                    )}
                 </div>
 
-                <div className="lg:col-span-8 space-y-4 min-h-[480px]">
+                <div className="lg:col-span-8 flex flex-col min-h-0 overflow-hidden">
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-4 pr-1">
                     {!selectedId && (
                         <div className="glass-card rounded-2xl border border-black/5 p-10 text-center text-gray-500 text-sm">
                             Selecione uma sessão à esquerda ou crie uma nova acima.
@@ -624,6 +681,7 @@ const AdminEscutaInteligente: React.FC = () => {
                             ) : null}
                         </>
                     )}
+                    </div>
                 </div>
             </div>
         </motion.div>
