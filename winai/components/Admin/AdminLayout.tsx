@@ -5,59 +5,86 @@ import AdminHeader from './AdminHeader';
 import { ModalProvider } from './ModalContext';
 import { AdminStaffViewProvider, isSuperAdminRole } from './AdminStaffViewContext';
 import { loadSidebarCollapsed, saveSidebarCollapsed } from './adminAmpliaRoutes';
+import { userService } from '../../services/api/user.service';
 import './AdminLayout.css';
+
+function parseStoredUser(): any | null {
+    const userStr = localStorage.getItem('win_user');
+    if (!userStr) return null;
+    try {
+        return JSON.parse(userStr);
+    } catch {
+        return null;
+    }
+}
 
 const AdminLayout: React.FC = () => {
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [sidebarNarrow, setSidebarNarrow] = useState(loadSidebarCollapsed);
+    /** Perfil sincronizado com a API — role do localStorage pode estar velho; o dropdown SUPER_ADMIN depende disso. */
+    const [sessionUser, setSessionUser] = useState<any | null>(null);
+    const [sessionReady, setSessionReady] = useState(false);
+    const [sessionError, setSessionError] = useState(false);
 
     useEffect(() => {
         saveSidebarCollapsed(sidebarNarrow);
     }, [sidebarNarrow]);
 
-    // VERIFICAÇÃO SÍNCRONA IMEDIATA - Antes de qualquer render
-    const token = localStorage.getItem('win_access_token');
-    const userStr = localStorage.getItem('win_user');
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const me = await userService.getProfile();
+                if (cancelled) return;
+                setSessionUser(me);
+                setSessionError(false);
+            } catch {
+                if (cancelled) return;
+                setSessionError(true);
+            } finally {
+                if (!cancelled) setSessionReady(true);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
+    const token = localStorage.getItem('win_access_token');
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-    // Se não tem token, redireciona IMEDIATAMENTE
     if (!token) {
-        console.log('[AdminLayout] Sem token - redirecionando para login');
         return <Navigate to="/admin/login" state={{ from: location }} replace />;
     }
 
-    // Se não tem dados do usuário, redireciona IMEDIATAMENTE
-    if (!userStr) {
-        console.log('[AdminLayout] Sem dados do usuário - redirecionando para login');
-        localStorage.removeItem('win_access_token');
-        return <Navigate to="/admin/login" state={{ from: location }} replace />;
+    if (!sessionReady) {
+        return (
+            <div className="admin-layout admin-layout--amplia flex items-center justify-center min-h-[100dvh] bg-[#f8f9fa]">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando sessão…</span>
+                </div>
+            </div>
+        );
     }
 
-    // Tenta parsear os dados do usuário
-    let user: any = null;
-    try {
-        user = JSON.parse(userStr);
-    } catch (error) {
-        console.error('[AdminLayout] Erro ao parsear usuário - redirecionando para login');
-        localStorage.removeItem('win_access_token');
-        localStorage.removeItem('win_user');
-        return <Navigate to="/admin/login" state={{ from: location }} replace />;
-    }
-
-    // Verifica se o usuário tem role ADMIN ou SUPER_ADMIN
-    const canAccessAdmin = user?.role === 'ADMIN' || isSuperAdminRole(user?.role);
-    if (!user || !user.role || !canAccessAdmin) {
-        console.log('[AdminLayout] Usuário não é ADMIN - redirecionando para login');
-        // Limpa dados pois não é admin
+    if (sessionError) {
         localStorage.removeItem('win_access_token');
         localStorage.removeItem('win_user');
         localStorage.removeItem('win_refresh_token');
         return <Navigate to="/admin/login" state={{ from: location }} replace />;
     }
 
-    // Usuário autenticado e é ADMIN - renderiza o painel
+    const user = sessionUser ?? parseStoredUser();
+    const canAccessAdmin = user?.role === 'ADMIN' || isSuperAdminRole(user?.role);
+    if (!user?.role || !canAccessAdmin) {
+        localStorage.removeItem('win_access_token');
+        localStorage.removeItem('win_user');
+        localStorage.removeItem('win_refresh_token');
+        return <Navigate to="/admin/login" state={{ from: location }} replace />;
+    }
+
     return (
         <ModalProvider>
             <AdminStaffViewProvider userRole={user.role}>
@@ -69,7 +96,6 @@ const AdminLayout: React.FC = () => {
                         onNarrowChange={setSidebarNarrow}
                     />
 
-                    {/* Mobile Overlay */}
                     {isSidebarOpen && (
                         <div
                             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[950] lg:hidden"
