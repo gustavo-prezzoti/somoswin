@@ -20,6 +20,7 @@ import adminService, {
     DashboardGoalDTO,
 } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
+import { useAdminStaffView } from './AdminStaffViewContext';
 
 function goalTypeLabel(type: string): string {
     const m: Record<string, string> = {
@@ -43,6 +44,13 @@ const currentY = new Date().getFullYear();
 const YEARS = [currentY + 1, currentY, currentY - 1, currentY - 2, currentY - 3];
 
 const AdminMetasObjetivos: React.FC = () => {
+    const staffView = useAdminStaffView();
+    const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
+    const staffName =
+        staffFilterId && staffView?.staffList?.length
+            ? staffView.staffList.find((s) => s.id === staffFilterId)?.name ?? null
+            : null;
+
     const [year, setYear] = useState(() => new Date().getFullYear());
     const [planningMonth, setPlanningMonth] = useState<number | ''>('');
     const [rows, setRows] = useState<AdminGoalCompanyRow[]>([]);
@@ -64,18 +72,27 @@ const AdminMetasObjetivos: React.FC = () => {
         try {
             setLoading(true);
             setError(null);
-            const list = await adminService.getGoalCompanies(year);
-            setRows(list);
+            if (staffFilterId) setRows([]);
+            const [list, crm] = await Promise.all([
+                adminService.getGoalCompanies(year),
+                adminService.getCrmLeads({ page: 0, size: 1000, staffUserId: staffFilterId ?? undefined }),
+            ]);
+            const leadCompanyIds = new Set<string>();
+            (crm.content ?? []).forEach((l) => {
+                if (l.companyId) leadCompanyIds.add(l.companyId);
+            });
+            const scoped = staffFilterId ? list.filter((r) => leadCompanyIds.has(r.companyId)) : list;
+            setRows(scoped);
             setSelectedId((prev) => {
-                if (prev && list.some((r) => r.companyId === prev)) return prev;
-                return list[0]?.companyId ?? null;
+                if (prev && scoped.some((r) => r.companyId === prev)) return prev;
+                return scoped[0]?.companyId ?? null;
             });
         } catch (e) {
             setError(getErrorMessage(e, 'Erro ao carregar resumo de metas'));
         } finally {
             setLoading(false);
         }
-    }, [year]);
+    }, [year, staffFilterId]);
 
     useEffect(() => {
         loadRows();
@@ -149,6 +166,12 @@ const AdminMetasObjetivos: React.FC = () => {
                     <p className="text-sm text-gray-400 font-medium mt-1">
                         Visão global por empresa — mesmo modelo do dashboard (ciclo anual, tarefas e marcos). Edição continua
                         no app do cliente.
+                        {staffFilterId && staffName && (
+                            <span className="block mt-2 text-emerald-600/90 font-medium">
+                                Colaborador selecionado: só empresas em que {staffName} tem leads como responsável (metas são da
+                                empresa, como no app do cliente).
+                            </span>
+                        )}
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-3 items-center">
@@ -187,14 +210,14 @@ const AdminMetasObjetivos: React.FC = () => {
                     </span>
                     <Link
                         to="/admin/clientes"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-xs font-black uppercase tracking-widest text-gray-300 hover:bg-gray-50"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
                     >
                         <Building2 size={14} /> Clientes
                     </Link>
                     <button
                         type="button"
                         onClick={() => loadRows()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-300 hover:bg-gray-50"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[#141414] hover:bg-gray-50"
                     >
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                         <span className="text-xs font-black uppercase tracking-widest">Atualizar</span>
@@ -203,9 +226,9 @@ const AdminMetasObjetivos: React.FC = () => {
             </div>
 
             {error && (
-                <div className="glass-card rounded-xl p-4 flex items-center gap-3 text-amber-200 border border-amber-500/30">
-                    <AlertCircle size={20} />
-                    <span className="text-sm">{error}</span>
+                <div className="rounded-xl p-4 flex items-center gap-3 bg-amber-50 text-amber-950 border border-amber-200/80">
+                    <AlertCircle size={20} className="text-amber-700 shrink-0" />
+                    <span className="text-sm font-medium">{error}</span>
                     <button type="button" className="ml-auto text-xs font-bold uppercase underline" onClick={() => setError(null)}>
                         Fechar
                     </button>
@@ -244,7 +267,11 @@ const AdminMetasObjetivos: React.FC = () => {
                             </button>
                         ))}
                         {filtered.length === 0 && (
-                            <p className="text-sm text-gray-500 text-center py-8">Nenhuma empresa encontrada.</p>
+                            <p className="text-sm text-gray-500 text-center py-8">
+                                {staffFilterId && !debounced
+                                    ? 'Nenhuma empresa com lead atribuído a este colaborador (ou busca sem resultado).'
+                                    : 'Nenhuma empresa encontrada.'}
+                            </p>
                         )}
                     </div>
                 </div>

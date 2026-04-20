@@ -29,6 +29,16 @@ function subscriptionLabel(status?: string | null): string {
     return m[status] ?? status;
 }
 
+function subscriptionStatusClass(status?: string | null): string {
+    if (!status) return 'text-[#141414]';
+    const s = String(status).toUpperCase();
+    if (s === 'ACTIVE') return 'text-emerald-700';
+    if (s === 'CANCELLED') return 'text-red-600';
+    if (s === 'OVERDUE') return 'text-amber-700';
+    if (s === 'PENDING') return 'text-amber-600';
+    return 'text-[#141414]';
+}
+
 const AdminClientes: React.FC = () => {
     const staffView = useAdminStaffView();
     const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
@@ -171,7 +181,7 @@ const AdminClientes: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                     <Link
                         to="/admin/companies"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-300 hover:bg-gray-50 text-xs font-black uppercase tracking-widest"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[#141414] hover:bg-gray-50 text-xs font-black uppercase tracking-widest"
                     >
                         <FileText size={14} />
                         Contratos e faturas
@@ -179,7 +189,7 @@ const AdminClientes: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => load()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-300 hover:bg-gray-50"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[#141414] hover:bg-gray-50"
                     >
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                         <span className="text-xs font-black uppercase tracking-widest">Sincronizar</span>
@@ -188,9 +198,9 @@ const AdminClientes: React.FC = () => {
             </div>
 
             {error && (
-                <div className="glass-card rounded-xl p-4 flex items-center gap-3 text-amber-200 border border-amber-500/30">
-                    <AlertCircle size={20} />
-                    <span className="text-sm">{error}</span>
+                <div className="rounded-xl p-4 flex items-center gap-3 bg-amber-50 text-amber-950 border border-amber-200/80">
+                    <AlertCircle size={20} className="text-amber-700 shrink-0" />
+                    <span className="text-sm font-medium">{error}</span>
                     <button type="button" className="ml-auto text-xs font-bold uppercase underline" onClick={() => setError(null)}>
                         Fechar
                     </button>
@@ -272,7 +282,7 @@ const AdminClientes: React.FC = () => {
                                     <div className="flex flex-wrap gap-2">
                                         <Link
                                             to={`/admin/clientes?companyId=${encodeURIComponent(selected.id)}`}
-                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase tracking-widest hover:brightness-110"
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest shadow-sm hover:bg-emerald-700 transition-colors"
                                         >
                                             Ver cliente
                                             <ArrowUpRight size={14} />
@@ -300,7 +310,11 @@ const AdminClientes: React.FC = () => {
                                     </div>
                                     <div className="rounded-xl bg-gray-100 border border-black/5 px-4 py-3 col-span-2">
                                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Assinatura</p>
-                                        <p className="text-sm font-bold text-gray-200 mt-1">
+                                        <p
+                                            className={`text-sm font-bold mt-1 ${subscriptionStatusClass(
+                                                selected.subscriptionStatus
+                                            )}`}
+                                        >
                                             {subscriptionLabel(selected.subscriptionStatus)}
                                         </p>
                                         {(selected.subscriptionDueDate || selected.subscriptionEndDate) && (
@@ -319,14 +333,14 @@ const AdminClientes: React.FC = () => {
                                     <div className="rounded-xl border border-black/5 bg-gray-50 p-4 space-y-2">
                                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contratante</p>
                                         {selected.contratante && (
-                                            <p className="text-sm text-gray-200">{selected.contratante}</p>
+                                            <p className="text-sm text-[#141414] font-medium">{selected.contratante}</p>
                                         )}
                                         {selected.documento && (
                                             <p className="text-xs text-gray-500 font-mono">{selected.documento}</p>
                                         )}
                                         {selected.emailContratante && (
-                                            <p className="text-xs text-gray-400 flex items-center gap-2">
-                                                <Mail size={12} /> {selected.emailContratante}
+                                            <p className="text-xs text-gray-600 flex items-center gap-2">
+                                                <Mail size={12} className="text-gray-500" /> {selected.emailContratante}
                                             </p>
                                         )}
                                     </div>
@@ -344,9 +358,9 @@ const AdminClientes: React.FC = () => {
                                         {companyUsers.map((u) => (
                                             <li
                                                 key={u.id}
-                                                className="flex items-center justify-between gap-3 text-sm border-b border-white/5 pb-2 last:border-0"
+                                                className="flex items-center justify-between gap-3 text-sm border-b border-black/5 pb-2 last:border-0"
                                             >
-                                                <span className="text-gray-200 font-medium truncate">{u.name}</span>
+                                                <span className="text-[#141414] font-medium truncate">{u.name}</span>
                                                 <span className="text-[10px] font-black uppercase text-gray-500 shrink-0">
                                                     {u.role}
                                                     {u.active ? '' : ' · inativo'}
