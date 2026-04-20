@@ -72,15 +72,15 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Só opacity: qualquer `transform` aqui vira ancestral de containing block e quebra
+   `position: fixed` dos modais dentro de .admin-content (faixa sem overlay no topo). */
 @keyframes admin-page-enter {
   from {
     opacity: 0;
-    transform: translateY(20px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 

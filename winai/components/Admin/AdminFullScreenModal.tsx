@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     ADMIN_MODAL_BACKDROP_BLUR,
     ADMIN_MODAL_BACKDROP_DEFAULT,
@@ -24,10 +25,13 @@ const AdminFullScreenModal: React.FC<AdminFullScreenModalProps> = ({
     className = '',
     innerClassName = '',
 }) => {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+
     const root =
         backdrop === 'blur' ? `${ADMIN_MODAL_BACKDROP_BLUR} ${className}`.trim() : `${ADMIN_MODAL_BACKDROP_DEFAULT} ${className}`.trim();
 
-    return (
+    const node = (
         <div
             className={root}
             role="presentation"
@@ -42,6 +46,9 @@ const AdminFullScreenModal: React.FC<AdminFullScreenModalProps> = ({
             <div className={`${ADMIN_MODAL_INNER} ${innerClassName}`.trim()}>{children}</div>
         </div>
     );
+
+    if (!mounted) return null;
+    return createPortal(node, document.body);
 };
 
 export default AdminFullScreenModal;
