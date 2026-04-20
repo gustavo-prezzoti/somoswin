@@ -1,14 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, Cpu, Loader2, Lock, Mail, TrendingUp, Zap, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Loader2, Lock, Mail } from 'lucide-react';
 import { authService } from '../services';
 import logoDark from '../logo_dark.png';
-
-const pillars = [
-   { icon: ShieldCheck, label: 'Segurança de Dados 2025' },
-   { icon: Cpu, label: 'Processamento Neural Ativo' },
-   { icon: Zap, label: 'Performance de Conversão' },
-] as const;
 
 const Login: React.FC = () => {
    const [email, setEmail] = useState('');
@@ -63,13 +57,9 @@ const Login: React.FC = () => {
          </div>
 
          <main className="relative z-10 flex min-h-0 flex-1 flex-col justify-center px-4 py-6 sm:px-6 sm:py-8">
-            <div className="mx-auto flex w-full max-w-[1000px] min-h-0 flex-1 flex-col justify-center lg:max-h-[min(720px,100dvh-2rem)] lg:max-w-6xl">
-               <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white shadow-[0_25px_80px_-20px_rgba(0,0,0,0.45)] lg:grid lg:min-h-[520px] lg:grid-cols-[1fr_1fr] lg:rounded-3xl">
-                  {/* Form — scroll só aqui em telas baixas */}
-                  <section
-                     className="flex min-h-0 flex-col border-b border-gray-100 bg-white lg:border-b-0 lg:border-r"
-                     aria-labelledby="login-heading"
-                  >
+            <div className="mx-auto flex w-full max-w-md min-h-0 flex-1 flex-col justify-center sm:max-w-[420px]">
+               <div className="flex max-h-[min(640px,100dvh-2rem)] min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white shadow-[0_25px_80px_-20px_rgba(0,0,0,0.45)] sm:rounded-3xl">
+                  <section className="flex min-h-0 flex-1 flex-col bg-white" aria-labelledby="login-heading">
                      <div className="flex min-h-0 flex-1 flex-col justify-center gap-6 overflow-y-auto overscroll-contain px-6 py-8 sm:px-10 sm:py-10">
                         <div className="flex flex-col gap-5">
                            <img src={logoDark} alt="Amplia" className="h-11 w-auto object-contain object-left" />
@@ -180,69 +170,11 @@ const Login: React.FC = () => {
                         </form>
                      </div>
                   </section>
-
-                  {/* Painel marca — oculto em mobile para caber na viewport; opcional expandir depois */}
-                  <aside className="relative hidden min-h-0 flex-col justify-between overflow-hidden bg-[#063d2f] p-8 text-white lg:flex lg:p-10">
-                     <svg
-                        className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.07]"
-                        viewBox="0 0 400 400"
-                        preserveAspectRatio="xMidYMid slice"
-                        aria-hidden
-                     >
-                        <defs>
-                           <linearGradient id="login-grid-fade" x1="0" y1="0" x2="1" y2="1">
-                              <stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
-                              <stop offset="100%" stopColor="#fff" stopOpacity="0" />
-                           </linearGradient>
-                        </defs>
-                        <circle cx="200" cy="120" r="160" fill="none" stroke="url(#login-grid-fade)" strokeWidth="0.5" />
-                        <circle cx="220" cy="280" r="200" fill="none" stroke="url(#login-grid-fade)" strokeWidth="0.5" />
-                     </svg>
-
-                     <div className="relative space-y-8">
-                        <div className="flex items-center gap-3">
-                           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-emerald-500/15">
-                              <TrendingUp className="size-5 text-emerald-300" aria-hidden />
-                           </div>
-                           <div className="h-px flex-1 max-w-[4rem] bg-gradient-to-r from-emerald-400/60 to-transparent" />
-                        </div>
-
-                        <div className="space-y-3">
-                           <h2 className="text-balance text-3xl font-black uppercase italic leading-[1.05] tracking-tight sm:text-4xl">
-                              O Futuro da <span className="text-emerald-400">Escala é IA.</span>
-                           </h2>
-                           <p className="max-w-sm text-[15px] leading-relaxed text-emerald-50/75">
-                              Sua infraestrutura de vendas configurada para converter leads enquanto você foca no estratégico.
-                           </p>
-                        </div>
-                     </div>
-
-                     <ul className="relative mt-auto space-y-2.5 pt-6">
-                        {pillars.map(({ icon: Icon, label }) => (
-                           <li
-                              key={label}
-                              className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.06] px-3 py-2.5 backdrop-blur-sm"
-                           >
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-300">
-                                 <Icon className="size-[18px]" aria-hidden />
-                              </span>
-                              <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-50/95">{label}</span>
-                           </li>
-                        ))}
-                     </ul>
-
-                     <div className="relative flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-6">
-                        <div className="flex items-center gap-2">
-                           <span className="relative flex h-2 w-2">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                           </span>
-                           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300/95">Sistemas online</span>
-                        </div>
-                        <p className="text-[10px] font-semibold uppercase tracking-widest text-white/35">© 2025 AMPLIA TECHNOLOGIES</p>
-                     </div>
-                  </aside>
                </div>
+
+               <p className="mt-6 text-center text-[10px] font-semibold uppercase tracking-widest text-emerald-100/35">
+                  © 2025 AMPLIA TECHNOLOGIES
+               </p>
             </div>
          </main>
       </div>
