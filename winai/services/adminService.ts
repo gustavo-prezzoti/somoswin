@@ -623,6 +623,10 @@ const adminService = {
         return await httpClient.patch<AmpliaStaffRoleRow>(`/admin/internal-staff-roles/${id}`, data);
     },
 
+    deleteAmpliaStaffRole: async (id: string): Promise<void> => {
+        await httpClient.delete(`/admin/internal-staff-roles/${id}`);
+    },
+
     listInternalStaff: async (): Promise<InternalStaffMember[]> => {
         return await httpClient.get<InternalStaffMember[]>('/admin/internal-staff');
     },

@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Plus, Shield } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Shield, Trash2 } from 'lucide-react';
 import adminService, { AmpliaStaffRoleRow } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
@@ -37,7 +37,7 @@ function compactTrue(perms: Record<string, boolean>): Record<string, boolean> {
 }
 
 const AdminGestaoPapeis: React.FC = () => {
-    const { showToast } = useModal();
+    const { showToast, showConfirm } = useModal();
     const [auth, setAuth] = useState<boolean | null>(null);
     const [rows, setRows] = useState<AmpliaStaffRoleRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -139,7 +139,7 @@ const AdminGestaoPapeis: React.FC = () => {
         }
     };
 
-    const toggleActive = async (r: AmpliaStaffRoleRow) => {
+    const toggleActiveForRole = async (r: AmpliaStaffRoleRow) => {
         try {
             await adminService.patchAmpliaStaffRole(r.id, { active: !r.active });
             showToast(r.active ? 'Papel desativado.' : 'Papel ativado.', 'success');
@@ -148,6 +148,32 @@ const AdminGestaoPapeis: React.FC = () => {
             showToast(getErrorMessage(e, 'Erro ao alterar status'), 'error');
         }
     };
+
+    const toggleActive = (r: AmpliaStaffRoleRow) => void toggleActiveForRole(r);
+
+    const confirmDeleteRole = (r: AmpliaStaffRoleRow, afterDelete?: () => void) => {
+        showConfirm({
+            title: 'Excluir papel',
+            message: `Excluir permanentemente o papel "${r.name}"? Esta ação não pode ser desfeita.`,
+            type: 'danger',
+            confirmText: 'Excluir',
+            onConfirm: async () => {
+                try {
+                    await adminService.deleteAmpliaStaffRole(r.id);
+                    showToast('Papel excluído.', 'success');
+                    afterDelete?.();
+                    await load();
+                } catch (e) {
+                    showToast(getErrorMessage(e, 'Não foi possível excluir o papel.'), 'error');
+                }
+            },
+        });
+    };
+
+    const roleBeingEdited = useMemo(() => {
+        if (!editing) return null;
+        return rows.find((x) => x.id === editing.id) ?? editing;
+    }, [editing, rows]);
 
     if (auth === false) {
         return <Navigate to="/admin/gestao-equipe" replace />;
@@ -241,6 +267,16 @@ const AdminGestaoPapeis: React.FC = () => {
                                 >
                                     {r.active ? 'Desativar' : 'Ativar'}
                                 </button>
+                                {!r.active && !r.legacyStaffType && (
+                                    <button
+                                        type="button"
+                                        onClick={() => confirmDeleteRole(r)}
+                                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-black uppercase hover:bg-rose-100"
+                                    >
+                                        <Trash2 size={14} />
+                                        Excluir
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -248,37 +284,42 @@ const AdminGestaoPapeis: React.FC = () => {
             )}
 
             {(creating || editing) && (
-                <AdminFullScreenModal backdrop="default">
+                <AdminFullScreenModal
+                    backdrop="default"
+                    innerClassName="box-border !min-h-0 min-h-[100dvh] max-h-[100dvh] overflow-hidden !flex !items-center !justify-center px-4 sm:px-6 py-3 sm:py-5"
+                >
                     <form
                         onSubmit={handleSave}
-                        className="bg-white rounded-2xl p-8 max-w-4xl w-full space-y-4 shadow-2xl border border-black/5"
+                        className="bg-white rounded-2xl p-6 sm:p-8 max-w-4xl w-full flex flex-col max-h-[min(100dvh-2.5rem,100svh-2.5rem)] min-h-0 overflow-hidden shadow-2xl border border-black/5"
                     >
-                        <h3 className="text-xl font-black uppercase italic text-[#141414]">
+                        <h3 className="shrink-0 text-xl font-black uppercase italic text-[#141414]">
                             {creating ? 'Novo papel' : 'Editar papel'}
                         </h3>
-                        <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase">Nome</label>
-                            <input
-                                required
-                                className="w-full mt-1 px-4 py-3 rounded-xl border border-black/10 font-bold text-sm"
-                                value={formName}
-                                onChange={(e) => setFormName(e.target.value)}
-                            />
+                        <div className="shrink-0 space-y-4 mt-4">
+                            <div>
+                                <label className="text-[10px] font-black text-gray-400 uppercase">Nome</label>
+                                <input
+                                    required
+                                    className="w-full mt-1 px-4 py-3 rounded-xl border border-black/10 font-bold text-sm"
+                                    value={formName}
+                                    onChange={(e) => setFormName(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-gray-400 uppercase">Descrição (opcional)</label>
+                                <input
+                                    className="w-full mt-1 px-4 py-3 rounded-xl border border-black/10 font-bold text-sm"
+                                    value={formDesc}
+                                    onChange={(e) => setFormDesc(e.target.value)}
+                                />
+                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={formFull} onChange={(e) => setFormFull(e.target.checked)} />
+                                <span className="text-sm font-bold">Acesso total (todos os módulos e ações)</span>
+                            </label>
                         </div>
-                        <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase">Descrição (opcional)</label>
-                            <input
-                                className="w-full mt-1 px-4 py-3 rounded-xl border border-black/10 font-bold text-sm"
-                                value={formDesc}
-                                onChange={(e) => setFormDesc(e.target.value)}
-                            />
-                        </div>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" checked={formFull} onChange={(e) => setFormFull(e.target.checked)} />
-                            <span className="text-sm font-bold">Acesso total (todos os módulos e ações)</span>
-                        </label>
                         {!formFull && (
-                            <div className="max-h-[min(70vh,560px)] overflow-y-auto space-y-5 border border-black/5 rounded-xl p-4">
+                            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-5 border border-black/5 rounded-xl p-4 mt-4 custom-scrollbar">
                                 {AMPLIA_ADMIN_MODULE_SECTIONS.map((section) => (
                                     <div key={section.id} className="space-y-3">
                                         <h4
@@ -329,21 +370,44 @@ const AdminGestaoPapeis: React.FC = () => {
                                 ))}
                             </div>
                         )}
-                        <div className="flex gap-2 pt-2">
-                            <button
-                                type="button"
-                                onClick={closeForm}
-                                className="flex-1 py-3 rounded-xl border border-black/10 text-xs font-black uppercase"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="flex-1 py-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-black uppercase disabled:opacity-50"
-                            >
-                                {saving ? 'Salvando…' : 'Salvar'}
-                            </button>
+                        <div className="shrink-0 space-y-3 pt-4 mt-2 border-t border-black/5">
+                            {!creating && roleBeingEdited && !roleBeingEdited.legacyStaffType && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => void toggleActiveForRole(roleBeingEdited)}
+                                        className="px-4 py-2 rounded-xl border border-black/10 text-xs font-black uppercase hover:bg-gray-50"
+                                    >
+                                        {roleBeingEdited.active ? 'Desativar papel' : 'Ativar papel'}
+                                    </button>
+                                    {!roleBeingEdited.active && (
+                                        <button
+                                            type="button"
+                                            onClick={() => confirmDeleteRole(roleBeingEdited, closeForm)}
+                                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-black uppercase hover:bg-rose-100"
+                                        >
+                                            <Trash2 size={14} />
+                                            Excluir papel
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={closeForm}
+                                    className="flex-1 py-3 rounded-xl border border-black/10 text-xs font-black uppercase"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="flex-1 py-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-black uppercase disabled:opacity-50"
+                                >
+                                    {saving ? 'Salvando…' : 'Salvar'}
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </AdminFullScreenModal>
