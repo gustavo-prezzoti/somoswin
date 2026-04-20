@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import adminService, { InternalStaffMember } from '../../services/adminService';
+import type { UserDTO } from '../../services/types';
 
 const STORAGE_KEY = 'admin_super_staff_view_id';
 
@@ -39,6 +40,37 @@ export type AdminStaffViewContextValue = {
 
 const AdminStaffViewContext = createContext<AdminStaffViewContextValue | null>(null);
 
+/** Rótulo no seletor: admins plenos não vêm em /internal-staff — incluímos a sessão atual como opção. */
+function staffTypeLabelForSessionUser(user: UserDTO): string {
+    if (user.ampliaStaffType && String(user.ampliaStaffType).trim()) return String(user.ampliaStaffType);
+    const r = String(user.role ?? '')
+        .trim()
+        .toUpperCase()
+        .replace('ROLE_', '');
+    if (r === 'SUPER_ADMIN') return 'Super admin';
+    if (r === 'ADMIN') return 'Administrador';
+    return r || 'Conta';
+}
+
+function sessionUserAsStaffMember(user: UserDTO): InternalStaffMember {
+    return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        ampliaStaffType: staffTypeLabelForSessionUser(user),
+        ampliaStaffRoleId: user.ampliaStaffRoleId ?? null,
+        ampliaStaffRoleName: user.ampliaStaffRoleName ?? null,
+        ampliaStaffPermissions: user.ampliaStaffPermissions,
+        ampliaStaffFullAccess: user.ampliaStaffFullAccess,
+        active: true,
+        lastLogin: null,
+        leadsTotal: 0,
+        leadsWon: 0,
+        meetingsThisWeek: 0,
+        conversionPercent: 0,
+    };
+}
+
 function readStoredId(): string | null {
     try {
         const raw = sessionStorage.getItem(STORAGE_KEY);
@@ -49,16 +81,24 @@ function readStoredId(): string | null {
     }
 }
 
-export const AdminStaffViewProvider: React.FC<{ children: React.ReactNode; userRole: string }> = ({
-    children,
-    userRole,
-}) => {
+export const AdminStaffViewProvider: React.FC<{
+    children: React.ReactNode;
+    userRole: string;
+    /** Perfil logado — usado para incluir “minha conta” no seletor quando não está na lista de internal-staff. */
+    currentUser: UserDTO | null;
+}> = ({ children, userRole, currentUser }) => {
     const canUseStaffTeam = canUseStaffTeamView(userRole);
     const [selectedStaffUserId, setSelectedStaffUserIdState] = useState<string | null>(() =>
         canUseStaffTeam ? readStoredId() : null
     );
-    const [staffList, setStaffList] = useState<InternalStaffMember[]>([]);
+    const [staffListRaw, setStaffListRaw] = useState<InternalStaffMember[]>([]);
     const [staffLoading, setStaffLoading] = useState(false);
+
+    const staffList = useMemo(() => {
+        if (!canUseStaffTeam || !currentUser?.id) return staffListRaw;
+        if (staffListRaw.some((s) => s.id === currentUser.id)) return staffListRaw;
+        return [sessionUserAsStaffMember(currentUser), ...staffListRaw];
+    }, [canUseStaffTeam, currentUser, staffListRaw]);
 
     const setSelectedStaffUserId = useCallback((id: string | null) => {
         setSelectedStaffUserIdState(id);
@@ -75,7 +115,7 @@ export const AdminStaffViewProvider: React.FC<{ children: React.ReactNode; userR
 
     useEffect(() => {
         if (!canUseStaffTeam) {
-            setStaffList([]);
+            setStaffListRaw([]);
             setSelectedStaffUserIdState(null);
             return;
         }
@@ -84,10 +124,10 @@ export const AdminStaffViewProvider: React.FC<{ children: React.ReactNode; userR
         adminService
             .listInternalStaff()
             .then((list) => {
-                if (!cancelled) setStaffList(list);
+                if (!cancelled) setStaffListRaw(list);
             })
             .catch(() => {
-                if (!cancelled) setStaffList([]);
+                if (!cancelled) setStaffListRaw([]);
             })
             .finally(() => {
                 if (!cancelled) setStaffLoading(false);

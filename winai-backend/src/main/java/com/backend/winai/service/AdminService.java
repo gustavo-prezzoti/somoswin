@@ -93,6 +93,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.NumberFormat;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -104,6 +105,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -224,6 +226,11 @@ public class AdminService {
 
         String newCompaniesSubtitle = "+" + newCompaniesMonth + " este mês";
 
+        List<Company> companiesForMrr = new ArrayList<>(companyRepository.findAllWithPlanFetched());
+        AdminFinanceKpisResponse mrrDash = computeFinanceKpisFromCompanies(companiesForMrr, today);
+        String faturamentoValue = formatBrlKpi(mrrDash.getMrr());
+        String faturamentoSubtitle = buildDashboardFaturamentoSubtitle(mrrDash);
+
         List<AdminDashboardResponse.Kpi> kpis = List.of(
                 AdminDashboardResponse.Kpi.builder()
                         .label("CLIENTES TOTAIS")
@@ -245,8 +252,8 @@ public class AdminService {
                         .build(),
                 AdminDashboardResponse.Kpi.builder()
                         .label("FATURAMENTO")
-                        .value("—")
-                        .subtitle("Em breve")
+                        .value(faturamentoValue)
+                        .subtitle(faturamentoSubtitle)
                         .icon("DOLLAR")
                         .build());
 
@@ -295,6 +302,15 @@ public class AdminService {
 
         String leadsSubtitle = leadsWon + " ganhos no funil";
 
+        List<Company> staffScopeCompanies = new ArrayList<>(companyRepository.findAllWithPlanFetched());
+        Set<UUID> allowedCompanyIds = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserId));
+        staffScopeCompanies = staffScopeCompanies.stream()
+                .filter(c -> allowedCompanyIds.contains(c.getId()))
+                .collect(Collectors.toList());
+        AdminFinanceKpisResponse mrrStaff = computeFinanceKpisFromCompanies(staffScopeCompanies, today);
+        String faturamentoStaffValue = formatBrlKpi(mrrStaff.getMrr());
+        String faturamentoStaffSubtitle = buildDashboardFaturamentoSubtitleForStaff(mrrStaff);
+
         List<AdminDashboardResponse.Kpi> kpis = List.of(
                 AdminDashboardResponse.Kpi.builder()
                         .label("LEADS ATRIBUÍDOS")
@@ -316,8 +332,8 @@ public class AdminService {
                         .build(),
                 AdminDashboardResponse.Kpi.builder()
                         .label("FATURAMENTO")
-                        .value("—")
-                        .subtitle("Em breve")
+                        .value(faturamentoStaffValue)
+                        .subtitle(faturamentoStaffSubtitle)
                         .icon("DOLLAR")
                         .build());
 
@@ -1734,23 +1750,10 @@ public class AdminService {
 
     // ========== FINANÇAS (admin — dados reais empresa/plano/assinatura) ==========
 
-    public AdminFinanceOverviewResponse getAdminFinanceOverview(int year, Integer month, UUID staffUserId) {
-        if (staffUserId != null) {
-            User staff = userRepository.findById(staffUserId)
-                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
-            if (!Boolean.TRUE.equals(staff.getAmpliaInternalStaff())) {
-                throw new RuntimeException("Filtro disponível apenas para colaboradores internos");
-            }
-        }
-
-        List<Company> companies = new ArrayList<>(companyRepository.findAllWithPlanFetched());
-        if (staffUserId != null) {
-            Set<UUID> allowed = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserId));
-            companies = companies.stream().filter(c -> allowed.contains(c.getId())).collect(Collectors.toList());
-        }
-
-        LocalDate today = LocalDate.now(ZoneId.systemDefault());
-
+    /**
+     * Mesma base que a tela Finanças — MRR = soma do valor mensal (plano) com assinatura ACTIVE.
+     */
+    private AdminFinanceKpisResponse computeFinanceKpisFromCompanies(List<Company> companies, LocalDate today) {
         BigDecimal mrr = BigDecimal.ZERO;
         int mrrCount = 0;
         BigDecimal overdueTotal = BigDecimal.ZERO;
@@ -1787,7 +1790,7 @@ public class AdminService {
             churnPct = BigDecimal.valueOf(cancelledCount * 100.0 / denomChurn).setScale(1, RoundingMode.HALF_UP);
         }
 
-        AdminFinanceKpisResponse kpis = AdminFinanceKpisResponse.builder()
+        return AdminFinanceKpisResponse.builder()
                 .mrr(mrr.setScale(2, RoundingMode.HALF_UP))
                 .mrrCompanyCount(mrrCount)
                 .overdueTotal(overdueTotal.setScale(2, RoundingMode.HALF_UP))
@@ -1798,6 +1801,49 @@ public class AdminService {
                 .churnRatePercent(churnPct)
                 .companiesConsidered(companies.size())
                 .build();
+    }
+
+    private static String formatBrlKpi(BigDecimal v) {
+        if (v == null) {
+            return "—";
+        }
+        NumberFormat nf = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+        return nf.format(v);
+    }
+
+    private static String buildDashboardFaturamentoSubtitle(AdminFinanceKpisResponse fin) {
+        String base = fin.getMrrCompanyCount() + " empresa(s) com assinatura ativa";
+        long overdue = fin.getOverdueCompanyCount();
+        if (overdue > 0) {
+            return base + " · " + overdue + " com cobrança atrasada";
+        }
+        return base;
+    }
+
+    private static String buildDashboardFaturamentoSubtitleForStaff(AdminFinanceKpisResponse fin) {
+        String base = buildDashboardFaturamentoSubtitle(fin);
+        long scope = fin.getCompaniesConsidered();
+        return base + " · " + scope + " empresa(s) no seu escopo";
+    }
+
+    public AdminFinanceOverviewResponse getAdminFinanceOverview(int year, Integer month, UUID staffUserId) {
+        if (staffUserId != null) {
+            User staff = userRepository.findById(staffUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+            if (!Boolean.TRUE.equals(staff.getAmpliaInternalStaff())) {
+                throw new RuntimeException("Filtro disponível apenas para colaboradores internos");
+            }
+        }
+
+        List<Company> companies = new ArrayList<>(companyRepository.findAllWithPlanFetched());
+        if (staffUserId != null) {
+            Set<UUID> allowed = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserId));
+            companies = companies.stream().filter(c -> allowed.contains(c.getId())).collect(Collectors.toList());
+        }
+
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+
+        AdminFinanceKpisResponse kpis = computeFinanceKpisFromCompanies(companies, today);
 
         List<AdminFinanceCompanyRowResponse> rows = new ArrayList<>();
         for (Company c : companies) {

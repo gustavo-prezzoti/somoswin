@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 /** Módulos que já têm rota dedicada — redireciona URLs antigas (?m=). */
 const LEGACY_REDIRECT: Record<string, string> = {
     financas: '/admin/financas',
+    faturamento: '/admin/financas',
 };
 
 const MODULE_LABELS: Record<string, string> = {

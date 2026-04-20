@@ -13,6 +13,7 @@ import {
     isFullAdminOnlyAdminPath,
 } from './adminPermissions';
 import { userService } from '../../services/api/user.service';
+import type { UserDTO } from '../../services/types';
 import './AdminLayout.css';
 
 function parseStoredUser(): any | null {
@@ -102,7 +103,7 @@ const AdminLayout: React.FC = () => {
 
     return (
         <ModalProvider>
-            <AdminStaffViewProvider userRole={user.role}>
+            <AdminStaffViewProvider userRole={user.role} currentUser={user as UserDTO}>
                 <div className={`admin-layout admin-layout--amplia ${isSidebarOpen ? 'sidebar-open' : ''}`}>
                     <AdminSidebar
                         isOpen={isSidebarOpen}
