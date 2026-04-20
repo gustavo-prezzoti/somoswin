@@ -1,9 +1,8 @@
 import React from 'react';
 import { Calendar as CalendarIcon, Building2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import type { AdminDashboardMeeting } from '../../../services/adminService';
 
-/** Shell alinhado ao cabeçalho de amplia-painel AgendaView + lista a partir da API. */
+/** Resumo de encontros no dashboard (lista vem da API). */
 const DashboardAgendaSection: React.FC<{ meetings: AdminDashboardMeeting[] }> = ({ meetings }) => {
     return (
         <div className="glass-card p-8 relative">
@@ -12,12 +11,6 @@ const DashboardAgendaSection: React.FC<{ meetings: AdminDashboardMeeting[] }> = 
                     <CalendarIcon className="text-emerald-500" size={24} />
                     <h2 className="text-xl font-black italic tracking-tighter uppercase text-[#141414]">Agenda da Semana</h2>
                 </div>
-                <Link
-                    to="/admin/agenda"
-                    className="text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:text-[#141414] transition-colors"
-                >
-                    Ver agenda completa
-                </Link>
             </div>
 
             {meetings.length === 0 ? (

@@ -55,14 +55,9 @@ import AdminConsultancyLayout from './components/Admin/AdminConsultancyLayout';
 import AdminConsultancyOperations from './components/Admin/AdminConsultancyOperations';
 import AdminConsultancyGlobalAppearance from './components/Admin/AdminConsultancyGlobalAppearance';
 import AdminComingSoon from './components/Admin/AdminComingSoon';
-import AdminCRM from './components/Admin/AdminCRM';
-import AdminAtendimento from './components/Admin/AdminAtendimento';
-import AdminEscutaInteligente from './components/Admin/AdminEscutaInteligente';
 import AdminClientes from './components/Admin/AdminClientes';
 import AdminMetaAds from './components/Admin/AdminMetaAds';
 import AdminMetasObjetivos from './components/Admin/AdminMetasObjetivos';
-import AdminAgendaComercial from './components/Admin/AdminAgendaComercial';
-import AdminDiagnosticoComercial from './components/Admin/AdminDiagnosticoComercial';
 import AdminAlertas from './components/Admin/AdminAlertas';
 import AdminPerformance from './components/Admin/AdminPerformance';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
@@ -641,14 +636,9 @@ const App: React.FC = () => {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="em-breve" element={<AdminComingSoon />} />
-          <Route path="crm" element={<AdminCRM />} />
-          <Route path="atendimento" element={<AdminAtendimento />} />
-          <Route path="escuta" element={<AdminEscutaInteligente />} />
           <Route path="clientes" element={<AdminClientes />} />
           <Route path="meta-ads" element={<AdminMetaAds />} />
           <Route path="metas" element={<AdminMetasObjetivos />} />
-          <Route path="agenda" element={<AdminAgendaComercial />} />
-          <Route path="diagnostico" element={<AdminDiagnosticoComercial />} />
           <Route path="alertas" element={<AdminAlertas />} />
           <Route path="performance" element={<AdminPerformance />} />
           <Route path="users" element={<AdminUsers />} />

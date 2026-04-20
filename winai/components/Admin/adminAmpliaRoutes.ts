@@ -1,23 +1,20 @@
 /**
- * Mapa Amplia → Somoswin (/admin). Atualizar quando cada módulo for implementado.
+ * Menu lateral do admin Somoswin (/admin). Manter alinhado a ADMIN_NAV_SECTIONS.
  *
- * | Amplia (tab)        | Rota Somoswin        | DB / API (próximas fases)        |
- * |---------------------|----------------------|----------------------------------|
- * | dashboard           | /admin               | Admin dashboard (Fase 1)         |
- * | crm                 | /admin/crm           | Lead, pipeline                   |
- * | clientes            | /admin/clientes      | Company / usuários / CRM         |
- * | agenda              | /admin/agenda          | Meeting (admin global)           |
- * | diagnostico         | /admin/diagnostico     | Agregado CRM/metas/Meta/alertas  |
- * | metaads             | /admin/meta-ads      | MetaConnection + campanhas       |
- * | metas               | /admin/metas         | Goal + tasks (ciclo anual)       |
- * | contratos           | /admin/companies     | Company + termos                 |
- * | usuarios            | /admin/users         | User                             |
- * | alertas             | /admin/alertas       | Notification (paginado)          |
- * | performance         | /admin/performance   | Snapshot CRM + Meta agregado     |
- * | equipe / gestao_*   | /admin/em-breve      | membros / permissões             |
- * | financas            | /admin/em-breve      | Asaas / billing                  |
- * | instancias…followup | rotas técnicas       | instâncias UAZAP, KB, etc.       |
- * | consultoria         | /admin/consultancy   | ConsultancyCallRequest, vídeo    |
+ * | Item / id           | Rota Somoswin              | Notas                              |
+ * |---------------------|----------------------------|------------------------------------|
+ * | dashboard           | /admin                     | Dashboard                          |
+ * | clientes            | /admin/clientes            | Companies / acompanhamento         |
+ * | usuarios            | /admin/users               | Usuários                           |
+ * | metaads             | /admin/meta-ads            | Meta Ads                           |
+ * | metas               | /admin/metas               | Metas e objetivos                  |
+ * | alertas             | /admin/alertas             | Notificações (badge opcional)      |
+ * | performance         | /admin/performance         | Snapshot agregado                  |
+ * | gestao_equipe…financas | /admin/em-breve?m=…     | Placeholder                        |
+ * | contratos           | /admin/companies           | Contratos / empresas               |
+ * | instancias…followup | /admin/instances, etc.     | Rotas técnicas                     |
+ * | prompts             | /admin/em-breve?m=prompts  | Placeholder Prompts IA             |
+ * | consultoria         | /admin/consultancy         | Não listado no menu (rota direta)  |
  */
 
 export type AdminNavSectionId = 'gestao' | 'administrativo' | 'tecnico';
@@ -28,6 +25,8 @@ export interface AdminNavItem {
     to: string;
     /** Se false, item ainda não tem tela dedicada (vai para /admin/em-breve com query ou mesmo path) */
     implemented?: boolean;
+    /** Ex.: contador em Alertas */
+    badge?: number;
 }
 
 export interface AdminNavSection {
@@ -44,16 +43,11 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         accentClass: 'text-emerald-500',
         items: [
             { id: 'dashboard', label: 'Dashboard', to: '/admin', implemented: true },
-            { id: 'crm', label: 'CRM e Leads', to: '/admin/crm', implemented: true },
-            { id: 'atendimento', label: 'Atendimento', to: '/admin/atendimento', implemented: true },
-            { id: 'escuta', label: 'Escuta Inteligente', to: '/admin/escuta', implemented: true },
             { id: 'clientes', label: 'Clientes', to: '/admin/clientes', implemented: true },
             { id: 'usuarios', label: 'Usuários', to: '/admin/users', implemented: true },
             { id: 'metaads', label: 'Meta Ads', to: '/admin/meta-ads', implemented: true },
             { id: 'metas', label: 'Metas e Objetivos', to: '/admin/metas', implemented: true },
-            { id: 'agenda', label: 'Agenda Comercial', to: '/admin/agenda', implemented: true },
-            { id: 'diagnostico', label: 'Diagnóstico Comercial', to: '/admin/diagnostico', implemented: true },
-            { id: 'alertas', label: 'Alertas', to: '/admin/alertas', implemented: true },
+            { id: 'alertas', label: 'Alertas', to: '/admin/alertas', implemented: true, badge: 3 },
             { id: 'performance', label: 'Performance', to: '/admin/performance', implemented: true },
         ],
     },
@@ -77,6 +71,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
             { id: 'conexoes', label: 'Conexões', to: '/admin/user-connections', implemented: true },
             { id: 'agentes', label: 'Agentes IA', to: '/admin/agents', implemented: true },
             { id: 'followup', label: 'Follow-up', to: '/admin/followup', implemented: true },
+            { id: 'prompts', label: 'Prompts IA', to: '/admin/em-breve?m=prompts' },
         ],
     },
 ];

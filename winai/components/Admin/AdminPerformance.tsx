@@ -276,8 +276,8 @@ const AdminPerformance: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap gap-4 justify-center text-xs text-gray-700">
-                <Link to="/admin/diagnostico" className="font-bold hover:text-emerald-700">
-                    Diagnóstico comercial →
+                <Link to="/admin/clientes" className="font-bold hover:text-emerald-700">
+                    Clientes →
                 </Link>
                 <span className="text-gray-400">·</span>
                 <Link to="/admin/metas" className="font-bold hover:text-emerald-700">

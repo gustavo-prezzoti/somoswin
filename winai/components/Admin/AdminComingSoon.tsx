@@ -4,19 +4,10 @@ import { Construction } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const MODULE_LABELS: Record<string, string> = {
-    crm: 'CRM e Leads',
-    atendimento: 'Atendimento',
-    escuta: 'Escuta Inteligente',
-    clientes: 'Clientes',
-    metaads: 'Meta Ads',
-    metas: 'Metas e Objetivos',
-    agenda: 'Agenda Comercial',
-    diagnostico: 'Diagnóstico Comercial',
-    alertas: 'Alertas',
-    performance: 'Performance',
     gestao_equipe: 'Gestão de Equipe',
     equipe: 'Equipe Admin',
     financas: 'Finanças',
+    prompts: 'Prompts IA',
 };
 
 const AdminComingSoon: React.FC = () => {

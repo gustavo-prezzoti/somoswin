@@ -3,12 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
     Home,
     Target,
-    MessageCircle,
-    Mic,
     Users,
     User,
-    Calendar,
-    ClipboardCheck,
     Bell,
     BarChart3,
     Building2,
@@ -21,6 +17,7 @@ import {
     ChevronRight,
     X,
     Flag,
+    Terminal,
 } from 'lucide-react';
 import {
     ADMIN_NAV_SECTIONS,
@@ -30,15 +27,10 @@ import {
 
 const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
     dashboard: Home,
-    crm: Target,
-    atendimento: MessageCircle,
-    escuta: Mic,
     clientes: Users,
     usuarios: User,
     metaads: Target,
     metas: Flag,
-    agenda: Calendar,
-    diagnostico: ClipboardCheck,
     alertas: Bell,
     performance: BarChart3,
     gestao_equipe: Users,
@@ -49,6 +41,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
     conexoes: LinkIcon,
     agentes: Bot,
     followup: Clock,
+    prompts: Terminal,
 };
 
 function isNavActive(to: string, pathname: string, search: string): boolean {
@@ -175,7 +168,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
                                                         : 'text-gray-500 hover:bg-gray-100'
                                                 }`}
                                             >
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 min-w-0">
                                                     <Icon
                                                         size={18}
                                                         className={
@@ -186,8 +179,20 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
                                                     />
                                                     {!narrow && <span className="text-xs font-bold tracking-wide">{item.label}</span>}
                                                 </div>
-                                                {!narrow && active && (
-                                                    <div className="w-1.5 h-1.5 bg-[#00FF00] rounded-full shrink-0" />
+                                                {!narrow && (
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {item.badge != null && (
+                                                            <span className="px-1.5 py-0.5 bg-red-500 text-white text-[8px] font-black rounded-full">
+                                                                {item.badge}
+                                                            </span>
+                                                        )}
+                                                        {active && (
+                                                            <div className="w-1.5 h-1.5 bg-[#00FF00] rounded-full" />
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {narrow && item.badge != null && (
+                                                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
                                                 )}
                                             </NavLink>
                                         );

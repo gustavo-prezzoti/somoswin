@@ -233,10 +233,10 @@ const AdminClientes: React.FC = () => {
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         <Link
-                                            to={`/admin/crm?companyId=${encodeURIComponent(selected.id)}`}
+                                            to={`/admin/clientes?companyId=${encodeURIComponent(selected.id)}`}
                                             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase tracking-widest hover:brightness-110"
                                         >
-                                            Abrir CRM
+                                            Ver cliente
                                             <ArrowUpRight size={14} />
                                         </Link>
                                         <Link

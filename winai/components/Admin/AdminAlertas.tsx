@@ -306,10 +306,10 @@ const AdminAlertas: React.FC = () => {
                                             </button>
                                         )}
                                         <Link
-                                            to="/admin/crm"
+                                            to="/admin/clientes"
                                             className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-black/5 text-gray-700 bg-white hover:bg-gray-50 text-center"
                                         >
-                                            CRM
+                                            Clientes
                                         </Link>
                                     </div>
                                 </div>

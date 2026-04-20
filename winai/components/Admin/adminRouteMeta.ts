@@ -7,14 +7,9 @@ export interface AdminRouteMeta {
 
 /** Títulos/subtítulos alinhados a amplia-painel/src/App.tsx (getTabTitle / getTabSubtitle). */
 const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
-    { pattern: '/admin/crm', meta: { title: 'CRM e Leads', subtitle: 'Gestão de leads e pipeline' } },
-    { pattern: '/admin/atendimento', meta: { title: 'Atendimento', subtitle: 'Central de mensagens e chat' } },
-    { pattern: '/admin/escuta', meta: { title: 'Escuta Inteligente', subtitle: 'Análise de chamadas com IA' } },
     { pattern: '/admin/clientes', meta: { title: 'Clientes', subtitle: 'Acompanhamento estratégico' } },
     { pattern: '/admin/meta-ads', meta: { title: 'Meta Ads', subtitle: 'Gestão e Otimização IA' } },
     { pattern: '/admin/metas', meta: { title: 'Metas e Objetivos', subtitle: 'Planejamento Estratégico' } },
-    { pattern: '/admin/agenda', meta: { title: 'Agenda Comercial', subtitle: 'Encontros da semana' } },
-    { pattern: '/admin/diagnostico', meta: { title: 'Diagnóstico Comercial', subtitle: 'Avaliação de Maturidade' } },
     { pattern: '/admin/alertas', meta: { title: 'Alertas', subtitle: 'Ações prioritárias' } },
     { pattern: '/admin/performance', meta: { title: 'Performance', subtitle: 'Performance do consultor' } },
     { pattern: '/admin/consultancy/aparencia', meta: { title: 'Consultoria', subtitle: 'Aparência global' } },
