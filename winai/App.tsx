@@ -54,7 +54,6 @@ import AdminTerms from './components/Admin/AdminTerms';
 import AdminConsultancyLayout from './components/Admin/AdminConsultancyLayout';
 import AdminConsultancyOperations from './components/Admin/AdminConsultancyOperations';
 import AdminConsultancyGlobalAppearance from './components/Admin/AdminConsultancyGlobalAppearance';
-import AdminComingSoon from './components/Admin/AdminComingSoon';
 import AdminClientes from './components/Admin/AdminClientes';
 import AdminMetaAds from './components/Admin/AdminMetaAds';
 import AdminMetasObjetivos from './components/Admin/AdminMetasObjetivos';
@@ -651,7 +650,7 @@ const App: React.FC = () => {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
-          <Route path="em-breve" element={<AdminComingSoon />} />
+          <Route path="em-breve" element={<Navigate to="/admin" replace />} />
           <Route path="gestao-equipe" element={<AdminGestaoEquipe />} />
           <Route path="gestao-equipe/papeis" element={<AdminGestaoPapeis />} />
           <Route path="clientes" element={<AdminClientes />} />

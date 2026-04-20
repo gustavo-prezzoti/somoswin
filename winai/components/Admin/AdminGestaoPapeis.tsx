@@ -298,23 +298,13 @@ const AdminGestaoPapeis: React.FC = () => {
                                                             Em breve — ainda não há rotas de permissão para este módulo.
                                                         </p>
                                                     ) : (
-                                                        <div
-                                                            className={`grid gap-2 ${
-                                                                opt.actions.length === 1
-                                                                    ? 'grid-cols-1'
-                                                                    : opt.actions.length === 2
-                                                                      ? 'grid-cols-2'
-                                                                      : opt.actions.length <= 4
-                                                                        ? 'grid-cols-2 sm:grid-cols-3'
-                                                                        : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
-                                                            }`}
-                                                        >
+                                                        <div className="flex flex-wrap gap-x-4 gap-y-2 justify-start items-center">
                                                             {opt.actions.map((action: AmpliaAdminAction) => {
                                                                 const key = ampliaPermissionKey(opt.id, action);
                                                                 return (
                                                                     <label
                                                                         key={key}
-                                                                        className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-gray-700"
+                                                                        className="inline-flex shrink-0 items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-gray-700"
                                                                     >
                                                                         <input
                                                                             type="checkbox"

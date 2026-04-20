@@ -24,7 +24,6 @@ const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
     { pattern: '/admin/settings', meta: { title: 'Configurações', subtitle: 'Configurações globais' } },
     { pattern: '/admin/terms', meta: { title: 'Termos de Uso', subtitle: 'Termos e aceites' } },
     { pattern: '/admin/gestao-equipe', meta: { title: 'Gestão de Equipe', subtitle: 'Colaboradores internos Amplia' } },
-    { pattern: '/admin/em-breve', meta: { title: 'Em desenvolvimento', subtitle: 'Módulo em construção' } },
     { pattern: '/admin', end: true, meta: { title: 'Dashboard', subtitle: 'Visão geral do sistema Amplia' } },
 ];
 

@@ -15,7 +15,7 @@ export const AMPLIA_ADMIN_ACTION_LABELS: Record<AmpliaAdminAction, string> = {
 export interface AmpliaAdminModuleOption {
     id: string;
     label: string;
-    /** Subconjunto de ações com rotas reais na API (Prompts IA: vazio até haver endpoints). */
+    /** Subconjunto de ações com rotas reais na API. */
     actions: AmpliaAdminAction[];
 }
 
@@ -62,7 +62,6 @@ export const AMPLIA_ADMIN_MODULE_SECTIONS: AmpliaAdminModuleSection[] = [
             { id: 'conexoes', label: 'Conexões', actions: ['list', 'read', 'create', 'update', 'delete'] },
             { id: 'agentes', label: 'Agentes IA', actions: ['list', 'read', 'create', 'update', 'delete'] },
             { id: 'followup', label: 'Follow-up', actions: ['list', 'read', 'update', 'delete'] },
-            { id: 'prompts', label: 'Prompts IA', actions: [] },
         ],
     },
 ];

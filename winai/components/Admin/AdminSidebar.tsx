@@ -17,7 +17,6 @@ import {
     ChevronRight,
     X,
     Flag,
-    Terminal,
 } from 'lucide-react';
 import {
     ADMIN_NAV_SECTIONS,
@@ -42,7 +41,6 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
     conexoes: LinkIcon,
     agentes: Bot,
     followup: Clock,
-    prompts: Terminal,
 };
 
 function isNavActive(to: string, pathname: string, search: string): boolean {

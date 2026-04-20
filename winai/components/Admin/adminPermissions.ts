@@ -111,7 +111,6 @@ export function adminRouteToModule(pathname: string): string | null {
     const rest = pathname.replace(/^\/admin\/?/, '');
     const first = rest.split('/')[0] || '';
     const map: Record<string, string> = {
-        'em-breve': 'dashboard',
         'gestao-equipe': 'gestao_equipe',
         clientes: 'clientes',
         'meta-ads': 'metaads',

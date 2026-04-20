@@ -14,7 +14,6 @@
  * | financas            | /admin/financas            | MRR, faturas, visão financeira     |
  * | contratos           | /admin/companies           | Contratos / empresas               |
  * | instancias…followup | /admin/instances, etc.     | Rotas técnicas                     |
- * | prompts             | /admin/em-breve?m=prompts  | Placeholder Prompts IA             |
  * | consultoria         | /admin/consultancy         | Não listado no menu (rota direta)  |
  */
 
@@ -24,7 +23,7 @@ export interface AdminNavItem {
     id: string;
     label: string;
     to: string;
-    /** Se false, item ainda não tem tela dedicada (vai para /admin/em-breve com query ou mesmo path) */
+    /** Se false, item ainda não tem tela dedicada */
     implemented?: boolean;
     /** Ex.: contador em Alertas */
     badge?: number;
@@ -71,7 +70,6 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
             { id: 'conexoes', label: 'Conexões', to: '/admin/user-connections', implemented: true },
             { id: 'agentes', label: 'Agentes IA', to: '/admin/agents', implemented: true },
             { id: 'followup', label: 'Follow-up', to: '/admin/followup', implemented: true },
-            { id: 'prompts', label: 'Prompts IA', to: '/admin/em-breve?m=prompts' },
         ],
     },
 ];
