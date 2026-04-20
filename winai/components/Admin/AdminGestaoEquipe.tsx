@@ -38,7 +38,8 @@ import adminService, {
     CreateInternalStaffPayload,
     AmpliaStaffRoleRow,
 } from '../../services/adminService';
-import { canViewGestaoAmpliaEquipe, isAmpliaFullAdmin } from './adminPermissions';
+import type { UserDTO } from '../../services/types';
+import { canViewGestaoAmpliaEquipe, hasAmpliaPermission, isAmpliaFullAdmin } from './adminPermissions';
 import { ADMIN_MODAL_BACKDROP_BLUR, ADMIN_MODAL_BACKDROP_DEFAULT, ADMIN_MODAL_INNER } from './adminModalStack';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
@@ -324,6 +325,8 @@ const AdminGestaoEquipe: React.FC = () => {
         }
     }, []);
 
+    const canCreateStaff = hasAmpliaPermission(storageUser as UserDTO | null, 'gestao_equipe', 'create');
+
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
         const userStr = localStorage.getItem('win_user');
@@ -477,20 +480,22 @@ const AdminGestaoEquipe: React.FC = () => {
                         <Download size={16} />
                         Atualizar
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setShowCreate(true);
-                            setCreateForm((p) => ({
-                                ...p,
-                                ampliaStaffRoleId: roleOptions[0]?.id ?? '',
-                            }));
-                        }}
-                        className="flex items-center gap-2 px-6 py-3 bg-[#141414] text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black shadow-lg"
-                    >
-                        <Plus size={16} className="text-[#00FF00]" />
-                        Novo colaborador
-                    </button>
+                    {canCreateStaff && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowCreate(true);
+                                setCreateForm((p) => ({
+                                    ...p,
+                                    ampliaStaffRoleId: roleOptions[0]?.id ?? '',
+                                }));
+                            }}
+                            className="flex items-center gap-2 px-6 py-3 bg-[#141414] text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black shadow-lg"
+                        >
+                            <Plus size={16} className="text-[#00FF00]" />
+                            Novo colaborador
+                        </button>
+                    )}
                 </div>
             </div>
 

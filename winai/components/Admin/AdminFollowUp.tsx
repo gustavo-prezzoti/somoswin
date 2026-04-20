@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Clock, Building2, RefreshCw, Bot, User, Calendar, AlertCircle, CheckCircle, Settings, Info, Pause, MessageSquare, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import adminService, { Company, followUpService, FollowUpConfig, FollowUpConfigRequest, FollowUpStepRequest } from '../../services/adminService';
+import type { UserDTO } from '../../services/types';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
+import { hasAmpliaPermission } from './adminPermissions';
 
 const AdminFollowUp = () => {
     const { showAlert, showConfirm, showToast } = useModal();
@@ -11,6 +13,17 @@ const AdminFollowUp = () => {
     // const [config, setConfig] = useState<FollowUpConfig | null>(null); // Not strictly used in render, can be removed or kept for reference
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+
+    const me = useMemo((): UserDTO | null => {
+        try {
+            const s = localStorage.getItem('win_user');
+            return s ? (JSON.parse(s) as UserDTO) : null;
+        } catch {
+            return null;
+        }
+    }, []);
+
+    const canEditFollowUp = hasAmpliaPermission(me, 'followup', 'update');
 
     // Form state
     const [formData, setFormData] = useState<FollowUpConfigRequest>({
@@ -252,7 +265,11 @@ const AdminFollowUp = () => {
                             <div className="w-10 h-10 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
                         </div>
                     ) : (
-                        <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm relative overflow-hidden">
+                        <div
+                            className={`bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm relative overflow-hidden ${
+                                !canEditFollowUp ? 'pointer-events-none select-none opacity-75' : ''
+                            }`}
+                        >
                             {/* Accent Decoration */}
                             <div className="absolute top-0 right-0 w-64 h-64 bg-amber-50 rounded-full -mr-32 -mt-32 opacity-50" />
 
@@ -503,7 +520,7 @@ const AdminFollowUp = () => {
                             <div className="sticky bottom-6 flex items-center gap-4">
                                 <button
                                     onClick={handleSave}
-                                    disabled={isSaving}
+                                    disabled={isSaving || !canEditFollowUp}
                                     className="flex-1 py-6 bg-gray-900 text-white rounded-3xl font-black uppercase text-base tracking-[0.3em] hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-4 shadow-2xl shadow-gray-900/40 relative overflow-hidden group"
                                 >
                                     <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 to-transparent w-full h-full transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />

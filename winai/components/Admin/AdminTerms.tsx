@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     FileText,
     Plus,
@@ -13,6 +13,8 @@ import {
     Eye
 } from 'lucide-react';
 import { termsAdminService, TermsOfServiceAdmin, UserTermsAcceptanceAdmin } from '../../services/adminService';
+import type { UserDTO } from '../../services/types';
+import { hasAmpliaPermission } from './adminPermissions';
 
 const AdminTerms: React.FC = () => {
     const [terms, setTerms] = useState<TermsOfServiceAdmin[]>([]);
@@ -101,13 +103,15 @@ const AdminTerms: React.FC = () => {
                         <RefreshCw size={20} />
                         Atualizar
                     </button>
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
-                    >
-                        <Plus size={20} />
-                        Nova Versão
-                    </button>
+                    {canCreateTermsVersion && (
+                        <button
+                            onClick={() => setShowCreateModal(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                        >
+                            <Plus size={20} />
+                            Nova Versão
+                        </button>
+                    )}
                 </div>
             </div>
 

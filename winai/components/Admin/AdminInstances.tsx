@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { RefreshCw, Wifi, WifiOff, Plus, Trash2, Power, Smartphone, QrCode, Search, Activity, Zap } from 'lucide-react';
 import adminService, { AdminInstance, CreateInstanceRequest } from '../../services/adminService';
+import type { UserDTO } from '../../services/types';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
+import { canUseAmpliaAdminScreen, hasAmpliaPermission } from './adminPermissions';
 
 const AdminInstances: React.FC = () => {
     const navigate = useNavigate();
@@ -15,6 +17,21 @@ const AdminInstances: React.FC = () => {
     const [disconnectingInstance, setDisconnectingInstance] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
+    const meUser = useMemo((): UserDTO | null => {
+        if (isAuthenticated !== true) return null;
+        try {
+            const userStr = localStorage.getItem('win_user');
+            if (!userStr) return null;
+            return JSON.parse(userStr) as UserDTO;
+        } catch {
+            return null;
+        }
+    }, [isAuthenticated]);
+
+    const canCreateInstance = hasAmpliaPermission(meUser, 'instancias', 'create');
+    const canUpdateInstance = hasAmpliaPermission(meUser, 'instancias', 'update');
+    const canDeleteInstance = hasAmpliaPermission(meUser, 'instancias', 'delete');
+
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
         const userStr = localStorage.getItem('win_user');
@@ -25,8 +42,8 @@ const AdminInstances: React.FC = () => {
         }
 
         try {
-            const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN') {
+            const user = JSON.parse(userStr) as UserDTO;
+            if (!canUseAmpliaAdminScreen(user, 'instancias')) {
                 setIsAuthenticated(false);
                 return;
             }
@@ -282,10 +299,12 @@ const AdminInstances: React.FC = () => {
                     <button onClick={loadInstances} className="p-4 bg-white text-gray-400 hover:text-emerald-600 rounded-2xl border border-gray-100 shadow-sm transition-all active:scale-95">
                         <RefreshCw size={22} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button onClick={openCreateModal} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-gray-900 text-white rounded-[1.2rem] hover:bg-black transition-all font-black uppercase text-xs tracking-widest active:scale-95 whitespace-nowrap">
-                        <Plus size={20} strokeWidth={3} />
-                        Nova Instância
-                    </button>
+                    {canCreateInstance && (
+                        <button onClick={openCreateModal} className="flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-gray-900 text-white rounded-[1.2rem] hover:bg-black transition-all font-black uppercase text-xs tracking-widest active:scale-95 whitespace-nowrap">
+                            <Plus size={20} strokeWidth={3} />
+                            Nova Instância
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -329,12 +348,14 @@ const AdminInstances: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => handleDelete(instance.instanceName)}
-                                        className="p-2 text-gray-300 hover:text-rose-600 transition-all"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+                                    {canDeleteInstance && (
+                                        <button
+                                            onClick={() => handleDelete(instance.instanceName)}
+                                            className="p-2 text-gray-300 hover:text-rose-600 transition-all"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    )}
                                 </div>
 
                                 <div className="flex-1 space-y-4 relative z-10">
@@ -361,23 +382,27 @@ const AdminInstances: React.FC = () => {
 
                                 <div className="mt-8 pt-8 border-t border-gray-50 flex gap-3">
                                     {isConnected ? (
-                                        <button
-                                            onClick={() => handleDisconnect(instance.instanceName)}
-                                            className="flex-1 flex items-center justify-center gap-3 py-4 bg-gray-50 text-gray-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all font-bold uppercase text-[10px] active:scale-95 disabled:opacity-50"
-                                            disabled={disconnectingInstance === instance.instanceName}
-                                        >
-                                            {disconnectingInstance === instance.instanceName ? <RefreshCw size={14} className="animate-spin" /> : <Power size={14} />}
-                                            Desconectar
-                                        </button>
+                                        canUpdateInstance && (
+                                            <button
+                                                onClick={() => handleDisconnect(instance.instanceName)}
+                                                className="flex-1 flex items-center justify-center gap-3 py-4 bg-gray-50 text-gray-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all font-bold uppercase text-[10px] active:scale-95 disabled:opacity-50"
+                                                disabled={disconnectingInstance === instance.instanceName}
+                                            >
+                                                {disconnectingInstance === instance.instanceName ? <RefreshCw size={14} className="animate-spin" /> : <Power size={14} />}
+                                                Desconectar
+                                            </button>
+                                        )
                                     ) : (
-                                        <button
-                                            onClick={() => handleConnect(instance.instanceName)}
-                                            className="flex-1 flex items-center justify-center gap-3 py-4 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-all font-bold uppercase text-[10px] active:scale-95 disabled:opacity-50"
-                                            disabled={connectingInstance === instance.instanceName}
-                                        >
-                                            {connectingInstance === instance.instanceName ? <RefreshCw size={14} className="animate-spin" /> : <QrCode size={14} />}
-                                            Conectar
-                                        </button>
+                                        canUpdateInstance && (
+                                            <button
+                                                onClick={() => handleConnect(instance.instanceName)}
+                                                className="flex-1 flex items-center justify-center gap-3 py-4 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-all font-bold uppercase text-[10px] active:scale-95 disabled:opacity-50"
+                                                disabled={connectingInstance === instance.instanceName}
+                                            >
+                                                {connectingInstance === instance.instanceName ? <RefreshCw size={14} className="animate-spin" /> : <QrCode size={14} />}
+                                                Conectar
+                                            </button>
+                                        )
                                     )}
                                 </div>
                             </div>

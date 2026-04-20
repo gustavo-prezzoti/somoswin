@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { knowledgeBaseService, KnowledgeBase } from '../../services/api/knowledge-base.service';
 import { Plus, Edit2, Trash2, Bot, Database, Link as LinkIcon, Unlink, Smartphone, ShieldCheck, Zap, Building2, Search, ArrowRight, Activity } from 'lucide-react';
 import { httpClient } from '../../services/api/http-client';
 import adminService, { Company } from '../../services/adminService';
+import type { UserDTO } from '../../services/types';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
+import { hasAmpliaPermission } from './adminPermissions';
 
 interface Connection {
     id: string;
@@ -23,6 +25,19 @@ const AdminAgentsAI = () => {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
     const [searchTerm, setSearchTerm] = useState('');
+
+    const me = useMemo((): UserDTO | null => {
+        try {
+            const s = localStorage.getItem('win_user');
+            return s ? (JSON.parse(s) as UserDTO) : null;
+        } catch {
+            return null;
+        }
+    }, []);
+
+    const canCreateAgent = hasAmpliaPermission(me, 'agentes', 'create');
+    const canUpdateAgent = hasAmpliaPermission(me, 'agentes', 'update');
+    const canDeleteAgent = hasAmpliaPermission(me, 'agentes', 'delete');
 
     useEffect(() => {
         loadCompanies();
@@ -423,14 +438,16 @@ const AdminAgentsAI = () => {
                         </select>
                     </div>
 
-                    <button
-                        onClick={() => openAgentModal()}
-                        disabled={!selectedCompanyId}
-                        className="flex items-center justify-center gap-3 px-8 py-4 bg-emerald-600 text-black rounded-2xl hover:brightness-110 transition-all font-black uppercase text-xs tracking-widest disabled:opacity-30 active:scale-95"
-                    >
-                        <Plus size={20} strokeWidth={3} />
-                        Novo Agente
-                    </button>
+                    {canCreateAgent && (
+                        <button
+                            onClick={() => openAgentModal()}
+                            disabled={!selectedCompanyId}
+                            className="flex items-center justify-center gap-3 px-8 py-4 bg-emerald-600 text-black rounded-2xl hover:brightness-110 transition-all font-black uppercase text-xs tracking-widest disabled:opacity-30 active:scale-95"
+                        >
+                            <Plus size={20} strokeWidth={3} />
+                            Novo Agente
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -462,12 +479,16 @@ const AdminAgentsAI = () => {
                                     <Bot size={28} />
                                 </div>
                                 <div className="flex gap-2">
-                                    <button onClick={() => openAgentModal(base)} className="p-2.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all">
-                                        <Edit2 size={16} />
-                                    </button>
-                                    <button onClick={() => handleDelete(base.id, base.name)} className="p-2.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all">
-                                        <Trash2 size={16} />
-                                    </button>
+                                    {canUpdateAgent && (
+                                        <button onClick={() => openAgentModal(base)} className="p-2.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all">
+                                            <Edit2 size={16} />
+                                        </button>
+                                    )}
+                                    {canDeleteAgent && (
+                                        <button onClick={() => handleDelete(base.id, base.name)} className="p-2.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 

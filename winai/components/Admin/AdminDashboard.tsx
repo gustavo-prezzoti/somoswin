@@ -8,6 +8,8 @@ import { useAdminStaffView } from './AdminStaffViewContext';
 import DashboardSummaryCards from './amplia/DashboardSummaryCards';
 import DashboardAgendaSection from './amplia/DashboardAgendaSection';
 import DashboardPriorityAlerts from './amplia/DashboardPriorityAlerts';
+import type { UserDTO } from '../../services/types';
+import { canUseAmpliaAdminScreen } from './adminPermissions';
 
 const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -53,8 +55,8 @@ const AdminDashboard: React.FC = () => {
         }
 
         try {
-            const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            const user = JSON.parse(userStr) as UserDTO;
+            if (!canUseAmpliaAdminScreen(user, 'dashboard')) {
                 setIsAuthenticated(false);
                 return;
             }

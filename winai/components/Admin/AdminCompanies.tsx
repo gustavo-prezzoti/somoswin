@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter, CreditCard, Info, DollarSign, ExternalLink, XCircle, Calendar } from 'lucide-react';
 import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest, Plan, asaasService } from '../../services/adminService';
+import type { UserDTO } from '../../services/types';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
+import { canUseAmpliaAdminScreen, hasAmpliaPermission } from './adminPermissions';
 
 // Função para aplicar máscara de CPF ou CNPJ
 const formatDocumento = (value: string): string => {
@@ -34,6 +36,21 @@ const AdminCompanies: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
+    const meUser = useMemo((): UserDTO | null => {
+        if (isAuthenticated !== true) return null;
+        try {
+            const userStr = localStorage.getItem('win_user');
+            if (!userStr) return null;
+            return JSON.parse(userStr) as UserDTO;
+        } catch {
+            return null;
+        }
+    }, [isAuthenticated]);
+
+    const canCreateCompany = hasAmpliaPermission(meUser, 'contratos', 'create');
+    const canUpdateCompany = hasAmpliaPermission(meUser, 'contratos', 'update');
+    const canDeleteCompany = hasAmpliaPermission(meUser, 'contratos', 'delete');
+
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
         const userStr = localStorage.getItem('win_user');
@@ -44,8 +61,8 @@ const AdminCompanies: React.FC = () => {
         }
 
         try {
-            const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            const user = JSON.parse(userStr) as UserDTO;
+            if (!canUseAmpliaAdminScreen(user, 'contratos')) {
                 setIsAuthenticated(false);
                 return;
             }
@@ -388,13 +405,15 @@ const AdminCompanies: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <button
-                        onClick={() => openCompanyModal('create')}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-gray-900 text-white rounded-[1.2rem] hover:bg-black transition-all font-black uppercase text-xs tracking-widest active:scale-95 whitespace-nowrap"
-                    >
-                        <Plus size={18} strokeWidth={3} />
-                        Nova Empresa
-                    </button>
+                    {canCreateCompany && (
+                        <button
+                            onClick={() => openCompanyModal('create')}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-gray-900 text-white rounded-[1.2rem] hover:bg-black transition-all font-black uppercase text-xs tracking-widest active:scale-95 whitespace-nowrap"
+                        >
+                            <Plus size={18} strokeWidth={3} />
+                            Nova Empresa
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -423,18 +442,22 @@ const AdminCompanies: React.FC = () => {
                                 <Building2 size={28} />
                             </div>
                             <div className="flex gap-2">
-                                <button
-                                    onClick={() => openCompanyModal('edit', company)}
-                                    className="p-2.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                                >
-                                    <Edit2 size={16} />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(company.id, company.name)}
-                                    className="p-2.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
+                                {canUpdateCompany && (
+                                    <button
+                                        onClick={() => openCompanyModal('edit', company)}
+                                        className="p-2.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                    >
+                                        <Edit2 size={16} />
+                                    </button>
+                                )}
+                                {canDeleteCompany && (
+                                    <button
+                                        onClick={() => handleDelete(company.id, company.name)}
+                                        className="p-2.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -508,7 +531,7 @@ const AdminCompanies: React.FC = () => {
                                 </div>
                             </div>
                             {/* Asaas Actions - Mostrar "Ativar" quando sem assinatura OU quando cancelada (permite renovar) */}
-                            {company.planId && (!company.asaasSubscriptionId || company.subscriptionStatus === 'CANCELLED') && (
+                            {canUpdateCompany && company.planId && (!company.asaasSubscriptionId || company.subscriptionStatus === 'CANCELLED') && (
                                 <button
                                     onClick={async () => {
                                         if (!company.contratante || !company.documento || !company.emailContratante) {
@@ -538,7 +561,7 @@ const AdminCompanies: React.FC = () => {
                                     {company.subscriptionStatus === 'CANCELLED' ? 'Renovar / Gerar Fatura' : 'Ativar Assinatura Recorrente'}
                                 </button>
                             )}
-                            {company.asaasSubscriptionId && company.subscriptionStatus !== 'CANCELLED' && (
+                            {canUpdateCompany && company.asaasSubscriptionId && company.subscriptionStatus !== 'CANCELLED' && (
                                 <div className="flex flex-col gap-2">
                                     <div className="flex gap-2">
                                         <button

@@ -1,4 +1,16 @@
-/** Alinhado a com.backend.winai.entity.AmpliaAdminModule e às seções do menu (ADMIN_NAV_SECTIONS). */
+/** Alinhado a com.backend.winai.entity.AmpliaAdminModule, AmpliaAdminAction e ADMIN_NAV_SECTIONS. */
+
+export type AmpliaAdminAction = 'list' | 'read' | 'create' | 'update' | 'delete';
+
+export const AMPLIA_ADMIN_ACTIONS: AmpliaAdminAction[] = ['list', 'read', 'create', 'update', 'delete'];
+
+export const AMPLIA_ADMIN_ACTION_LABELS: Record<AmpliaAdminAction, string> = {
+    list: 'Listar',
+    read: 'Ver detalhe',
+    create: 'Criar',
+    update: 'Atualizar',
+    delete: 'Excluir',
+};
 
 export interface AmpliaAdminModuleOption {
     id: string;
@@ -53,5 +65,19 @@ export const AMPLIA_ADMIN_MODULE_SECTIONS: AmpliaAdminModuleSection[] = [
     },
 ];
 
-/** Lista plana (compatível com validação única por id). */
 export const AMPLIA_ADMIN_MODULE_OPTIONS: AmpliaAdminModuleOption[] = AMPLIA_ADMIN_MODULE_SECTIONS.flatMap((s) => s.items);
+
+export function ampliaPermissionKey(moduleId: string, action: AmpliaAdminAction): string {
+    return `${moduleId}:${action}`;
+}
+
+/** Todas as chaves granular false (payload novo). */
+export function emptyGranularPermissions(): Record<string, boolean> {
+    const out: Record<string, boolean> = {};
+    for (const opt of AMPLIA_ADMIN_MODULE_OPTIONS) {
+        for (const a of AMPLIA_ADMIN_ACTIONS) {
+            out[ampliaPermissionKey(opt.id, a)] = false;
+        }
+    }
+    return out;
+}

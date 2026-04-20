@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -16,6 +16,8 @@ import {
 import adminService, { AdminNotificationRow, Company } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useAdminStaffView } from './AdminStaffViewContext';
+import type { UserDTO } from '../../services/types';
+import { canUseAmpliaAdminScreen, hasAmpliaPermission } from './adminPermissions';
 
 function typeStyle(t: string): { card: string; iconWrap: string; Icon: typeof Info } {
     const u = (t || 'INFO').toUpperCase();
@@ -61,6 +63,18 @@ const AdminAlertas: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [markingId, setMarkingId] = useState<string | null>(null);
 
+    const me = useMemo((): UserDTO | null => {
+        if (auth !== true) return null;
+        try {
+            const raw = localStorage.getItem('win_user');
+            return raw ? (JSON.parse(raw) as UserDTO) : null;
+        } catch {
+            return null;
+        }
+    }, [auth]);
+
+    const canMarkAlertRead = hasAmpliaPermission(me, 'alertas', 'update');
+
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
         const userStr = localStorage.getItem('win_user');
@@ -69,8 +83,8 @@ const AdminAlertas: React.FC = () => {
             return;
         }
         try {
-            const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            const user = JSON.parse(userStr) as UserDTO;
+            if (!canUseAmpliaAdminScreen(user, 'alertas')) {
                 setAuth(false);
                 return;
             }
@@ -299,7 +313,7 @@ const AdminAlertas: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="flex flex-row lg:flex-col gap-2 shrink-0">
-                                        {!n.read && (
+                                        {!n.read && canMarkAlertRead && (
                                             <button
                                                 type="button"
                                                 disabled={markingId === n.id || loading}

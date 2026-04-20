@@ -4,6 +4,8 @@ import { RefreshCw, Save, Globe, ShieldCheck, Zap, Activity } from 'lucide-react
 import adminService, { GlobalWebhookConfig } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
+import type { UserDTO } from '../../services/types';
+import { canUseAmpliaAdminScreen } from './adminPermissions';
 
 const AdminSettings: React.FC = () => {
     const { showAlert, showConfirm, showToast } = useModal();
@@ -29,8 +31,8 @@ const AdminSettings: React.FC = () => {
         }
 
         try {
-            const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN') {
+            const user = JSON.parse(userStr) as UserDTO;
+            if (!canUseAmpliaAdminScreen(user, 'instancias')) {
                 setIsAuthenticated(false);
                 return;
             }

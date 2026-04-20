@@ -17,6 +17,8 @@ import {
 import adminService, { AdminPerformanceSnapshot } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useAdminStaffView } from './AdminStaffViewContext';
+import type { UserDTO } from '../../services/types';
+import { canUseAmpliaAdminScreen } from './adminPermissions';
 
 function fmtMoney(n: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
@@ -42,8 +44,8 @@ const AdminPerformance: React.FC = () => {
             return;
         }
         try {
-            const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            const user = JSON.parse(userStr) as UserDTO;
+            if (!canUseAmpliaAdminScreen(user, 'performance')) {
                 setAuth(false);
                 return;
             }

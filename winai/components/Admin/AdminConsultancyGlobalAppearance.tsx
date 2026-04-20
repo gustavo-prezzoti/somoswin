@@ -3,6 +3,8 @@ import { Navigate } from 'react-router-dom';
 import { Loader2, Save, User, LayoutTemplate, Upload, ImageIcon } from 'lucide-react';
 import { followUpService, ConsultancyClientAppearanceAdmin } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
+import type { UserDTO } from '../../services/types';
+import { canUseAmpliaAdminScreen } from './adminPermissions';
 
 const AdminConsultancyGlobalAppearance: React.FC = () => {
   const [auth, setAuth] = useState<boolean | null>(null);
@@ -30,8 +32,8 @@ const AdminConsultancyGlobalAppearance: React.FC = () => {
       return;
     }
     try {
-      const user = JSON.parse(userStr);
-      if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+      const user = JSON.parse(userStr) as UserDTO;
+      if (!canUseAmpliaAdminScreen(user, 'consultoria')) {
         setAuth(false);
         return;
       }

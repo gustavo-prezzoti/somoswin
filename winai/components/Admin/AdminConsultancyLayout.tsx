@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, NavLink, Outlet } from 'react-router-dom';
 import { Loader2, Video, Palette } from 'lucide-react';
+import type { UserDTO } from '../../services/types';
+import { canUseAmpliaAdminScreen } from './adminPermissions';
 
 const AdminConsultancyLayout: React.FC = () => {
   const [auth, setAuth] = useState<boolean | null>(null);
@@ -13,8 +15,8 @@ const AdminConsultancyLayout: React.FC = () => {
       return;
     }
     try {
-      const user = JSON.parse(userStr);
-      if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+      const user = JSON.parse(userStr) as UserDTO;
+      if (!canUseAmpliaAdminScreen(user, 'consultoria')) {
         setAuth(false);
         return;
       }

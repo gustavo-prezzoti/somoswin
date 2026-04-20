@@ -4,12 +4,37 @@ import { ArrowLeft, Loader2, Plus, Shield } from 'lucide-react';
 import adminService, { AmpliaStaffRoleRow } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
-import { AMPLIA_ADMIN_MODULE_SECTIONS } from './adminAmpliaModuleOptions';
+import {
+    AMPLIA_ADMIN_ACTION_LABELS,
+    AMPLIA_ADMIN_ACTIONS,
+    AMPLIA_ADMIN_MODULE_SECTIONS,
+    ampliaPermissionKey,
+    emptyGranularPermissions,
+    type AmpliaAdminAction,
+} from './adminAmpliaModuleOptions';
 import { isAmpliaFullAdmin } from './adminPermissions';
 import AdminFullScreenModal from './AdminFullScreenModal';
 
-const emptyPermissions = (): Record<string, boolean> =>
-    Object.fromEntries(AMPLIA_ADMIN_MODULE_SECTIONS.flatMap((s) => s.items).map((o) => [o.id, false]));
+function mergeRolePermissionsIntoForm(r: AmpliaStaffRoleRow): Record<string, boolean> {
+    const next = emptyGranularPermissions();
+    if (!r.permissions) return next;
+    for (const [k, v] of Object.entries(r.permissions)) {
+        if (!v) continue;
+        if (k.includes(':')) {
+            if (Object.prototype.hasOwnProperty.call(next, k)) next[k] = true;
+        } else {
+            for (const a of AMPLIA_ADMIN_ACTIONS) {
+                const key = ampliaPermissionKey(k, a);
+                if (Object.prototype.hasOwnProperty.call(next, key)) next[key] = true;
+            }
+        }
+    }
+    return next;
+}
+
+function compactTrue(perms: Record<string, boolean>): Record<string, boolean> {
+    return Object.fromEntries(Object.entries(perms).filter(([, v]) => v)) as Record<string, boolean>;
+}
 
 const AdminGestaoPapeis: React.FC = () => {
     const { showToast } = useModal();
@@ -23,7 +48,7 @@ const AdminGestaoPapeis: React.FC = () => {
     const [formName, setFormName] = useState('');
     const [formDesc, setFormDesc] = useState('');
     const [formFull, setFormFull] = useState(false);
-    const [formPerms, setFormPerms] = useState<Record<string, boolean>>(emptyPermissions);
+    const [formPerms, setFormPerms] = useState<Record<string, boolean>>(() => emptyGranularPermissions());
 
     useEffect(() => {
         const userStr = localStorage.getItem('win_user');
@@ -61,7 +86,7 @@ const AdminGestaoPapeis: React.FC = () => {
         setFormName('');
         setFormDesc('');
         setFormFull(false);
-        setFormPerms(emptyPermissions());
+        setFormPerms(emptyGranularPermissions());
     };
 
     const openEdit = (r: AmpliaStaffRoleRow) => {
@@ -70,13 +95,7 @@ const AdminGestaoPapeis: React.FC = () => {
         setFormName(r.name);
         setFormDesc(r.description || '');
         setFormFull(r.fullAccess);
-        const next = emptyPermissions();
-        if (r.permissions) {
-            for (const k of Object.keys(r.permissions)) {
-                if (r.permissions[k]) next[k] = true;
-            }
-        }
-        setFormPerms(next);
+        setFormPerms(mergeRolePermissionsIntoForm(r));
     };
 
     const closeForm = () => {
@@ -93,12 +112,13 @@ const AdminGestaoPapeis: React.FC = () => {
         }
         try {
             setSaving(true);
+            const permissionsPayload = formFull ? {} : compactTrue(formPerms);
             if (creating) {
                 await adminService.createAmpliaStaffRole({
                     name,
                     description: formDesc.trim() || undefined,
                     fullAccess: formFull,
-                    permissions: { ...formPerms },
+                    permissions: permissionsPayload,
                 });
                 showToast('Papel criado.', 'success');
             } else if (editing) {
@@ -106,7 +126,7 @@ const AdminGestaoPapeis: React.FC = () => {
                     name: name !== editing.name ? name : undefined,
                     description: formDesc.trim() || undefined,
                     fullAccess: formFull,
-                    permissions: { ...formPerms },
+                    permissions: permissionsPayload,
                 });
                 showToast('Papel atualizado.', 'success');
             }
@@ -155,7 +175,7 @@ const AdminGestaoPapeis: React.FC = () => {
                     <div>
                         <h2 className="text-3xl font-black italic tracking-tighter uppercase text-[#141414]">Papéis e permissões</h2>
                         <p className="text-sm text-gray-400 font-medium">
-                            Defina nomes e quais módulos do painel cada colaborador interno pode acessar
+                            Por módulo: listar, ver detalhe, criar, atualizar e excluir (alinhado às rotas da API)
                         </p>
                     </div>
                 </div>
@@ -199,15 +219,10 @@ const AdminGestaoPapeis: React.FC = () => {
                                         )}
                                     </div>
                                     {r.description && <p className="text-sm text-gray-500 mt-1">{r.description}</p>}
-                                    <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-wider">
+                                    <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-wider break-all">
                                         {r.fullAccess
                                             ? 'Acesso total ao painel'
-                                            : `Módulos: ${
-                                                  Object.entries(r.permissions || {})
-                                                      .filter(([, v]) => v)
-                                                      .map(([k]) => k)
-                                                      .join(', ') || '—'
-                                              }`}
+                                            : `${Object.entries(r.permissions || {}).filter(([, v]) => v).length || 0} permissão(ões) granular(es)`}
                                     </p>
                                 </div>
                             </div>
@@ -236,7 +251,7 @@ const AdminGestaoPapeis: React.FC = () => {
                 <AdminFullScreenModal backdrop="default">
                     <form
                         onSubmit={handleSave}
-                        className="bg-white rounded-2xl p-8 max-w-2xl w-full space-y-4 shadow-2xl border border-black/5"
+                        className="bg-white rounded-2xl p-8 max-w-4xl w-full space-y-4 shadow-2xl border border-black/5"
                     >
                         <h3 className="text-xl font-black uppercase italic text-[#141414]">
                             {creating ? 'Novo papel' : 'Editar papel'}
@@ -260,35 +275,48 @@ const AdminGestaoPapeis: React.FC = () => {
                         </div>
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" checked={formFull} onChange={(e) => setFormFull(e.target.checked)} />
-                            <span className="text-sm font-bold">Acesso total (todos os módulos)</span>
+                            <span className="text-sm font-bold">Acesso total (todos os módulos e ações)</span>
                         </label>
                         {!formFull && (
-                            <div className="max-h-[min(70vh,520px)] overflow-y-auto space-y-5 border border-black/5 rounded-xl p-4">
+                            <div className="max-h-[min(70vh,560px)] overflow-y-auto space-y-5 border border-black/5 rounded-xl p-4">
                                 {AMPLIA_ADMIN_MODULE_SECTIONS.map((section) => (
-                                    <div key={section.id} className="space-y-2">
+                                    <div key={section.id} className="space-y-3">
                                         <h4
                                             className={`text-[10px] font-black uppercase tracking-widest ${section.accentClass} border-b border-black/5 pb-2`}
                                         >
                                             {section.label}
                                         </h4>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 pl-1">
+                                        <div className="space-y-3 pl-1">
                                             {section.items.map((opt) => (
-                                                <label
+                                                <div
                                                     key={opt.id}
-                                                    className="flex items-center gap-2 cursor-pointer text-sm"
+                                                    className="rounded-xl border border-black/5 bg-gray-50/80 p-3 space-y-2"
                                                 >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!formPerms[opt.id]}
-                                                        onChange={(e) =>
-                                                            setFormPerms((p) => ({
-                                                                ...p,
-                                                                [opt.id]: e.target.checked,
-                                                            }))
-                                                        }
-                                                    />
-                                                    <span className="font-medium text-gray-800">{opt.label}</span>
-                                                </label>
+                                                    <div className="text-xs font-black uppercase text-[#141414]">{opt.label}</div>
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                                                        {AMPLIA_ADMIN_ACTIONS.map((action: AmpliaAdminAction) => {
+                                                            const key = ampliaPermissionKey(opt.id, action);
+                                                            return (
+                                                                <label
+                                                                    key={key}
+                                                                    className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-gray-700"
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!formPerms[key]}
+                                                                        onChange={(e) =>
+                                                                            setFormPerms((p) => ({
+                                                                                ...p,
+                                                                                [key]: e.target.checked,
+                                                                            }))
+                                                                        }
+                                                                    />
+                                                                    <span>{AMPLIA_ADMIN_ACTION_LABELS[action]}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
                                     </div>

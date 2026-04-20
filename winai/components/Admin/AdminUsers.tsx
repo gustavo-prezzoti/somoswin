@@ -19,8 +19,10 @@ import {
     ChevronRight,
 } from 'lucide-react';
 import adminService, { AdminUser, CreateUserRequest, UpdateUserRequest, Company } from '../../services/adminService';
+import type { UserDTO } from '../../services/types';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
+import { canUseAmpliaAdminScreen, hasAmpliaPermission } from './adminPermissions';
 
 function roleLabel(role: string): string {
     if (role === 'SUPER_ADMIN') return 'Super admin';
@@ -49,17 +51,24 @@ const AdminUsers: React.FC = () => {
     const [totalElements, setTotalElements] = useState(0);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
-    const meRole = useMemo(() => {
+    const meUser = useMemo((): UserDTO | null => {
+        if (isAuthenticated !== true) return null;
         try {
             const userStr = localStorage.getItem('win_user');
-            if (!userStr) return '';
-            return (JSON.parse(userStr) as { role?: string }).role ?? '';
+            if (!userStr) return null;
+            return JSON.parse(userStr) as UserDTO;
         } catch {
-            return '';
+            return null;
         }
     }, [isAuthenticated]);
 
+    const meRole = meUser?.role ?? '';
+
     const canAssignSuperAdmin = meRole === 'SUPER_ADMIN';
+
+    const canCreateUser = hasAmpliaPermission(meUser, 'usuarios', 'create');
+    const canUpdateUser = hasAmpliaPermission(meUser, 'usuarios', 'update');
+    const canDeleteUser = hasAmpliaPermission(meUser, 'usuarios', 'delete');
 
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
@@ -71,8 +80,8 @@ const AdminUsers: React.FC = () => {
         }
 
         try {
-            const user = JSON.parse(userStr);
-            if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            const user = JSON.parse(userStr) as UserDTO;
+            if (!canUseAmpliaAdminScreen(user, 'usuarios')) {
                 setIsAuthenticated(false);
                 return;
             }
@@ -429,14 +438,16 @@ const AdminUsers: React.FC = () => {
                         </Link>
                     </p>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => openUserModal()}
-                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase tracking-widest hover:brightness-110"
-                >
-                    <Plus size={18} strokeWidth={3} />
-                    Novo usuário
-                </button>
+                {canCreateUser && (
+                    <button
+                        type="button"
+                        onClick={() => openUserModal()}
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase tracking-widest hover:brightness-110"
+                    >
+                        <Plus size={18} strokeWidth={3} />
+                        Novo usuário
+                    </button>
+                )}
             </div>
 
             <div className="relative shrink-0">
@@ -530,38 +541,46 @@ const AdminUsers: React.FC = () => {
                                         </td>
                                         <td className="px-5 py-4 text-right">
                                             <div className="flex gap-1 justify-end opacity-70 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openUserModal(user)}
-                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                    title="Editar"
-                                                >
-                                                    <Pencil size={16} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleToggleStatus(user.id)}
-                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                    title={user.active ? 'Bloquear' : 'Desbloquear'}
-                                                >
-                                                    {user.active ? <Lock size={16} /> : <Unlock size={16} />}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDelete(user.id, true)}
-                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                    title="Excluir"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleResetPassword(user.id, user.name, user.email)}
-                                                    className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                    title="Resetar senha"
-                                                >
-                                                    <Key size={16} />
-                                                </button>
+                                                {canUpdateUser && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openUserModal(user)}
+                                                        className="p-2.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-50 border border-transparent hover:border-black/5"
+                                                        title="Editar"
+                                                    >
+                                                        <Pencil size={16} />
+                                                    </button>
+                                                )}
+                                                {canUpdateUser && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleStatus(user.id)}
+                                                        className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
+                                                        title={user.active ? 'Bloquear' : 'Desbloquear'}
+                                                    >
+                                                        {user.active ? <Lock size={16} /> : <Unlock size={16} />}
+                                                    </button>
+                                                )}
+                                                {canDeleteUser && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDelete(user.id, true)}
+                                                        className="p-2.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
+                                                        title="Excluir"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                                {canUpdateUser && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleResetPassword(user.id, user.name, user.email)}
+                                                        className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
+                                                        title="Resetar senha"
+                                                    >
+                                                        <Key size={16} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -599,27 +618,33 @@ const AdminUsers: React.FC = () => {
                                     <Building2 size={12} /> {user.companyName || '—'}
                                 </p>
                                 <div className="flex gap-2 flex-wrap">
-                                    <button
-                                        type="button"
-                                        onClick={() => openUserModal(user)}
-                                        className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-gray-700 border border-black/5"
-                                    >
-                                        Editar
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleToggleStatus(user.id)}
-                                        className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-amber-400 border border-black/5"
-                                    >
-                                        {user.active ? 'Bloquear' : 'Ativar'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDelete(user.id, true)}
-                                        className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
+                                    {canUpdateUser && (
+                                        <button
+                                            type="button"
+                                            onClick={() => openUserModal(user)}
+                                            className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-gray-700 border border-black/5"
+                                        >
+                                            Editar
+                                        </button>
+                                    )}
+                                    {canUpdateUser && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleStatus(user.id)}
+                                            className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-amber-400 border border-black/5"
+                                        >
+                                            {user.active ? 'Bloquear' : 'Ativar'}
+                                        </button>
+                                    )}
+                                    {canDeleteUser && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDelete(user.id, true)}
+                                            className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}
