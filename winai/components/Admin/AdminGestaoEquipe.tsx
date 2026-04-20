@@ -39,6 +39,7 @@ import adminService, {
     AmpliaStaffRoleRow,
 } from '../../services/adminService';
 import { canViewGestaoAmpliaEquipe, isAmpliaFullAdmin } from './adminPermissions';
+import { ADMIN_MODAL_BACKDROP_BLUR, ADMIN_MODAL_BACKDROP_DEFAULT, ADMIN_MODAL_INNER } from './adminModalStack';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 import { useAdminStaffView } from './AdminStaffViewContext';
@@ -113,14 +114,15 @@ const IndividualDashboardModal = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+            className={ADMIN_MODAL_BACKDROP_BLUR}
         >
-            <motion.div
-                initial={{ scale: 0.9, y: 20 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.9, y: 20 }}
-                className="bg-white rounded-[2.5rem] w-full max-w-6xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
-            >
+            <div className={ADMIN_MODAL_INNER}>
+                <motion.div
+                    initial={{ scale: 0.9, y: 20 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.9, y: 20 }}
+                    className="bg-white rounded-[2.5rem] w-full max-w-6xl max-h-[min(90dvh,90vh)] overflow-hidden shadow-2xl flex flex-col"
+                >
                 <div className="p-8 border-b border-black/5 flex items-center justify-between bg-gray-50">
                     <div className="flex items-center gap-6">
                         <div className="w-20 h-20 bg-[#141414] rounded-[2rem] flex items-center justify-center shadow-xl">
@@ -285,7 +287,8 @@ const IndividualDashboardModal = ({
                         </>
                     )}
                 </div>
-            </motion.div>
+                </motion.div>
+            </div>
         </motion.div>
     );
 };
@@ -658,14 +661,15 @@ const AdminGestaoEquipe: React.FC = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/50 z-[110] flex items-center justify-center p-4"
+                        className={ADMIN_MODAL_BACKDROP_DEFAULT}
                     >
-                        <motion.form
-                            initial={{ scale: 0.95 }}
-                            animate={{ scale: 1 }}
-                            onSubmit={handleCreate}
-                            className="bg-white rounded-2xl p-8 max-w-md w-full space-y-4 shadow-2xl border border-black/5"
-                        >
+                        <div className={ADMIN_MODAL_INNER}>
+                            <motion.form
+                                initial={{ scale: 0.95 }}
+                                animate={{ scale: 1 }}
+                                onSubmit={handleCreate}
+                                className="bg-white rounded-2xl p-8 max-w-md w-full space-y-4 shadow-2xl border border-black/5"
+                            >
                             <h3 className="text-xl font-black uppercase italic text-[#141414]">Novo colaborador interno</h3>
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase">Nome</label>
@@ -731,7 +735,8 @@ const AdminGestaoEquipe: React.FC = () => {
                                     {saving ? 'Salvando…' : 'Criar'}
                                 </button>
                             </div>
-                        </motion.form>
+                            </motion.form>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

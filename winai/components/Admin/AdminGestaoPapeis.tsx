@@ -6,6 +6,7 @@ import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 import { AMPLIA_ADMIN_MODULE_SECTIONS } from './adminAmpliaModuleOptions';
 import { isAmpliaFullAdmin } from './adminPermissions';
+import AdminFullScreenModal from './AdminFullScreenModal';
 
 const emptyPermissions = (): Record<string, boolean> =>
     Object.fromEntries(AMPLIA_ADMIN_MODULE_SECTIONS.flatMap((s) => s.items).map((o) => [o.id, false]));
@@ -232,10 +233,10 @@ const AdminGestaoPapeis: React.FC = () => {
             )}
 
             {(creating || editing) && (
-                <div className="fixed inset-0 bg-black/50 z-[120] flex items-center justify-center p-4 overflow-y-auto">
+                <AdminFullScreenModal backdrop="default">
                     <form
                         onSubmit={handleSave}
-                        className="bg-white rounded-2xl p-8 max-w-2xl w-full space-y-4 shadow-2xl border border-black/5 my-8"
+                        className="bg-white rounded-2xl p-8 max-w-2xl w-full space-y-4 shadow-2xl border border-black/5"
                     >
                         <h3 className="text-xl font-black uppercase italic text-[#141414]">
                             {creating ? 'Novo papel' : 'Editar papel'}
@@ -311,7 +312,7 @@ const AdminGestaoPapeis: React.FC = () => {
                             </button>
                         </div>
                     </form>
-                </div>
+                </AdminFullScreenModal>
             )}
         </div>
     );
