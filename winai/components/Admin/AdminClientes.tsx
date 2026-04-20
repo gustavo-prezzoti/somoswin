@@ -31,7 +31,7 @@ function subscriptionLabel(status?: string | null): string {
 
 const AdminClientes: React.FC = () => {
     const staffView = useAdminStaffView();
-    const staffFilterId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId : null;
+    const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
     const [companies, setCompanies] = useState<Company[]>([]);
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [leads, setLeads] = useState<AdminLeadRow[]>([]);

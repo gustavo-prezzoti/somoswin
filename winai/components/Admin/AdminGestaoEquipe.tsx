@@ -286,7 +286,7 @@ const IndividualDashboardModal = ({
 const AdminGestaoEquipe: React.FC = () => {
     const { showAlert, showToast } = useModal();
     const staffView = useAdminStaffView();
-    const headerStaffId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId : null;
+    const headerStaffId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
     const [auth, setAuth] = useState<boolean | null>(null);
     const [members, setMembers] = useState<InternalStaffMember[]>([]);
     const [loading, setLoading] = useState(true);

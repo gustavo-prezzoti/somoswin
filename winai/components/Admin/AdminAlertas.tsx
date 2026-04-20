@@ -48,7 +48,7 @@ const PAGE_SIZE = 12;
 
 const AdminAlertas: React.FC = () => {
     const staffView = useAdminStaffView();
-    const staffFilterId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId : null;
+    const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
     const [auth, setAuth] = useState<boolean | null>(null);
     const [companies, setCompanies] = useState<Company[]>([]);
     const [companyId, setCompanyId] = useState('');

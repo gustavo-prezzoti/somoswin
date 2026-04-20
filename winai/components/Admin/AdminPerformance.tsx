@@ -29,7 +29,7 @@ function fmtInt(n: number): string {
 const AdminPerformance: React.FC = () => {
     const staffView = useAdminStaffView();
     const [auth, setAuth] = useState<boolean | null>(null);
-    const selectedStaffId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId ?? '' : '';
+    const selectedStaffId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId ?? '' : '';
     const [data, setData] = useState<AdminPerformanceSnapshot | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -156,7 +156,7 @@ const AdminPerformance: React.FC = () => {
                     <p className="text-sm text-gray-600 font-medium mt-1 leading-relaxed max-w-2xl">
                         {selectedStaffId
                             ? 'Indicadores do colaborador interno (leads e reuniões atribuídos). Troque em “Selecionar equipe” no topo.'
-                            : 'Indicadores agregados: CRM, operação, metas e Meta Ads (dados sincronizados). SUPER_ADMIN filtra pelo topo.'}
+                            : 'Indicadores agregados: CRM, operação, metas e Meta Ads (dados sincronizados). Filtro por equipe no topo.'}
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">

@@ -2,7 +2,7 @@ import React from 'react';
 import { LogOut, Menu, ShieldCheck, Bell, ChevronDown } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getAdminRouteMeta } from './adminRouteMeta';
-import { isSuperAdminRole, useAdminStaffView } from './AdminStaffViewContext';
+import { useAdminStaffView } from './AdminStaffViewContext';
 
 interface AdminHeaderProps {
     user: any;
@@ -21,7 +21,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
     const location = useLocation();
     const { title, subtitle } = getAdminRouteMeta(location.pathname);
     const staffView = useAdminStaffView();
-    const superAdmin = isSuperAdminRole(user?.role);
 
     const handleLogout = () => {
         localStorage.removeItem('win_access_token');
@@ -50,7 +49,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0 flex-nowrap justify-end w-full sm:w-auto overflow-x-auto pb-0.5 sm:pb-0 [-webkit-overflow-scrolling:touch]">
-                {superAdmin && staffView && (
+                {staffView && staffView.canUseStaffTeam && (
                     <div className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-2 rounded-xl border border-black/5 shrink-0 max-w-[min(100vw-2rem,22rem)]">
                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap shrink-0 hidden sm:inline">
                             Selecionar equipe:

@@ -3,13 +3,26 @@ import adminService, { InternalStaffMember } from '../../services/adminService';
 
 const STORAGE_KEY = 'admin_super_staff_view_id';
 
-/** Aceita SUPER_ADMIN vindo da API com variações de string. */
-export function isSuperAdminRole(role: unknown): boolean {
-    const r = String(role ?? '')
+function normalizeRole(role: unknown): string {
+    return String(role ?? '')
         .trim()
         .toUpperCase()
         .replace(/\s+/g, '_');
+}
+
+/** Aceita SUPER_ADMIN vindo da API com variações de string. */
+export function isSuperAdminRole(role: unknown): boolean {
+    const r = normalizeRole(role);
     return r === 'SUPER_ADMIN' || r === 'ROLE_SUPER_ADMIN';
+}
+
+/**
+ * Quem pode usar o seletor "Selecionar equipe" e filtros por colaborador interno (ADMIN e SUPER_ADMIN).
+ * O /user/me do usuário mostrado costuma ser "ADMIN" — não só SUPER_ADMIN.
+ */
+export function canUseStaffTeamView(role: unknown): boolean {
+    const r = normalizeRole(role);
+    return r === 'ADMIN' || r === 'ROLE_ADMIN' || r === 'SUPER_ADMIN' || r === 'ROLE_SUPER_ADMIN';
 }
 
 export type AdminStaffViewContextValue = {
@@ -18,7 +31,9 @@ export type AdminStaffViewContextValue = {
     setSelectedStaffUserId: (id: string | null) => void;
     staffList: InternalStaffMember[];
     staffLoading: boolean;
-    /** true quando o usuário logado é SUPER_ADMIN */
+    /** ADMIN ou SUPER_ADMIN — exibe seletor de equipe interna */
+    canUseStaffTeam: boolean;
+    /** @deprecated use canUseStaffTeam */
     isSuperAdmin: boolean;
 };
 
@@ -38,9 +53,9 @@ export const AdminStaffViewProvider: React.FC<{ children: React.ReactNode; userR
     children,
     userRole,
 }) => {
-    const isSuperAdmin = isSuperAdminRole(userRole);
+    const canUseStaffTeam = canUseStaffTeamView(userRole);
     const [selectedStaffUserId, setSelectedStaffUserIdState] = useState<string | null>(() =>
-        isSuperAdmin ? readStoredId() : null
+        canUseStaffTeam ? readStoredId() : null
     );
     const [staffList, setStaffList] = useState<InternalStaffMember[]>([]);
     const [staffLoading, setStaffLoading] = useState(false);
@@ -59,7 +74,7 @@ export const AdminStaffViewProvider: React.FC<{ children: React.ReactNode; userR
     }, []);
 
     useEffect(() => {
-        if (!isSuperAdmin) {
+        if (!canUseStaffTeam) {
             setStaffList([]);
             setSelectedStaffUserIdState(null);
             return;
@@ -80,14 +95,14 @@ export const AdminStaffViewProvider: React.FC<{ children: React.ReactNode; userR
         return () => {
             cancelled = true;
         };
-    }, [isSuperAdmin]);
+    }, [canUseStaffTeam]);
 
     /** Se o id armazenado não existir mais na lista, volta para Todos */
     useEffect(() => {
-        if (!isSuperAdmin || !selectedStaffUserId || staffList.length === 0) return;
+        if (!canUseStaffTeam || !selectedStaffUserId || staffList.length === 0) return;
         const ok = staffList.some((s) => s.id === selectedStaffUserId);
         if (!ok) setSelectedStaffUserId(null);
-    }, [isSuperAdmin, selectedStaffUserId, staffList, setSelectedStaffUserId]);
+    }, [canUseStaffTeam, selectedStaffUserId, staffList, setSelectedStaffUserId]);
 
     const value = useMemo<AdminStaffViewContextValue>(
         () => ({
@@ -95,9 +110,10 @@ export const AdminStaffViewProvider: React.FC<{ children: React.ReactNode; userR
             setSelectedStaffUserId,
             staffList,
             staffLoading,
-            isSuperAdmin,
+            canUseStaffTeam,
+            isSuperAdmin: canUseStaffTeamView(userRole) && isSuperAdminRole(userRole),
         }),
-        [selectedStaffUserId, setSelectedStaffUserId, staffList, staffLoading, isSuperAdmin]
+        [selectedStaffUserId, setSelectedStaffUserId, staffList, staffLoading, canUseStaffTeam, userRole]
     );
 
     return <AdminStaffViewContext.Provider value={value}>{children}</AdminStaffViewContext.Provider>;

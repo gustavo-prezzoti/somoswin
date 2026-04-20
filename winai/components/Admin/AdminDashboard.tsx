@@ -12,7 +12,7 @@ import DashboardPriorityAlerts from './amplia/DashboardPriorityAlerts';
 const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
     const staffView = useAdminStaffView();
-    const staffFilterId = staffView?.isSuperAdmin ? staffView.selectedStaffUserId : null;
+    const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
     const staffName =
         staffFilterId && staffView?.staffList?.length
             ? staffView.staffList.find((s) => s.id === staffFilterId)?.name ?? null
