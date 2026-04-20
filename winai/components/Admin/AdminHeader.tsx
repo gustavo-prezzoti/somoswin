@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Menu, ShieldCheck, Bell, ChevronDown } from 'lucide-react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { LogOut, Menu, ShieldCheck, ChevronDown } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getAdminRouteMeta } from './adminRouteMeta';
 import { AdminStaffViewContextValue, useAdminStaffView } from './AdminStaffViewContext';
 
@@ -203,14 +203,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onMenuClick }) => {
                         <StaffTeamDropdown staffView={staffView} />
                     </div>
                 )}
-                <Link
-                    to="/admin/notifications"
-                    className="relative p-2 text-gray-400 hover:text-black transition-colors hidden sm:flex"
-                    aria-label="Notificações"
-                >
-                    <Bell size={20} />
-                    <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-                </Link>
 
                 <div className="hidden md:flex items-center gap-4 bg-gray-50 p-1.5 pr-4 rounded-2xl border border-black/5">
                     {user?.avatarUrl ? (

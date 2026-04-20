@@ -1136,39 +1136,6 @@ export interface ConsultantProfileAdmin {
     avatarUrl: string | null;
 }
 
-export interface GlobalNotificationConfig {
-    id?: string;
-    companyId: string;
-    humanHandoffNotificationEnabled?: boolean;
-    humanHandoffPhone?: string;
-    humanHandoffMessage?: string;
-    humanHandoffClientMessage?: string;
-    createdAt?: string;
-    updatedAt?: string;
-}
-
-export interface GlobalNotificationConfigRequest {
-    companyId: string;
-    humanHandoffNotificationEnabled?: boolean;
-    humanHandoffPhone?: string;
-    humanHandoffMessage?: string;
-    humanHandoffClientMessage?: string;
-}
-
-export const globalNotificationService = {
-    getConfig: async (companyId: string): Promise<GlobalNotificationConfig | null> => {
-        try {
-            return await httpClient.get<GlobalNotificationConfig>(`/admin/global-notifications/${companyId}`);
-        } catch {
-            return null;
-        }
-    },
-
-    saveConfig: async (config: GlobalNotificationConfigRequest): Promise<GlobalNotificationConfig> => {
-        return await httpClient.post<GlobalNotificationConfig>('/admin/global-notifications', config);
-    }
-};
-
 // ========== TERMOS DE SERVIÇO ==========
 
 export interface TermsOfServiceAdmin {

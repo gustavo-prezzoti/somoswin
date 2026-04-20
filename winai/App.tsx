@@ -50,7 +50,6 @@ import AdminAgentsAI from './components/Admin/AdminAgentsAI';
 import AdminFinancas from './components/Admin/AdminFinancas';
 import AdminCompanies from './components/Admin/AdminCompanies';
 import AdminFollowUp from './components/Admin/AdminFollowUp';
-import AdminGlobalNotifications from './components/Admin/AdminGlobalNotifications';
 import AdminTerms from './components/Admin/AdminTerms';
 import AdminConsultancyLayout from './components/Admin/AdminConsultancyLayout';
 import AdminConsultancyOperations from './components/Admin/AdminConsultancyOperations';
@@ -668,7 +667,6 @@ const App: React.FC = () => {
           <Route path="agents" element={<AdminAgentsAI />} />
           <Route path="followup" element={<AdminFollowUp />} />
           <Route path="settings" element={<AdminSettings />} />
-          <Route path="notifications" element={<AdminGlobalNotifications />} />
           <Route path="terms" element={<AdminTerms />} />
           <Route path="consultancy" element={<AdminConsultancyLayout />}>
             <Route index element={<AdminConsultancyOperations />} />

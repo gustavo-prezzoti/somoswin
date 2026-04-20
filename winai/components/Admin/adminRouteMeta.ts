@@ -22,7 +22,6 @@ const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
     { pattern: '/admin/agents', meta: { title: 'Agentes IA', subtitle: 'Agentes e automação' } },
     { pattern: '/admin/followup', meta: { title: 'Follow-up', subtitle: 'Automação de follow-up' } },
     { pattern: '/admin/settings', meta: { title: 'Configurações', subtitle: 'Configurações globais' } },
-    { pattern: '/admin/notifications', meta: { title: 'Notificações', subtitle: 'Centro de notificações' } },
     { pattern: '/admin/terms', meta: { title: 'Termos de Uso', subtitle: 'Termos e aceites' } },
     { pattern: '/admin/gestao-equipe', meta: { title: 'Gestão de Equipe', subtitle: 'Colaboradores internos Amplia' } },
     { pattern: '/admin/em-breve', meta: { title: 'Em desenvolvimento', subtitle: 'Módulo em construção' } },

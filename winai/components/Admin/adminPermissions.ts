@@ -63,7 +63,6 @@ export function adminRouteToModule(pathname: string): string | null {
         agents: 'agentes',
         followup: 'followup',
         settings: 'instancias',
-        notifications: 'alertas',
         terms: 'contratos',
         consultancy: 'consultoria',
     };
