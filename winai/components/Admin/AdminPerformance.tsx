@@ -75,15 +75,15 @@ const AdminPerformance: React.FC = () => {
     if (auth === null || (loading && !data)) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando performance…</span>
+                <div className="w-12 h-12 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
+                <span className="text-xs font-black text-gray-600 uppercase tracking-widest">Carregando performance…</span>
             </div>
         );
     }
 
     if (error && !data) {
         return (
-            <div className="glass-card rounded-2xl p-8 border border-rose-500/30 text-center max-w-lg mx-auto">
+            <div className="glass-card rounded-2xl p-8 border border-rose-200 bg-rose-50/50 text-center max-w-lg mx-auto">
                 <p className="text-[#141414] font-bold mb-4">{error}</p>
                 <button
                     type="button"
@@ -149,7 +149,7 @@ const AdminPerformance: React.FC = () => {
                         <BarChart3 className="w-8 h-8 text-emerald-600" />
                         Performance
                     </h2>
-                    <p className="text-sm text-gray-400 font-medium mt-1">
+                    <p className="text-sm text-gray-600 font-medium mt-1 leading-relaxed max-w-2xl">
                         Indicadores agregados: CRM, operação, metas e Meta Ads (dados sincronizados)
                     </p>
                 </div>
@@ -157,7 +157,7 @@ const AdminPerformance: React.FC = () => {
                     type="button"
                     onClick={() => void load()}
                     disabled={loading}
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50 disabled:opacity-50 shrink-0"
                 >
                     <RefreshCw size={16} className={`text-emerald-600 ${loading ? 'animate-spin' : ''}`} />
                     Atualizar
@@ -165,7 +165,7 @@ const AdminPerformance: React.FC = () => {
             </div>
 
             {error && (
-                <div className="glass-card rounded-xl px-4 py-3 border border-amber-500/40 bg-amber-500/10 text-sm text-amber-100">
+                <div className="glass-card rounded-xl px-4 py-3 border border-amber-200 bg-amber-50 text-sm text-amber-950">
                     {error}
                 </div>
             )}
@@ -182,12 +182,12 @@ const AdminPerformance: React.FC = () => {
                                 <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-emerald-600">
                                     <Icon size={20} />
                                 </div>
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">
+                                <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest text-right leading-tight">
                                     {k.label}
                                 </span>
                             </div>
                             <p className="text-2xl font-black italic text-[#141414] tracking-tight">{k.value}</p>
-                            <p className="text-xs text-gray-500 mt-1">{k.sub}</p>
+                            <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
                         </div>
                     );
                 })}
@@ -200,41 +200,41 @@ const AdminPerformance: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
-                        <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Investimento</p>
+                        <p className="text-[10px] font-black uppercase text-gray-600 tracking-widest">Investimento</p>
                         <p className="text-xl font-black text-[#141414] mt-1">{fmtMoney(d.totalSpend)}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest flex items-center gap-1">
-                            <Eye size={12} /> Impressões
+                        <p className="text-[10px] font-black uppercase text-gray-600 tracking-widest flex items-center gap-1">
+                            <Eye className="text-gray-600" size={12} /> Impressões
                         </p>
                         <p className="text-xl font-black text-[#141414] mt-1">{fmtInt(d.totalImpressions)}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest flex items-center gap-1">
-                            <MousePointer2 size={12} /> Cliques
+                        <p className="text-[10px] font-black uppercase text-gray-600 tracking-widest flex items-center gap-1">
+                            <MousePointer2 className="text-gray-600" size={12} /> Cliques
                         </p>
                         <p className="text-xl font-black text-[#141414] mt-1">{fmtInt(d.totalClicks)}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">CTR global</p>
-                        <p className="text-xl font-black text-emerald-600 mt-1">
+                        <p className="text-[10px] font-black uppercase text-gray-600 tracking-widest">CTR global</p>
+                        <p className="text-xl font-black text-emerald-700 mt-1 tabular-nums">
                             {d.ctrGlobal.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%
                         </p>
                     </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-black/5">
                     <div>
-                        <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Alcance (soma)</p>
-                        <p className="text-sm font-bold text-gray-300 mt-1">{fmtInt(d.totalReach)}</p>
+                        <p className="text-[10px] font-black uppercase text-gray-600 tracking-widest">Alcance (soma)</p>
+                        <p className="text-lg font-black text-[#141414] mt-1 tabular-nums">{fmtInt(d.totalReach)}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Conversões (soma)</p>
-                        <p className="text-sm font-bold text-gray-300 mt-1">{fmtInt(d.totalConversions)}</p>
+                        <p className="text-[10px] font-black uppercase text-gray-600 tracking-widest">Conversões (soma)</p>
+                        <p className="text-lg font-black text-[#141414] mt-1 tabular-nums">{fmtInt(d.totalConversions)}</p>
                     </div>
                 </div>
                 <Link
                     to="/admin/meta-ads"
-                    className="inline-flex mt-6 text-xs font-black uppercase tracking-widest text-emerald-600 hover:underline"
+                    className="inline-flex mt-6 text-xs font-black uppercase tracking-widest text-emerald-700 hover:underline"
                 >
                     Abrir Meta Ads →
                 </Link>
@@ -243,15 +243,15 @@ const AdminPerformance: React.FC = () => {
             <div className="glass-card rounded-2xl border border-black/5 overflow-hidden">
                 <div className="p-4 sm:p-6 border-b border-black/5">
                     <h3 className="text-lg font-black italic uppercase text-[#141414] tracking-tight">Top empresas por investimento</h3>
-                    <p className="text-xs text-gray-500 mt-1">Soma de spend das campanhas sincronizadas por empresa</p>
+                    <p className="text-xs text-gray-600 mt-1">Soma de spend das campanhas sincronizadas por empresa</p>
                 </div>
                 <div className="overflow-x-auto">
                     {(d.topCompaniesBySpend ?? []).length === 0 ? (
-                        <p className="p-8 text-sm text-gray-500 text-center">Nenhuma campanha no banco ainda.</p>
+                        <p className="p-8 text-sm text-gray-600 text-center">Nenhuma campanha no banco ainda.</p>
                     ) : (
                         <table className="w-full text-left text-sm">
                             <thead>
-                                <tr className="border-b border-black/5 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                                <tr className="border-b border-black/5 text-[10px] font-black uppercase tracking-widest text-gray-600">
                                     <th className="px-4 py-3">Empresa</th>
                                     <th className="px-4 py-3">Investimento</th>
                                     <th className="px-4 py-3">Impressões</th>
@@ -263,10 +263,10 @@ const AdminPerformance: React.FC = () => {
                                 {d.topCompaniesBySpend.map((row) => (
                                     <tr key={row.companyId} className="hover:bg-gray-50">
                                         <td className="px-4 py-3 font-bold text-[#141414]">{row.companyName}</td>
-                                        <td className="px-4 py-3 text-emerald-600 font-mono">{fmtMoney(row.spend)}</td>
-                                        <td className="px-4 py-3 text-gray-300">{fmtInt(row.impressions)}</td>
-                                        <td className="px-4 py-3 text-gray-300">{fmtInt(row.clicks)}</td>
-                                        <td className="px-4 py-3 text-gray-400">{row.campaignCount}</td>
+                                        <td className="px-4 py-3 text-emerald-700 font-mono font-bold">{fmtMoney(row.spend)}</td>
+                                        <td className="px-4 py-3 text-[#141414] tabular-nums">{fmtInt(row.impressions)}</td>
+                                        <td className="px-4 py-3 text-[#141414] tabular-nums">{fmtInt(row.clicks)}</td>
+                                        <td className="px-4 py-3 text-gray-800 font-medium tabular-nums">{row.campaignCount}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -275,12 +275,12 @@ const AdminPerformance: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex flex-wrap gap-4 justify-center text-xs text-gray-500">
-                <Link to="/admin/diagnostico" className="hover:text-emerald-600">
+            <div className="flex flex-wrap gap-4 justify-center text-xs text-gray-700">
+                <Link to="/admin/diagnostico" className="font-bold hover:text-emerald-700">
                     Diagnóstico comercial →
                 </Link>
-                <span>·</span>
-                <Link to="/admin/metas" className="hover:text-emerald-600">
+                <span className="text-gray-400">·</span>
+                <Link to="/admin/metas" className="font-bold hover:text-emerald-700">
                     Metas →
                 </Link>
             </div>
