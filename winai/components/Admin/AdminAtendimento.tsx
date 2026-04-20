@@ -141,15 +141,19 @@ const AdminAtendimento: React.FC = () => {
     if (loading && conversations.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-black/10 border-t-[#00FF00] rounded-full animate-spin" />
                 <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Carregando atendimento…</span>
             </div>
         );
     }
 
     return (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 max-w-[1600px] mx-auto min-h-[70vh]">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col min-h-0 gap-4 max-w-[1600px] mx-auto w-full h-[calc(100dvh-13rem)] max-h-[calc(100dvh-13rem)]"
+        >
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
                 <div>
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Atendimento</h2>
                     <p className="text-sm text-gray-400 font-medium mt-1">Conversas WhatsApp em todas as empresas</p>
@@ -173,7 +177,7 @@ const AdminAtendimento: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => loadConversations()}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-300 hover:bg-gray-50"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-gray-500 hover:bg-gray-50"
                     >
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                     </button>
@@ -181,15 +185,15 @@ const AdminAtendimento: React.FC = () => {
             </div>
 
             {error && (
-                <div className="glass-card rounded-xl p-4 flex items-center gap-3 text-amber-200 border border-amber-500/30">
+                <div className="glass-card rounded-xl p-4 flex items-center gap-3 text-amber-900 border border-amber-200 bg-amber-50 shrink-0">
                     <AlertCircle size={20} />
                     <span className="text-sm">{error}</span>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4 min-h-[560px]">
-                <div className="glass-card rounded-2xl border border-black/5 flex flex-col overflow-hidden max-h-[70vh] lg:max-h-none">
-                    <div className="p-3 border-b border-black/5">
+            <div className="flex flex-col lg:flex-row flex-1 min-h-0 gap-4 overflow-hidden">
+                <div className="glass-card rounded-2xl border border-black/5 flex flex-col min-h-0 overflow-hidden w-full lg:w-[340px] lg:shrink-0 h-[min(42vh,380px)] lg:h-full lg:max-h-full">
+                    <div className="p-3 border-b border-black/5 shrink-0">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                             <input
@@ -201,13 +205,13 @@ const AdminAtendimento: React.FC = () => {
                             />
                         </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                         {filtered.map((c) => (
                             <button
                                 key={c.id}
                                 type="button"
                                 onClick={() => setSelectedId(c.id)}
-                                className={`w-full text-left px-4 py-3 border-b border-white/5 hover:bg-white/[0.04] transition-colors ${
+                                className={`w-full text-left px-4 py-3 border-b border-black/5 hover:bg-gray-50 transition-colors ${
                                     selectedId === c.id ? 'bg-emerald-50 border-l-2 border-l-[#00FF00]' : ''
                                 }`}
                             >
@@ -234,10 +238,10 @@ const AdminAtendimento: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="glass-card rounded-2xl border border-black/5 flex flex-col min-h-[480px] max-h-[70vh]">
+                <div className="glass-card rounded-2xl border border-black/5 flex flex-col min-h-0 flex-1 overflow-hidden lg:min-h-0">
                     {selected ? (
                         <>
-                            <div className="p-4 border-b border-black/5 flex flex-wrap items-center justify-between gap-2">
+                            <div className="p-4 border-b border-black/5 flex flex-wrap items-center justify-between gap-2 shrink-0">
                                 <div>
                                     <p className="text-lg font-black text-[#141414] uppercase italic tracking-tight">
                                         {selected.contactName || 'Contato'}
@@ -257,7 +261,7 @@ const AdminAtendimento: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-gray-100">
+                            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-gray-100">
                                 {loadingMsgs ? (
                                     <p className="text-center text-gray-500 text-sm py-8">Carregando mensagens…</p>
                                 ) : (
@@ -270,7 +274,7 @@ const AdminAtendimento: React.FC = () => {
                                                 className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${
                                                     m.fromMe
                                                         ? 'bg-emerald-600/20 text-[#141414] border border-emerald-200'
-                                                        : 'bg-white/10 text-gray-100 border border-black/5'
+                                                        : 'bg-white text-[#141414] border border-black/5 shadow-sm'
                                                 }`}
                                             >
                                                 <p className="whitespace-pre-wrap break-words">{m.content || '(mídia)'}</p>
@@ -282,11 +286,11 @@ const AdminAtendimento: React.FC = () => {
                                 <div ref={bottomRef} />
                             </div>
                             {!selected.companyId ? (
-                                <div className="p-4 border-t border-black/5 text-xs text-amber-200">
+                                <div className="p-4 border-t border-black/5 text-xs text-amber-800 bg-amber-50 shrink-0">
                                     Sem empresa vinculada — envio desativado.
                                 </div>
                             ) : (
-                                <div className="p-4 border-t border-black/5 flex gap-2">
+                                <div className="p-4 border-t border-black/5 flex gap-2 shrink-0 bg-white">
                                     <textarea
                                         value={sendText}
                                         onChange={(e) => setSendText(e.target.value)}
@@ -312,7 +316,7 @@ const AdminAtendimento: React.FC = () => {
                             )}
                         </>
                     ) : (
-                        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm p-8">
+                        <div className="flex-1 min-h-0 flex items-center justify-center text-gray-500 text-sm p-8">
                             Selecione uma conversa à esquerda.
                         </div>
                     )}
