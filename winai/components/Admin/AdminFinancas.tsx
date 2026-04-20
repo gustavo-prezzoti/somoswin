@@ -197,8 +197,8 @@ const AdminFinancas: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-8 max-w-[1800px] mx-auto"
         >
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
-                <div>
+            <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-6">
+                <div className="min-w-0 flex-1">
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Finanças</h2>
                     <p className="text-sm text-gray-500 font-medium mt-1">
                         Controle financeiro da base — MRR, inadimplência e vencimentos a partir dos planos e do cadastro de
@@ -210,59 +210,71 @@ const AdminFinancas: React.FC = () => {
                         )}
                     </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Ano</label>
-                        <select
-                            value={year}
-                            onChange={(e) => setYear(Number(e.target.value))}
-                            className="px-3 py-2 rounded-xl bg-gray-50 border border-black/10 text-sm text-[#141414]"
-                        >
-                            {YEARS.map((y) => (
-                                <option key={y} value={y}>
-                                    {y}
-                                </option>
-                            ))}
-                        </select>
+
+                <div className="flex w-full shrink-0 flex-col gap-3 xl:max-w-2xl xl:items-end">
+                    <div className="flex flex-wrap items-end gap-3 sm:justify-end">
+                        <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">
+                                Ano
+                            </label>
+                            <select
+                                value={year}
+                                onChange={(e) => setYear(Number(e.target.value))}
+                                className="min-w-[5.5rem] px-3 py-2.5 rounded-xl bg-gray-50 border border-black/10 text-sm text-[#141414]"
+                            >
+                                {YEARS.map((y) => (
+                                    <option key={y} value={y}>
+                                        {y}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">
+                                Mês (tabela)
+                            </label>
+                            <select
+                                value={month === '' ? '' : String(month)}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    setMonth(v === '' ? '' : Number(v));
+                                }}
+                                className="min-w-[11rem] max-w-[min(100vw-2rem,18rem)] px-3 py-2.5 rounded-xl bg-gray-50 border border-black/10 text-sm text-[#141414]"
+                            >
+                                <option value="">Todos (com plano/assinatura)</option>
+                                {MONTHS.map((m) => (
+                                    <option key={m.v} value={m.v}>
+                                        {m.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Mês (tabela)</label>
-                        <select
-                            value={month === '' ? '' : String(month)}
-                            onChange={(e) => {
-                                const v = e.target.value;
-                                setMonth(v === '' ? '' : Number(v));
-                            }}
-                            className="min-w-[10rem] px-3 py-2 rounded-xl bg-gray-50 border border-black/10 text-sm text-[#141414]"
-                        >
-                            <option value="">Todos (com plano/assinatura)</option>
-                            {MONTHS.map((m) => (
-                                <option key={m.v} value={m.v}>
-                                    {m.label}
-                                </option>
-                            ))}
-                        </select>
+
+                    <div className="flex w-full flex-col gap-2 border-t border-black/5 pt-3 sm:flex-row sm:items-center sm:justify-end sm:border-0 sm:pt-0">
+                        <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
+                            <Link
+                                to="/admin/companies"
+                                className="inline-flex min-h-[2.75rem] items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
+                            >
+                                <FileText size={14} /> Contratos
+                            </Link>
+                            <Link
+                                to="/admin/clientes"
+                                className="inline-flex min-h-[2.75rem] items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
+                            >
+                                <Building2 size={14} /> Clientes
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => void load()}
+                                className="inline-flex min-h-[2.75rem] min-w-[7.5rem] items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest shadow-sm hover:bg-emerald-700 transition-colors"
+                            >
+                                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                                Atualizar
+                            </button>
+                        </div>
                     </div>
-                    <Link
-                        to="/admin/companies"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
-                    >
-                        <FileText size={14} /> Contratos
-                    </Link>
-                    <Link
-                        to="/admin/clientes"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
-                    >
-                        <Building2 size={14} /> Clientes
-                    </Link>
-                    <button
-                        type="button"
-                        onClick={() => void load()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest shadow-sm hover:bg-emerald-700"
-                    >
-                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                        Atualizar
-                    </button>
                 </div>
             </div>
 
