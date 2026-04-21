@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { buildAttributionQueryLineFromSearch } from '../utils/attribution';
+import { appendAttributionQueryToText, buildAttributionQueryLineFromSearch } from '../utils/attribution';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
@@ -14,20 +14,22 @@ function extractCompanyId(search: string): string | null {
   return params.get('c') || params.get('companyId');
 }
 
-/** Query sem parâmetros internos de tenant (só atribuição). */
+/** Query sem parâmetros internos de tenant e sem prefill (só atribuição). */
 function searchForAttribution(search: string): string {
   if (!search || search === '?') return '';
   const raw = search.startsWith('?') ? search.slice(1) : search;
   const p = new URLSearchParams(raw);
   p.delete('c');
   p.delete('companyId');
+  p.delete('m');
   const s = p.toString();
   return s ? `?${s}` : '';
 }
 
 /**
- * Rota /w — ex.: https://dominio.com/w?c={companyId}&utm_source=...
- * Busca o WhatsApp da empresa na API pública e redireciona para wa.me com UTMs no texto.
+ * Rota /w — ex.: https://dominio.com/w?c={companyId}&utm_...&m={mensagem}
+ * Parâmetro opcional `m`: primeira linha (texto do anúncio); UTMs viram a segunda linha (parse no webhook).
+ * Busca o WhatsApp da empresa na API pública e redireciona para wa.me com esse texto.
  */
 const WhatsAppUtmRedirect: React.FC = () => {
   const { search } = useLocation();
@@ -37,7 +39,16 @@ const WhatsAppUtmRedirect: React.FC = () => {
     let cancelled = false;
     const run = async () => {
       const companyId = extractCompanyId(search || '');
+      const rawQs =
+        search && search !== '?' ? (search.startsWith('?') ? search.slice(1) : search) : '';
+      const bootstrapParams = new URLSearchParams(rawQs);
+      const prefillRaw = bootstrapParams.get('m');
+      const prefillMessage = prefillRaw != null ? prefillRaw.trim() : '';
+
       const attrSearch = searchForAttribution(search || '');
+      const message = prefillMessage
+        ? appendAttributionQueryToText(prefillMessage, attrSearch)
+        : buildAttributionQueryLineFromSearch(attrSearch);
 
       let digits = '';
       let apiUnreachable = false;
@@ -76,7 +87,6 @@ const WhatsAppUtmRedirect: React.FC = () => {
         }
         return;
       }
-      const message = buildAttributionQueryLineFromSearch(attrSearch);
       window.location.replace(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`);
     };
     void run();

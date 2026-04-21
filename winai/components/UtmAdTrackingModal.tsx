@@ -76,6 +76,8 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
   const [registerLoading, setRegisterLoading] = useState(false);
   const [anchorError, setAnchorError] = useState<string | null>(null);
   const [registerOk, setRegisterOk] = useState(false);
+  /** Texto gravado no último registro — usado nos links (incl. parâmetro `m` no /w/). */
+  const [registeredPrefillForLinks, setRegisteredPrefillForLinks] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && typeof window !== 'undefined') {
@@ -87,6 +89,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
     setAnchorDraft('');
     setAnchorError(null);
     setRegisterOk(false);
+    setRegisteredPrefillForLinks(null);
   }, [open, ctx?.platform, ctx?.adId]);
 
   if (!ctx) return null;
@@ -103,7 +106,6 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
 
   const metaFullLanding = metaQueryFilled ? `${base}/?${metaQueryFilled}` : '';
   const cPrefix = companyId ? `c=${encodeURIComponent(companyId)}&` : '';
-  const metaWaHop = metaQueryFilled && companyId ? `${base}/w/?${cPrefix}${metaQueryFilled}` : '';
 
   const googleQueryFilled =
     camp && adg && ad
@@ -111,7 +113,14 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       : '';
 
   const googleFullLanding = googleQueryFilled ? `${base}/?${googleQueryFilled}` : '';
-  const googleWaHop = googleQueryFilled && companyId ? `${base}/w/?${cPrefix}${googleQueryFilled}` : '';
+
+  const utmQueryFilled = ctx.platform === 'META' ? metaQueryFilled : googleQueryFilled;
+  const fullLanding = ctx.platform === 'META' ? metaFullLanding : googleFullLanding;
+
+  const waHopWithAnchoredMessage =
+    registerOk && registeredPrefillForLinks && utmQueryFilled && companyId
+      ? `${base}/w/?${cPrefix}${utmQueryFilled}&m=${encodeURIComponent(registeredPrefillForLinks)}`
+      : '';
 
   const incomplete = !ctx.campaignId || !ctx.adSetId || !ctx.adId;
 
@@ -131,6 +140,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
     setSuggestLoading(true);
     setAnchorError(null);
     setRegisterOk(false);
+    setRegisteredPrefillForLinks(null);
     try {
       const baseBody = {
         context: suggestContextLines,
@@ -165,6 +175,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
     setRegisterLoading(true);
     setAnchorError(null);
     setRegisterOk(false);
+    setRegisteredPrefillForLinks(null);
     try {
       const baseBody = {
         anchorText: text,
@@ -178,6 +189,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
           : { ...baseBody, utmSource: 'google', utmMedium: 'cpc' };
       await marketingService.createLeadAttributionAnchor(body);
       setRegisterOk(true);
+      setRegisteredPrefillForLinks(text);
       onCopied();
     } catch {
       setAnchorError('Não foi possível registrar a âncora. Verifique a sessão e tente de novo.');
@@ -192,9 +204,8 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
         Mensagem para anúncio Click-to-WhatsApp
       </p>
       <p className="text-xs text-violet-800/90">
-        Cole no Meta (ou escreva algo muito parecido) a mesma frase que você registrar aqui. O sistema usa{' '}
-        <strong>similaridade semântica</strong> com o texto salvo — não precisa ser cópia byte a byte, nem código{' '}
-        <code className="font-mono bg-white/80 px-1 rounded">ref:</code>.
+        Primeiro <strong>registre</strong> a mensagem abaixo; em seguida aparecem os links (incluindo um que passa pela sua tela{' '}
+        <code className="font-mono bg-white/80 px-1 rounded">/w/</code> com a frase + UTM já montados para o WhatsApp).
       </p>
       <div className="flex flex-col sm:flex-row gap-2">
         <button
@@ -226,10 +237,14 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       </button>
       {anchorError ? <p className="text-xs text-red-600 font-medium">{anchorError}</p> : null}
       {registerOk ? (
-        <p className="text-xs text-emerald-700 font-medium">Âncora registrada. Use essa mensagem (ou muito parecida) no criativo.</p>
+        <p className="text-xs text-emerald-700 font-medium">
+          Âncora registrada. Copie os links abaixo para o anúncio — o link /w/ abre seu site e redireciona ao WhatsApp com mensagem + UTM.
+        </p>
       ) : null}
     </div>
   );
+
+  const showTrackingSection = utmQueryFilled && fullLanding;
 
   return (
     <Modal
@@ -241,7 +256,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
     >
       <div className="space-y-5">
         <p className="text-sm text-gray-600">
-          Use <strong className="text-gray-800">/w/</strong> com <strong className="text-gray-800">?c=</strong> (empresa) para abrir o WhatsApp certo por cliente; use <strong className="text-gray-800">/</strong> só para a landing.
+          Fluxo recomendado: defina o <strong className="text-gray-800">texto da primeira mensagem</strong>, registre a âncora, depois copie os links.
         </p>
 
         <div>
@@ -275,33 +290,35 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
           </div>
         )}
 
-        {ctx.platform === 'META' && metaFullLanding && metaQueryFilled && (
+        {showTrackingSection && (
           <div className="space-y-3">
             {SemanticAnchorBlock}
-            {companyId && metaWaHop ? (
-              <CopyRow label="Link → WhatsApp (/w/)" value={metaWaHop} onCopied={onCopied} emphasis />
-            ) : (
-              <div className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
-                Link direto ao WhatsApp (/w/) aparece quando o usuário tem empresa vinculada (UUID em <code className="font-mono">?c=</code>).
-              </div>
-            )}
-            <CopyRow label="Link da landing (/)" value={metaFullLanding} onCopied={onCopied} />
-            <CopyRow label="Só os parâmetros UTM" value={metaQueryFilled} onCopied={onCopied} />
-          </div>
-        )}
 
-        {ctx.platform === 'GOOGLE' && googleFullLanding && googleQueryFilled && (
-          <div className="space-y-3">
-            {SemanticAnchorBlock}
-            {companyId && googleWaHop ? (
-              <CopyRow label="Link → WhatsApp (/w/)" value={googleWaHop} onCopied={onCopied} emphasis />
-            ) : (
-              <div className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
-                Link direto ao WhatsApp (/w/) aparece quando o usuário tem empresa vinculada (UUID em <code className="font-mono">?c=</code>).
+            {!registerOk && !incomplete && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
+                Os links de campanha (WhatsApp via <code className="font-mono">/w/</code>, landing e UTMs) aparecem{' '}
+                <strong>depois</strong> que você clicar em <strong>Registrar mensagem e UTM</strong>.
               </div>
             )}
-            <CopyRow label="Link da landing (/)" value={googleFullLanding} onCopied={onCopied} />
-            <CopyRow label="Só os parâmetros UTM" value={googleQueryFilled} onCopied={onCopied} />
+
+            {registerOk && registeredPrefillForLinks && (
+              <>
+                {waHopWithAnchoredMessage ? (
+                  <CopyRow
+                    label="Link → WhatsApp (/w/) — sua tela, depois wa.me com mensagem + UTM"
+                    value={waHopWithAnchoredMessage}
+                    onCopied={onCopied}
+                    emphasis
+                  />
+                ) : (
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
+                    Para gerar o link <code className="font-mono">/w/</code> é preciso o UUID da empresa em <code className="font-mono">?c=</code> (usuário com empresa vinculada).
+                  </div>
+                )}
+                <CopyRow label="Link da landing (/)" value={fullLanding} onCopied={onCopied} />
+                <CopyRow label="Só os parâmetros UTM" value={utmQueryFilled} onCopied={onCopied} />
+              </>
+            )}
           </div>
         )}
       </div>
