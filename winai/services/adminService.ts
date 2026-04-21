@@ -1179,6 +1179,35 @@ export const termsAdminService = {
     }
 };
 
+// ========== NOTIFICAÇÕES GLOBAIS (HANDOFF / WHATSAPP ADMIN) ==========
+
+export interface GlobalNotificationConfig {
+    id?: string;
+    companyId?: string;
+    humanHandoffNotificationEnabled?: boolean;
+    humanHandoffPhone?: string;
+    humanHandoffMessage?: string;
+    humanHandoffClientMessage?: string;
+}
+
+export interface GlobalNotificationConfigRequest {
+    companyId: string;
+    humanHandoffNotificationEnabled?: boolean;
+    humanHandoffPhone?: string;
+    humanHandoffMessage?: string;
+    humanHandoffClientMessage?: string;
+}
+
+export const globalNotificationService = {
+    getConfig: async (companyId: string): Promise<GlobalNotificationConfig | null> => {
+        return await httpClient.get<GlobalNotificationConfig | null>(`/admin/global-notifications/${companyId}`);
+    },
+
+    saveConfig: async (body: GlobalNotificationConfigRequest): Promise<GlobalNotificationConfig> => {
+        return await httpClient.post<GlobalNotificationConfig>('/admin/global-notifications', body);
+    },
+};
+
 // ========== ASAAS INTEGRAÇÃO ==========
 
 export interface AsaasSubscriptionResponse {

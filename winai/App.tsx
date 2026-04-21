@@ -39,6 +39,7 @@ import Settings from './components/Settings';
 import AcceptInvitation from './components/AcceptInvitation';
 import OAuthComplete from './components/OAuthComplete';
 import Notifications from './components/Notifications';
+import NotificationsPage from './components/NotificationsPage';
 import AdminLayout from './components/Admin/AdminLayout';
 import AdminLogin from './components/Admin/AdminLogin';
 import AdminDashboard from './components/Admin/AdminDashboard';
@@ -62,6 +63,7 @@ import AdminAlertas from './components/Admin/AdminAlertas';
 import AdminPerformance from './components/Admin/AdminPerformance';
 import AdminGestaoEquipe from './components/Admin/AdminGestaoEquipe';
 import AdminGestaoPapeis from './components/Admin/AdminGestaoPapeis';
+import AdminGlobalNotifications from './components/Admin/AdminGlobalNotifications';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
@@ -201,6 +203,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
           <SidebarSection title="Principal" isCollapsed={!isSidebarOpen} />
           <nav className="space-y-1">
             <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" isActive={location.pathname === '/dashboard'} isCollapsed={!isSidebarOpen} />
+            <SidebarItem to="/notificacoes" icon={Bell} label="Notificações" isActive={location.pathname === '/notificacoes'} isCollapsed={!isSidebarOpen} />
           </nav>
 
           <SidebarSection title="Operação Vendas" isCollapsed={!isSidebarOpen} />
@@ -632,6 +635,7 @@ const App: React.FC = () => {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/termos" element={<Terms />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/notificacoes" element={<ProtectedRoute><Layout><NotificationsPage /></Layout></ProtectedRoute>} />
         <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
         <Route path="/whatsapp" element={<ProtectedRoute><WhatsApp /></ProtectedRoute>} />
@@ -666,6 +670,7 @@ const App: React.FC = () => {
           <Route path="user-connections" element={<AdminUserConnections />} />
           <Route path="agents" element={<AdminAgentsAI />} />
           <Route path="followup" element={<AdminFollowUp />} />
+          <Route path="notificacoes-globais" element={<AdminGlobalNotifications />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="terms" element={<AdminTerms />} />
           <Route path="consultancy" element={<AdminConsultancyLayout />}>

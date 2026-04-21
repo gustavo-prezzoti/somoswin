@@ -52,6 +52,7 @@ BEGIN
                 WHEN 'conexoes' THEN ARRAY['list', 'read', 'create', 'update', 'delete']
                 WHEN 'agentes' THEN ARRAY['list', 'read', 'create', 'update', 'delete']
                 WHEN 'followup' THEN ARRAY['list', 'read', 'update', 'delete']
+                WHEN 'notificacoes_globais' THEN ARRAY['list', 'read', 'update']
                 WHEN 'prompts' THEN ARRAY[]::TEXT[]
                 ELSE ARRAY['list', 'read', 'create', 'update', 'delete']
             END;

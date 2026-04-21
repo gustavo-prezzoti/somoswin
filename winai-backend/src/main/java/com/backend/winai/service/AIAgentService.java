@@ -27,6 +27,7 @@ import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.UserRepository;
 import com.backend.winai.repository.NotificationRepository;
+import com.backend.winai.dto.request.SendWhatsAppMessageRequest;
 import com.backend.winai.dto.response.WhatsAppConversationResponse;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +48,7 @@ public class AIAgentService {
     private final NotificationRepository notificationRepository;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
     private final FollowUpService followUpService;
+    private final GlobalNotificationService globalNotificationService;
     private final com.backend.winai.repository.LeadRepository leadRepository;
     /** Proxy para self-invocation e garantir REQUIRES_NEW em persistAndNotifyByConversationId */
     private final AIAgentService self;
@@ -71,6 +73,7 @@ public class AIAgentService {
             NotificationRepository notificationRepository,
             org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate,
             @org.springframework.context.annotation.Lazy FollowUpService followUpService,
+            GlobalNotificationService globalNotificationService,
             com.backend.winai.repository.LeadRepository leadRepository,
             @org.springframework.context.annotation.Lazy AIAgentService self) {
         this.openAiService = openAiService;
@@ -84,6 +87,7 @@ public class AIAgentService {
         this.notificationRepository = notificationRepository;
         this.messagingTemplate = messagingTemplate;
         this.followUpService = followUpService;
+        this.globalNotificationService = globalNotificationService;
         this.leadRepository = leadRepository;
         this.self = self;
     }
@@ -707,6 +711,18 @@ public class AIAgentService {
         if (sendClientMessage) {
             String handoffMsg = "Entendi! Vou chamar nossa especialista humana para continuar seu atendimento agora mesmo. 🧡 Aguarde só um momento. 🌿✨";
 
+            try {
+                if (conversation.getCompany() != null) {
+                    var globalConfig = globalNotificationService.getConfig(conversation.getCompany().getId());
+                    if (globalConfig != null && globalConfig.getHumanHandoffClientMessage() != null
+                            && !globalConfig.getHumanHandoffClientMessage().isBlank()) {
+                        handoffMsg = globalConfig.getHumanHandoffClientMessage();
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Erro ao buscar mensagem personalizada de handoff, usando padrão: {}", e.getMessage());
+            }
+
             sendAIResponse(conversation, handoffMsg);
             persistAndNotify(conversation, handoffMsg);
         }
@@ -737,6 +753,94 @@ public class AIAgentService {
             com.backend.winai.dto.response.WebSocketMessage notificationEvent = com.backend.winai.dto.response.WebSocketMessage
                     .builder().type("NOTIFICATION_RECEIVED").companyId(conversation.getCompany().getId()).build();
             messagingTemplate.convertAndSend("/topic/whatsapp/" + conversation.getCompany().getId(), notificationEvent);
+
+            sendHumanHandoffWhatsAppNotification(conversation);
+        }
+    }
+
+    private void sendHumanHandoffWhatsAppNotification(WhatsAppConversation conversation) {
+        try {
+            var config = globalNotificationService.getConfig(conversation.getCompany().getId());
+
+            if (config == null) {
+                log.debug(
+                        "Nenhuma configuração de Notificação Global para empresa {}, pulando notificação WhatsApp de handoff",
+                        conversation.getCompany().getId());
+                return;
+            }
+
+            if (!Boolean.TRUE.equals(config.getHumanHandoffNotificationEnabled())) {
+                log.debug("Notificação WhatsApp de handoff desabilitada para empresa {}",
+                        conversation.getCompany().getId());
+                return;
+            }
+
+            String targetPhone = config.getHumanHandoffPhone();
+            if (targetPhone == null || targetPhone.isBlank()) {
+                log.warn("Número de telefone para handoff não configurado para empresa {}",
+                        conversation.getCompany().getId());
+                return;
+            }
+
+            String leadName = conversation.getContactName() != null ? conversation.getContactName() : "Lead";
+            String leadPhone = conversation.getPhoneNumber() != null ? conversation.getPhoneNumber() : "N/A";
+
+            String notificationMessage;
+            if (config.getHumanHandoffMessage() != null && !config.getHumanHandoffMessage().isBlank()) {
+                notificationMessage = config.getHumanHandoffMessage().replace("{leadName}", leadName)
+                        .replace("{phoneNumber}", leadPhone)
+                        .replace("{conversationId}", conversation.getId().toString());
+            } else {
+                notificationMessage = String.format("*Atendimento Humano Solicitado*\n\n"
+                        + "O lead *%s* (%s) está solicitando atendimento humano.\n\n" + "Acesse o painel para atender.",
+                        leadName, leadPhone);
+            }
+
+            var connections = whatsAppConnectionRepository.findByCompanyId(conversation.getCompany().getId());
+            log.info("=== [HANDOFF NOTIFICATION] Buscando conexão para empresa {} ===",
+                    conversation.getCompany().getId());
+            log.info("  Conexões encontradas: {}", connections.size());
+            for (int i = 0; i < connections.size(); i++) {
+                var c = connections.get(i);
+                log.info("    [{}] Instance: {}, BaseUrl: {}, Token: {}, Active: {}",
+                        i, c.getInstanceName(), c.getInstanceBaseUrl(),
+                        c.getInstanceToken() != null ? "[PRESENTE]" : "[AUSENTE]",
+                        c.getIsActive());
+            }
+
+            if (connections.isEmpty()) {
+                log.warn(
+                        "Nenhuma conexão WhatsApp ativa para empresa {}, não foi possível enviar notificação de handoff",
+                        conversation.getCompany().getId());
+                return;
+            }
+
+            UserWhatsAppConnection connection = connections.stream().filter(c -> Boolean.TRUE.equals(c.getIsActive()))
+                    .findFirst().orElse(connections.get(0));
+
+            log.info("  === CONEXÃO SELECIONADA ===");
+            log.info("    Instance: {}", connection.getInstanceName());
+            log.info("    BaseUrl: {}", connection.getInstanceBaseUrl());
+            log.info("    Token: {}", connection.getInstanceToken() != null ? "[PRESENTE]" : "[AUSENTE]");
+            log.info("    Active: {}", connection.getIsActive());
+
+            SendWhatsAppMessageRequest request = SendWhatsAppMessageRequest.builder().phoneNumber(targetPhone)
+                    .message(notificationMessage).uazapInstance(connection.getInstanceName())
+                    .uazapBaseUrl(connection.getInstanceBaseUrl()).uazapToken(connection.getInstanceToken()).build();
+
+            log.info("  === REQUEST DTO CONSTRUÍDO ===");
+            log.info("    phoneNumber: {}", targetPhone);
+            log.info("    uazapInstance: {}", request.getUazapInstance());
+            log.info("    uazapBaseUrl: {}", request.getUazapBaseUrl());
+            log.info("    uazapToken: {}", request.getUazapToken() != null ? "[PRESENTE]" : "[AUSENTE]");
+
+            uazapService.sendTextMessage(request, conversation.getCompany());
+
+            log.info("Notificação WhatsApp de handoff enviada para {} (empresa {})", targetPhone,
+                    conversation.getCompany().getName());
+
+        } catch (Exception e) {
+            log.error("Erro ao enviar notificação WhatsApp de handoff: {}", e.getMessage(), e);
         }
     }
 
@@ -878,7 +982,27 @@ public class AIAgentService {
                     .findByConversationIdOrderByMessageTimestampDesc(conversationId).stream().limit(limit)
                     .collect(Collectors.toList());
 
+            String customHandoffMsg = null;
+            if (!recentMessages.isEmpty()) {
+                try {
+                    UUID infoCompanyId = null;
+                    var conv = conversationRepository.findById(conversationId).orElse(null);
+                    if (conv != null && conv.getCompany() != null) {
+                        infoCompanyId = conv.getCompany().getId();
+                    }
+                    if (infoCompanyId != null) {
+                        var globalConfig = globalNotificationService.getConfig(infoCompanyId);
+                        if (globalConfig != null) {
+                            customHandoffMsg = globalConfig.getHumanHandoffClientMessage();
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("Erro ao buscar config de handoff para filtro de histórico: {}", ex.getMessage());
+                }
+            }
+
             final String defaultHandoffMsgPrefix = "Entendi! Vou chamar nossa especialista humana";
+            final String customHandoffMsgFinal = customHandoffMsg;
 
             List<OpenAiService.ChatMessage> history = new ArrayList<>();
 
@@ -889,8 +1013,10 @@ public class AIAgentService {
                     // Verificação de Handoff (Reset de Contexto)
                     if (Boolean.TRUE.equals(msg.getFromMe())) {
                         boolean isDefaultHandoff = msg.getContent().startsWith(defaultHandoffMsgPrefix);
+                        boolean isCustomHandoff = customHandoffMsgFinal != null && !customHandoffMsgFinal.isBlank()
+                                && msg.getContent().trim().equals(customHandoffMsgFinal.trim());
 
-                        if (isDefaultHandoff) {
+                        if (isDefaultHandoff || isCustomHandoff) {
                             log.info(
                                     "Histórico truncado: mensagem de handoff detectada (ID: {}). Ignorando mensagens anteriores.",
                                     msg.getId());

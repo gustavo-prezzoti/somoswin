@@ -41,6 +41,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
     conexoes: LinkIcon,
     agentes: Bot,
     followup: Clock,
+    notificacoes_globais: Bell,
 };
 
 function isNavActive(to: string, pathname: string, search: string): boolean {

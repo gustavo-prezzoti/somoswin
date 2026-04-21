@@ -54,6 +54,9 @@ public final class AmpliaAdminPermissionCatalog {
         m.put(AmpliaAdminModule.followup,
                 EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read, AmpliaAdminAction.update, AmpliaAdminAction.delete));
 
+        m.put(AmpliaAdminModule.notificacoes_globais,
+                EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read, AmpliaAdminAction.update));
+
         m.put(AmpliaAdminModule.prompts, EnumSet.noneOf(AmpliaAdminAction.class));
 
         Map<AmpliaAdminModule, Set<AmpliaAdminAction>> unmodifiable = new EnumMap<>(AmpliaAdminModule.class);

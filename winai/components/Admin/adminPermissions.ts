@@ -124,6 +124,7 @@ export function adminRouteToModule(pathname: string): string | null {
         'user-connections': 'conexoes',
         agents: 'agentes',
         followup: 'followup',
+        'notificacoes-globais': 'notificacoes_globais',
         settings: 'instancias',
         terms: 'contratos',
         consultancy: 'consultoria',

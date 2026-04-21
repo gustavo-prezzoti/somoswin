@@ -62,6 +62,7 @@ export const AMPLIA_ADMIN_MODULE_SECTIONS: AmpliaAdminModuleSection[] = [
             { id: 'conexoes', label: 'Conexões', actions: ['list', 'read', 'create', 'update', 'delete'] },
             { id: 'agentes', label: 'Agentes IA', actions: ['list', 'read', 'create', 'update', 'delete'] },
             { id: 'followup', label: 'Follow-up', actions: ['list', 'read', 'update', 'delete'] },
+            { id: 'notificacoes_globais', label: 'Notificações globais (handoff)', actions: ['list', 'read', 'update'] },
         ],
     },
 ];

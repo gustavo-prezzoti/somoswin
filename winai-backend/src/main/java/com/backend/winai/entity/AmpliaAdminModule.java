@@ -23,6 +23,8 @@ public enum AmpliaAdminModule {
     agentes,
     followup,
     prompts,
+    /** Configuração admin: alertas WhatsApp / transbordo humano por empresa */
+    notificacoes_globais,
     consultoria;
 
     private static final Set<String> ALL_IDS;

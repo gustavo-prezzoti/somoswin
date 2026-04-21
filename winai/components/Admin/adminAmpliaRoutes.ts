@@ -14,6 +14,7 @@
  * | financas            | /admin/financas            | MRR, faturas, visão financeira     |
  * | contratos           | /admin/companies           | Contratos / empresas               |
  * | instancias…followup | /admin/instances, etc.     | Rotas técnicas                     |
+ * | notificacoes_globais | /admin/notificacoes-globais | Handoff / alertas WhatsApp       |
  * | consultoria         | /admin/consultancy         | Não listado no menu (rota direta)  |
  */
 
@@ -70,6 +71,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
             { id: 'conexoes', label: 'Conexões', to: '/admin/user-connections', implemented: true },
             { id: 'agentes', label: 'Agentes IA', to: '/admin/agents', implemented: true },
             { id: 'followup', label: 'Follow-up', to: '/admin/followup', implemented: true },
+            { id: 'notificacoes_globais', label: 'Notif. globais', to: '/admin/notificacoes-globais', implemented: true },
         ],
     },
 ];
