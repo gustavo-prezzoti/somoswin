@@ -1086,13 +1086,6 @@ const Campaigns: React.FC = () => {
                       </div>
                     )}
                   </div>
-                    {paidOverview.connected && !paidOverviewLoading && paidOverview.tableLevel === 'ADS' && (
-                      <p className="text-xs text-gray-500 font-medium px-1 pb-3 flex items-center gap-2">
-                        <Link2 size={14} className="text-indigo-500 shrink-0" />
-                        Em cada <strong>anúncio</strong>, use o ícone de link à direita para gerar UTMs já com campanha e
-                        conjunto desta navegação.
-                      </p>
-                    )}
                     {paidOverview.connected && !paidOverviewLoading && (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[1000px]">
