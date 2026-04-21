@@ -258,7 +258,7 @@ public class WhatsAppWebhookService {
     private Lead findOrCreateLead(String phoneNumber, String contactName, Company company, String messageText,
             String trackSource, String trackId) {
         Optional<Lead> existingLead = leadRepository.findByCompanyOrderByCreatedAtDesc(company).stream()
-                .filter(lead -> phoneNumber.equals(lead.getPhone()))
+                .filter(lead -> lead.getPhone() != null && phonesMatchForLead(phoneNumber, lead.getPhone()))
                 .findFirst();
 
         Optional<UtmParseUtil.UtmSnapshot> utmFromText = UtmParseUtil.parseFromText(messageText);
@@ -361,6 +361,29 @@ public class WhatsAppWebhookService {
         if (u.getFbclid() != null) {
             lead.setFbclid(u.getFbclid());
         }
+    }
+
+    /** Mesmo telefone com ou sem 55 / máscara (evita lead duplicado sem merge de UTM). */
+    private static boolean phonesMatchForLead(String webhookPhone, String leadPhone) {
+        String a = digitsOnly(webhookPhone);
+        String b = digitsOnly(leadPhone);
+        if (a.isEmpty() || b.isEmpty()) {
+            return false;
+        }
+        if (a.equals(b)) {
+            return true;
+        }
+        if (a.length() >= 10 && b.length() >= 10) {
+            return a.endsWith(b) || b.endsWith(a);
+        }
+        return false;
+    }
+
+    private static String digitsOnly(String p) {
+        if (p == null) {
+            return "";
+        }
+        return p.replaceAll("\\D", "");
     }
 
     private String extractTrackSource(UazapWebhookRequest webhook) {
@@ -566,33 +589,66 @@ public class WhatsAppWebhookService {
     }
 
     private String extractMessageText(UazapWebhookRequest webhook) {
-        if (webhook.getMessage() != null) {
-            Object textObj = webhook.getMessage().getText();
-            if (textObj instanceof String) {
-                String text = (String) textObj;
-                if (!text.isEmpty())
-                    return text;
-            } else if (textObj != null) {
-                return textObj.toString();
-            }
+        if (webhook.getMessage() == null) {
+            return "[Mensagem sem texto]";
+        }
+        String fromText = extractPlainStringFromPayloadObject(webhook.getMessage().getText());
+        if (fromText != null && !fromText.isEmpty()) {
+            return fromText;
+        }
 
-            Object contentObj = webhook.getMessage().getContent();
-            if (contentObj instanceof String) {
-                String content = (String) contentObj;
-                if (!content.isEmpty())
-                    return content;
-            } else if (contentObj instanceof java.util.Map) {
-                // É um objeto de midia, tenta extrair URL ou algo util
-                java.util.Map<?, ?> map = (java.util.Map<?, ?>) contentObj;
-                if (map.containsKey("URL")) {
-                    return "Mídia: " + map.get("URL");
-                }
-                return "[Conteúdo Mídia]";
-            } else if (contentObj != null) {
-                return contentObj.toString();
+        Object contentObj = webhook.getMessage().getContent();
+        if (contentObj instanceof String s) {
+            if (!s.isEmpty()) {
+                return s;
             }
+        } else if (contentObj instanceof java.util.Map<?, ?> map) {
+            String plain = extractTextFromNestedMap(map);
+            if (plain != null && !plain.isEmpty()) {
+                return plain;
+            }
+            if (map.containsKey("URL")) {
+                return "Mídia: " + map.get("URL");
+            }
+            return "[Conteúdo Mídia]";
+        } else if (contentObj != null) {
+            return contentObj.toString();
         }
         return "[Mensagem sem texto]";
+    }
+
+    /**
+     * UAZAP / Z-API costumam mandar {@code text} como String ou como objeto {@code { "body": "..." }}.
+     * {@code Map#toString()} quebrava o parse de UTM na primeira mensagem.
+     */
+    private static String extractPlainStringFromPayloadObject(Object o) {
+        if (o == null) {
+            return null;
+        }
+        if (o instanceof String s) {
+            return s.isEmpty() ? null : s;
+        }
+        if (o instanceof java.util.Map<?, ?> map) {
+            return extractTextFromNestedMap(map);
+        }
+        return null;
+    }
+
+    private static String extractTextFromNestedMap(java.util.Map<?, ?> map) {
+        for (String key : java.util.List.of("body", "text", "message", "caption", "conversation")) {
+            Object v = map.get(key);
+            if (v instanceof String s && !s.isEmpty()) {
+                return s;
+            }
+        }
+        Object ext = map.get("extendedTextMessage");
+        if (ext instanceof java.util.Map<?, ?> em) {
+            Object v = em.get("text");
+            if (v instanceof String s && !s.isEmpty()) {
+                return s;
+            }
+        }
+        return null;
     }
 
     private String extractMessageId(UazapWebhookRequest webhook) {

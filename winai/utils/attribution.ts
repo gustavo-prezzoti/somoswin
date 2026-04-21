@@ -93,13 +93,10 @@ export function leadAttributionFieldsFromSearch(search: string): Partial<{
   };
 }
 
-/**
- * Anexa query ao texto (ex.: WhatsApp) para o backend parsear com UtmParseUtil.
- * @param search ex.: location.search na página onde o usuário clica
- */
-export function appendAttributionQueryToText(text: string, search: string): string {
+/** Linha única ?utm_...&gclid=... para o backend parsear (ex.: wa.me sem texto extra). */
+export function buildAttributionQueryLineFromSearch(search: string): string {
   const fields = parseSearchToAttributionFields(search);
-  if (!fields) return text;
+  if (!fields) return '';
 
   const pairs: string[] = [];
   const add = (k: string, v?: string) => {
@@ -114,6 +111,18 @@ export function appendAttributionQueryToText(text: string, search: string): stri
   add('fbclid', fields.fbclid);
   add('msclkid', fields.msclkid);
 
-  if (pairs.length === 0) return text;
-  return `${text}\n\n?${pairs.join('&')}`;
+  if (pairs.length === 0) return '';
+  return `?${pairs.join('&')}`;
+}
+
+/**
+ * Anexa query ao texto (ex.: WhatsApp) para o backend parsear com UtmParseUtil.
+ * @param search ex.: location.search na página onde o usuário clica
+ */
+export function appendAttributionQueryToText(text: string, search: string): string {
+  const line = buildAttributionQueryLineFromSearch(search);
+  if (!line) return text;
+  const prefix = text.trim();
+  if (!prefix) return line;
+  return `${prefix}\n\n${line}`;
 }

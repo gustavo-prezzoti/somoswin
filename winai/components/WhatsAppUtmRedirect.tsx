@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { appendAttributionQueryToText } from '../utils/attribution';
+import { buildAttributionQueryLineFromSearch } from '../utils/attribution';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
@@ -76,8 +76,7 @@ const WhatsAppUtmRedirect: React.FC = () => {
         }
         return;
       }
-      const base = 'Olá! Vim pelo anúncio.';
-      const message = attrSearch.length > 1 ? appendAttributionQueryToText(base, attrSearch) : base;
+      const message = buildAttributionQueryLineFromSearch(attrSearch);
       window.location.replace(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`);
     };
     void run();

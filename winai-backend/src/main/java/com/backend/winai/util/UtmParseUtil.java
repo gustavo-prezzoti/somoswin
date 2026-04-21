@@ -27,10 +27,45 @@ public final class UtmParseUtil {
     private UtmParseUtil() {
     }
 
+    /**
+     * Aceita texto cru, URL-encoded (comum em wa.me / APIs) ou misto.
+     */
     public static Optional<UtmSnapshot> parseFromText(String text) {
         if (text == null || text.isBlank()) {
             return Optional.empty();
         }
+        String trimmed = text.trim();
+        Optional<UtmSnapshot> direct = parseSnapshotFromString(trimmed);
+        if (direct.isPresent()) {
+            return direct;
+        }
+        String current = trimmed;
+        for (int round = 0; round < 4; round++) {
+            try {
+                String dec = URLDecoder.decode(current, StandardCharsets.UTF_8);
+                if (dec.equals(current)) {
+                    break;
+                }
+                current = dec;
+                Optional<UtmSnapshot> o = parseSnapshotFromString(current);
+                if (o.isPresent()) {
+                    return o;
+                }
+            } catch (IllegalArgumentException e) {
+                break;
+            }
+        }
+        if (trimmed.contains("%3F") || trimmed.contains("%3f") || trimmed.contains("%26")
+                || trimmed.contains("%3D") || trimmed.contains("%3d")) {
+            String replaced = trimmed.replace("%3F", "?").replace("%3f", "?")
+                    .replace("%26", "&")
+                    .replace("%3D", "=").replace("%3d", "=");
+            return parseSnapshotFromString(replaced);
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<UtmSnapshot> parseSnapshotFromString(String text) {
         Map<String, String> utmMap = new LinkedHashMap<>();
         Matcher utm = UTM_PAIR.matcher(text);
         while (utm.find()) {
