@@ -242,6 +242,52 @@ export interface UtmPerformanceRow {
     metaCampaignName?: string | null;
 }
 
+export interface CreateLeadAttributionAnchorRequest {
+    anchorText: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmContent?: string;
+    utmTerm?: string;
+    gclid?: string;
+    fbclid?: string;
+    label?: string;
+    notes?: string;
+}
+
+export interface LeadAttributionAnchorResponse {
+    id: string;
+    anchorText: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmContent?: string;
+    utmTerm?: string;
+    gclid?: string;
+    fbclid?: string;
+    active: boolean;
+    label?: string;
+    notes?: string;
+    createdAt?: string;
+}
+
+export interface LeadAttributionMessageSuggestRequest {
+    context?: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmContent?: string;
+    utmTerm?: string;
+}
+
+export interface LeadAttributionMessageSuggestResponse {
+    suggestedText: string | null;
+}
+
+export interface PatchLeadAttributionAnchorRequest {
+    active?: boolean;
+}
+
 export interface UtmPerformanceResponse {
     rows: UtmPerformanceRow[];
     bestRoas: number;
@@ -348,6 +394,31 @@ export const marketingService = {
         if (params.endDate) q.set('endDate', params.endDate);
         const qs = q.toString();
         return api.get<UtmPerformanceResponse>('/marketing/paid-traffic/utm-performance' + (qs ? '?' + qs : ''));
+    },
+    createLeadAttributionAnchor: async (
+        body: CreateLeadAttributionAnchorRequest
+    ): Promise<LeadAttributionAnchorResponse> => {
+        return api.post<LeadAttributionAnchorResponse>('/marketing/lead-attribution-anchors', body);
+    },
+    suggestLeadAttributionMessage: async (
+        body: LeadAttributionMessageSuggestRequest
+    ): Promise<LeadAttributionMessageSuggestResponse> => {
+        return api.post<LeadAttributionMessageSuggestResponse>(
+            '/marketing/lead-attribution-message-suggest',
+            body
+        );
+    },
+    listLeadAttributionAnchors: async (): Promise<LeadAttributionAnchorResponse[]> => {
+        return api.get<LeadAttributionAnchorResponse[]>('/marketing/lead-attribution-anchors');
+    },
+    patchLeadAttributionAnchor: async (
+        anchorId: string,
+        body: PatchLeadAttributionAnchorRequest
+    ): Promise<LeadAttributionAnchorResponse> => {
+        return api.patch<LeadAttributionAnchorResponse>(
+            '/marketing/lead-attribution-anchors/' + encodeURIComponent(anchorId),
+            body
+        );
     },
 };
 

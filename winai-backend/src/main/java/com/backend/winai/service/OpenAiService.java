@@ -51,6 +51,9 @@ public class OpenAiService {
     @Value("${openai.enabled:true}")
     private Boolean enabled;
 
+    @Value("${openai.marketing-suggest-model:gpt-4o-mini}")
+    private String marketingSuggestModel;
+
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -694,6 +697,51 @@ public class OpenAiService {
         } catch (Exception e) {
             throw new RuntimeException("Erro ao gerar embedding: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 1–2 frases em PT para mensagem inicial de anúncio Click-to-WhatsApp (sem UTM/ref na resposta).
+     */
+    @SuppressWarnings("unchecked")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public String suggestMarketingWhatsAppFirstMessage(String userContext) {
+        if (!isChatEnabled() || userContext == null || userContext.isBlank()) {
+            return null;
+        }
+        List<Map<String, Object>> messages = new ArrayList<>();
+        Map<String, Object> sys = new HashMap<>();
+        sys.put("role", "system");
+        sys.put("content",
+                "Você ajuda anunciantes a escrever a primeira mensagem que o cliente enviará ao abrir o WhatsApp a partir de um anúncio (Click-to-WhatsApp). Responda APENAS com 1 ou 2 frases curtas em português do Brasil, tom natural e específico ao contexto. Não inclua UTMs, links, códigos nem ref:.");
+        messages.add(sys);
+        Map<String, Object> userMsg = new HashMap<>();
+        userMsg.put("role", "user");
+        userMsg.put("content", userContext.trim());
+        messages.add(userMsg);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", marketingSuggestModel);
+        body.put("messages", messages);
+        body.put("max_completion_tokens", 200);
+
+        Map<String, Object> responseBody = callOpenAIWithRetry(body);
+        if (responseBody == null || responseBody.containsKey("error")) {
+            return null;
+        }
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
+        if (choices == null || choices.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> choice0 = choices.get(0);
+        if (choice0 == null) {
+            return null;
+        }
+        Map<String, Object> message = (Map<String, Object>) choice0.get("message");
+        if (message == null) {
+            return null;
+        }
+        String content = extractTextContent(message.get("content"));
+        return content != null ? content.trim() : null;
     }
 
     public String transcribeAudio(byte[] audioData, String filename) {

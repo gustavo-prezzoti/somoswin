@@ -67,6 +67,9 @@ public interface WhatsAppMessageRepository extends JpaRepository<WhatsAppMessage
         @Query("SELECT DISTINCT m.conversation.id FROM WhatsAppMessage m WHERE m.lead.id = :leadId")
         List<UUID> findDistinctConversationIdsByLeadId(@Param("leadId") UUID leadId);
 
+        @Query("SELECT COUNT(m) FROM WhatsAppMessage m WHERE m.lead.id = :leadId AND m.fromMe = false")
+        long countInboundByLeadId(@Param("leadId") UUID leadId);
+
         void deleteByConversation(WhatsAppConversation conversation);
 
         void deleteByLead_Id(UUID leadId);

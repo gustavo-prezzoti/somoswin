@@ -1,0 +1,243 @@
+package com.backend.winai.service;
+
+import com.backend.winai.dto.marketing.CreateLeadAttributionAnchorRequest;
+import com.backend.winai.dto.marketing.LeadAttributionAnchorResponse;
+import com.backend.winai.dto.marketing.LeadAttributionMessageSuggestRequest;
+import com.backend.winai.dto.marketing.LeadAttributionMessageSuggestResponse;
+import com.backend.winai.dto.marketing.PatchLeadAttributionAnchorRequest;
+import com.backend.winai.entity.Company;
+import com.backend.winai.entity.LeadAttributionAnchor;
+import com.backend.winai.entity.User;
+import com.backend.winai.entity.UserRole;
+import com.backend.winai.repository.CompanyRepository;
+import com.backend.winai.repository.LeadAttributionAnchorRepository;
+import com.backend.winai.util.UtmParseUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class LeadAttributionAnchorService {
+
+    private final LeadAttributionAnchorRepository anchorRepository;
+    private final CompanyRepository companyRepository;
+    private final OpenAiService openAiService;
+
+    @Value("${winai.lead-attribution.min-cosine-similarity:0.80}")
+    private double minCosineSimilarity;
+
+    @Transactional
+    public LeadAttributionAnchorResponse register(User user, CreateLeadAttributionAnchorRequest req) {
+        if (req.getAnchorText() == null || req.getAnchorText().isBlank()) {
+            throw new IllegalArgumentException("anchorText é obrigatório");
+        }
+        Company company = resolveCompany(user, null);
+        if (!hasAnyAttribution(req)) {
+            throw new IllegalArgumentException("Informe ao menos utm_campaign ou outro parâmetro UTM");
+        }
+
+        UUID id = UUID.randomUUID();
+        LeadAttributionAnchor entity = LeadAttributionAnchor.builder()
+                .id(id)
+                .company(company)
+                .anchorText(req.getAnchorText().trim())
+                .utmSource(trimToNull(req.getUtmSource()))
+                .utmMedium(trimToNull(req.getUtmMedium()))
+                .utmCampaign(trimToNull(req.getUtmCampaign()))
+                .utmContent(trimToNull(req.getUtmContent()))
+                .utmTerm(trimToNull(req.getUtmTerm()))
+                .gclid(trimToNull(req.getGclid()))
+                .fbclid(trimToNull(req.getFbclid()))
+                .active(true)
+                .label(trimToNull(req.getLabel()))
+                .notes(trimToNull(req.getNotes()))
+                .build();
+
+        entity = anchorRepository.save(entity);
+        List<Double> vector = openAiService.getEmbedding(entity.getAnchorText());
+        anchorRepository.updateEmbedding(entity.getId(), vector.toString());
+        return toResponse(entity);
+    }
+
+    /**
+     * Melhor âncora por similaridade de cosseno; só retorna se {@code similarity >= minCosineSimilarity}.
+     */
+    public Optional<UtmParseUtil.UtmSnapshot> findBestMatch(UUID companyId, String inboundMessageText) {
+        if (inboundMessageText == null || inboundMessageText.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            List<Double> q = openAiService.getEmbedding(inboundMessageText.trim());
+            String qStr = q.toString();
+            List<Object[]> rows = anchorRepository.findTopByCosineSimilarity(companyId, qStr, 2);
+            if (rows.isEmpty()) {
+                return Optional.empty();
+            }
+            double top1 = toDouble(rows.get(0)[1]);
+            if (top1 < minCosineSimilarity) {
+                return Optional.empty();
+            }
+            UUID anchorId = UUID.fromString((String) rows.get(0)[0]);
+            if (rows.size() > 1) {
+                double top2 = toDouble(rows.get(1)[1]);
+                if (top2 >= minCosineSimilarity && (top1 - top2) < 0.02) {
+                    log.warn(
+                            "[SemanticAttr] Match ambíguo companyId={} anchor1={} sim1={} sim2={}",
+                            companyId,
+                            anchorId,
+                            top1,
+                            top2);
+                }
+            }
+            return anchorRepository.findById(anchorId).map(this::toUtmSnapshot);
+        } catch (Exception e) {
+            log.debug("[SemanticAttr] sem match: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public LeadAttributionMessageSuggestResponse suggestMessage(User user, LeadAttributionMessageSuggestRequest req) {
+        if (!openAiService.isChatEnabled()) {
+            return LeadAttributionMessageSuggestResponse.builder().suggestedText(null).build();
+        }
+        StringBuilder ctx = new StringBuilder();
+        if (req.getContext() != null && !req.getContext().isBlank()) {
+            ctx.append(req.getContext().trim()).append("\n");
+        }
+        if (req.getUtmCampaign() != null) {
+            ctx.append("utm_campaign: ").append(req.getUtmCampaign()).append("\n");
+        }
+        if (req.getUtmContent() != null) {
+            ctx.append("utm_content: ").append(req.getUtmContent()).append("\n");
+        }
+        if (req.getUtmTerm() != null) {
+            ctx.append("utm_term: ").append(req.getUtmTerm()).append("\n");
+        }
+        if (req.getUtmSource() != null) {
+            ctx.append("utm_source: ").append(req.getUtmSource()).append("\n");
+        }
+        if (req.getUtmMedium() != null) {
+            ctx.append("utm_medium: ").append(req.getUtmMedium()).append("\n");
+        }
+        String prompt = ctx.toString().trim();
+        if (prompt.isEmpty()) {
+            return LeadAttributionMessageSuggestResponse.builder().suggestedText(null).build();
+        }
+        String text = openAiService.suggestMarketingWhatsAppFirstMessage(prompt);
+        return LeadAttributionMessageSuggestResponse.builder().suggestedText(text).build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<LeadAttributionAnchorResponse> list(User user) {
+        Company company = resolveCompany(user, null);
+        return anchorRepository.findByCompanyOrderByCreatedAtDesc(company).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public LeadAttributionAnchorResponse patch(User user, UUID anchorId, PatchLeadAttributionAnchorRequest req) {
+        Company company = resolveCompany(user, null);
+        LeadAttributionAnchor entity = anchorRepository.findById(anchorId)
+                .orElseThrow(() -> new IllegalArgumentException("Âncora não encontrada"));
+        if (!entity.getCompany().getId().equals(company.getId())) {
+            throw new IllegalArgumentException("Acesso negado");
+        }
+        if (req.getActive() != null) {
+            entity.setActive(req.getActive());
+        }
+        entity = anchorRepository.save(entity);
+        return toResponse(entity);
+    }
+
+    private UtmParseUtil.UtmSnapshot toUtmSnapshot(LeadAttributionAnchor a) {
+        return UtmParseUtil.UtmSnapshot.builder()
+                .utmSource(a.getUtmSource())
+                .utmMedium(a.getUtmMedium())
+                .utmCampaign(a.getUtmCampaign())
+                .utmContent(a.getUtmContent())
+                .utmTerm(a.getUtmTerm())
+                .gclid(a.getGclid())
+                .fbclid(a.getFbclid())
+                .build();
+    }
+
+    private LeadAttributionAnchorResponse toResponse(LeadAttributionAnchor a) {
+        return LeadAttributionAnchorResponse.builder()
+                .id(a.getId())
+                .anchorText(a.getAnchorText())
+                .utmSource(a.getUtmSource())
+                .utmMedium(a.getUtmMedium())
+                .utmCampaign(a.getUtmCampaign())
+                .utmContent(a.getUtmContent())
+                .utmTerm(a.getUtmTerm())
+                .gclid(a.getGclid())
+                .fbclid(a.getFbclid())
+                .active(Boolean.TRUE.equals(a.getActive()))
+                .label(a.getLabel())
+                .notes(a.getNotes())
+                .createdAt(a.getCreatedAt())
+                .build();
+    }
+
+    private static double toDouble(Object o) {
+        if (o == null) {
+            return 0;
+        }
+        if (o instanceof Double d) {
+            return d;
+        }
+        if (o instanceof Float f) {
+            return f.doubleValue();
+        }
+        if (o instanceof BigDecimal bd) {
+            return bd.doubleValue();
+        }
+        if (o instanceof Number n) {
+            return n.doubleValue();
+        }
+        return Double.parseDouble(o.toString());
+    }
+
+    private static String trimToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private static boolean hasAnyAttribution(CreateLeadAttributionAnchorRequest req) {
+        return req.getUtmCampaign() != null && !req.getUtmCampaign().isBlank()
+                || req.getUtmSource() != null && !req.getUtmSource().isBlank()
+                || req.getUtmMedium() != null && !req.getUtmMedium().isBlank()
+                || req.getUtmContent() != null && !req.getUtmContent().isBlank()
+                || req.getUtmTerm() != null && !req.getUtmTerm().isBlank()
+                || req.getGclid() != null && !req.getGclid().isBlank()
+                || req.getFbclid() != null && !req.getFbclid().isBlank();
+    }
+
+    private Company resolveCompany(User user, UUID requestedCompanyId) {
+        if (user.getCompany() == null) {
+            throw new IllegalStateException("Usuário sem empresa");
+        }
+        if (requestedCompanyId != null) {
+            if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.SUPER_ADMIN) {
+                return companyRepository.findById(requestedCompanyId)
+                        .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+            }
+            throw new RuntimeException("Acesso negado: Apenas administradores podem selecionar empresas.");
+        }
+        return user.getCompany();
+    }
+}

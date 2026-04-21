@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Copy } from 'lucide-react';
+import { Copy, Loader2 } from 'lucide-react';
 import { Modal } from './ui/Modal';
+import { marketingService } from '../services';
 
 export type UtmAdTrackingPlatform = 'META' | 'GOOGLE';
 
@@ -70,12 +71,23 @@ function CopyRow({
 
 const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, ctx, onCopied, companyId }) => {
   const [baseUrl, setBaseUrl] = useState('');
+  const [anchorDraft, setAnchorDraft] = useState('');
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [anchorError, setAnchorError] = useState<string | null>(null);
+  const [registerOk, setRegisterOk] = useState(false);
 
   useEffect(() => {
     if (open && typeof window !== 'undefined') {
       setBaseUrl((u) => u || window.location.origin);
     }
   }, [open]);
+
+  useEffect(() => {
+    setAnchorDraft('');
+    setAnchorError(null);
+    setRegisterOk(false);
+  }, [open, ctx?.platform, ctx?.adId]);
 
   if (!ctx) return null;
 
@@ -104,6 +116,120 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
   const incomplete = !ctx.campaignId || !ctx.adSetId || !ctx.adId;
 
   const platformLabel = ctx.platform === 'META' ? 'Meta Ads' : 'Google Ads';
+
+  const suggestContextLines = [
+    `Plataforma: ${platformLabel}`,
+    ctx.campaignName ? `Campanha: ${ctx.campaignName}` : '',
+    ctx.adSetName ? `Conjunto: ${ctx.adSetName}` : '',
+    ctx.adName ? `Anúncio: ${ctx.adName}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const suggestAnchorMessage = async () => {
+    if (!camp || !adg || !ad) return;
+    setSuggestLoading(true);
+    setAnchorError(null);
+    setRegisterOk(false);
+    try {
+      const baseBody = {
+        context: suggestContextLines,
+        utmCampaign: camp,
+        utmContent: ad,
+        utmTerm: adg,
+      };
+      const body =
+        ctx.platform === 'META'
+          ? { ...baseBody, utmSource: 'facebook', utmMedium: 'paid_social' }
+          : { ...baseBody, utmSource: 'google', utmMedium: 'cpc' };
+      const r = await marketingService.suggestLeadAttributionMessage(body);
+      if (r.suggestedText) {
+        setAnchorDraft(r.suggestedText);
+      } else {
+        setAnchorError('A IA não retornou texto. Tente de novo ou escreva manualmente.');
+      }
+    } catch {
+      setAnchorError('Não foi possível sugerir o texto. Verifique a sessão e tente de novo.');
+    } finally {
+      setSuggestLoading(false);
+    }
+  };
+
+  const registerAnchor = async () => {
+    if (!camp || !adg || !ad) return;
+    const text = anchorDraft.trim();
+    if (!text) {
+      setAnchorError('Digite ou sugira a mensagem que irá no anúncio antes de registrar.');
+      return;
+    }
+    setRegisterLoading(true);
+    setAnchorError(null);
+    setRegisterOk(false);
+    try {
+      const baseBody = {
+        anchorText: text,
+        utmCampaign: camp,
+        utmContent: ad,
+        utmTerm: adg,
+      };
+      const body =
+        ctx.platform === 'META'
+          ? { ...baseBody, utmSource: 'facebook', utmMedium: 'paid_social' }
+          : { ...baseBody, utmSource: 'google', utmMedium: 'cpc' };
+      await marketingService.createLeadAttributionAnchor(body);
+      setRegisterOk(true);
+      onCopied();
+    } catch {
+      setAnchorError('Não foi possível registrar a âncora. Verifique a sessão e tente de novo.');
+    } finally {
+      setRegisterLoading(false);
+    }
+  };
+
+  const SemanticAnchorBlock = (
+    <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-4 space-y-3">
+      <p className="text-xs font-bold text-violet-900 uppercase tracking-wide">
+        Mensagem para anúncio Click-to-WhatsApp
+      </p>
+      <p className="text-xs text-violet-800/90">
+        Cole no Meta (ou escreva algo muito parecido) a mesma frase que você registrar aqui. O sistema usa{' '}
+        <strong>similaridade semântica</strong> com o texto salvo — não precisa ser cópia byte a byte, nem código{' '}
+        <code className="font-mono bg-white/80 px-1 rounded">ref:</code>.
+      </p>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <button
+          type="button"
+          disabled={incomplete || suggestLoading}
+          onClick={() => void suggestAnchorMessage()}
+          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-violet-600 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50 hover:bg-violet-700 transition-colors"
+        >
+          {suggestLoading ? <Loader2 className="animate-spin" size={16} /> : null}
+          Sugerir mensagem (IA)
+        </button>
+      </div>
+      <label className="text-[10px] font-bold text-gray-500 block">Texto que vai no anúncio (editável)</label>
+      <textarea
+        value={anchorDraft}
+        onChange={(e) => setAnchorDraft(e.target.value)}
+        rows={4}
+        placeholder="Ex.: Vi o anúncio da promoção no Instagram e quero saber mais."
+        className="w-full px-3 py-2 rounded-xl border border-violet-100 text-sm text-gray-900 focus:ring-2 focus:ring-violet-500/20 outline-none resize-y min-h-[5rem]"
+      />
+      <button
+        type="button"
+        disabled={incomplete || registerLoading}
+        onClick={() => void registerAnchor()}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50 hover:bg-slate-900 transition-colors"
+      >
+        {registerLoading ? <Loader2 className="animate-spin" size={16} /> : null}
+        Registrar mensagem e UTM
+      </button>
+      {anchorError ? <p className="text-xs text-red-600 font-medium">{anchorError}</p> : null}
+      {registerOk ? (
+        <p className="text-xs text-emerald-700 font-medium">Âncora registrada. Use essa mensagem (ou muito parecida) no criativo.</p>
+      ) : null}
+    </div>
+  );
 
   return (
     <Modal
@@ -151,6 +277,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
 
         {ctx.platform === 'META' && metaFullLanding && metaQueryFilled && (
           <div className="space-y-3">
+            {SemanticAnchorBlock}
             {companyId && metaWaHop ? (
               <CopyRow label="Link → WhatsApp (/w/)" value={metaWaHop} onCopied={onCopied} emphasis />
             ) : (
@@ -165,6 +292,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
 
         {ctx.platform === 'GOOGLE' && googleFullLanding && googleQueryFilled && (
           <div className="space-y-3">
+            {SemanticAnchorBlock}
             {companyId && googleWaHop ? (
               <CopyRow label="Link → WhatsApp (/w/)" value={googleWaHop} onCopied={onCopied} emphasis />
             ) : (
@@ -172,7 +300,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
                 Link direto ao WhatsApp (/w/) aparece quando o usuário tem empresa vinculada (UUID em <code className="font-mono">?c=</code>).
               </div>
             )}
-            <CopyRow label="Link da landing (/)" value={metaFullLanding} onCopied={onCopied} />
+            <CopyRow label="Link da landing (/)" value={googleFullLanding} onCopied={onCopied} />
             <CopyRow label="Só os parâmetros UTM" value={googleQueryFilled} onCopied={onCopied} />
           </div>
         )}

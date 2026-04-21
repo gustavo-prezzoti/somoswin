@@ -1,6 +1,13 @@
 package com.backend.winai.controller;
 
+import com.backend.winai.dto.marketing.CreateLeadAttributionAnchorRequest;
+import com.backend.winai.dto.marketing.CreateWhatsappAttributionTokenRequest;
 import com.backend.winai.dto.marketing.AiRecommendationDTO;
+import com.backend.winai.dto.marketing.LeadAttributionAnchorResponse;
+import com.backend.winai.dto.marketing.LeadAttributionMessageSuggestRequest;
+import com.backend.winai.dto.marketing.LeadAttributionMessageSuggestResponse;
+import com.backend.winai.dto.marketing.PatchLeadAttributionAnchorRequest;
+import com.backend.winai.dto.marketing.WhatsappAttributionTokenResponse;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
 import com.backend.winai.dto.marketing.CreateCampaignRequest;
 import com.backend.winai.dto.marketing.InstagramMetricsResponse;
@@ -15,6 +22,8 @@ import com.backend.winai.service.MetaSyncService;
 import com.backend.winai.service.PaidTrafficService;
 import com.backend.winai.service.PaidTrafficTargetService;
 import com.backend.winai.service.PaidTrafficUtmService;
+import com.backend.winai.service.LeadAttributionAnchorService;
+import com.backend.winai.service.WhatsAppAttributionTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/marketing")
@@ -38,6 +48,8 @@ public class MarketingController {
     private final PaidTrafficService paidTrafficService;
     private final PaidTrafficTargetService paidTrafficTargetService;
     private final PaidTrafficUtmService paidTrafficUtmService;
+    private final WhatsAppAttributionTokenService whatsAppAttributionTokenService;
+    private final LeadAttributionAnchorService leadAttributionAnchorService;
 
     @GetMapping("/metrics")
     public ResponseEntity<TrafficMetricsResponse> getMetrics(
@@ -180,6 +192,44 @@ public class MarketingController {
     @GetMapping("/page-posts")
     public ResponseEntity<List<Map<String, Object>>> getPagePosts(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(marketingService.getPagePosts(user));
+    }
+
+    /**
+     * Legado: token ref:… — preferir POST /lead-attribution-anchors e match semântico no webhook.
+     */
+    @PostMapping("/whatsapp-attribution-token")
+    public ResponseEntity<WhatsappAttributionTokenResponse> createWhatsappAttributionToken(
+            @AuthenticationPrincipal User user,
+            @RequestBody CreateWhatsappAttributionTokenRequest body) {
+        return ResponseEntity.ok(whatsAppAttributionTokenService.create(user, body));
+    }
+
+    @PostMapping("/lead-attribution-anchors")
+    public ResponseEntity<LeadAttributionAnchorResponse> createLeadAttributionAnchor(
+            @AuthenticationPrincipal User user,
+            @RequestBody CreateLeadAttributionAnchorRequest body) {
+        return ResponseEntity.ok(leadAttributionAnchorService.register(user, body));
+    }
+
+    @PostMapping("/lead-attribution-message-suggest")
+    public ResponseEntity<LeadAttributionMessageSuggestResponse> suggestLeadAttributionMessage(
+            @AuthenticationPrincipal User user,
+            @RequestBody LeadAttributionMessageSuggestRequest body) {
+        return ResponseEntity.ok(leadAttributionAnchorService.suggestMessage(user, body));
+    }
+
+    @GetMapping("/lead-attribution-anchors")
+    public ResponseEntity<List<LeadAttributionAnchorResponse>> listLeadAttributionAnchors(
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(leadAttributionAnchorService.list(user));
+    }
+
+    @PatchMapping("/lead-attribution-anchors/{anchorId}")
+    public ResponseEntity<LeadAttributionAnchorResponse> patchLeadAttributionAnchor(
+            @AuthenticationPrincipal User user,
+            @PathVariable UUID anchorId,
+            @RequestBody PatchLeadAttributionAnchorRequest body) {
+        return ResponseEntity.ok(leadAttributionAnchorService.patch(user, anchorId, body));
     }
 
     @GetMapping("/page-whatsapp-number")

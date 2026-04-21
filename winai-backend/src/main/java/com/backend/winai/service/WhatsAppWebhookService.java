@@ -45,6 +45,7 @@ public class WhatsAppWebhookService {
     private final MetricsSyncService metricsSyncService;
     private final FollowUpService followUpService;
     private final OpenAiService openAiService;
+    private final LeadAttributionAnchorService leadAttributionAnchorService;
 
     /**
      * Processa webhook do Uazap recebido via n8n
@@ -106,10 +107,11 @@ public class WhatsAppWebhookService {
                 return;
             }
 
-            // Buscar ou criar lead
+            boolean isFromMe = Boolean.TRUE.equals(webhook.getMessage().getFromMe());
+
             // Buscar ou criar lead
             Lead lead = findOrCreateLead(phoneNumber, contactName, company, messageText,
-                    extractTrackSource(webhook), extractTrackId(webhook));
+                    extractTrackSource(webhook), extractTrackId(webhook), isFromMe);
 
             // Sincronizar foto de perfil da conversa com o lead
             if (conversation.getProfilePictureUrl() != null &&
@@ -120,8 +122,6 @@ public class WhatsAppWebhookService {
             }
 
             // Criar mensagem
-            boolean isFromMe = Boolean.TRUE.equals(webhook.getMessage().getFromMe());
-
             WhatsAppMessage message = WhatsAppMessage.builder()
                     .conversation(conversation)
                     .lead(lead)
@@ -256,7 +256,7 @@ public class WhatsAppWebhookService {
      * Busca ou cria um lead baseado no telefone; preenche track/UTM quando disponíveis (primeira mensagem / webhook).
      */
     private Lead findOrCreateLead(String phoneNumber, String contactName, Company company, String messageText,
-            String trackSource, String trackId) {
+            String trackSource, String trackId, boolean messageFromMe) {
         Optional<Lead> existingLead = leadRepository.findByCompanyOrderByCreatedAtDesc(company).stream()
                 .filter(lead -> lead.getPhone() != null && phonesMatchForLead(phoneNumber, lead.getPhone()))
                 .findFirst();
@@ -284,6 +284,10 @@ public class WhatsAppWebhookService {
             if (utmFromText.isPresent()) {
                 save |= mergeUtmIfEmpty(lead, utmFromText.get());
             }
+            if (!messageFromMe && messageRepository.countInboundByLeadId(lead.getId()) == 0
+                    && needsUtmCampaignForSemantic(lead)) {
+                save |= applySemanticAnchorIfPresent(company, messageText, lead);
+            }
             if (save) {
                 leadRepository.save(lead);
             }
@@ -303,7 +307,31 @@ public class WhatsAppWebhookService {
 
         Lead newLead = lb.build();
         utmFromText.ifPresent(u -> applyUtmToLead(newLead, u));
+        if (!messageFromMe && needsUtmCampaignForSemantic(newLead)) {
+            applySemanticAnchorIfPresent(company, messageText, newLead);
+        }
         return leadRepository.save(newLead);
+    }
+
+    private static boolean needsUtmCampaignForSemantic(Lead lead) {
+        return lead.getUtmCampaign() == null || lead.getUtmCampaign().isBlank();
+    }
+
+    private boolean applySemanticAnchorIfPresent(Company company, String messageText, Lead lead) {
+        if (messageText == null || messageText.isBlank()) {
+            return false;
+        }
+        try {
+            Optional<UtmParseUtil.UtmSnapshot> snap = leadAttributionAnchorService.findBestMatch(company.getId(),
+                    messageText);
+            if (snap.isEmpty()) {
+                return false;
+            }
+            return mergeUtmIfEmpty(lead, snap.get());
+        } catch (Exception e) {
+            log.debug("[SemanticAttr] ignorado: {}", e.getMessage());
+            return false;
+        }
     }
 
     private static boolean mergeUtmIfEmpty(Lead lead, UtmParseUtil.UtmSnapshot u) {
