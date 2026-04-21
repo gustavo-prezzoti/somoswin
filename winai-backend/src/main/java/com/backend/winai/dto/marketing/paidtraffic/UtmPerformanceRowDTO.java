@@ -12,9 +12,9 @@ import lombok.NoArgsConstructor;
 public class UtmPerformanceRowDTO {
     /** Chave interna de agrupamento */
     private String groupKey;
-    /** Texto do badge [ref=...] */
+    /** Badge só quando há track/ref: [ref=...] (sem [utm_campaign=id]) */
     private String refLabel;
-    /** Linha secundária (ex.: campanha • criativo) */
+    /** Nomes resolvidos: campanha • conjunto • anúncio (Meta sync); IDs numéricos viram — se não houver nome */
     private String subtitle;
     private int leads;
     /** CPL em R$ (atribuição proporcional ao gasto Meta no período) */
@@ -24,6 +24,6 @@ public class UtmPerformanceRowDTO {
     /** excelente | bom | atenção */
     private String status;
 
-    /** Nome da campanha Meta quando utm_campaign coincide com meta_id sincronizado */
+    /** Legado; nomes vêm em {@link #subtitle} */
     private String metaCampaignName;
 }

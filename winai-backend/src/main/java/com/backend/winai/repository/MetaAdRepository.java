@@ -13,6 +13,8 @@ import java.util.List;
 public interface MetaAdRepository extends JpaRepository<MetaAd, UUID> {
     Optional<MetaAd> findByMetaId(String metaId);
 
+    Optional<MetaAd> findByCompany_IdAndMetaId(UUID companyId, String metaId);
+
     List<MetaAd> findByCompanyId(UUID companyId);
 
     void deleteByCompany(Company company);

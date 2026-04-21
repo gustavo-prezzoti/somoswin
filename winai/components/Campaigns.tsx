@@ -1249,7 +1249,7 @@ const Campaigns: React.FC = () => {
                 <table className="w-full text-left border-collapse min-w-[720px]">
                   <thead>
                     <tr className="bg-gray-50/50">
-                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Referência UTM [ref=...]</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Anuncio Referência UTM [ref=...]</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Leads</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CPL</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">ROAS</th>
@@ -1260,17 +1260,14 @@ const Campaigns: React.FC = () => {
                     {utmPerformance.rows.map((item) => (
                       <tr key={item.groupKey} className="hover:bg-gray-50/50 transition-colors group">
                         <td className="px-6 py-5">
-                          <div className="flex flex-col">
-                            <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 w-fit mb-1 break-all max-w-md">
-                              {item.refLabel}
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                          <div className="flex flex-col gap-1">
+                            {item.refLabel ? (
+                              <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 w-fit break-all max-w-md">
+                                {item.refLabel}
+                              </span>
+                            ) : null}
+                            <span className="text-xs text-slate-700 font-semibold normal-case tracking-normal leading-snug max-w-md">
                               {item.subtitle}
-                              {item.metaCampaignName ? (
-                                <span className="block mt-0.5 text-indigo-500 normal-case font-semibold">
-                                  Campanha Meta: {item.metaCampaignName}
-                                </span>
-                              ) : null}
                             </span>
                           </div>
                         </td>
