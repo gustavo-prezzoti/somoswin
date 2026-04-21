@@ -28,8 +28,12 @@ const DATE_PRESET_OPTIONS = [
   'Personalizado',
 ] as const;
 
-function formatYmd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+/** Data civil local (evita deslocar um dia com toISOString/UTC). */
+function formatYmdLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function computePresetDates(
@@ -37,9 +41,9 @@ function computePresetDates(
   bounds: MetricsDateRange
 ): { start: string; end: string } {
   const minBound = new Date(bounds.minDate + 'T12:00:00');
-  const maxBound = new Date(bounds.maxDate + 'T12:00:00');
-  const today = new Date();
-  const end = new Date(Math.min(maxBound.getTime(), today.getTime()));
+  const now = new Date();
+  // Fim = hoje (local). Não usar min(maxBound, hoje): o último dia com insight Meta costuma ser ontem e escondia leads/UTM criados hoje. O backend continua limitando gasto Meta ao maxDate.
+  let end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let start = new Date(end);
 
   if (preset === 'Últimos 7 dias') start.setDate(start.getDate() - 6);
@@ -50,7 +54,7 @@ function computePresetDates(
   } else if (preset === 'Mês Passado') {
     const lastDayPrev = new Date(end.getFullYear(), end.getMonth(), 0);
     const firstDayPrev = new Date(lastDayPrev.getFullYear(), lastDayPrev.getMonth(), 1);
-    return { start: formatYmd(firstDayPrev), end: formatYmd(lastDayPrev) };
+    return { start: formatYmdLocal(firstDayPrev), end: formatYmdLocal(lastDayPrev) };
   } else if (preset === 'Este Trimestre') {
     const q = Math.floor(end.getMonth() / 3);
     start = new Date(end.getFullYear(), q * 3, 1);
@@ -58,9 +62,11 @@ function computePresetDates(
     start.setDate(start.getDate() - 29);
   }
 
-  if (start < minBound) start = minBound;
+  if (start < minBound) {
+    start = new Date(minBound.getFullYear(), minBound.getMonth(), minBound.getDate());
+  }
   if (start > end) start = new Date(end);
-  return { start: formatYmd(start), end: formatYmd(end) };
+  return { start: formatYmdLocal(start), end: formatYmdLocal(end) };
 }
 
 const Campaigns: React.FC = () => {

@@ -211,8 +211,7 @@ public class WhatsAppWebhookService {
             String imageUrl) {
         try {
             if (!aiAgentService.isAIEnabledForConversation(conversation)) {
-                log.info("IA não vai responder ao lead: conversa {} (empresa {}). Verifique: 1) Chave OpenAI configurada, 2) Base de Conhecimento ativa vinculada à conexão WhatsApp.",
-                        conversation.getId(), company.getId());
+                // Motivo específico já logado em AIAgentService.isAIEnabledForConversation (modo humano, OpenAI, base, etc.)
                 return;
             }
 
