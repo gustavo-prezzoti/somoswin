@@ -1220,11 +1220,6 @@ const Campaigns: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-slate-800 tracking-tight">Performance por Referência UTM</h3>
-                  <p className="text-sm text-gray-500 font-medium">
-                    Análise de conversão baseada nos parâmetros de rastreamento e leads do funil. Para montar os links nos
-                    anúncios, use o ícone de link na lista <strong>Tráfego Pago → Anúncios</strong> (com campanha e
-                    conjunto já escolhidos).
-                  </p>
                 </div>
               </div>
               {!utmLoading && utmPerformance && utmPerformance.rows.length > 0 && utmPerformance.bestRoas > 0 && (
