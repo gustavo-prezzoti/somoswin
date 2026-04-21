@@ -146,6 +146,10 @@ public class Company {
     @Column(name = "city_state", length = 255)
     private String cityState;
 
+    /** JSON: títulos customizados das colunas do funil CRM (chaves = LeadStatus.name()). */
+    @Column(name = "crm_kanban_column_titles", columnDefinition = "TEXT")
+    private String crmKanbanColumnTitles;
+
     // Método auxiliar para verificar se os campos obrigatórios estão preenchidos
     public boolean hasRequiredContractFields() {
         return contratante != null && !contratante.trim().isEmpty()

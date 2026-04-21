@@ -126,7 +126,33 @@ export function normalizeLeadData(raw: LeadData): LeadData {
 // Service
 // ============================================
 
+/** Títulos customizados das colunas do Kanban (empresa) — chaves = LeadStatusType. */
+export type CrmKanbanColumnTitles = Partial<Record<LeadStatusType, string>>;
+
+function normalizeKanbanTitlesPayload(raw: Record<string, string> | undefined | null): CrmKanbanColumnTitles {
+    const out: CrmKanbanColumnTitles = {};
+    if (!raw) return out;
+    for (const [k, v] of Object.entries(raw)) {
+        if (KANBAN_COLUMN_ORDER.includes(k as LeadStatusType) && typeof v === 'string' && v.trim()) {
+            out[k as LeadStatusType] = v.trim();
+        }
+    }
+    return out;
+}
+
 export const leadService = {
+    async getKanbanColumnTitles(): Promise<CrmKanbanColumnTitles> {
+        const r = await httpClient.get<{ titles: Record<string, string> }>('/leads/kanban-column-titles');
+        return normalizeKanbanTitlesPayload(r.titles);
+    },
+
+    async updateKanbanColumnTitles(titles: CrmKanbanColumnTitles): Promise<CrmKanbanColumnTitles> {
+        const r = await httpClient.put<{ titles: Record<string, string> }>('/leads/kanban-column-titles', {
+            titles,
+        });
+        return normalizeKanbanTitlesPayload(r.titles);
+    },
+
     async getAllLeads(): Promise<LeadData[]> {
         const data = await httpClient.get<LeadData[]>('/leads');
         return data.map(normalizeLeadData);

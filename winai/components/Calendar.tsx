@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock, User, Loader2, AlertCircle, RefreshCw, Trash2, Edit2, X, Save, Users, Mail, Crown, Check, HelpCircle, XCircle, ExternalLink, MapPin } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -53,6 +54,7 @@ const StatusBadge = ({ status }: { status: MeetingStatusType }) => {
 
 
 const MeetingCalendar: React.FC = () => {
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [meetings, setMeetings] = useState<MeetingData[]>([]);
@@ -61,6 +63,8 @@ const MeetingCalendar: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(true); // Verificação inicial
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
 
   // ... existing states ...
 
@@ -222,6 +226,21 @@ const MeetingCalendar: React.FC = () => {
     setSelectedDate(new Date());
   };
 
+  const handleConnectGoogleCalendar = async () => {
+    setGoogleAuthError(null);
+    setIsConnectingGoogle(true);
+    try {
+      await googleDriveService.authorize();
+    } catch (e) {
+      console.error('Failed to start Google OAuth', e);
+      setGoogleAuthError(
+        'Não foi possível abrir a autorização do Google. Confira sua sessão ou tente em Configurações → Integrações.'
+      );
+    } finally {
+      setIsConnectingGoogle(false);
+    }
+  };
+
   const getMeetingsForDate = (date: Date) => {
     return meetings.filter(m => isSameDay(parseISO(m.meetingDate), date));
   };
@@ -271,11 +290,32 @@ const MeetingCalendar: React.FC = () => {
             <p className="text-gray-500 mb-8 font-medium">
               Para gerenciar sua agenda comercial e permitir que a IA agende reuniões, conecte seu Google Calendar.
             </p>
+            {googleAuthError && (
+              <p className="text-sm text-red-600 mb-4 font-medium text-left" role="alert">
+                {googleAuthError}
+              </p>
+            )}
             <button
-              onClick={() => window.location.hash = '#/configuracoes'}
-              className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 uppercase text-xs tracking-widest"
+              type="button"
+              onClick={handleConnectGoogleCalendar}
+              disabled={isConnectingGoogle}
+              className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 uppercase text-xs tracking-widest disabled:opacity-60 disabled:pointer-events-none inline-flex items-center justify-center gap-2"
             >
-              Conectar Google Calendar
+              {isConnectingGoogle ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  Abrindo Google…
+                </>
+              ) : (
+                'Conectar Google Calendar'
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/configuracoes')}
+              className="mt-4 text-[11px] font-bold text-gray-500 hover:text-gray-700 uppercase tracking-widest"
+            >
+              Ou abrir Configurações
             </button>
           </div>
         </div>

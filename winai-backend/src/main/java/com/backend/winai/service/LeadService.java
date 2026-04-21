@@ -6,12 +6,16 @@ import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Lead;
 import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.entity.WhatsAppConversation;
+import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.MeetingRepository;
 import com.backend.winai.repository.WhatsAppBroadcastRecipientRepository;
 import com.backend.winai.repository.FollowUpStatusRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +39,11 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class LeadService {
 
+    private static final int CRM_KANBAN_TITLE_MAX_LEN = 40;
+
     private final LeadRepository leadRepository;
+    private final CompanyRepository companyRepository;
+    private final ObjectMapper objectMapper;
     private final WhatsAppMessageRepository messageRepository;
     private final WhatsAppConversationRepository conversationRepository;
     private final MeetingRepository meetingRepository;
@@ -87,6 +96,93 @@ public class LeadService {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return leadRepository.searchByCompany(company, search, pageable)
                 .map(this::toResponse);
+    }
+
+    /**
+     * Títulos personalizados das colunas do Kanban CRM (por empresa). Chaves = LeadStatus.name().
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> getCrmKanbanColumnTitles(Company company) {
+        return companyRepository.findById(company.getId())
+                .map(this::parseCrmKanbanColumnTitles)
+                .orElseGet(LinkedHashMap::new);
+    }
+
+    private Map<String, String> parseCrmKanbanColumnTitles(Company c) {
+        String raw = c.getCrmKanbanColumnTitles();
+        if (raw == null || raw.isBlank()) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            Map<String, String> parsed = objectMapper.readValue(raw, new TypeReference<Map<String, String>>() {});
+            Map<String, String> out = new LinkedHashMap<>();
+            for (Map.Entry<String, String> e : parsed.entrySet()) {
+                try {
+                    LeadStatus st = LeadStatus.valueOf(e.getKey().trim().toUpperCase());
+                    if (e.getValue() == null) {
+                        continue;
+                    }
+                    String t = e.getValue().trim();
+                    if (t.isEmpty()) {
+                        continue;
+                    }
+                    if (t.length() > CRM_KANBAN_TITLE_MAX_LEN) {
+                        t = t.substring(0, CRM_KANBAN_TITLE_MAX_LEN);
+                    }
+                    out.put(st.name(), t);
+                } catch (IllegalArgumentException ignored) {
+                    // ignora chave inválida
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            return new LinkedHashMap<>();
+        }
+    }
+
+    /**
+     * Persiste títulos customizados; remove entradas iguais ao padrão; mapa vazio limpa o JSON.
+     */
+    @Transactional
+    public Map<String, String> updateCrmKanbanColumnTitles(Company company, Map<String, String> titles) {
+        Company c = companyRepository.findById(company.getId())
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        Map<String, String> cleaned = new LinkedHashMap<>();
+        if (titles != null) {
+            for (Map.Entry<String, String> e : titles.entrySet()) {
+                try {
+                    LeadStatus st = LeadStatus.valueOf(e.getKey().trim().toUpperCase());
+                    if (e.getValue() == null) {
+                        continue;
+                    }
+                    String t = e.getValue().trim();
+                    if (t.isEmpty()) {
+                        continue;
+                    }
+                    if (t.length() > CRM_KANBAN_TITLE_MAX_LEN) {
+                        t = t.substring(0, CRM_KANBAN_TITLE_MAX_LEN);
+                    }
+                    String def = STATUS_LABELS.get(st);
+                    if (def != null && t.equals(def)) {
+                        continue;
+                    }
+                    cleaned.put(st.name(), t);
+                } catch (IllegalArgumentException ignored) {
+                    // ignora chave inválida
+                }
+            }
+        }
+        try {
+            if (cleaned.isEmpty()) {
+                c.setCrmKanbanColumnTitles(null);
+            } else {
+                c.setCrmKanbanColumnTitles(objectMapper.writeValueAsString(cleaned));
+            }
+            companyRepository.save(c);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Erro ao salvar títulos do CRM", e);
+        }
+        return cleaned;
     }
 
     /**

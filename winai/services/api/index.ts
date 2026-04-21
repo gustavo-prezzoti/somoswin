@@ -17,7 +17,7 @@ export { consultancyService } from './consultancy.service';
 export { intelligentListeningService } from './intelligent-listening.service';
 export type { IntelligentListeningSession } from './intelligent-listening.service';
 export type { DashboardData, MetricCard, ChartDataPoint, GoalDTO, InsightDTO, CreateGoalRequest } from './dashboard.service';
-export type { LeadData, LeadRequest, LeadStatusType, PagedResponse } from './lead.service';
+export type { LeadData, LeadRequest, LeadStatusType, PagedResponse, CrmKanbanColumnTitles } from './lead.service';
 export type { MeetingData, MeetingRequest, MeetingStatusType, CalendarData, CalendarStats, MeetingAttendee } from './meeting.service';
 export type { TrafficMetrics, MetricDetail, DailyPerformance, CreateCampaignRequest, AdItemRequest, PagePost, CampaignListItem, CampaignsListResponse, AiRecommendation, MetricsDateRange, PaidTrafficOverview, PaidTrafficKpiCard, PaidTrafficPlatform, UtmPerformanceResponse, UtmPerformanceRow } from './marketing.service';
 export type { DriveFile, DriveConnectionStatus } from './google-drive.service';

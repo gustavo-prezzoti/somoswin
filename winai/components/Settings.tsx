@@ -414,6 +414,7 @@ const Settings: React.FC = () => {
       await googleDriveService.authorize();
     } catch (error) {
       console.error('Failed to authorize google', error);
+      showToast(getErrorMessage(error) || 'Não foi possível iniciar a conexão com o Google.', 'error');
     }
   };
 

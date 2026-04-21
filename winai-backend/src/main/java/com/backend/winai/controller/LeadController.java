@@ -1,6 +1,8 @@
 package com.backend.winai.controller;
 
+import com.backend.winai.dto.request.CrmKanbanColumnTitlesRequest;
 import com.backend.winai.dto.request.LeadRequest;
+import com.backend.winai.dto.response.CrmKanbanColumnTitlesResponse;
 import com.backend.winai.dto.response.LeadResponse;
 import com.backend.winai.dto.response.MessageResponse;
 import com.backend.winai.entity.User;
@@ -14,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -23,6 +26,38 @@ public class LeadController {
 
     private final LeadService leadService;
     private final UserRepository userRepository;
+
+    /**
+     * GET /api/v1/leads/kanban-column-titles
+     * Títulos personalizados das colunas do funil CRM (empresa do usuário).
+     */
+    @GetMapping("/kanban-column-titles")
+    public ResponseEntity<CrmKanbanColumnTitlesResponse> getKanbanColumnTitles(@AuthenticationPrincipal User user) {
+        User userWithCompany = getUserWithCompany(user);
+        if (userWithCompany.getCompany() == null) {
+            return ResponseEntity.ok(new CrmKanbanColumnTitlesResponse(Map.of()));
+        }
+        return ResponseEntity.ok(new CrmKanbanColumnTitlesResponse(
+                leadService.getCrmKanbanColumnTitles(userWithCompany.getCompany())));
+    }
+
+    /**
+     * PUT /api/v1/leads/kanban-column-titles
+     * Salva títulos customizados (chaves = LeadStatus em maiúsculas; omitir ou igual ao padrão remove).
+     */
+    @PutMapping("/kanban-column-titles")
+    public ResponseEntity<CrmKanbanColumnTitlesResponse> updateKanbanColumnTitles(
+            @AuthenticationPrincipal User user,
+            @RequestBody(required = false) CrmKanbanColumnTitlesRequest body) {
+        User userWithCompany = getUserWithCompany(user);
+        if (userWithCompany.getCompany() == null) {
+            throw new RuntimeException("Usuário não possui empresa associada");
+        }
+        Map<String, String> saved = leadService.updateCrmKanbanColumnTitles(
+                userWithCompany.getCompany(),
+                body != null ? body.getTitles() : null);
+        return ResponseEntity.ok(new CrmKanbanColumnTitlesResponse(saved));
+    }
 
     /**
      * GET /api/v1/leads

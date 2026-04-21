@@ -40,11 +40,8 @@ import {
 } from '../services';
 import { ConfirmModal, BodyPortal } from './ui';
 
-const kanbanColumns = KANBAN_COLUMN_ORDER.map((id) => ({
-  id,
-  label: LEAD_STATUS_LABELS[id],
-  color: KANBAN_COLUMN_COLORS[id],
-}));
+/** Limite de caracteres para o título exibido em cada coluna do Kanban (alinhado ao backend). */
+const CRM_COLUMN_TITLE_MAX = 40;
 
 function daysSince(dateStr: string): number {
   if (!dateStr) return 0;
@@ -53,11 +50,11 @@ function daysSince(dateStr: string): number {
   return Math.max(0, Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
-const StatusBadge = ({ status }: { status: LeadStatusType }) => {
+const StatusBadge = ({ status, label }: { status: LeadStatusType; label?: string }) => {
   const style = LEAD_STATUS_STYLES[status] || 'bg-gray-50 text-gray-600 border-gray-100';
-  const label = LEAD_STATUS_LABELS[status] || status;
+  const display = label ?? LEAD_STATUS_LABELS[status] ?? status;
   return (
-    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${style}`}>{label}</span>
+    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${style}`}>{display}</span>
   );
 };
 
@@ -126,6 +123,25 @@ const CRM: React.FC = () => {
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [columnTitles, setColumnTitles] = useState<Partial<Record<LeadStatusType, string>>>({});
+  const [columnTitleModal, setColumnTitleModal] = useState<{ status: LeadStatusType; draft: string } | null>(null);
+  const [columnTitlesSaving, setColumnTitlesSaving] = useState(false);
+
+  const labelForStatus = useCallback(
+    (s: LeadStatusType) => columnTitles[s]?.trim() || LEAD_STATUS_LABELS[s],
+    [columnTitles]
+  );
+
+  const kanbanColumns = useMemo(
+    () =>
+      KANBAN_COLUMN_ORDER.map((id) => ({
+        id,
+        label: labelForStatus(id),
+        color: KANBAN_COLUMN_COLORS[id],
+      })),
+    [labelForStatus]
+  );
+
   const [newLeadForm, setNewLeadForm] = useState<LeadRequest>({
     name: '',
     email: '',
@@ -141,12 +157,29 @@ const CRM: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await leadService.getAllLeads();
+      const [data, titles] = await Promise.all([
+        leadService.getAllLeads(),
+        leadService.getKanbanColumnTitles().catch(() => ({} as Partial<Record<LeadStatusType, string>>)),
+      ]);
       setLeads(data);
+      setColumnTitles(titles);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar leads');
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const persistColumnTitles = useCallback(async (next: Partial<Record<LeadStatusType, string>>) => {
+    setColumnTitlesSaving(true);
+    try {
+      const saved = await leadService.updateKanbanColumnTitles(next);
+      setColumnTitles(saved);
+      setColumnTitleModal(null);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Erro ao salvar títulos das colunas.');
+    } finally {
+      setColumnTitlesSaving(false);
     }
   }, []);
 
@@ -421,11 +454,25 @@ const CRM: React.FC = () => {
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, col.id)}
             >
-              <div className="flex items-center justify-between px-2">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${col.color}`} />
-                  <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-[0.2em]">{col.label}</h3>
-                  <span className="bg-gray-100 text-gray-400 text-[10px] font-black px-2 py-0.5 rounded-full">
+              <div className="flex items-center justify-between px-2 gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className={`w-2 h-2 rounded-full ${col.color} shrink-0`} />
+                  <h3
+                    className="text-[10px] font-black text-gray-800 uppercase tracking-[0.2em] truncate min-w-0"
+                    title={col.label}
+                  >
+                    {col.label}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setColumnTitleModal({ status: col.id, draft: labelForStatus(col.id) })}
+                    className="p-1.5 rounded-lg text-gray-300 hover:text-emerald-600 hover:bg-emerald-50 transition-colors shrink-0"
+                    title="Editar nome da coluna"
+                    aria-label={`Editar título da coluna ${col.label}`}
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <span className="bg-gray-100 text-gray-400 text-[10px] font-black px-2 py-0.5 rounded-full shrink-0">
                     {filteredLeads.filter((l) => l.status === col.id).length}
                   </span>
                 </div>
@@ -436,7 +483,8 @@ const CRM: React.FC = () => {
                     setNewLeadForm((prev) => ({ ...prev, status: col.id }));
                     setShowNewLeadModal(true);
                   }}
-                  className="text-gray-300 hover:text-gray-600 transition-colors"
+                  className="text-gray-300 hover:text-gray-600 transition-colors shrink-0"
+                  title="Novo lead nesta coluna"
                 >
                   <Plus size={16} />
                 </button>
@@ -583,7 +631,7 @@ const CRM: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-8 py-6">
-                    <StatusBadge status={lead.status} />
+                    <StatusBadge status={lead.status} label={labelForStatus(lead.status)} />
                   </td>
                   <td className="px-8 py-6">
                     <span className="text-sm font-black text-emerald-600 tracking-tight">
@@ -667,7 +715,7 @@ const CRM: React.FC = () => {
                   <div className="min-w-0">
                     <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic truncate">{selectedLead.name}</h2>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <StatusBadge status={selectedLead.status} />
+                      <StatusBadge status={selectedLead.status} label={labelForStatus(selectedLead.status)} />
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">• {selectedLead.source || '—'}</span>
                     </div>
                   </div>
@@ -943,7 +991,7 @@ const CRM: React.FC = () => {
                       >
                         {KANBAN_COLUMN_ORDER.map((st) => (
                           <option key={st} value={st}>
-                            {LEAD_STATUS_LABELS[st]}
+                            {labelForStatus(st)}
                           </option>
                         ))}
                       </select>
@@ -1089,7 +1137,7 @@ const CRM: React.FC = () => {
                   >
                     {KANBAN_COLUMN_ORDER.map((st) => (
                       <option key={st} value={st}>
-                        {LEAD_STATUS_LABELS[st]}
+                        {labelForStatus(st)}
                       </option>
                     ))}
                   </select>
@@ -1121,6 +1169,99 @@ const CRM: React.FC = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {columnTitleModal && (
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto min-h-0">
+          <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl border border-gray-100 p-8 md:p-10 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em] mb-1">CRM · Kanban</p>
+                <h2 className="text-xl font-black text-gray-900 tracking-tight uppercase italic">Nome da coluna</h2>
+                <p className="text-xs text-gray-500 mt-2 font-medium">
+                  Este nome aparece no funil, nos cards e nos formulários. É salvo na sua empresa no servidor. Deixe em
+                  branco e salve para restaurar o padrão.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setColumnTitleModal(null)}
+                className="p-2 text-gray-400 hover:text-gray-900 rounded-xl hover:bg-gray-50 transition-colors shrink-0"
+                aria-label="Fechar"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="crm-column-title" className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
+                Título (máx. {CRM_COLUMN_TITLE_MAX} caracteres)
+              </label>
+              <input
+                id="crm-column-title"
+                type="text"
+                maxLength={CRM_COLUMN_TITLE_MAX}
+                disabled={columnTitlesSaving}
+                value={columnTitleModal.draft}
+                onChange={(e) =>
+                  setColumnTitleModal((m) =>
+                    m ? { ...m, draft: e.target.value.slice(0, CRM_COLUMN_TITLE_MAX) } : null
+                  )
+                }
+                className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-bold text-sm disabled:opacity-60"
+                placeholder={LEAD_STATUS_LABELS[columnTitleModal.status]}
+                autoFocus
+              />
+              <div className="flex justify-between items-center px-1 pt-1">
+                <span className="text-[10px] text-gray-400 font-bold">
+                  Padrão: {LEAD_STATUS_LABELS[columnTitleModal.status]}
+                </span>
+                <span className="text-[10px] font-black text-gray-400 tabular-nums">
+                  {columnTitleModal.draft.length}/{CRM_COLUMN_TITLE_MAX}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 mt-8">
+              <button
+                type="button"
+                disabled={columnTitlesSaving}
+                onClick={() => {
+                  const st = columnTitleModal.status;
+                  const next = { ...columnTitles };
+                  delete next[st];
+                  void persistColumnTitles(next);
+                }}
+                className="flex-1 px-6 py-4 border border-gray-200 text-gray-600 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                Restaurar padrão
+              </button>
+              <button
+                type="button"
+                disabled={columnTitlesSaving}
+                onClick={() => setColumnTitleModal(null)}
+                className="flex-1 px-6 py-4 border border-gray-100 text-gray-400 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={columnTitlesSaving}
+                onClick={() => {
+                  const trimmed = columnTitleModal.draft.trim();
+                  const def = LEAD_STATUS_LABELS[columnTitleModal.status];
+                  const st = columnTitleModal.status;
+                  const next = { ...columnTitles };
+                  if (!trimmed || trimmed === def) delete next[st];
+                  else next[st] = trimmed.slice(0, CRM_COLUMN_TITLE_MAX);
+                  void persistColumnTitles(next);
+                }}
+                className="flex-1 px-6 py-4 bg-emerald-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {columnTitlesSaving ? <Loader2 size={16} className="animate-spin" /> : null}
+                Salvar
+              </button>
             </div>
           </div>
         </div>
