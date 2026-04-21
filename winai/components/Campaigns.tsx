@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   DollarSign, Eye, MousePointerClick, Play, Plus, Minus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, AlertTriangle, FileText, ChevronRight, Zap, ArrowUpRight, ArrowDownRight,
-  Calendar, Search, Filter, MoreHorizontal, Copy, Pause, Trash2,
+  Calendar, Search, Filter, MoreHorizontal, Copy, Pause, Trash2, Link2,
 } from 'lucide-react';
+import UtmAdTrackingModal from './UtmAdTrackingModal';
+import type { UtmAdTrackingContext } from './UtmAdTrackingModal';
 import { marketingService, CreateCampaignRequest, AdItemRequest, PagePost, CampaignListItem } from '../services';
 import type { MetricsDateRange, PaidTrafficOverview, PaidTrafficPlatform, UtmPerformanceResponse } from '../services/api/marketing.service';
 import {
@@ -92,6 +94,10 @@ const Campaigns: React.FC = () => {
   const [paidOverviewLoading, setPaidOverviewLoading] = useState(false);
   const [drillCampaignId, setDrillCampaignId] = useState<string | null>(null);
   const [drillAdSetId, setDrillAdSetId] = useState<string | null>(null);
+  const [drillCampaignLabel, setDrillCampaignLabel] = useState('');
+  const [drillAdSetLabel, setDrillAdSetLabel] = useState('');
+  const [utmAdModalOpen, setUtmAdModalOpen] = useState(false);
+  const [utmAdModalCtx, setUtmAdModalCtx] = useState<UtmAdTrackingContext | null>(null);
   const [showBudgetPace, setShowBudgetPace] = useState(false);
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
   const [googleAdsCustomerId, setGoogleAdsCustomerId] = useState('');
@@ -433,6 +439,8 @@ const Campaigns: React.FC = () => {
   useEffect(() => {
     setDrillCampaignId(null);
     setDrillAdSetId(null);
+    setDrillCampaignLabel('');
+    setDrillAdSetLabel('');
   }, [activePlatform]);
 
   useEffect(() => {
@@ -1004,7 +1012,12 @@ const Campaigns: React.FC = () => {
                             <button
                               type="button"
                               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${!drillCampaignId ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 hover:bg-gray-50'}`}
-                              onClick={() => { setDrillCampaignId(null); setDrillAdSetId(null); }}
+                              onClick={() => {
+                                setDrillCampaignId(null);
+                                setDrillAdSetId(null);
+                                setDrillCampaignLabel('');
+                                setDrillAdSetLabel('');
+                              }}
                             >
                               Campanhas
                             </button>
@@ -1013,7 +1026,11 @@ const Campaigns: React.FC = () => {
                               type="button"
                               disabled={!drillCampaignId}
                               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${drillCampaignId && !drillAdSetId ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 hover:bg-gray-50 disabled:opacity-50'}`}
-                              onClick={() => drillCampaignId && setDrillAdSetId(null)}
+                              onClick={() => {
+                                if (!drillCampaignId) return;
+                                setDrillAdSetId(null);
+                                setDrillAdSetLabel('');
+                              }}
                             >
                               Conjuntos
                             </button>
@@ -1062,7 +1079,14 @@ const Campaigns: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  {paidOverview.connected && !paidOverviewLoading && (
+                    {paidOverview.connected && !paidOverviewLoading && paidOverview.tableLevel === 'ADS' && (
+                      <p className="text-xs text-gray-500 font-medium px-1 pb-3 flex items-center gap-2">
+                        <Link2 size={14} className="text-indigo-500 shrink-0" />
+                        Em cada <strong>anúncio</strong>, use o ícone de link à direita para gerar UTMs já com campanha e
+                        conjunto desta navegação.
+                      </p>
+                    )}
+                    {paidOverview.connected && !paidOverviewLoading && (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[1000px]">
                       <thead>
@@ -1085,13 +1109,15 @@ const Campaigns: React.FC = () => {
                               key={row.id}
                               className="hover:bg-gray-50/50 transition-colors cursor-pointer group"
                               onClick={() => {
-                                if (activePlatform !== 'META') return;
                                 const lv = String(row.level ?? '').toUpperCase();
                                 if (lv === 'CAMPAIGN') {
                                   setDrillCampaignId(String(row.id).trim());
                                   setDrillAdSetId(null);
+                                  setDrillCampaignLabel(row.name || '');
+                                  setDrillAdSetLabel('');
                                 } else if (lv === 'ADSET') {
                                   setDrillAdSetId(String(row.id).trim());
+                                  setDrillAdSetLabel(row.name || '');
                                 }
                               }}
                             >
@@ -1128,6 +1154,27 @@ const Campaigns: React.FC = () => {
                                 )}
                                 {paidOverview.tableLevel === 'ADS' && (
                                   <div className="flex items-center justify-end gap-2">
+                                    {String(row.level ?? '').toUpperCase() === 'AD' && (
+                                      <button
+                                        type="button"
+                                        className="p-2 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all"
+                                        title="Gerar UTM para este anúncio (campanha + conjunto + anúncio)"
+                                        onClick={() => {
+                                          setUtmAdModalCtx({
+                                            platform: activePlatform,
+                                            campaignId: drillCampaignId || '',
+                                            campaignName: drillCampaignLabel,
+                                            adSetId: drillAdSetId || '',
+                                            adSetName: drillAdSetLabel,
+                                            adId: String(row.id).trim(),
+                                            adName: row.name || '',
+                                          });
+                                          setUtmAdModalOpen(true);
+                                        }}
+                                      >
+                                        <Link2 size={18} />
+                                      </button>
+                                    )}
                                     <button type="button" className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Duplicar">
                                       <Copy size={16} />
                                     </button>
@@ -1166,7 +1213,11 @@ const Campaigns: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-slate-800 tracking-tight">Performance por Referência UTM</h3>
-                  <p className="text-sm text-gray-500 font-medium">Análise de conversão baseada nos parâmetros de rastreamento e leads do funil</p>
+                  <p className="text-sm text-gray-500 font-medium">
+                    Análise de conversão baseada nos parâmetros de rastreamento e leads do funil. Para montar os links nos
+                    anúncios, use o ícone de link na lista <strong>Tráfego Pago → Anúncios</strong> (com campanha e
+                    conjunto já escolhidos).
+                  </p>
                 </div>
               </div>
               {!utmLoading && utmPerformance && utmPerformance.rows.length > 0 && utmPerformance.bestRoas > 0 && (
@@ -1780,6 +1831,16 @@ const Campaigns: React.FC = () => {
           <ToastComponent key={toast.id} toast={toast} onClose={removeToast} />
         ))}
       </div>
+
+      <UtmAdTrackingModal
+        open={utmAdModalOpen}
+        onClose={() => {
+          setUtmAdModalOpen(false);
+          setUtmAdModalCtx(null);
+        }}
+        ctx={utmAdModalCtx}
+        onCopied={() => showToast('Copiado para a área de transferência', 'success')}
+      />
     </>
   );
 };
