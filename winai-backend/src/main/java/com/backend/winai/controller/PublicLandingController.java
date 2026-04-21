@@ -23,16 +23,19 @@ public class PublicLandingController {
 
     private final WhatsAppCompanyInstancesService whatsAppCompanyInstancesService;
 
+    /**
+     * Sempre 200 quando o UUID é válido — {@code whatsappNumber} vazio significa empresa sem número
+     * (perfil/UAZAP), não “endpoint inexistente”. Evita 404 confundir com deploy antigo ou proxy.
+     */
     @GetMapping("/landing-whatsapp")
     public ResponseEntity<Map<String, String>> getLandingWhatsApp(@RequestParam("companyId") String companyIdRaw) {
         UUID companyId;
         try {
             companyId = UUID.fromString(companyIdRaw);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("whatsappNumber", ""));
         }
-        return whatsAppCompanyInstancesService.resolvePrimaryPhoneDigitsForCompany(companyId)
-                .map(digits -> ResponseEntity.ok(Map.of("whatsappNumber", digits)))
-                .orElse(ResponseEntity.notFound().build());
+        String digits = whatsAppCompanyInstancesService.resolvePrimaryPhoneDigitsForCompany(companyId).orElse("");
+        return ResponseEntity.ok(Map.of("whatsappNumber", digits));
     }
 }

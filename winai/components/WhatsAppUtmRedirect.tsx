@@ -40,6 +40,7 @@ const WhatsAppUtmRedirect: React.FC = () => {
       const attrSearch = searchForAttribution(search || '');
 
       let digits = '';
+      let apiUnreachable = false;
       if (companyId) {
         try {
           const res = await fetch(
@@ -48,9 +49,11 @@ const WhatsAppUtmRedirect: React.FC = () => {
           if (res.ok) {
             const data = (await res.json()) as { whatsappNumber?: string };
             digits = (data.whatsappNumber || '').replace(/\D/g, '');
+          } else {
+            apiUnreachable = true;
           }
         } catch {
-          /* rede / CORS — segue sem dígitos */
+          apiUnreachable = true;
         }
       }
       if (!digits && FALLBACK_WHATSAPP_DIGITS.length >= 10) {
@@ -58,11 +61,19 @@ const WhatsAppUtmRedirect: React.FC = () => {
       }
       if (cancelled) return;
       if (!digits) {
-        setError(
-          companyId
-            ? 'WhatsApp não configurado para esta empresa (perfil ou instância UAZAP).'
-            : 'Falta o identificador da empresa na URL (?c=...). Use o link gerado no app em Campanhas.'
-        );
+        if (companyId && apiUnreachable) {
+          setError(
+            'Não foi possível obter o WhatsApp no servidor. Confirme o deploy do backend (rota GET /api/v1/public/landing-whatsapp) e o valor de VITE_API_URL no front.'
+          );
+        } else if (companyId) {
+          setError(
+            'WhatsApp não configurado para esta empresa. Preencha o WhatsApp no cadastro da empresa ou conecte uma instância UAZAP com número visível na API.'
+          );
+        } else {
+          setError(
+            'Falta o identificador da empresa na URL (?c=...). Use o link gerado no app em Campanhas.'
+          );
+        }
         return;
       }
       const base = 'Olá! Vim pelo anúncio.';
