@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { buildAttributionQueryLineFromSearch } from '../utils/attribution';
+import { buildAttributionQueryLineFromSearch, searchHasTrackingParams } from '../utils/attribution';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
@@ -30,7 +30,7 @@ function searchForAttribution(search: string): string {
  * Rota /w — ex.: https://dominio.com/w?c={companyId}&utm_...&m={mensagem}
  * Com `m=`, o texto enviado ao WhatsApp é só a mensagem legível (sem linha ?utm_ no chat).
  * UTMs na query do /w/ servem para o link gerado no app; a gravação no lead usa âncora semântica + primeira mensagem.
- * Sem `m=`, mantém o comportamento antigo: só a linha ?utm_... no texto (links legados).
+ * Links de campanha (UTM na URL) exigem sempre `m=` com a mensagem do anúncio.
  */
 const WhatsAppUtmRedirect: React.FC = () => {
   const { search } = useLocation();
@@ -47,6 +47,16 @@ const WhatsAppUtmRedirect: React.FC = () => {
       const prefillMessage = prefillRaw != null ? prefillRaw.trim() : '';
 
       const attrSearch = searchForAttribution(search || '');
+      const hasCampaignTracking = searchHasTrackingParams(attrSearch);
+      if (hasCampaignTracking && prefillMessage.length === 0) {
+        if (!cancelled) {
+          setError(
+            'Este link de campanha precisa incluir a mensagem do anúncio. No app, em Campanhas, escreva ou sugira o texto, clique em Registrar mensagem e UTM e use o link gerado.'
+          );
+        }
+        return;
+      }
+
       const message =
         prefillMessage.length > 0
           ? prefillMessage

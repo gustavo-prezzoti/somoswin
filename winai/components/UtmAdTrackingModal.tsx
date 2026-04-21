@@ -119,6 +119,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       : '';
 
   const incomplete = !ctx.campaignId || !ctx.adSetId || !ctx.adId;
+  const hasAnchorText = anchorDraft.trim().length > 0;
 
   const platformLabel = ctx.platform === 'META' ? 'Meta Ads' : 'Google Ads';
 
@@ -223,7 +224,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       />
       <button
         type="button"
-        disabled={incomplete || registerLoading}
+        disabled={incomplete || registerLoading || !hasAnchorText}
         onClick={() => void registerAnchor()}
         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50 hover:bg-slate-900 transition-colors"
       >
@@ -246,7 +247,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
     >
       <div className="space-y-5">
         <p className="text-sm text-gray-600">
-          Defina o <strong className="text-gray-800">texto da primeira mensagem</strong>, registre e copie o <strong className="text-gray-800">link do WhatsApp</strong>.
+          O <strong className="text-gray-800">texto da mensagem do anúncio</strong> é obrigatório: sem ele não dá para registrar a âncora nem gerar o link com UTM.
         </p>
 
         <div>

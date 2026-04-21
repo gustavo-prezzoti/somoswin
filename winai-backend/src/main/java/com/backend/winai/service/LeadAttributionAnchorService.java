@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,7 +39,11 @@ public class LeadAttributionAnchorService {
     @Transactional
     public LeadAttributionAnchorResponse register(User user, CreateLeadAttributionAnchorRequest req) {
         if (req.getAnchorText() == null || req.getAnchorText().isBlank()) {
-            throw new IllegalArgumentException("anchorText é obrigatório");
+            throw new IllegalArgumentException("A mensagem do anúncio (anchorText) é obrigatória.");
+        }
+        String anchorTrimmed = req.getAnchorText().trim();
+        if (anchorTrimmed.length() < 2) {
+            throw new IllegalArgumentException("A mensagem do anúncio deve ter ao menos 2 caracteres.");
         }
         Company company = resolveCompany(user, null);
         if (!hasAnyAttribution(req)) {
@@ -49,7 +54,7 @@ public class LeadAttributionAnchorService {
         LeadAttributionAnchor entity = LeadAttributionAnchor.builder()
                 .id(id)
                 .company(company)
-                .anchorText(req.getAnchorText().trim())
+                .anchorText(anchorTrimmed)
                 .utmSource(trimToNull(req.getUtmSource()))
                 .utmMedium(trimToNull(req.getUtmMedium()))
                 .utmCampaign(trimToNull(req.getUtmCampaign()))
@@ -65,6 +70,12 @@ public class LeadAttributionAnchorService {
         entity = anchorRepository.save(entity);
         List<Double> vector = openAiService.getEmbedding(entity.getAnchorText());
         anchorRepository.updateEmbedding(entity.getId(), vector.toString());
+        log.info(
+                "[SemanticAttr] âncora registrada id={} companyId={} utm_campaign={} textoPreview=\"{}\"",
+                entity.getId(),
+                company.getId(),
+                entity.getUtmCampaign(),
+                previewForLog(entity.getAnchorText()));
         return toResponse(entity);
     }
 
@@ -73,34 +84,75 @@ public class LeadAttributionAnchorService {
      */
     public Optional<UtmParseUtil.UtmSnapshot> findBestMatch(UUID companyId, String inboundMessageText) {
         if (inboundMessageText == null || inboundMessageText.isBlank()) {
+            log.debug("[SemanticAttr] findBestMatch ignorado: texto vazio companyId={}", companyId);
             return Optional.empty();
         }
+        log.info(
+                "[SemanticAttr] findBestMatch início companyId={} minCosine={} inboundPreview=\"{}\"",
+                companyId,
+                String.format(Locale.ROOT, "%.2f", minCosineSimilarity),
+                previewForLog(inboundMessageText));
         try {
             List<Double> q = openAiService.getEmbedding(inboundMessageText.trim());
             String qStr = q.toString();
             List<Object[]> rows = anchorRepository.findTopByCosineSimilarity(companyId, qStr, 2);
             if (rows.isEmpty()) {
+                log.info(
+                        "[SemanticAttr] nenhum candidato (âncoras ativas sem embedding ou tabela vazia) companyId={}",
+                        companyId);
                 return Optional.empty();
             }
             double top1 = toDouble(rows.get(0)[1]);
+            UUID bestId = UUID.fromString((String) rows.get(0)[0]);
             if (top1 < minCosineSimilarity) {
+                log.info(
+                        "[SemanticAttr] abaixo do corte companyId={} melhorAnchorId={} cosineSim={} minRequerido={}",
+                        companyId,
+                        bestId,
+                        String.format(Locale.ROOT, "%.4f", top1),
+                        String.format(Locale.ROOT, "%.4f", minCosineSimilarity));
                 return Optional.empty();
             }
-            UUID anchorId = UUID.fromString((String) rows.get(0)[0]);
+            UUID anchorId = bestId;
             if (rows.size() > 1) {
                 double top2 = toDouble(rows.get(1)[1]);
+                UUID secondId = UUID.fromString((String) rows.get(1)[0]);
                 if (top2 >= minCosineSimilarity && (top1 - top2) < 0.02) {
                     log.warn(
-                            "[SemanticAttr] Match ambíguo companyId={} anchor1={} sim1={} sim2={}",
+                            "[SemanticAttr] match ambíguo companyId={} anchor1={} sim1={} anchor2={} sim2={}",
                             companyId,
                             anchorId,
-                            top1,
-                            top2);
+                            String.format(Locale.ROOT, "%.4f", top1),
+                            secondId,
+                            String.format(Locale.ROOT, "%.4f", top2));
+                } else {
+                    log.debug(
+                            "[SemanticAttr] segundo lugar companyId={} anchor2={} sim2={}",
+                            companyId,
+                            secondId,
+                            String.format(Locale.ROOT, "%.4f", top2));
                 }
             }
-            return anchorRepository.findById(anchorId).map(this::toUtmSnapshot);
+            Optional<LeadAttributionAnchor> anchorOpt = anchorRepository.findById(anchorId);
+            if (anchorOpt.isEmpty()) {
+                log.warn("[SemanticAttr] anchorId {} sumiu após ranking companyId={}", anchorId, companyId);
+                return Optional.empty();
+            }
+            LeadAttributionAnchor matched = anchorOpt.get();
+            log.info(
+                    "[SemanticAttr] match OK companyId={} anchorId={} cosineSim={} utm_campaign={} anchorPreview=\"{}\"",
+                    companyId,
+                    anchorId,
+                    String.format(Locale.ROOT, "%.4f", top1),
+                    matched.getUtmCampaign(),
+                    previewForLog(matched.getAnchorText()));
+            return Optional.of(toUtmSnapshot(matched));
         } catch (Exception e) {
-            log.debug("[SemanticAttr] sem match: {}", e.getMessage());
+            log.warn(
+                    "[SemanticAttr] erro embedding/pgvector companyId={}: {}",
+                    companyId,
+                    e.getMessage(),
+                    e);
             return Optional.empty();
         }
     }
@@ -188,6 +240,17 @@ public class LeadAttributionAnchorService {
                 .notes(a.getNotes())
                 .createdAt(a.getCreatedAt())
                 .build();
+    }
+
+    private static String previewForLog(String s) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.trim().replaceAll("\\s+", " ");
+        if (t.length() > 160) {
+            return t.substring(0, 157) + "...";
+        }
+        return t;
     }
 
     private static double toDouble(Object o) {

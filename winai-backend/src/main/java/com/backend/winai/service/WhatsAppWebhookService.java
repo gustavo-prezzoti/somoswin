@@ -321,15 +321,36 @@ public class WhatsAppWebhookService {
         if (messageText == null || messageText.isBlank()) {
             return false;
         }
+        String leadRef = lead.getId() != null ? lead.getId().toString() : "novo-lead";
         try {
+            log.info(
+                    "[SemanticAttr] webhook: primeira mensagem inbound, buscando âncora companyId={} leadRef={}",
+                    company.getId(),
+                    leadRef);
             Optional<UtmParseUtil.UtmSnapshot> snap = leadAttributionAnchorService.findBestMatch(company.getId(),
                     messageText);
             if (snap.isEmpty()) {
+                log.info(
+                        "[SemanticAttr] webhook: nenhum snapshot aplicado companyId={} leadRef={}",
+                        company.getId(),
+                        leadRef);
                 return false;
             }
-            return mergeUtmIfEmpty(lead, snap.get());
+            boolean merged = mergeUtmIfEmpty(lead, snap.get());
+            log.info(
+                    "[SemanticAttr] webhook: mergeUtmIfEmpty={} companyId={} leadRef={} utm_campaign={}",
+                    merged,
+                    company.getId(),
+                    leadRef,
+                    snap.get().getUtmCampaign());
+            return merged;
         } catch (Exception e) {
-            log.debug("[SemanticAttr] ignorado: {}", e.getMessage());
+            log.warn(
+                    "[SemanticAttr] webhook: erro companyId={} leadRef={}: {}",
+                    company.getId(),
+                    leadRef,
+                    e.getMessage(),
+                    e);
             return false;
         }
     }
