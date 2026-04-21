@@ -34,6 +34,7 @@ import Login from './components/Login';
 import Checkout from './components/Checkout';
 import Terms from './components/Terms';
 import LandingPage from './components/LandingPage';
+import WhatsAppUtmRedirect from './components/WhatsAppUtmRedirect';
 import Settings from './components/Settings';
 import AcceptInvitation from './components/AcceptInvitation';
 import OAuthComplete from './components/OAuthComplete';
@@ -625,6 +626,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/w" element={<WhatsAppUtmRedirect />} />
         <Route path="/aceitar-convite" element={<AcceptInvitation />} />
         <Route path="/login" element={<Login />} />
         <Route path="/checkout" element={<Checkout />} />

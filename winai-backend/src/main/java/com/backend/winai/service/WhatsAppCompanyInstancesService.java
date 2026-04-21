@@ -2,8 +2,10 @@ package com.backend.winai.service;
 
 import com.backend.winai.dto.uazap.UazapInstanceDTO;
 import com.backend.winai.dto.whatsapp.broadcast.CompanyWhatsAppInstanceCardResponse;
+import com.backend.winai.entity.Company;
 import com.backend.winai.entity.User;
 import com.backend.winai.entity.UserWhatsAppConnection;
+import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -23,11 +26,60 @@ import java.util.UUID;
 @Slf4j
 public class WhatsAppCompanyInstancesService {
 
+    private final CompanyRepository companyRepository;
     private final UserWhatsAppConnectionRepository connectionRepository;
     private final UazapService uazapService;
 
     @Value("${uazap.default-base-url}")
     private String defaultBaseUrl;
+
+    private static final int MIN_WHATSAPP_DIGITS = 10;
+
+    /**
+     * Número para wa.me na landing pública (/w): perfil da empresa ou primeira instância UAZAP ativa com número na API.
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> resolvePrimaryPhoneDigitsForCompany(UUID companyId) {
+        Optional<Company> companyOpt = companyRepository.findById(companyId);
+        if (companyOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        Company company = companyOpt.get();
+        Optional<String> fromProfile = digitsOnlyValid(company.getWhatsapp());
+        if (fromProfile.isPresent()) {
+            return fromProfile;
+        }
+        List<UserWhatsAppConnection> connections = connectionRepository.findByCompanyIdAndIsActiveTrue(companyId);
+        for (UserWhatsAppConnection conn : connections) {
+            String base = conn.getInstanceBaseUrl() != null && !conn.getInstanceBaseUrl().isBlank()
+                    ? conn.getInstanceBaseUrl().trim()
+                    : defaultBaseUrl;
+            try {
+                List<UazapInstanceDTO> instances = uazapService.fetchInstances(base);
+                UazapInstanceDTO match = findMatchingInstance(conn, instances);
+                if (match != null && match.getPhoneNumber() != null && !match.getPhoneNumber().isBlank()) {
+                    Optional<String> d = digitsOnlyValid(match.getPhoneNumber().trim());
+                    if (d.isPresent()) {
+                        return d;
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[LandingWhatsApp] UAZAP fetchInstances falhou para {}: {}", conn.getInstanceName(), e.getMessage());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<String> digitsOnlyValid(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        String d = raw.replaceAll("\\D", "");
+        if (d.length() < MIN_WHATSAPP_DIGITS) {
+            return Optional.empty();
+        }
+        return Optional.of(d);
+    }
 
     @Transactional(readOnly = true)
     public List<CompanyWhatsAppInstanceCardResponse> listForUser(User user) {

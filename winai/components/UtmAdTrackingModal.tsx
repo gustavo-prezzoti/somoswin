@@ -26,6 +26,8 @@ interface UtmAdTrackingModalProps {
   onClose: () => void;
   ctx: UtmAdTrackingContext | null;
   onCopied: () => void;
+  /** UUID da empresa — obrigatório para o link /w/ (WhatsApp vem do backend por cliente). */
+  companyId?: string | null;
 }
 
 function CopyRow({
@@ -66,7 +68,7 @@ function CopyRow({
   );
 }
 
-const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, ctx, onCopied }) => {
+const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, ctx, onCopied, companyId }) => {
   const [baseUrl, setBaseUrl] = useState('');
 
   useEffect(() => {
@@ -88,6 +90,8 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       : '';
 
   const metaFullLanding = metaQueryFilled ? `${base}/?${metaQueryFilled}` : '';
+  const cPrefix = companyId ? `c=${encodeURIComponent(companyId)}&` : '';
+  const metaWaHop = metaQueryFilled && companyId ? `${base}/w/?${cPrefix}${metaQueryFilled}` : '';
 
   const googleQueryFilled =
     camp && adg && ad
@@ -95,6 +99,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       : '';
 
   const googleFullLanding = googleQueryFilled ? `${base}/?${googleQueryFilled}` : '';
+  const googleWaHop = googleQueryFilled && companyId ? `${base}/w/?${cPrefix}${googleQueryFilled}` : '';
 
   const incomplete = !ctx.campaignId || !ctx.adSetId || !ctx.adId;
 
@@ -109,7 +114,9 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       size="lg"
     >
       <div className="space-y-5">
-        <p className="text-sm text-gray-600">Confira o site abaixo e copie o link ou só os parâmetros.</p>
+        <p className="text-sm text-gray-600">
+          Use <strong className="text-gray-800">/w/</strong> com <strong className="text-gray-800">?c=</strong> (empresa) para abrir o WhatsApp certo por cliente; use <strong className="text-gray-800">/</strong> só para a landing.
+        </p>
 
         <div>
           <label className="text-xs font-bold text-gray-500 block mb-1.5">Seu site</label>
@@ -144,14 +151,28 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
 
         {ctx.platform === 'META' && metaFullLanding && metaQueryFilled && (
           <div className="space-y-3">
-            <CopyRow label="Link completo" value={metaFullLanding} onCopied={onCopied} emphasis />
+            {companyId && metaWaHop ? (
+              <CopyRow label="Link → WhatsApp (/w/)" value={metaWaHop} onCopied={onCopied} emphasis />
+            ) : (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
+                Link direto ao WhatsApp (/w/) aparece quando o usuário tem empresa vinculada (UUID em <code className="font-mono">?c=</code>).
+              </div>
+            )}
+            <CopyRow label="Link da landing (/)" value={metaFullLanding} onCopied={onCopied} />
             <CopyRow label="Só os parâmetros UTM" value={metaQueryFilled} onCopied={onCopied} />
           </div>
         )}
 
         {ctx.platform === 'GOOGLE' && googleFullLanding && googleQueryFilled && (
           <div className="space-y-3">
-            <CopyRow label="Link completo" value={googleFullLanding} onCopied={onCopied} emphasis />
+            {companyId && googleWaHop ? (
+              <CopyRow label="Link → WhatsApp (/w/)" value={googleWaHop} onCopied={onCopied} emphasis />
+            ) : (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
+                Link direto ao WhatsApp (/w/) aparece quando o usuário tem empresa vinculada (UUID em <code className="font-mono">?c=</code>).
+              </div>
+            )}
+            <CopyRow label="Link da landing (/)" value={metaFullLanding} onCopied={onCopied} />
             <CopyRow label="Só os parâmetros UTM" value={googleQueryFilled} onCopied={onCopied} />
           </div>
         )}

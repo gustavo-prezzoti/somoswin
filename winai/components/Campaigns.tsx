@@ -6,6 +6,7 @@ import {
 import UtmAdTrackingModal from './UtmAdTrackingModal';
 import type { UtmAdTrackingContext } from './UtmAdTrackingModal';
 import { marketingService, CreateCampaignRequest, AdItemRequest, PagePost, CampaignListItem } from '../services';
+import { storageService } from '../services/storage';
 import type { MetricsDateRange, PaidTrafficOverview, PaidTrafficPlatform, UtmPerformanceResponse } from '../services/api/marketing.service';
 import {
   googleAdsService,
@@ -1839,6 +1840,7 @@ const Campaigns: React.FC = () => {
           setUtmAdModalCtx(null);
         }}
         ctx={utmAdModalCtx}
+        companyId={storageService.getUser()?.company?.id ?? null}
         onCopied={() => showToast('Copiado para a área de transferência', 'success')}
       />
     </>
