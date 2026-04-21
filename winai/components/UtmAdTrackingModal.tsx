@@ -70,7 +70,6 @@ function CopyRow({
 }
 
 const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, ctx, onCopied, companyId }) => {
-  const [baseUrl, setBaseUrl] = useState('');
   const [anchorDraft, setAnchorDraft] = useState('');
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
@@ -78,12 +77,6 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
   const [registerOk, setRegisterOk] = useState(false);
   /** Texto gravado no último registro — usado no link /w/ (parâmetro `m`). */
   const [registeredPrefillForLinks, setRegisteredPrefillForLinks] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open && typeof window !== 'undefined') {
-      setBaseUrl((u) => u || window.location.origin);
-    }
-  }, [open]);
 
   useEffect(() => {
     setAnchorDraft('');
@@ -94,7 +87,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
 
   if (!ctx) return null;
 
-  const base = baseUrl.replace(/\/$/, '');
+  const base = typeof window !== 'undefined' ? window.location.origin.replace(/\/$/, '') : '';
   const camp = compactId(ctx.campaignId);
   const adg = compactId(ctx.adSetId);
   const ad = compactId(ctx.adId);
@@ -249,17 +242,6 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
         <p className="text-sm text-gray-600">
           O <strong className="text-gray-800">texto da mensagem do anúncio</strong> é obrigatório: sem ele não dá para registrar a âncora nem gerar o link com UTM.
         </p>
-
-        <div>
-          <label className="text-xs font-bold text-gray-500 block mb-1.5">Seu site</label>
-          <input
-            type="url"
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="https://seusite.com"
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-indigo-500/20 outline-none"
-          />
-        </div>
 
         {!incomplete && (
           <div className="text-xs text-gray-500 space-y-1 border-l-4 border-indigo-200 pl-3">
