@@ -176,7 +176,7 @@ const AdminGlobalNotifications = () => {
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <h3 className="font-black text-gray-900 uppercase text-lg italic tracking-tight">Transbordo para Humano</h3>
+                                                <h3 className="font-black text-gray-900 uppercase text-lg italic tracking-tight">Notificação</h3>
                                                 {formData.humanHandoffNotificationEnabled && <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />}
                                             </div>
                                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">
