@@ -76,7 +76,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
   const [registerLoading, setRegisterLoading] = useState(false);
   const [anchorError, setAnchorError] = useState<string | null>(null);
   const [registerOk, setRegisterOk] = useState(false);
-  /** Texto gravado no último registro — usado nos links (incl. parâmetro `m` no /w/). */
+  /** Texto gravado no último registro — usado no link /w/ (parâmetro `m`). */
   const [registeredPrefillForLinks, setRegisteredPrefillForLinks] = useState<string | null>(null);
 
   useEffect(() => {
@@ -104,7 +104,6 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       ? `utm_source=facebook&utm_medium=paid_social&utm_campaign=${encodeURIComponent(camp)}&utm_content=${encodeURIComponent(ad)}&utm_term=${encodeURIComponent(adg)}`
       : '';
 
-  const metaFullLanding = metaQueryFilled ? `${base}/?${metaQueryFilled}` : '';
   const cPrefix = companyId ? `c=${encodeURIComponent(companyId)}&` : '';
 
   const googleQueryFilled =
@@ -112,10 +111,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       ? `utm_source=google&utm_medium=cpc&utm_campaign=${encodeURIComponent(camp)}&utm_content=${encodeURIComponent(ad)}&utm_term=${encodeURIComponent(adg)}`
       : '';
 
-  const googleFullLanding = googleQueryFilled ? `${base}/?${googleQueryFilled}` : '';
-
   const utmQueryFilled = ctx.platform === 'META' ? metaQueryFilled : googleQueryFilled;
-  const fullLanding = ctx.platform === 'META' ? metaFullLanding : googleFullLanding;
 
   const waHopWithAnchoredMessage =
     registerOk && registeredPrefillForLinks && utmQueryFilled && companyId
@@ -204,8 +200,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
         Mensagem para anúncio Click-to-WhatsApp
       </p>
       <p className="text-xs text-violet-800/90">
-        Primeiro <strong>registre</strong> a mensagem abaixo; em seguida aparecem os links (incluindo um que passa pela sua tela{' '}
-        <code className="font-mono bg-white/80 px-1 rounded">/w/</code> com a frase + UTM já montados para o WhatsApp).
+        <strong>Registre</strong> a mensagem abaixo; em seguida você copia o <strong>link do WhatsApp</strong> para usar no anúncio.
       </p>
       <div className="flex flex-col sm:flex-row gap-2">
         <button
@@ -236,15 +231,10 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
         Registrar mensagem e UTM
       </button>
       {anchorError ? <p className="text-xs text-red-600 font-medium">{anchorError}</p> : null}
-      {registerOk ? (
-        <p className="text-xs text-emerald-700 font-medium">
-          Âncora registrada. Copie os links abaixo para o anúncio — o link /w/ abre seu site e redireciona ao WhatsApp com mensagem + UTM.
-        </p>
-      ) : null}
     </div>
   );
 
-  const showTrackingSection = utmQueryFilled && fullLanding;
+  const showTrackingSection = Boolean(utmQueryFilled);
 
   return (
     <Modal
@@ -256,7 +246,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
     >
       <div className="space-y-5">
         <p className="text-sm text-gray-600">
-          Fluxo recomendado: defina o <strong className="text-gray-800">texto da primeira mensagem</strong>, registre a âncora, depois copie os links.
+          Defina o <strong className="text-gray-800">texto da primeira mensagem</strong>, registre e copie o <strong className="text-gray-800">link do WhatsApp</strong>.
         </p>
 
         <div>
@@ -296,27 +286,19 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
 
             {!registerOk && !incomplete && (
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
-                Os links de campanha (WhatsApp via <code className="font-mono">/w/</code>, landing e UTMs) aparecem{' '}
-                <strong>depois</strong> que você clicar em <strong>Registrar mensagem e UTM</strong>.
+                O link aparece <strong>depois</strong> de <strong>Registrar mensagem e UTM</strong>.
               </div>
             )}
 
             {registerOk && registeredPrefillForLinks && (
               <>
                 {waHopWithAnchoredMessage ? (
-                  <CopyRow
-                    label="Link → WhatsApp (/w/) — sua tela, depois wa.me com mensagem + UTM"
-                    value={waHopWithAnchoredMessage}
-                    onCopied={onCopied}
-                    emphasis
-                  />
+                  <CopyRow label="Link do WhatsApp" value={waHopWithAnchoredMessage} onCopied={onCopied} emphasis />
                 ) : (
                   <div className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
-                    Para gerar o link <code className="font-mono">/w/</code> é preciso o UUID da empresa em <code className="font-mono">?c=</code> (usuário com empresa vinculada).
+                    É preciso estar com empresa vinculada para gerar o link.
                   </div>
                 )}
-                <CopyRow label="Link da landing (/)" value={fullLanding} onCopied={onCopied} />
-                <CopyRow label="Só os parâmetros UTM" value={utmQueryFilled} onCopied={onCopied} />
               </>
             )}
           </div>

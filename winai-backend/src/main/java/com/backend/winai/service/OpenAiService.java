@@ -712,7 +712,10 @@ public class OpenAiService {
         Map<String, Object> sys = new HashMap<>();
         sys.put("role", "system");
         sys.put("content",
-                "Você ajuda anunciantes a escrever a primeira mensagem que o cliente enviará ao abrir o WhatsApp a partir de um anúncio (Click-to-WhatsApp). Responda APENAS com 1 ou 2 frases curtas em português do Brasil, tom natural e específico ao contexto. Não inclua UTMs, links, códigos nem ref:.");
+                "Você ajuda anunciantes a escrever a primeira mensagem que o cliente enviará ao abrir o WhatsApp a partir de um anúncio (Click-to-WhatsApp). "
+                        + "Responda APENAS com 1 ou 2 frases curtas em português do Brasil, tom natural. "
+                        + "PROIBIDO na resposta: parâmetros utm_*, linhas começando com ?, URLs, ids numéricos de campanha copiados do contexto, gclid, fbclid, ref:. "
+                        + "O rastreamento é tratado pelo sistema; a mensagem deve ser só linguagem de pessoa, como se o cliente estivesse digitando.");
         messages.add(sys);
         Map<String, Object> userMsg = new HashMap<>();
         userMsg.put("role", "user");
@@ -741,7 +744,46 @@ public class OpenAiService {
             return null;
         }
         String content = extractTextContent(message.get("content"));
-        return content != null ? content.trim() : null;
+        if (content == null) {
+            return null;
+        }
+        return stripTrackingLinesFromMarketingSuggestion(content.trim());
+    }
+
+    /**
+     * Remove linhas que o modelo às vezes repete (query UTM, etc.) — isso não vai no criativo do anúncio.
+     */
+    private static String stripTrackingLinesFromMarketingSuggestion(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String[] parts = text.split("\\R");
+        StringBuilder out = new StringBuilder();
+        for (String part : parts) {
+            String line = part.trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            String low = line.toLowerCase();
+            if (low.startsWith("?")
+                    || low.contains("utm_")
+                    || low.contains("utm_source=")
+                    || low.contains("utm_medium=")
+                    || low.contains("utm_campaign=")
+                    || low.contains("utm_content=")
+                    || low.contains("utm_term=")
+                    || low.contains("gclid=")
+                    || low.contains("fbclid=")
+                    || low.contains("msclkid=")) {
+                continue;
+            }
+            if (out.length() > 0) {
+                out.append('\n');
+            }
+            out.append(line);
+        }
+        String s = out.toString().trim();
+        return s.isEmpty() ? null : s;
     }
 
     public String transcribeAudio(byte[] audioData, String filename) {

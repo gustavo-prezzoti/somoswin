@@ -115,19 +115,19 @@ public class LeadAttributionAnchorService {
             ctx.append(req.getContext().trim()).append("\n");
         }
         if (req.getUtmCampaign() != null) {
-            ctx.append("utm_campaign: ").append(req.getUtmCampaign()).append("\n");
+            ctx.append("Campanha (id no ads): ").append(req.getUtmCampaign()).append("\n");
         }
         if (req.getUtmContent() != null) {
-            ctx.append("utm_content: ").append(req.getUtmContent()).append("\n");
+            ctx.append("Anúncio/creative (id no ads): ").append(req.getUtmContent()).append("\n");
         }
         if (req.getUtmTerm() != null) {
-            ctx.append("utm_term: ").append(req.getUtmTerm()).append("\n");
+            ctx.append("Conjunto (id no ads): ").append(req.getUtmTerm()).append("\n");
         }
         if (req.getUtmSource() != null) {
-            ctx.append("utm_source: ").append(req.getUtmSource()).append("\n");
+            ctx.append("Canal de mídia: ").append(req.getUtmSource()).append("\n");
         }
         if (req.getUtmMedium() != null) {
-            ctx.append("utm_medium: ").append(req.getUtmMedium()).append("\n");
+            ctx.append("Tipo de veiculação: ").append(req.getUtmMedium()).append("\n");
         }
         String prompt = ctx.toString().trim();
         if (prompt.isEmpty()) {

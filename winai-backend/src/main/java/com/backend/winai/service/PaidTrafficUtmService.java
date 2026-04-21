@@ -80,9 +80,10 @@ public class PaidTrafficUtmService {
                     .bestRoas(0)
                     .startDate(start.toString())
                     .endDate(end.toString())
-                    .emptyMessage("Nenhum lead com rastreamento (ref ou UTM) neste período. "
-                            + "O lead precisa enviar a mensagem com a linha ?utm_... (wa.me) para o webhook gravar; "
-                            + "amplie o intervalo de datas ou confira se o webhook está salvando o texto da mensagem.")
+                    .emptyMessage("Nenhum lead com campanha atribuída neste período. "
+                            + "Na primeira mensagem do WhatsApp, inclua a linha ?utm_... (por exemplo usando o link /w/) "
+                            + "ou use um texto alinhado a uma mensagem âncora já registrada em Campanhas. "
+                            + "Amplie o intervalo de datas ou confira se o webhook está gravando o texto da mensagem.")
                     .build();
         }
 
