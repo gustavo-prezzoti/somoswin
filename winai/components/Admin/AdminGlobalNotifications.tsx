@@ -129,7 +129,7 @@ const AdminGlobalNotifications = () => {
                         Notificações Globais
                     </h1>
                     <p className="text-gray-500 font-bold text-sm tracking-tight mt-2 opacity-70">
-                        Centralize alertas e transbordo para atendimento humano
+                        Centralize alertas para atendimento humano
                     </p>
                 </div>
 
