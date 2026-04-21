@@ -74,6 +74,12 @@ public class Lead {
     @Column(name = "utm_term", length = 255)
     private String utmTerm;
 
+    @Column(length = 1024)
+    private String gclid;
+
+    @Column(length = 2048)
+    private String fbclid;
+
     @Column(name = "estimated_value", precision = 14, scale = 2)
     private BigDecimal estimatedValue;
 

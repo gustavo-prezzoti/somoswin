@@ -1208,6 +1208,11 @@ const Campaigns: React.FC = () => {
                             </span>
                             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
                               {item.subtitle}
+                              {item.metaCampaignName ? (
+                                <span className="block mt-0.5 text-indigo-500 normal-case font-semibold">
+                                  Campanha Meta: {item.metaCampaignName}
+                                </span>
+                              ) : null}
                             </span>
                           </div>
                         </td>

@@ -239,6 +239,7 @@ export interface UtmPerformanceRow {
     cpl: number;
     roas: number;
     status: string;
+    metaCampaignName?: string | null;
 }
 
 export interface UtmPerformanceResponse {

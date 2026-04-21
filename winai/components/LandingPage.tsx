@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
+import { appendAttributionQueryToText } from '../utils/attribution';
 import logoDark from '../logo_dark.png';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 import {
    Zap,
@@ -52,6 +53,7 @@ const TechIllustration = () => (
 
 const LandingPage: React.FC = () => {
    const navigate = useNavigate();
+   const location = useLocation();
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [formData, setFormData] = useState({
       name: '',
@@ -74,7 +76,8 @@ const LandingPage: React.FC = () => {
    const handleWhatsAppRedirect = (e: React.FormEvent) => {
       e.preventDefault();
       const phone = "5511999999999"; // Substituir pelo número real
-      const message = `Olá, gostaria de agendar meu Diagnóstico Gratuito!\n\n*Dados do Lead:*\n- Nome: ${formData.name}\n- Empresa: ${formData.company}\n- Faturamento: ${formData.revenue}\n- Dificuldade: ${formData.difficulty}`;
+      const baseMessage = `Olá, gostaria de agendar meu Diagnóstico Gratuito!\n\n*Dados do Lead:*\n- Nome: ${formData.name}\n- Empresa: ${formData.company}\n- Faturamento: ${formData.revenue}\n- Dificuldade: ${formData.difficulty}`;
+      const message = appendAttributionQueryToText(baseMessage, location.search || '');
       const encodedMessage = encodeURIComponent(message);
       window.open(`https://wa.me/${phone}?text=${encodedMessage}`, '_blank');
       setIsModalOpen(false);

@@ -32,6 +32,24 @@ public class LeadRequest {
 
     private String source;
 
+    private String trackId;
+
+    private String trackSource;
+
+    private String utmSource;
+
+    private String utmMedium;
+
+    private String utmCampaign;
+
+    private String utmContent;
+
+    private String utmTerm;
+
+    private String gclid;
+
+    private String fbclid;
+
     private BigDecimal estimatedValue;
 
     private Integer leadScore;

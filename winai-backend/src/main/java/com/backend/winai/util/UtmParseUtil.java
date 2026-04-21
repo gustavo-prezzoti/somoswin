@@ -12,12 +12,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Extrai parâmetros UTM de texto de mensagem (URL ou query solta).
+ * Extrai parâmetros UTM e click ids (gclid, fbclid, msclkid) de texto de mensagem (URL ou query solta).
  */
 public final class UtmParseUtil {
 
-    private static final Pattern PAIR = Pattern.compile(
+    private static final Pattern UTM_PAIR = Pattern.compile(
             "(?:[?&]|^)(utm_source|utm_medium|utm_campaign|utm_content|utm_term)=([^&#\\s]+)",
+            Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern CLICK_PAIR = Pattern.compile(
+            "(?:[?&]|^)(gclid|fbclid|msclkid)=([^&#\\s]+)",
             Pattern.CASE_INSENSITIVE);
 
     private UtmParseUtil() {
@@ -27,27 +31,37 @@ public final class UtmParseUtil {
         if (text == null || text.isBlank()) {
             return Optional.empty();
         }
-        Map<String, String> map = new LinkedHashMap<>();
-        Matcher m = PAIR.matcher(text);
-        while (m.find()) {
-            String key = m.group(1).toLowerCase();
-            String raw = m.group(2);
-            try {
-                map.put(key, URLDecoder.decode(raw, StandardCharsets.UTF_8));
-            } catch (Exception e) {
-                map.put(key, raw);
-            }
+        Map<String, String> utmMap = new LinkedHashMap<>();
+        Matcher utm = UTM_PAIR.matcher(text);
+        while (utm.find()) {
+            putDecoded(utmMap, utm.group(1).toLowerCase(), utm.group(2));
         }
-        if (map.isEmpty()) {
+        Map<String, String> clickMap = new LinkedHashMap<>();
+        Matcher clk = CLICK_PAIR.matcher(text);
+        while (clk.find()) {
+            putDecoded(clickMap, clk.group(1).toLowerCase(), clk.group(2));
+        }
+        if (utmMap.isEmpty() && clickMap.isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(UtmSnapshot.builder()
-                .utmSource(map.get("utm_source"))
-                .utmMedium(map.get("utm_medium"))
-                .utmCampaign(map.get("utm_campaign"))
-                .utmContent(map.get("utm_content"))
-                .utmTerm(map.get("utm_term"))
+                .utmSource(utmMap.get("utm_source"))
+                .utmMedium(utmMap.get("utm_medium"))
+                .utmCampaign(utmMap.get("utm_campaign"))
+                .utmContent(utmMap.get("utm_content"))
+                .utmTerm(utmMap.get("utm_term"))
+                .gclid(clickMap.get("gclid"))
+                .fbclid(clickMap.get("fbclid"))
+                .msclkid(clickMap.get("msclkid"))
                 .build());
+    }
+
+    private static void putDecoded(Map<String, String> map, String key, String raw) {
+        try {
+            map.put(key, URLDecoder.decode(raw, StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            map.put(key, raw);
+        }
     }
 
     @Value
@@ -58,5 +72,8 @@ public final class UtmParseUtil {
         String utmCampaign;
         String utmContent;
         String utmTerm;
+        String gclid;
+        String fbclid;
+        String msclkid;
     }
 }

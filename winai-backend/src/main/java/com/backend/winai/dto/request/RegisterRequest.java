@@ -1,5 +1,6 @@
 package com.backend.winai.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -32,4 +33,7 @@ public class RegisterRequest {
     private String password;
 
     private String leadVolume;
+
+    @Valid
+    private AttributionDto attribution;
 }

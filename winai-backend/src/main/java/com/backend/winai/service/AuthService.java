@@ -20,6 +20,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.format.DateTimeParseException;
+
 import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -55,16 +57,19 @@ public class AuthService {
         }
 
         // Cria a empresa
-        Company company = Company.builder()
+        Company.CompanyBuilder companyBuilder = Company.builder()
                 .name(request.getCompanyName())
                 .segment(request.getSegment())
                 .whatsapp(request.getWhatsapp())
                 .leadVolume(request.getLeadVolume())
                 .plan(UserPlan.STARTER)
-                .status(AccountStatus.ACTIVE)
-                .build();
+                .status(AccountStatus.ACTIVE);
 
-        company = companyRepository.save(company);
+        if (request.getAttribution() != null) {
+            applyAttributionToCompanyBuilder(companyBuilder, request.getAttribution());
+        }
+
+        Company company = companyRepository.save(companyBuilder.build());
 
         // Cria o usuário
         User user = User.builder()
@@ -344,5 +349,66 @@ public class AuthService {
     private String extractNameFromEmail(String email) {
         String rawName = email.split("@")[0];
         return rawName.substring(0, 1).toUpperCase() + rawName.substring(1).toLowerCase();
+    }
+
+    private static void applyAttributionToCompanyBuilder(Company.CompanyBuilder cb, AttributionDto a) {
+        boolean any = false;
+        if (isPresent(a.getUtmSource())) {
+            cb.acqUtmSource(truncate(a.getUtmSource().trim(), 255));
+            any = true;
+        }
+        if (isPresent(a.getUtmMedium())) {
+            cb.acqUtmMedium(truncate(a.getUtmMedium().trim(), 255));
+            any = true;
+        }
+        if (isPresent(a.getUtmCampaign())) {
+            cb.acqUtmCampaign(truncate(a.getUtmCampaign().trim(), 255));
+            any = true;
+        }
+        if (isPresent(a.getUtmContent())) {
+            cb.acqUtmContent(truncate(a.getUtmContent().trim(), 255));
+            any = true;
+        }
+        if (isPresent(a.getUtmTerm())) {
+            cb.acqUtmTerm(truncate(a.getUtmTerm().trim(), 255));
+            any = true;
+        }
+        if (isPresent(a.getGclid())) {
+            cb.acqGclid(truncate(a.getGclid().trim(), 1024));
+            any = true;
+        }
+        if (isPresent(a.getFbclid())) {
+            cb.acqFbclid(truncate(a.getFbclid().trim(), 2048));
+            any = true;
+        }
+        if (isPresent(a.getMsclkid())) {
+            cb.acqMsclkid(truncate(a.getMsclkid().trim(), 1024));
+            any = true;
+        }
+        if (any) {
+            cb.acqCapturedAt(parseCapturedAt(a.getCapturedAt()));
+        }
+    }
+
+    private static boolean isPresent(String s) {
+        return s != null && !s.isBlank();
+    }
+
+    private static ZonedDateTime parseCapturedAt(String iso) {
+        if (iso == null || iso.isBlank()) {
+            return ZonedDateTime.now();
+        }
+        try {
+            return ZonedDateTime.parse(iso);
+        } catch (DateTimeParseException e) {
+            return ZonedDateTime.now();
+        }
+    }
+
+    private static String truncate(String s, int max) {
+        if (s.length() <= max) {
+            return s;
+        }
+        return s.substring(0, max);
     }
 }

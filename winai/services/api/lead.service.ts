@@ -35,6 +35,8 @@ export interface LeadData {
     utmCampaign?: string | null;
     utmContent?: string | null;
     utmTerm?: string | null;
+    gclid?: string | null;
+    fbclid?: string | null;
     estimatedValue?: number | null;
     leadScore?: number | null;
     createdAt: string;
@@ -49,6 +51,15 @@ export interface LeadRequest {
     ownerName?: string;
     notes?: string;
     source?: string;
+    trackId?: string;
+    trackSource?: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmContent?: string;
+    utmTerm?: string;
+    gclid?: string;
+    fbclid?: string;
     estimatedValue?: number | null;
     leadScore?: number | null;
 }

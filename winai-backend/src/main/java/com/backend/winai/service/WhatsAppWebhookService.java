@@ -328,6 +328,14 @@ public class WhatsAppWebhookService {
             lead.setUtmTerm(u.getUtmTerm());
             changed = true;
         }
+        if (lead.getGclid() == null && u.getGclid() != null) {
+            lead.setGclid(u.getGclid());
+            changed = true;
+        }
+        if (lead.getFbclid() == null && u.getFbclid() != null) {
+            lead.setFbclid(u.getFbclid());
+            changed = true;
+        }
         return changed;
     }
 
@@ -346,6 +354,12 @@ public class WhatsAppWebhookService {
         }
         if (u.getUtmTerm() != null) {
             lead.setUtmTerm(u.getUtmTerm());
+        }
+        if (u.getGclid() != null) {
+            lead.setGclid(u.getGclid());
+        }
+        if (u.getFbclid() != null) {
+            lead.setFbclid(u.getFbclid());
         }
     }
 

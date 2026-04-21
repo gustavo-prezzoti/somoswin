@@ -6,8 +6,10 @@ import com.backend.winai.dto.marketing.paidtraffic.UtmPerformanceResponse;
 import com.backend.winai.dto.marketing.paidtraffic.UtmPerformanceRowDTO;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Lead;
+import com.backend.winai.entity.MetaCampaign;
 import com.backend.winai.entity.User;
 import com.backend.winai.repository.LeadRepository;
+import com.backend.winai.repository.MetaCampaignRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +35,7 @@ public class PaidTrafficUtmService {
     private final LeadRepository leadRepository;
     private final MarketingService marketingService;
     private final MetaPaidTrafficGraphService metaPaidTrafficGraphService;
+    private final MetaCampaignRepository metaCampaignRepository;
 
     public UtmPerformanceResponse getPerformance(User user, LocalDate startDate, LocalDate endDate) {
         Company company = user.getCompany();
@@ -102,6 +105,7 @@ public class PaidTrafficUtmService {
                 bestRoas = roas;
             }
             String status = classifyStatus(roas);
+            String metaCampaignName = resolveMetaCampaignName(company, e.getKey());
             rows.add(UtmPerformanceRowDTO.builder()
                     .groupKey(e.getKey())
                     .refLabel(buildRefLabel(e.getKey(), agg))
@@ -110,6 +114,7 @@ public class PaidTrafficUtmService {
                     .cpl(round2(cpl))
                     .roas(round2(roas))
                     .status(status)
+                    .metaCampaignName(metaCampaignName)
                     .build());
         }
 
@@ -155,6 +160,20 @@ public class PaidTrafficUtmService {
         String c = agg.sampleCampaign != null ? agg.sampleCampaign : "—";
         String cr = agg.sampleCreative != null ? agg.sampleCreative : "—";
         return c + " • " + cr;
+    }
+
+    private String resolveMetaCampaignName(Company company, String groupKey) {
+        if (company == null || groupKey == null || !groupKey.startsWith("u:")) {
+            return null;
+        }
+        String metaId = groupKey.substring(2).trim();
+        if (metaId.isEmpty()) {
+            return null;
+        }
+        return metaCampaignRepository
+                .findByCompany_IdAndMetaId(company.getId(), metaId)
+                .map(MetaCampaign::getName)
+                .orElse(null);
     }
 
     private static String classifyStatus(double roas) {

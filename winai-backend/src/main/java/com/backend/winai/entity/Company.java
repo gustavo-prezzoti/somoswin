@@ -150,6 +150,33 @@ public class Company {
     @Column(name = "crm_kanban_column_titles", columnDefinition = "TEXT")
     private String crmKanbanColumnTitles;
 
+    @Column(name = "acq_utm_source", length = 255)
+    private String acqUtmSource;
+
+    @Column(name = "acq_utm_medium", length = 255)
+    private String acqUtmMedium;
+
+    @Column(name = "acq_utm_campaign", length = 255)
+    private String acqUtmCampaign;
+
+    @Column(name = "acq_utm_content", length = 255)
+    private String acqUtmContent;
+
+    @Column(name = "acq_utm_term", length = 255)
+    private String acqUtmTerm;
+
+    @Column(name = "acq_gclid", length = 1024)
+    private String acqGclid;
+
+    @Column(name = "acq_fbclid", length = 2048)
+    private String acqFbclid;
+
+    @Column(name = "acq_msclkid", length = 1024)
+    private String acqMsclkid;
+
+    @Column(name = "acq_captured_at")
+    private ZonedDateTime acqCapturedAt;
+
     // Método auxiliar para verificar se os campos obrigatórios estão preenchidos
     public boolean hasRequiredContractFields() {
         return contratante != null && !contratante.trim().isEmpty()

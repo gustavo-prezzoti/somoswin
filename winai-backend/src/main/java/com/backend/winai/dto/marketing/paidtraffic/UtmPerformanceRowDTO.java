@@ -23,4 +23,7 @@ public class UtmPerformanceRowDTO {
     private double roas;
     /** excelente | bom | atenção */
     private String status;
+
+    /** Nome da campanha Meta quando utm_campaign coincide com meta_id sincronizado */
+    private String metaCampaignName;
 }

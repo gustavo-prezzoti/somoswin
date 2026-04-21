@@ -14,6 +14,8 @@ import java.util.UUID;
 public interface MetaCampaignRepository extends JpaRepository<MetaCampaign, UUID> {
     Optional<MetaCampaign> findByMetaId(String metaId);
 
+    Optional<MetaCampaign> findByCompany_IdAndMetaId(UUID companyId, String metaId);
+
     List<MetaCampaign> findByCompanyId(UUID companyId);
 
     void deleteByCompany(Company company);

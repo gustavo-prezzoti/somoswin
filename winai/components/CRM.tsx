@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { leadAttributionFieldsFromSearch } from '../utils/attribution';
 import {
   leadService,
   LeadData,
@@ -97,6 +98,15 @@ function toRequestFromLead(lead: LeadData): LeadRequest {
     ownerName: lead.ownerName || undefined,
     notes: lead.notes || undefined,
     source: lead.source || undefined,
+    trackId: lead.trackId ?? undefined,
+    trackSource: lead.trackSource ?? undefined,
+    utmSource: lead.utmSource ?? undefined,
+    utmMedium: lead.utmMedium ?? undefined,
+    utmCampaign: lead.utmCampaign ?? undefined,
+    utmContent: lead.utmContent ?? undefined,
+    utmTerm: lead.utmTerm ?? undefined,
+    gclid: lead.gclid ?? undefined,
+    fbclid: lead.fbclid ?? undefined,
     estimatedValue: lead.estimatedValue ?? undefined,
     leadScore: lead.leadScore ?? undefined,
   };
@@ -104,6 +114,7 @@ function toRequestFromLead(lead: LeadData): LeadRequest {
 
 const CRM: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [viewMode, setViewMode] = useState<'KANBAN' | 'TABLE'>('KANBAN');
   const [searchTerm, setSearchTerm] = useState('');
   const [leads, setLeads] = useState<LeadData[]>([]);
@@ -266,6 +277,7 @@ const CRM: React.FC = () => {
     try {
       const payload: LeadRequest = {
         ...newLeadForm,
+        ...leadAttributionFieldsFromSearch(location.search || ''),
         status: preSelectedStatus || newLeadForm.status || 'NEW',
         estimatedValue: newLeadForm.estimatedValue != null ? Number(newLeadForm.estimatedValue) : undefined,
         leadScore: newLeadForm.leadScore != null ? Number(newLeadForm.leadScore) : undefined,

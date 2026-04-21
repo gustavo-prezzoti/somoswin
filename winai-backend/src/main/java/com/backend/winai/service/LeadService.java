@@ -209,6 +209,15 @@ public class LeadService {
                 .ownerName(request.getOwnerName())
                 .notes(request.getNotes())
                 .source(request.getSource())
+                .trackId(request.getTrackId())
+                .trackSource(request.getTrackSource())
+                .utmSource(request.getUtmSource())
+                .utmMedium(request.getUtmMedium())
+                .utmCampaign(request.getUtmCampaign())
+                .utmContent(request.getUtmContent())
+                .utmTerm(request.getUtmTerm())
+                .gclid(request.getGclid())
+                .fbclid(request.getFbclid())
                 .estimatedValue(request.getEstimatedValue())
                 .leadScore(request.getLeadScore() != null ? request.getLeadScore() : 0)
                 .build();
@@ -243,6 +252,33 @@ public class LeadService {
         }
         if (request.getLeadScore() != null) {
             lead.setLeadScore(request.getLeadScore());
+        }
+        if (request.getTrackId() != null && !request.getTrackId().isBlank()) {
+            lead.setTrackId(request.getTrackId().trim());
+        }
+        if (request.getTrackSource() != null && !request.getTrackSource().isBlank()) {
+            lead.setTrackSource(request.getTrackSource().trim());
+        }
+        if (request.getUtmSource() != null && !request.getUtmSource().isBlank()) {
+            lead.setUtmSource(request.getUtmSource().trim());
+        }
+        if (request.getUtmMedium() != null && !request.getUtmMedium().isBlank()) {
+            lead.setUtmMedium(request.getUtmMedium().trim());
+        }
+        if (request.getUtmCampaign() != null && !request.getUtmCampaign().isBlank()) {
+            lead.setUtmCampaign(request.getUtmCampaign().trim());
+        }
+        if (request.getUtmContent() != null && !request.getUtmContent().isBlank()) {
+            lead.setUtmContent(request.getUtmContent().trim());
+        }
+        if (request.getUtmTerm() != null && !request.getUtmTerm().isBlank()) {
+            lead.setUtmTerm(request.getUtmTerm().trim());
+        }
+        if (request.getGclid() != null && !request.getGclid().isBlank()) {
+            lead.setGclid(request.getGclid().trim());
+        }
+        if (request.getFbclid() != null && !request.getFbclid().isBlank()) {
+            lead.setFbclid(request.getFbclid().trim());
         }
 
         lead = leadRepository.save(lead);
@@ -329,6 +365,8 @@ public class LeadService {
                 .utmCampaign(lead.getUtmCampaign())
                 .utmContent(lead.getUtmContent())
                 .utmTerm(lead.getUtmTerm())
+                .gclid(lead.getGclid())
+                .fbclid(lead.getFbclid())
                 .estimatedValue(lead.getEstimatedValue())
                 .leadScore(lead.getLeadScore() != null ? lead.getLeadScore() : 0)
                 .profilePictureUrl(lead.getProfilePictureUrl())

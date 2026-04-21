@@ -1,11 +1,13 @@
 
 import React, { useState } from 'react';
 import { Check, ShieldCheck, Zap, ArrowRight, Building2, ChevronLeft, Users, MessageSquare, Target, Loader2, Lock } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services';
+import { attributionPayloadFromSearch } from '../utils/attribution';
 
 const Checkout: React.FC = () => {
    const navigate = useNavigate();
+   const location = useLocation();
    const [isLoading, setIsLoading] = useState(false);
    const [error, setError] = useState('');
    const [formData, setFormData] = useState({
@@ -41,13 +43,15 @@ const Checkout: React.FC = () => {
       setIsLoading(true);
 
       try {
+         const attr = attributionPayloadFromSearch(location.search || '');
          await authService.register({
             companyName: formData.companyName,
             segment: formData.segment,
             email: formData.email,
             whatsapp: formData.whatsapp,
             password: formData.password,
-            leadVolume: formData.leadVolume
+            leadVolume: formData.leadVolume,
+            attribution: attr ?? undefined,
          });
          navigate('/dashboard');
       } catch (err: any) {

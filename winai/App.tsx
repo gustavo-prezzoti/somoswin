@@ -68,7 +68,6 @@ import { termsService } from './services/api/terms.service';
 import { authService } from './services/api/auth.service';
 import { subscriptionService } from './services/api/subscription.service';
 import { useWebSocket } from './hooks/useWebSocket';
-
 import logoLight from './logo_light.png';
 
 const SidebarItem = ({ to, icon: Icon, label, isActive, isCollapsed }: { to: string, icon: any, label: string, isActive: boolean, isCollapsed: boolean }) => (

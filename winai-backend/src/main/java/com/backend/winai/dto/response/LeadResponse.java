@@ -31,6 +31,8 @@ public class LeadResponse {
     private String utmCampaign;
     private String utmContent;
     private String utmTerm;
+    private String gclid;
+    private String fbclid;
     private BigDecimal estimatedValue;
     private Integer leadScore;
     private String profilePictureUrl;

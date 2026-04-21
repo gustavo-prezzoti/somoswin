@@ -119,6 +119,19 @@ export interface LoginRequest {
     rememberMe?: boolean;
 }
 
+/** Atribuição (UTM / click ids) lida da URL e enviada no cadastro — persistida só no backend. */
+export interface RegisterAttribution {
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    utmContent?: string;
+    utmTerm?: string;
+    gclid?: string;
+    fbclid?: string;
+    msclkid?: string;
+    capturedAt?: string;
+}
+
 export interface RegisterRequest {
     companyName: string;
     segment: string;
@@ -126,6 +139,7 @@ export interface RegisterRequest {
     whatsapp: string;
     password: string;
     leadVolume?: string;
+    attribution?: RegisterAttribution | null;
 }
 
 export interface ForgotPasswordRequest {
