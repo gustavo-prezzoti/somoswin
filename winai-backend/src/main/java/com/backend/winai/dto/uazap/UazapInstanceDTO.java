@@ -35,6 +35,13 @@ public class UazapInstanceDTO {
     @JsonProperty("number")
     private String phoneNumber;
 
+    /** JID ou número bruto (ex.: 5511999999999@s.whatsapp.net) — comum quando "number" não vem na listagem. */
+    @JsonProperty("owner")
+    private String owner;
+
+    @JsonProperty("wid")
+    private String wid;
+
     @JsonProperty("profileName")
     private String profileName;
 

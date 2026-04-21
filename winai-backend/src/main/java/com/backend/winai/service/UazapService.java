@@ -25,7 +25,10 @@ import org.springframework.core.ParameterizedTypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Service
 @RequiredArgsConstructor
@@ -642,6 +645,89 @@ public class UazapService {
         }
 
         return new ArrayList<>();
+    }
+
+    /**
+     * Lista global (/instance/all) muitas vezes não inclui "number" mesmo com instância open.
+     * Tenta ler owner/wid em GET /instance/connectionState/{name} (token admin).
+     */
+    public Optional<String> tryResolveInstanceOwnerDigits(String baseUrl, String instanceName) {
+        if (instanceName == null || instanceName.isBlank()) {
+            return Optional.empty();
+        }
+        if (adminToken == null || adminToken.isBlank()) {
+            log.debug("[Uazap] tryResolveInstanceOwnerDigits: admin-token vazio");
+            return Optional.empty();
+        }
+        String base = (baseUrl != null && !baseUrl.trim().isEmpty() ? baseUrl.trim() : defaultBaseUrl)
+                .replaceAll("/$", "");
+        String enc = URLEncoder.encode(instanceName.trim(), StandardCharsets.UTF_8).replace("+", "%20");
+        String url = base + "/instance/connectionState/" + enc;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("admintoken", adminToken);
+        headers.set("apikey", adminToken);
+        try {
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
+            Map<String, Object> body = response.getBody();
+            if (body == null) {
+                return Optional.empty();
+            }
+            Optional<String> d = extractOwnerDigitsFromMap(body);
+            if (d.isPresent()) {
+                return d;
+            }
+            Object nested = body.get("instance");
+            if (nested instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> inst = (Map<String, Object>) nested;
+                return extractOwnerDigitsFromMap(inst);
+            }
+        } catch (Exception e) {
+            log.debug("[Uazap] connectionState {} falhou: {}", instanceName, e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    private Optional<String> extractOwnerDigitsFromMap(Map<String, Object> map) {
+        if (map == null) {
+            return Optional.empty();
+        }
+        for (String key : new String[] { "owner", "wid", "wuid", "phone", "number" }) {
+            Optional<String> d = digitsFromOwnerLike(map.get(key));
+            if (d.isPresent()) {
+                return d;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<String> digitsFromOwnerLike(Object v) {
+        if (v == null) {
+            return Optional.empty();
+        }
+        String s = v.toString().trim();
+        if (s.isEmpty()) {
+            return Optional.empty();
+        }
+        int at = s.indexOf('@');
+        if (at > 0) {
+            s = s.substring(0, at);
+        }
+        int colon = s.indexOf(':');
+        if (colon > 0) {
+            s = s.substring(0, colon);
+        }
+        String digits = s.replaceAll("\\D", "");
+        if (digits.length() < 10 || digits.length() > 15) {
+            return Optional.empty();
+        }
+        return Optional.of(digits);
     }
 
     private List<UazapInstanceDTO> fetchAndParseInstances(String url, HttpHeaders headers) throws Exception {

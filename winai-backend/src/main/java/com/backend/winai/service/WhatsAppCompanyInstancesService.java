@@ -57,17 +57,54 @@ public class WhatsAppCompanyInstancesService {
             try {
                 List<UazapInstanceDTO> instances = uazapService.fetchInstances(base);
                 UazapInstanceDTO match = findMatchingInstance(conn, instances);
-                if (match != null && match.getPhoneNumber() != null && !match.getPhoneNumber().isBlank()) {
-                    Optional<String> d = digitsOnlyValid(match.getPhoneNumber().trim());
-                    if (d.isPresent()) {
-                        return d;
+                if (match != null) {
+                    Optional<String> fromDto = phoneDigitsFromInstanceDto(match);
+                    if (fromDto.isPresent()) {
+                        return fromDto;
                     }
                 }
             } catch (Exception e) {
                 log.warn("[LandingWhatsApp] UAZAP fetchInstances falhou para {}: {}", conn.getInstanceName(), e.getMessage());
             }
+            // Listagem costuma omitir "number" mesmo conectado — owner vem em connectionState ou nos campos owner/wid.
+            Optional<String> fromState = uazapService.tryResolveInstanceOwnerDigits(base, conn.getInstanceName());
+            if (fromState.isPresent()) {
+                return fromState;
+            }
         }
         return Optional.empty();
+    }
+
+    /** number, ou owner/wid (JID) na listagem da API. */
+    private static Optional<String> phoneDigitsFromInstanceDto(UazapInstanceDTO m) {
+        if (m == null) {
+            return Optional.empty();
+        }
+        if (m.getPhoneNumber() != null && !m.getPhoneNumber().isBlank()) {
+            return digitsOnlyValid(m.getPhoneNumber().trim());
+        }
+        if (m.getOwner() != null && !m.getOwner().isBlank()) {
+            Optional<String> d = digitsOnlyValid(stripJidToDigitsPart(m.getOwner().trim()));
+            if (d.isPresent()) {
+                return d;
+            }
+        }
+        if (m.getWid() != null && !m.getWid().isBlank()) {
+            return digitsOnlyValid(stripJidToDigitsPart(m.getWid().trim()));
+        }
+        return Optional.empty();
+    }
+
+    private static String stripJidToDigitsPart(String s) {
+        int at = s.indexOf('@');
+        if (at > 0) {
+            s = s.substring(0, at);
+        }
+        int colon = s.indexOf(':');
+        if (colon > 0) {
+            s = s.substring(0, colon);
+        }
+        return s.trim();
     }
 
     private static Optional<String> digitsOnlyValid(String raw) {
@@ -133,10 +170,7 @@ public class WhatsAppCompanyInstancesService {
     }
 
     private CompanyWhatsAppInstanceCardResponse toCard(UserWhatsAppConnection conn, UazapInstanceDTO api) {
-        String phone = "—";
-        if (api != null && api.getPhoneNumber() != null && !api.getPhoneNumber().isBlank()) {
-            phone = api.getPhoneNumber().trim();
-        }
+        String phone = api != null ? phoneDigitsFromInstanceDto(api).orElse("—") : "—";
         String profile = api != null ? api.getProfileName() : null;
         String uiStatus = mapUiStatus(api);
         String modeLabel = conn.getDescription() != null && !conn.getDescription().isBlank()
