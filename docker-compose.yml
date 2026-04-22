@@ -138,11 +138,11 @@ services:
     networks:
       - winai-network
     healthcheck:
-      test: [ "CMD", "curl", "-f", "--max-time", "15", "http://localhost:8080/actuator/health" ]
-      interval: 30s
+      test: [ "CMD", "curl", "-fsS", "--max-time", "15", "http://127.0.0.1:8080/actuator/health/liveness" ]
+      interval: 15s
       timeout: 15s
-      retries: 3
-      start_period: 90s
+      retries: 5
+      start_period: 180s
     restart: unless-stopped
 
   # =====================================

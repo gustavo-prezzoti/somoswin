@@ -48,9 +48,9 @@ USER appuser
 # Expose port
 EXPOSE 8080
 
-# Health check - increased start period to 120s for cold starts
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
-    CMD curl -f http://127.0.0.1:8080/actuator/health || exit 1
+# Alinhado ao compose: liveness (evita 503 do agregado quando DB/Redis ainda verificam)
+HEALTHCHECK --interval=15s --timeout=10s --start-period=180s --retries=5 \
+    CMD curl -fsS http://127.0.0.1:8080/actuator/health/liveness || exit 1
 
 # JVM optimizations for containers
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
