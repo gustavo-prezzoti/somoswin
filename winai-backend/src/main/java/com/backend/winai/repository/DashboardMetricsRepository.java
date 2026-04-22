@@ -16,6 +16,9 @@ public interface DashboardMetricsRepository extends JpaRepository<DashboardMetri
 
         Optional<DashboardMetrics> findByCompanyAndDate(Company company, LocalDate date);
 
+        /** Uma linha por (company, date); se houver legado duplicado, usa a mais antiga. */
+        Optional<DashboardMetrics> findTopByCompanyAndDateOrderByIdAsc(Company company, LocalDate date);
+
         List<DashboardMetrics> findByCompanyAndDateBetweenOrderByDateAsc(
                         Company company, LocalDate startDate, LocalDate endDate);
 

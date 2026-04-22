@@ -5,6 +5,7 @@ import com.backend.winai.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -26,8 +27,10 @@ public class MetricsSyncService {
 
     /**
      * Sincroniza as métricas do dashboard para uma empresa nos últimos N dias
+     * (REQUIRES_NEW: não força flush de outras entidades pendentes no webhook, nem falha o fluxo
+     * principal se métricas estiverem inconsistentes.)
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncDashboardMetrics(Company company, int days) {
         log.info("Sincronizando métricas do dashboard para a empresa {} nos últimos {} dias", company.getId(), days);
 
@@ -66,7 +69,8 @@ public class MetricsSyncService {
             BigDecimal roas = BigDecimal.ZERO;
 
             // Busca ou cria registro de métrica
-            DashboardMetrics metrics = dashboardMetricsRepository.findByCompanyAndDate(company, date)
+            DashboardMetrics metrics = dashboardMetricsRepository
+                    .findTopByCompanyAndDateOrderByIdAsc(company, date)
                     .orElse(DashboardMetrics.builder()
                             .company(company)
                             .date(date)
