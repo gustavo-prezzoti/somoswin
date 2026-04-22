@@ -46,7 +46,6 @@ public class WhatsAppWebhookService {
     private final FollowUpService followUpService;
     private final OpenAiService openAiService;
     private final LeadAttributionAnchorService leadAttributionAnchorService;
-    private final WhatsAppMessagePersistenceService messagePersistenceService;
 
     /**
      * Processa webhook do Uazap recebido via n8n
@@ -122,8 +121,6 @@ public class WhatsAppWebhookService {
                 lead = leadRepository.save(lead);
             }
 
-            // Criar mensagem (persistência em transação separada: evita flush cruzado com métricas
-            // e permite tratar unique message_id do PostgreSQL sem abortar a tx do webhook)
             WhatsAppMessage newMessage = WhatsAppMessage.builder()
                     .conversation(conversation)
                     .lead(lead)
@@ -141,7 +138,7 @@ public class WhatsAppWebhookService {
 
             final WhatsAppMessage message;
             try {
-                message = messagePersistenceService.saveNew(newMessage);
+                message = messageRepository.saveAndFlush(newMessage);
             } catch (DataIntegrityViolationException e) {
                 if (messageRepository.findByMessageId(messageId).isPresent()) {
                     log.debug("Mensagem duplicada (concorrência ou outra instância): {}", messageId);
