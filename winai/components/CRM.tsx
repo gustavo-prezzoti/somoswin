@@ -26,6 +26,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { leadAttributionFieldsFromSearch } from '../utils/attribution';
@@ -224,31 +225,27 @@ const CRM: React.FC = () => {
 
   const moveLead = async (leadId: string, newStatus: LeadStatusType) => {
     const lead = leads.find((l) => l.id === leadId);
-    if (!lead) return;
+    if (!lead || lead.status === newStatus) return;
+    // Otimista: atualiza UI imediatamente
+    const previousStatus = lead.status;
+    setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l)));
     try {
       const updated = await leadService.updateLead(leadId, { ...toRequestFromLead(lead), status: newStatus });
       setLeads((prev) => prev.map((l) => (l.id === leadId ? updated : l)));
       setSelectedLead((sel) => (sel?.id === leadId ? updated : sel));
       setEditingLead((ed) => (ed?.id === leadId ? updated : ed));
     } catch (err: unknown) {
+      // Reverte em caso de erro
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status: previousStatus } : l)));
       alert('Erro ao mover: ' + (err instanceof Error ? err.message : 'falha'));
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, leadId: string) => {
-    e.dataTransfer.setData('leadId', leadId);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, status: LeadStatusType) => {
-    e.preventDefault();
-    const leadId = e.dataTransfer.getData('leadId');
-    if (leadId) moveLead(leadId, status);
+  const handleDragEnd = (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+    if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+    moveLead(draggableId, destination.droppableId as LeadStatusType);
   };
 
   const handleEdit = (lead: LeadData) => {
@@ -458,13 +455,12 @@ const CRM: React.FC = () => {
       </div>
 
       {viewMode === 'KANBAN' ? (
+        <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex gap-6 overflow-x-auto pb-8 no-scrollbar min-h-[600px]">
           {kanbanColumns.map((col) => (
             <div
               key={col.id}
               className="flex-shrink-0 w-80 flex flex-col gap-4"
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, col.id)}
             >
               <div className="flex items-center justify-between px-2 gap-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -502,27 +498,39 @@ const CRM: React.FC = () => {
                 </button>
               </div>
 
-              <div className="flex-1 space-y-4 min-h-[500px]">
+              <Droppable droppableId={col.id}>
+                {(dropProvided, dropSnapshot) => (
+                  <div
+                    ref={dropProvided.innerRef}
+                    {...dropProvided.droppableProps}
+                    className={`flex-1 space-y-4 min-h-[500px] rounded-2xl transition-colors ${
+                      dropSnapshot.isDraggingOver ? 'bg-emerald-50/40' : ''
+                    }`}
+                  >
                 {filteredLeads
                   .filter((l) => l.status === col.id)
-                  .map((lead) => {
+                  .map((lead, index) => {
                     const score = lead.leadScore ?? 0;
                     const aging = daysSince(lead.createdAt);
                     return (
-                      <motion.div
-                        layoutId={lead.id}
-                        key={lead.id}
+                      <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                        {(dragProvided, dragSnapshot) => (
+                      <div
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                        {...dragProvided.dragHandleProps}
                         onClick={() => setSelectedLead(lead)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(ev) => ev.key === 'Enter' && setSelectedLead(lead)}
-                        className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm hover:shadow-xl hover:border-emerald-100 transition-all cursor-pointer group relative active:scale-95 active:rotate-1"
+                        style={dragProvided.draggableProps.style}
+                        className={`bg-white p-5 rounded-[28px] border shadow-sm transition-shadow cursor-pointer group relative ${
+                          dragSnapshot.isDragging
+                            ? 'shadow-2xl border-emerald-200 ring-2 ring-emerald-500/20'
+                            : 'border-gray-100 hover:shadow-lg hover:border-emerald-100'
+                        }`}
                       >
-                        <div
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, lead.id)}
-                          className="flex justify-between items-start mb-4 cursor-grab active:cursor-grabbing"
-                        >
+                        <div className="flex justify-between items-start mb-4">
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-sm border border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
                               {lead.name.charAt(0)}
@@ -609,13 +617,19 @@ const CRM: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      </motion.div>
+                      </div>
+                        )}
+                      </Draggable>
                     );
                   })}
-              </div>
+                {dropProvided.placeholder}
+                  </div>
+                )}
+              </Droppable>
             </div>
           ))}
         </div>
+        </DragDropContext>
       ) : (
         <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
           <table className="w-full border-collapse">
