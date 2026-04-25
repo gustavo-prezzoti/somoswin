@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react';
 import {
   Search,
   Filter,
@@ -52,43 +52,187 @@ function daysSince(dateStr: string): number {
   return Math.max(0, Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
-const StatusBadge = ({ status, label }: { status: LeadStatusType; label?: string }) => {
+function formatMoney(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+const StatusBadge = memo(function StatusBadge({ status, label }: { status: LeadStatusType; label?: string }) {
   const style = LEAD_STATUS_STYLES[status] || 'bg-gray-50 text-gray-600 border-gray-100';
   const display = label ?? LEAD_STATUS_LABELS[status] ?? status;
   return (
     <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${style}`}>{display}</span>
   );
-};
+});
 
-const ScoreBadge = ({ score }: { score: number }) => {
-  const getColor = (s: number) => {
-    if (s >= 80) return 'text-emerald-600 bg-emerald-50 border-emerald-100';
-    if (s >= 50) return 'text-amber-600 bg-amber-50 border-amber-100';
-    return 'text-rose-600 bg-rose-50 border-rose-100';
-  };
+const ScoreBadge = memo(function ScoreBadge({ score }: { score: number }) {
+  const color =
+    score >= 80
+      ? 'text-emerald-600 bg-emerald-50 border-emerald-100'
+      : score >= 50
+        ? 'text-amber-600 bg-amber-50 border-amber-100'
+        : 'text-rose-600 bg-rose-50 border-rose-100';
   return (
-    <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-black ${getColor(score)}`}>
+    <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-black ${color}`}>
       <TrendingUp size={10} />
       {score}
     </div>
   );
-};
+});
 
-const AgingBadge = ({ days }: { days: number }) => {
-  const getStatus = (d: number) => {
-    if (d <= 2) return { label: 'Fresco', color: 'text-emerald-600 bg-emerald-50' };
-    if (d <= 5) return { label: 'Atenção', color: 'text-amber-600 bg-amber-50' };
-    if (d <= 10) return { label: 'Atrasado', color: 'text-orange-600 bg-orange-50' };
-    return { label: 'Crítico', color: 'text-rose-600 bg-rose-50' };
-  };
-  const st = getStatus(days);
+const AgingBadge = memo(function AgingBadge({ days }: { days: number }) {
+  const st =
+    days <= 2
+      ? { label: 'Fresco', color: 'text-emerald-600 bg-emerald-50' }
+      : days <= 5
+        ? { label: 'Atenção', color: 'text-amber-600 bg-amber-50' }
+        : days <= 10
+          ? { label: 'Atrasado', color: 'text-orange-600 bg-orange-50' }
+          : { label: 'Crítico', color: 'text-rose-600 bg-rose-50' };
   return (
     <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${st.color}`}>
       <Clock size={10} />
       {st.label} ({days}d)
     </div>
   );
-};
+});
+
+type KanbanColumnDescriptor = { id: LeadStatusType; label: string; color: string };
+
+interface LeadCardProps {
+  lead: LeadData;
+  index: number;
+  isMoveMenuOpen: boolean;
+  columns: ReadonlyArray<KanbanColumnDescriptor>;
+  onSelect: (lead: LeadData) => void;
+  onToggleMoveMenu: (id: string | null) => void;
+  onMove: (leadId: string, status: LeadStatusType) => void;
+  onDelete: (lead: LeadData) => void;
+}
+
+const LeadCard = memo(function LeadCard({
+  lead,
+  index,
+  isMoveMenuOpen,
+  columns,
+  onSelect,
+  onToggleMoveMenu,
+  onMove,
+  onDelete,
+}: LeadCardProps) {
+  const score = lead.leadScore ?? 0;
+  const aging = daysSince(lead.createdAt);
+  const value = formatMoney(lead.estimatedValue != null ? Number(lead.estimatedValue) : null);
+  const dateLabel = new Date(lead.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+
+  return (
+    <Draggable draggableId={lead.id} index={index}>
+      {(dragProvided, dragSnapshot) => (
+        <div
+          ref={dragProvided.innerRef}
+          {...dragProvided.draggableProps}
+          {...dragProvided.dragHandleProps}
+          onClick={() => onSelect(lead)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(ev) => ev.key === 'Enter' && onSelect(lead)}
+          style={dragProvided.draggableProps.style}
+          className={`bg-white p-5 rounded-[28px] border shadow-sm transition-shadow cursor-pointer group relative ${
+            dragSnapshot.isDragging
+              ? 'shadow-2xl border-emerald-200 ring-2 ring-emerald-500/20'
+              : 'border-gray-100 hover:shadow-lg hover:border-emerald-100'
+          }`}
+        >
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-sm border border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
+                {lead.name.charAt(0)}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-black text-gray-800 text-sm tracking-tight truncate">{lead.name}</h4>
+                  <ScoreBadge score={score} />
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest shrink-0">
+                    {lead.source || '—'}
+                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-gray-300">•</span>
+                    <AgingBadge days={aging} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleMoveMenu(isMoveMenuOpen ? null : lead.id);
+                }}
+                className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+              >
+                <MoreVertical size={16} />
+              </button>
+              {isMoveMenuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className="px-4 py-2 text-[8px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">
+                    Mover para:
+                  </p>
+                  {columns.map((column) => (
+                    <button
+                      type="button"
+                      key={column.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMove(lead.id, column.id);
+                        onToggleMoveMenu(null);
+                      }}
+                      className={`w-full text-left px-4 py-2 text-[10px] font-bold hover:bg-emerald-50 transition-colors flex items-center gap-2 ${
+                        lead.status === column.id ? 'text-emerald-600 bg-emerald-50/50' : 'text-gray-600'
+                      }`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full ${column.color}`} />
+                      {column.label}
+                    </button>
+                  ))}
+                  <div className="border-t border-gray-100 my-1 mx-2" />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(lead);
+                      onToggleMoveMenu(null);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-[10px] font-black text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-2 rounded-b-xl"
+                  >
+                    <Trash2 size={14} /> Excluir lead
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="space-y-3 pt-4 border-t border-gray-50">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-emerald-600 font-black text-xs truncate">
+                <DollarSign size={12} className="shrink-0" />
+                {value}
+              </div>
+              <div className="flex items-center gap-1.5 text-gray-400 text-[9px] font-bold shrink-0">
+                <Clock size={12} />
+                {dateLabel}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </Draggable>
+  );
+});
 
 function toRequestFromLead(lead: LeadData): LeadRequest {
   return {
@@ -200,12 +344,16 @@ const CRM: React.FC = () => {
   }, [loadLeads]);
 
   const filteredLeads = useMemo(() => {
-    let result = leads.filter(
-      (l) =>
-        l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        l.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (l.phone && l.phone.includes(searchTerm))
-    );
+    const q = searchTerm.trim().toLowerCase();
+    let result = leads;
+    if (q) {
+      result = result.filter(
+        (l) =>
+          l.name.toLowerCase().includes(q) ||
+          l.email.toLowerCase().includes(q) ||
+          (l.phone && l.phone.includes(q))
+      );
+    }
     if (showFilters) {
       result = result.filter(
         (l) => (Number(l.estimatedValue) || 0) > 5000 || (l.leadScore ?? 0) > 70
@@ -213,6 +361,25 @@ const CRM: React.FC = () => {
     }
     return result;
   }, [leads, searchTerm, showFilters]);
+
+  /** Pre-agrupa leads por coluna em uma única passada (evita N×M filter por render). */
+  const leadsByStatus = useMemo(() => {
+    const map: Record<LeadStatusType, LeadData[]> = {
+      NEW: [],
+      CONTACTED: [],
+      QUALIFIED: [],
+      MEETING_SCHEDULED: [],
+      PROPOSAL_SENT: [],
+      NEGOTIATION: [],
+      WON: [],
+      LOST: [],
+    };
+    for (const lead of filteredLeads) {
+      const arr = map[lead.status];
+      if (arr) arr.push(lead);
+    }
+    return map;
+  }, [filteredLeads]);
 
   const pipelineStats = useMemo(() => {
     const total = leads.length;
@@ -223,10 +390,13 @@ const CRM: React.FC = () => {
     return { total, value, conversion, hot };
   }, [leads]);
 
-  const moveLead = async (leadId: string, newStatus: LeadStatusType) => {
-    const lead = leads.find((l) => l.id === leadId);
+  // Ref para acessar leads atualizados sem invalidar callbacks memoizadas
+  const leadsRef = useRef(leads);
+  leadsRef.current = leads;
+
+  const moveLead = useCallback(async (leadId: string, newStatus: LeadStatusType) => {
+    const lead = leadsRef.current.find((l) => l.id === leadId);
     if (!lead || lead.status === newStatus) return;
-    // Otimista: atualiza UI imediatamente
     const previousStatus = lead.status;
     setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l)));
     try {
@@ -235,18 +405,17 @@ const CRM: React.FC = () => {
       setSelectedLead((sel) => (sel?.id === leadId ? updated : sel));
       setEditingLead((ed) => (ed?.id === leadId ? updated : ed));
     } catch (err: unknown) {
-      // Reverte em caso de erro
       setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status: previousStatus } : l)));
       alert('Erro ao mover: ' + (err instanceof Error ? err.message : 'falha'));
     }
-  };
+  }, []);
 
-  const handleDragEnd = (result: DropResult) => {
+  const handleDragEnd = useCallback((result: DropResult) => {
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
     moveLead(draggableId, destination.droppableId as LeadStatusType);
-  };
+  }, [moveLead]);
 
   const handleEdit = (lead: LeadData) => {
     setEditingLead({ ...lead });
@@ -300,9 +469,17 @@ const CRM: React.FC = () => {
     }
   };
 
-  const openDeleteConfirm = (lead: LeadData) => {
+  const openDeleteConfirm = useCallback((lead: LeadData) => {
     setDeleteConfirm({ isOpen: true, leadId: lead.id, leadName: lead.name });
-  };
+  }, []);
+
+  const handleSelectLead = useCallback((lead: LeadData) => {
+    setSelectedLead(lead);
+  }, []);
+
+  const handleToggleMoveMenu = useCallback((id: string | null) => {
+    setShowMoveMenu(id);
+  }, []);
 
   const handleDelete = async () => {
     if (!deleteConfirm.leadId) return;
@@ -317,11 +494,6 @@ const CRM: React.FC = () => {
     } finally {
       setIsDeleting(false);
     }
-  };
-
-  const formatMoney = (n: number | null | undefined) => {
-    if (n == null || Number.isNaN(Number(n))) return '—';
-    return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   };
 
   if (loading) {
@@ -358,7 +530,7 @@ const CRM: React.FC = () => {
 
   return (
     <>
-    <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500">
+    <div className="space-y-8 max-w-7xl mx-auto">
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-gray-800 tracking-tighter uppercase italic">Pipeline de Vendas</h1>
@@ -481,7 +653,7 @@ const CRM: React.FC = () => {
                     <Edit2 size={14} />
                   </button>
                   <span className="bg-gray-100 text-gray-400 text-[10px] font-black px-2 py-0.5 rounded-full shrink-0">
-                    {filteredLeads.filter((l) => l.status === col.id).length}
+                    {leadsByStatus[col.id].length}
                   </span>
                 </div>
                 <button
@@ -507,121 +679,19 @@ const CRM: React.FC = () => {
                       dropSnapshot.isDraggingOver ? 'bg-emerald-50/40' : ''
                     }`}
                   >
-                {filteredLeads
-                  .filter((l) => l.status === col.id)
-                  .map((lead, index) => {
-                    const score = lead.leadScore ?? 0;
-                    const aging = daysSince(lead.createdAt);
-                    return (
-                      <Draggable key={lead.id} draggableId={lead.id} index={index}>
-                        {(dragProvided, dragSnapshot) => (
-                      <div
-                        ref={dragProvided.innerRef}
-                        {...dragProvided.draggableProps}
-                        {...dragProvided.dragHandleProps}
-                        onClick={() => setSelectedLead(lead)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(ev) => ev.key === 'Enter' && setSelectedLead(lead)}
-                        style={dragProvided.draggableProps.style}
-                        className={`bg-white p-5 rounded-[28px] border shadow-sm transition-shadow cursor-pointer group relative ${
-                          dragSnapshot.isDragging
-                            ? 'shadow-2xl border-emerald-200 ring-2 ring-emerald-500/20'
-                            : 'border-gray-100 hover:shadow-lg hover:border-emerald-100'
-                        }`}
-                      >
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-sm border border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
-                              {lead.name.charAt(0)}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-black text-gray-800 text-sm tracking-tight truncate">{lead.name}</h4>
-                                <ScoreBadge score={score} />
-                              </div>
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
-                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest shrink-0">
-                                  {lead.source || '—'}
-                                </p>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="text-gray-300">•</span>
-                                  <AgingBadge days={aging} />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="relative shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowMoveMenu(showMoveMenu === lead.id ? null : lead.id);
-                              }}
-                              className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
-                            >
-                              <MoreVertical size={16} />
-                            </button>
-
-                            {showMoveMenu === lead.id && (
-                              <div
-                                className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in duration-200"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <p className="px-4 py-2 text-[8px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">
-                                  Mover para:
-                                </p>
-                                {kanbanColumns.map((column) => (
-                                  <button
-                                    type="button"
-                                    key={column.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      moveLead(lead.id, column.id);
-                                      setShowMoveMenu(null);
-                                    }}
-                                    className={`w-full text-left px-4 py-2 text-[10px] font-bold hover:bg-emerald-50 transition-colors flex items-center gap-2 ${
-                                      lead.status === column.id ? 'text-emerald-600 bg-emerald-50/50' : 'text-gray-600'
-                                    }`}
-                                  >
-                                    <div className={`w-1.5 h-1.5 rounded-full ${column.color}`} />
-                                    {column.label}
-                                  </button>
-                                ))}
-                                <div className="border-t border-gray-100 my-1 mx-2" />
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openDeleteConfirm(lead);
-                                    setShowMoveMenu(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2.5 text-[10px] font-black text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-2 rounded-b-xl"
-                                >
-                                  <Trash2 size={14} /> Excluir lead
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="space-y-3 pt-4 border-t border-gray-50">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 text-emerald-600 font-black text-xs truncate">
-                              <DollarSign size={12} className="shrink-0" />
-                              {formatMoney(lead.estimatedValue != null ? Number(lead.estimatedValue) : null)}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-gray-400 text-[9px] font-bold shrink-0">
-                              <Clock size={12} />
-                              {new Date(lead.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                        )}
-                      </Draggable>
-                    );
-                  })}
+                {leadsByStatus[col.id].map((lead, index) => (
+                  <LeadCard
+                    key={lead.id}
+                    lead={lead}
+                    index={index}
+                    isMoveMenuOpen={showMoveMenu === lead.id}
+                    columns={kanbanColumns}
+                    onSelect={handleSelectLead}
+                    onToggleMoveMenu={handleToggleMoveMenu}
+                    onMove={moveLead}
+                    onDelete={openDeleteConfirm}
+                  />
+                ))}
                 {dropProvided.placeholder}
                   </div>
                 )}
@@ -722,7 +792,7 @@ const CRM: React.FC = () => {
           <div className="fixed inset-0 z-[10050] flex justify-end">
             <button
               type="button"
-              className="absolute inset-0 bg-black/60 backdrop-blur-md border-0 p-0 cursor-pointer"
+              className="absolute inset-0 bg-black/60 border-0 p-0 cursor-pointer"
               aria-label="Fechar detalhe do lead"
               onClick={() => setSelectedLead(null)}
             />
@@ -891,7 +961,7 @@ const CRM: React.FC = () => {
 
       <AnimatePresence>
         {showNewLeadModal && (
-          <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto min-h-0">
+          <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 overflow-y-auto min-h-0">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -1060,7 +1130,7 @@ const CRM: React.FC = () => {
       </AnimatePresence>
 
       {editingLead && (
-        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto min-h-0">
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 overflow-y-auto min-h-0">
           <div className="bg-white w-full max-w-lg rounded-[48px] shadow-2xl overflow-hidden border border-emerald-800/10 relative flex flex-col max-h-[min(90dvh,900px)] my-auto">
             <div className="p-8 md:p-12 pb-4 flex justify-between items-center shrink-0">
               <div className="space-y-1">
@@ -1201,8 +1271,8 @@ const CRM: React.FC = () => {
       )}
 
       {columnTitleModal && (
-        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md overflow-y-auto min-h-0">
-          <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl border border-gray-100 p-8 md:p-10 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 sm:p-6 bg-black/60 overflow-y-auto min-h-0">
+          <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl border border-gray-100 p-8 md:p-10">
             <div className="flex items-start justify-between gap-4 mb-6">
               <div>
                 <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em] mb-1">CRM · Kanban</p>
