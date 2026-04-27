@@ -8,17 +8,11 @@ import {
   Image as ImageIcon,
   Video,
   Type,
-  Clock,
   Search,
   Filter,
-  MoreVertical,
   FileText,
-  Zap,
   AlertCircle,
   X as LucideX,
-  ShieldCheck,
-  Smartphone,
-  Network,
   ShieldAlert,
   Loader2,
 } from 'lucide-react';
@@ -53,14 +47,24 @@ function backendStatusLabel(status: string): string {
   return m[status] ?? status;
 }
 
-function instanceStatusLabel(status: string): string {
-  const m: Record<string, string> = {
-    ready: 'Pronto para disparo',
-    warming: 'Conectando / aquecendo',
-    paused: 'Pausado / desconectado',
-    unknown: 'Status indisponível',
-  };
-  return m[status] ?? status;
+function digitsOnly(s: string): string {
+  return s.replace(/\D/g, '');
+}
+
+type ManualPhoneRow = { id: string; ddi: string; ddd: string; phone: string };
+
+function newManualRow(): ManualPhoneRow {
+  return { id: crypto.randomUUID(), ddi: '55', ddd: '', phone: '' };
+}
+
+function isValidBrManualRow(row: ManualPhoneRow): boolean {
+  const ddi = digitsOnly(row.ddi) || '55';
+  const ddd = digitsOnly(row.ddd);
+  const num = digitsOnly(row.phone);
+  if (ddi !== '55') {
+    return ddd.length >= 1 && num.length >= 6 && ddi.length + ddd.length + num.length >= 12;
+  }
+  return ddd.length === 2 && num.length === 9 && num.startsWith('9');
 }
 
 const MetricCard = ({
@@ -91,17 +95,18 @@ const MetricCard = ({
 );
 
 const ActiveBase: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'whatsapp' | 'warmer'>('whatsapp');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [step, setStep] = useState(1);
   const [campaignName, setCampaignName] = useState('');
   const [messageText, setMessageText] = useState('');
+  const [companyPrompt, setCompanyPrompt] = useState('');
   const [hasImage, setHasImage] = useState(false);
   const [hasVideo, setHasVideo] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [manualContacts, setManualContacts] = useState('');
-  const [contactMethod, setContactMethod] = useState<'manual' | 'excel'>('manual');
+  const [manualRows, setManualRows] = useState<ManualPhoneRow[]>([newManualRow()]);
+  const [contactMethod, setContactMethod] = useState<'form' | 'paste' | 'excel'>('form');
   const [contactsFile, setContactsFile] = useState<File | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
 
@@ -174,13 +179,8 @@ const ActiveBase: React.FC = () => {
   useEffect(() => {
     loadMetrics();
     loadCampaigns();
-  }, [loadMetrics, loadCampaigns]);
-
-  useEffect(() => {
-    if (activeTab === 'warmer') {
-      loadInstances();
-    }
-  }, [activeTab, loadInstances]);
+    void loadInstances();
+  }, [loadMetrics, loadCampaigns, loadInstances]);
 
   useEffect(() => {
     if (showCreateModal) {
@@ -206,16 +206,22 @@ const ActiveBase: React.FC = () => {
     return manualContacts.split(/\r?\n/).filter((l) => l.trim().length > 0).length;
   }, [manualContacts]);
 
+  const validFormRowsCount = useMemo(() => {
+    return manualRows.filter((r) => isValidBrManualRow(r)).length;
+  }, [manualRows]);
+
   const resetModal = () => {
     setStep(1);
     setCampaignName('');
     setMessageText('');
+    setCompanyPrompt('');
     setHasImage(false);
     setHasVideo(false);
     setImageUrl('');
     setVideoUrl('');
     setManualContacts('');
-    setContactMethod('manual');
+    setManualRows([newManualRow()]);
+    setContactMethod('form');
     setContactsFile(null);
     setConfirmOptIn(false);
     if (instances.length) {
@@ -236,11 +242,22 @@ const ActiveBase: React.FC = () => {
     }
     setSubmitting(true);
     try {
+      const phoneParts =
+        contactMethod === 'form'
+          ? manualRows.filter((r) => isValidBrManualRow(r)).map((r) => ({
+              ddi: digitsOnly(r.ddi) || '55',
+              ddd: digitsOnly(r.ddd),
+              number: digitsOnly(r.phone),
+            }))
+          : undefined;
       const payload = {
         name: campaignName.trim(),
         messageText: messageText.trim(),
+        companyPrompt: companyPrompt.trim() || null,
+        scheduleTimezone: 'America/Sao_Paulo',
         connectionId,
-        phonesRaw: contactMethod === 'manual' ? manualContacts : undefined,
+        phoneParts,
+        phonesRaw: contactMethod === 'paste' ? manualContacts : undefined,
         imageUrl: hasImage && imageUrl.trim() ? imageUrl.trim() : null,
         videoUrl: hasVideo && videoUrl.trim() ? videoUrl.trim() : null,
         startImmediately: true,
@@ -275,7 +292,7 @@ const ActiveBase: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">Base Ativa</h2>
-          <p className="text-gray-500 font-medium">Remarketing, disparos em massa e status das instâncias WhatsApp</p>
+          <p className="text-gray-500 font-medium">Remarketing e disparos com envio gradual (WhatsApp)</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -311,7 +328,7 @@ const ActiveBase: React.FC = () => {
           icon={ShieldAlert}
           label="Falhas"
           value={metricsLoading ? '…' : formatInt(metrics?.failedLast30Days)}
-          subValue="Destinatários com erro (30 dias)"
+          subValue="Envios sem sucesso (30 dias)"
           color="bg-rose-500"
         />
         <MetricCard
@@ -334,205 +351,37 @@ const ActiveBase: React.FC = () => {
       <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-8 border-b border-gray-50">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex bg-gray-100 p-1 rounded-2xl self-start">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600">
+                <MessageCircle size={20} />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-800 tracking-tight">Remarketing e disparos</h2>
+                <p className="text-[11px] text-gray-500 font-medium">
+                  Campanhas com envio gradual e sequência de mensagens. Respeite opt-in e as políticas do WhatsApp.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Buscar campanhas..."
+                  className="pl-10 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 w-64"
+                />
+              </div>
               <button
-                onClick={() => setActiveTab('whatsapp')}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black transition-all ${
-                  activeTab === 'whatsapp'
-                    ? 'bg-white text-emerald-600 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
+                type="button"
+                className="p-2.5 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-100 transition-colors"
               >
-                <MessageCircle size={16} />
-                WhatsApp
-              </button>
-              <button
-                onClick={() => setActiveTab('warmer')}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black transition-all ${
-                  activeTab === 'warmer'
-                    ? 'bg-white text-amber-600 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Zap size={16} />
-                Aquecedor de Chip
+                <Filter size={18} />
               </button>
             </div>
-
-            {activeTab !== 'warmer' && (
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    type="text"
-                    placeholder="Buscar campanhas..."
-                    className="pl-10 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 w-64"
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="p-2.5 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-100 transition-colors"
-                >
-                  <Filter size={18} />
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
-        {activeTab === 'warmer' ? (
-          <div className="p-8 space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-amber-50 p-8 rounded-[32px] border border-amber-100 relative overflow-hidden">
-                <div className="relative z-10 space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-amber-500 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-500/20">
-                      <Network size={28} className="text-white" />
-                    </div>
-                    <div>
-                      <h4 className="text-xl font-black text-amber-900 tracking-tight">Aquecimento de número</h4>
-                      <p className="text-amber-800 font-bold text-sm">
-                        Use números com histórico legítimo e respeite as políticas do WhatsApp. Os dados abaixo vêm das
-                        suas conexões e da API UaZap.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                    <div className="bg-white/50 backdrop-blur-sm p-4 rounded-2xl border border-amber-200/50">
-                      <h5 className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-2 flex items-center gap-2">
-                        <ShieldCheck size={12} />
-                        Boas práticas
-                      </h5>
-                      <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                        Evite disparos promocionais sem opt-in. Mantenha conversas naturais e respeite limites de envio.
-                      </p>
-                    </div>
-                    <div className="bg-white/50 backdrop-blur-sm p-4 rounded-2xl border border-amber-200/50">
-                      <h5 className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-2 flex items-center gap-2">
-                        <AlertCircle size={12} />
-                        Métricas de rede
-                      </h5>
-                      <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                        Totais agregados de &quot;rede comunitária&quot; não estão disponíveis aqui — apenas o status real
-                        das suas instâncias.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <Zap className="absolute -right-8 -bottom-8 text-amber-200/20 w-48 h-48 -rotate-12" />
-              </div>
-
-              <div className="bg-slate-900 p-8 rounded-[32px] text-white space-y-6">
-                <div className="space-y-2">
-                  <h4 className="text-lg font-black tracking-tight">Resumo</h4>
-                  <p className="text-xs text-slate-400 font-medium leading-relaxed">
-                    Instâncias ativas listadas ao lado refletem conexões cadastradas para a empresa e o estado retornado
-                    pela UaZap.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {instancesLoading && (
-                <div className="col-span-full flex items-center justify-center py-12 text-gray-400 gap-2">
-                  <Loader2 className="animate-spin" size={20} />
-                  <span className="text-sm font-bold">Carregando instâncias…</span>
-                </div>
-              )}
-              {!instancesLoading &&
-                instances.map((warmer) => {
-                  const lim = warmer.limitToday;
-                  const today = warmer.interactionsToday;
-                  const hasProgress =
-                    lim != null && lim > 0 && today != null && Number.isFinite(today / lim);
-                  return (
-                    <div
-                      key={warmer.connectionId}
-                      className="bg-gray-50 p-6 rounded-[32px] border border-gray-100 space-y-6"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-3 bg-white rounded-2xl text-slate-600 shadow-sm">
-                            <Smartphone size={20} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-black text-slate-800">{warmer.phoneDisplay}</p>
-                            {warmer.profileName && (
-                              <p className="text-[10px] text-gray-500 font-medium">{warmer.profileName}</p>
-                            )}
-                            <div className="flex items-center gap-2 mt-1">
-                              <span
-                                className={`w-2 h-2 rounded-full ${
-                                  warmer.status === 'ready' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-                                }`}
-                              />
-                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                {instanceStatusLabel(warmer.status)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-gray-200 text-gray-600">
-                            {warmer.modeLabel || 'Instância'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="bg-white p-4 rounded-2xl border border-gray-100">
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Dias</p>
-                          <p className="text-lg font-black text-slate-800">
-                            {warmer.daysActive != null ? formatInt(warmer.daysActive) : 'N/D'}
-                          </p>
-                        </div>
-                        <div className="bg-white p-4 rounded-2xl border border-gray-100">
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Msgs env.</p>
-                          <p className="text-lg font-black text-slate-800">
-                            {warmer.messagesSent != null ? formatInt(warmer.messagesSent) : 'N/D'}
-                          </p>
-                        </div>
-                        <div className="bg-white p-4 rounded-2xl border border-gray-100">
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Hoje</p>
-                          <p className="text-lg font-black text-slate-800">
-                            {today != null && lim != null ? `${today}/${lim}` : 'N/D'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {hasProgress ? (
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">
-                            <span>Uso hoje (API)</span>
-                            <span>{Math.round(((today as number) / (lim as number)) * 100)}%</span>
-                          </div>
-                          <div className="h-2 bg-white rounded-full overflow-hidden border border-gray-100">
-                            <div
-                              className="h-full bg-amber-500 transition-all duration-1000"
-                              style={{
-                                width: `${Math.min(100, ((today as number) / (lim as number)) * 100)}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                          Limite diário não informado pela API
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              {!instancesLoading && instances.length === 0 && (
-                <div className="col-span-full text-center py-8 text-gray-500 text-sm font-medium">
-                  Nenhuma instância ativa encontrada. Cadastre uma conexão WhatsApp para a empresa.
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
+        <div className="overflow-x-auto">
             {listLoading ? (
               <div className="flex items-center justify-center py-16 gap-2 text-gray-400">
                 <Loader2 className="animate-spin" size={22} />
@@ -624,7 +473,6 @@ const ActiveBase: React.FC = () => {
               <div className="text-center py-12 text-gray-500 text-sm font-medium">Nenhuma campanha ainda.</div>
             )}
           </div>
-        )}
       </div>
     </div>
 
@@ -671,10 +519,18 @@ const ActiveBase: React.FC = () => {
                 )}
                 {!reportLoading && reportDetail && (
                   <>
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contatos</p>
                         <p className="text-2xl font-black text-slate-800">{reportDetail.totalRecipients}</p>
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                          Msgs / sequência
+                        </p>
+                        <p className="text-2xl font-black text-slate-800">
+                          {reportDetail.sequenceSize != null ? reportDetail.sequenceSize : '—'}
+                        </p>
                       </div>
                       <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
                         <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">
@@ -683,7 +539,9 @@ const ActiveBase: React.FC = () => {
                         <p className="text-2xl font-black text-emerald-700">{reportDetail.sentCount}</p>
                       </div>
                       <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100">
-                        <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">Falhas</p>
+                        <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">
+                          Não enviados
+                        </p>
                         <p className="text-2xl font-black text-rose-700">{reportDetail.failedCount}</p>
                       </div>
                     </div>
@@ -696,7 +554,7 @@ const ActiveBase: React.FC = () => {
                               Contato
                             </th>
                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                              Informação
+                              Mensagem
                             </th>
                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                               Status
@@ -704,39 +562,29 @@ const ActiveBase: React.FC = () => {
                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                               Horário
                             </th>
-                            <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                              Erro
-                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                          {(reportDetail.reports || []).map((report) => (
-                            <tr key={report.id} className="text-sm">
-                              <td className="px-6 py-4 font-black text-slate-800">{report.contactName}</td>
-                              <td className="px-6 py-4 text-gray-500 font-medium">{report.contactInfo}</td>
+                          {(reportDetail.dispatchReports || []).map((row) => (
+                            <tr key={row.id} className="text-sm">
+                              <td className="px-6 py-4 font-bold text-slate-800">{row.recipientLabel}</td>
+                              <td className="px-6 py-4 text-gray-600 font-medium">
+                                {row.sequenceIndex} de {row.sequenceTotal}
+                              </td>
                               <td className="px-6 py-4">
                                 <span
                                   className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                                    report.status === 'sent'
+                                    row.statusLabel === 'Enviado'
                                       ? 'bg-emerald-50 text-emerald-600'
-                                      : report.status === 'failed'
-                                        ? 'bg-rose-50 text-rose-600'
-                                        : 'bg-gray-100 text-gray-600'
+                                      : 'bg-gray-100 text-gray-600'
                                   }`}
                                 >
-                                  {report.status === 'sent'
-                                    ? 'Enviado'
-                                    : report.status === 'failed'
-                                      ? 'Falhou'
-                                      : 'Pendente'}
+                                  {row.statusLabel}
                                 </span>
                               </td>
                               <td className="px-6 py-4 text-gray-400 text-xs">
-                                {report.timestamp
-                                  ? new Date(report.timestamp).toLocaleString('pt-BR')
-                                  : '—'}
+                                {row.timestamp ? new Date(row.timestamp).toLocaleString('pt-BR') : '—'}
                               </td>
-                              <td className="px-6 py-4 text-rose-500 text-xs font-medium">{report.error || '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -798,50 +646,141 @@ const ActiveBase: React.FC = () => {
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
                         Como deseja adicionar os contatos?
                       </label>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <button
                           type="button"
-                          onClick={() => setContactMethod('manual')}
-                          className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                            contactMethod === 'manual'
+                          onClick={() => setContactMethod('form')}
+                          className={`flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                            contactMethod === 'form'
                               ? 'border-indigo-500 bg-indigo-50 text-indigo-600'
                               : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
                           }`}
                         >
-                          <Type size={20} />
-                          <span className="text-xs font-black uppercase tracking-widest">Manual</span>
+                          <Plus size={18} />
+                          <span className="text-xs font-black uppercase tracking-widest">DDI / DDD / Tel.</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setContactMethod('paste')}
+                          className={`flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                            contactMethod === 'paste'
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-600'
+                              : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
+                          }`}
+                        >
+                          <Type size={18} />
+                          <span className="text-xs font-black uppercase tracking-widest">Colar lista</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setContactMethod('excel')}
-                          className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+                          className={`flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all ${
                             contactMethod === 'excel'
                               ? 'border-indigo-500 bg-indigo-50 text-indigo-600'
                               : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
                           }`}
                         >
-                          <Upload size={20} />
+                          <Upload size={18} />
                           <span className="text-xs font-black uppercase tracking-widest">Planilha</span>
                         </button>
                       </div>
 
-                      {contactMethod === 'manual' ? (
+                      {contactMethod === 'form' && (
+                        <div className="space-y-3">
+                          <p className="text-[10px] text-gray-500 font-medium ml-1">
+                            Brasil: DDI 55, DDD com 2 dígitos, celular com 9 dígitos (começando em 9). Linhas inválidas
+                            são ignoradas ao enviar.
+                          </p>
+                          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                            {manualRows.map((row, idx) => (
+                              <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={row.ddi}
+                                  onChange={(e) => {
+                                    const v = digitsOnly(e.target.value).slice(0, 3);
+                                    setManualRows((prev) =>
+                                      prev.map((r, i) => (i === idx ? { ...r, ddi: v } : r))
+                                    );
+                                  }}
+                                  placeholder="55"
+                                  className="col-span-3 px-3 py-3 bg-gray-50 rounded-xl text-sm font-bold text-slate-800 outline-none"
+                                />
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={row.ddd}
+                                  onChange={(e) => {
+                                    const v = digitsOnly(e.target.value).slice(0, 2);
+                                    setManualRows((prev) =>
+                                      prev.map((r, i) => (i === idx ? { ...r, ddd: v } : r))
+                                    );
+                                  }}
+                                  placeholder="11"
+                                  className="col-span-3 px-3 py-3 bg-gray-50 rounded-xl text-sm font-bold text-slate-800 outline-none"
+                                />
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={row.phone}
+                                  onChange={(e) => {
+                                    const v = digitsOnly(e.target.value).slice(0, 9);
+                                    setManualRows((prev) =>
+                                      prev.map((r, i) => (i === idx ? { ...r, phone: v } : r))
+                                    );
+                                  }}
+                                  placeholder="99999-9999"
+                                  className="col-span-5 px-3 py-3 bg-gray-50 rounded-xl text-sm font-bold text-slate-800 outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  className="col-span-1 p-2 text-rose-400 hover:bg-rose-50 rounded-lg disabled:opacity-30"
+                                  disabled={manualRows.length <= 1}
+                                  onClick={() =>
+                                    setManualRows((prev) =>
+                                      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)
+                                    )
+                                  }
+                                  aria-label="Remover linha"
+                                >
+                                  <LucideX size={18} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setManualRows((prev) => [...prev, newManualRow()])}
+                            className="text-[10px] font-black uppercase tracking-widest text-indigo-600"
+                          >
+                            + Adicionar contato
+                          </button>
+                          <p className="text-[10px] font-bold text-gray-400">
+                            {validFormRowsCount} contato(s) válido(s)
+                          </p>
+                        </div>
+                      )}
+
+                      {contactMethod === 'paste' && (
                         <div className="space-y-2">
                           <div className="flex justify-between items-center ml-1">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                              Contatos manuais
+                              Um número por linha
                             </label>
-                            <span className="text-[9px] font-bold text-indigo-500">Um número por linha</span>
+                            <span className="text-[9px] font-bold text-indigo-500">Texto livre ou colado</span>
                           </div>
                           <textarea
                             rows={4}
                             value={manualContacts}
                             onChange={(e) => setManualContacts(e.target.value)}
-                            placeholder={'5511999999999\n5511888888888'}
+                            placeholder={'5511999999999\n(11) 99999-9999'}
                             className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500/20 font-bold text-slate-700 outline-none resize-none"
                           />
                         </div>
-                      ) : (
+                      )}
+
+                      {contactMethod === 'excel' && (
                         <div className="space-y-3">
                           <input
                             ref={excelInputRef}
@@ -863,7 +802,7 @@ const ActiveBase: React.FC = () => {
                                 {contactsFile ? contactsFile.name : 'Clique para enviar CSV ou XLSX'}
                               </p>
                               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                                A primeira coluna deve conter os telefones
+                                Uma coluna com telefone ou três colunas: DDI, DDD, telefone (com cabeçalho opcional)
                               </p>
                             </div>
                           </button>
@@ -877,13 +816,25 @@ const ActiveBase: React.FC = () => {
                   <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
-                        Conteúdo da Mensagem
+                        Regras da empresa (tom, ofertas, o que evitar)
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={companyPrompt}
+                        onChange={(e) => setCompanyPrompt(e.target.value)}
+                        placeholder="Ex.: tom consultivo, mencionar desconto de 10% apenas se o lead perguntar preço..."
+                        className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500/20 font-bold text-slate-700 outline-none resize-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                        Primeira mensagem da sequência
                       </label>
                       <textarea
                         rows={5}
                         value={messageText}
                         onChange={(e) => setMessageText(e.target.value)}
-                        placeholder="Digite sua mensagem aqui..."
+                        placeholder="Esta mensagem abre a sequência; as demais serão geradas com base nela e nas regras acima."
                         className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500/20 font-bold text-slate-700 outline-none resize-none"
                       />
                     </div>
@@ -939,7 +890,7 @@ const ActiveBase: React.FC = () => {
                   <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
-                        Instância WhatsApp (UaZap)
+                        Instância WhatsApp
                       </label>
                       <select
                         value={connectionId}
@@ -947,7 +898,9 @@ const ActiveBase: React.FC = () => {
                         className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-slate-700 outline-none"
                         disabled={instancesLoading || instances.length === 0}
                       >
-                        {instances.length === 0 && <option value="">Carregue instâncias (aba Aquecedor) ou aguarde…</option>}
+                        {instances.length === 0 && (
+                          <option value="">Nenhuma instância disponível — cadastre uma conexão para a empresa</option>
+                        )}
                         {instances.map((i) => (
                           <option key={i.connectionId} value={i.connectionId}>
                             {i.instanceName} — {i.phoneDisplay}
@@ -955,7 +908,8 @@ const ActiveBase: React.FC = () => {
                         ))}
                       </select>
                       <p className="text-[10px] text-gray-400 font-medium">
-                        A lista é carregada das conexões ativas da empresa. Abra a aba Aquecedor primeiro se estiver vazia.
+                        Lista das conexões ativas da empresa. Os envios respeitam janela comercial e limite diário de
+                        contatos.
                       </p>
                     </div>
 
@@ -979,11 +933,13 @@ const ActiveBase: React.FC = () => {
                       <div>
                         <h4 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Público</h4>
                         <p className="text-xs text-emerald-700 font-medium">
-                          {contactMethod === 'manual'
-                            ? `${manualLineCount} linha(s) em modo manual`
-                            : contactsFile
-                              ? `Arquivo: ${contactsFile.name}`
-                              : 'Nenhum arquivo selecionado'}
+                          {contactMethod === 'form'
+                            ? `${validFormRowsCount} contato(s) no formulário`
+                            : contactMethod === 'paste'
+                              ? `${manualLineCount} linha(s) coladas`
+                              : contactsFile
+                                ? `Arquivo: ${contactsFile.name}`
+                                : 'Nenhum arquivo selecionado'}
                         </p>
                       </div>
                     </div>
@@ -1031,7 +987,11 @@ const ActiveBase: React.FC = () => {
                         showToast('Informe o nome da campanha.', 'info');
                         return;
                       }
-                      if (step === 1 && contactMethod === 'manual' && manualLineCount === 0) {
+                      if (step === 1 && contactMethod === 'form' && validFormRowsCount === 0) {
+                        showToast('Informe ao menos um número válido (DDI, DDD e celular).', 'info');
+                        return;
+                      }
+                      if (step === 1 && contactMethod === 'paste' && manualLineCount === 0) {
                         showToast('Informe ao menos um número.', 'info');
                         return;
                       }

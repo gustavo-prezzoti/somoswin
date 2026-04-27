@@ -1,5 +1,5 @@
 /**
- * Base Ativa — campanhas de disparo em massa (WhatsApp / UaZap) e métricas.
+ * Base Ativa — campanhas de remarketing (WhatsApp / UaZap) e métricas.
  */
 
 import { httpClient } from './http-client';
@@ -11,11 +11,23 @@ export interface ActiveBaseDashboardMetrics {
     estimatedConversionLabel: string | null;
 }
 
+export interface WhatsAppBroadcastDispatchReportDto {
+    id: string;
+    recipientLabel: string;
+    sequenceIndex: number;
+    sequenceTotal: number;
+    statusLabel: string;
+    timestamp: string;
+}
+
 export interface WhatsAppBroadcastCampaignDto {
     id: string;
     name: string;
     status: string;
     messageText: string;
+    companyPrompt?: string | null;
+    sequenceSize?: number | null;
+    scheduleTimezone?: string | null;
     imageUrl?: string | null;
     videoUrl?: string | null;
     totalRecipients: number;
@@ -25,17 +37,7 @@ export interface WhatsAppBroadcastCampaignDto {
     createdAt: string;
     startedAt?: string | null;
     completedAt?: string | null;
-    reports?: WhatsAppBroadcastRecipientReportDto[] | null;
-}
-
-export interface WhatsAppBroadcastRecipientReportDto {
-    id: string;
-    contactId: string;
-    contactName: string;
-    contactInfo: string;
-    status: string;
-    error?: string | null;
-    timestamp: string;
+    dispatchReports?: WhatsAppBroadcastDispatchReportDto[] | null;
 }
 
 export interface SpringPage<T> {
@@ -46,11 +48,20 @@ export interface SpringPage<T> {
     number: number;
 }
 
+export interface BroadcastPhonePartPayload {
+    ddi?: string;
+    ddd?: string;
+    number?: string;
+}
+
 export interface CreateWhatsAppBroadcastPayload {
     name: string;
     messageText: string;
+    companyPrompt?: string | null;
+    scheduleTimezone?: string | null;
     connectionId: string;
     phones?: string[];
+    phoneParts?: BroadcastPhonePartPayload[];
     phonesRaw?: string;
     imageUrl?: string | null;
     videoUrl?: string | null;
@@ -81,6 +92,11 @@ export const whatsappBroadcastService = {
         ),
 
     getCampaign: (id: string) => httpClient.get<WhatsAppBroadcastCampaignDto>(`/whatsapp/broadcasts/${id}`),
+
+    listDispatches: (campaignId: string, page = 0, size = 50) =>
+        httpClient.get<SpringPage<WhatsAppBroadcastDispatchReportDto>>(
+            `/whatsapp/broadcasts/${campaignId}/dispatches?page=${page}&size=${size}`
+        ),
 
     create: (body: CreateWhatsAppBroadcastPayload) =>
         httpClient.post<WhatsAppBroadcastCampaignDto>('/whatsapp/broadcasts', body),

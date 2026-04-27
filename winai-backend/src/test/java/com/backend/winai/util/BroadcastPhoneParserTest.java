@@ -27,6 +27,14 @@ class BroadcastPhoneParserTest {
     }
 
     @Test
+    void normalizeStructuredBrazilMobile() {
+        assertEquals("5511999999999", BroadcastPhoneParser.normalizeStructured("55", "11", "999999999"));
+        assertEquals("5511999999999", BroadcastPhoneParser.normalizeStructured("+55", "(11)", "99999-9999"));
+        assertNull(BroadcastPhoneParser.normalizeStructured("55", "11", "899999999"));
+        assertNull(BroadcastPhoneParser.normalizeStructured("55", "1", "999999999"));
+    }
+
+    @Test
     void parseLinesDedupePreservesOrderAndRemovesDuplicates() {
         List<String> out = BroadcastPhoneParser.parseLinesDedupe(Arrays.asList(
                 "5511888888888",

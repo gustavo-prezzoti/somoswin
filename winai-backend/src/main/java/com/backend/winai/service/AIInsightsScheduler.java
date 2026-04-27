@@ -4,6 +4,7 @@ import com.backend.winai.entity.Company;
 import com.backend.winai.repository.CompanyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
+@Profile("!broadcast-worker")
 public class AIInsightsScheduler {
 
     private final CompanyRepository companyRepository;

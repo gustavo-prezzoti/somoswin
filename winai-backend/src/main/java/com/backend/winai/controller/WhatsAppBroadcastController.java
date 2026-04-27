@@ -3,6 +3,7 @@ package com.backend.winai.controller;
 import com.backend.winai.dto.whatsapp.broadcast.ActiveBaseDashboardMetricsResponse;
 import com.backend.winai.dto.whatsapp.broadcast.CreateWhatsAppBroadcastRequest;
 import com.backend.winai.dto.whatsapp.broadcast.WhatsAppBroadcastCampaignResponse;
+import com.backend.winai.dto.whatsapp.broadcast.WhatsAppBroadcastDispatchReportDto;
 import com.backend.winai.entity.User;
 import com.backend.winai.service.WhatsAppBroadcastService;
 import jakarta.validation.Valid;
@@ -46,6 +47,16 @@ public class WhatsAppBroadcastController {
             @AuthenticationPrincipal User user,
             @PathVariable UUID id) {
         return ResponseEntity.ok(broadcastService.get(user, id));
+    }
+
+    @GetMapping("/{id}/dispatches")
+    public ResponseEntity<Page<WhatsAppBroadcastDispatchReportDto>> listDispatches(
+            @AuthenticationPrincipal User user,
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        Pageable pageable = PageRequest.of(page, Math.min(size, 200));
+        return ResponseEntity.ok(broadcastService.listDispatchReports(user, id, pageable));
     }
 
     @PostMapping

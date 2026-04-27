@@ -57,6 +57,16 @@ public class WhatsAppBroadcastCampaign {
     @Column(name = "video_url", columnDefinition = "TEXT")
     private String videoUrl;
 
+    @Column(name = "company_prompt", columnDefinition = "TEXT")
+    private String companyPrompt;
+
+    @Column(name = "sequence_size")
+    private Integer sequenceSize;
+
+    @Column(name = "schedule_timezone", length = 64)
+    @Builder.Default
+    private String scheduleTimezone = "America/Sao_Paulo";
+
     @Column(name = "total_recipients", nullable = false)
     @Builder.Default
     private int totalRecipients = 0;

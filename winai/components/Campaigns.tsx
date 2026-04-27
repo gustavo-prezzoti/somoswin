@@ -17,11 +17,11 @@ import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
 
 const DATE_PRESET_OPTIONS = [
-  'Ãšltimos 7 dias',
-  'Ãšltimos 14 dias',
-  'Ãšltimos 30 dias',
-  'Este MÃªs',
-  'MÃªs Passado',
+  'Últimos 7 dias',
+  'Últimos 14 dias',
+  'Últimos 30 dias',
+  'Este Mês',
+  'Mês Passado',
   'Este Trimestre',
   'Personalizado',
 ] as const;
@@ -40,16 +40,16 @@ function computePresetDates(
 ): { start: string; end: string } {
   const minBound = new Date(bounds.minDate + 'T12:00:00');
   const now = new Date();
-  // Fim = hoje (local). NÃ£o usar min(maxBound, hoje): o Ãºltimo dia com insight Meta costuma ser ontem e escondia leads/UTM criados hoje. O backend continua limitando gasto Meta ao maxDate.
+  // Fim = hoje (local). Não usar min(maxBound, hoje): o último dia com insight Meta costuma ser ontem e escondia leads/UTM criados hoje. O backend continua limitando gasto Meta ao maxDate.
   let end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let start = new Date(end);
 
-  if (preset === 'Ãšltimos 7 dias') start.setDate(start.getDate() - 6);
-  else if (preset === 'Ãšltimos 14 dias') start.setDate(start.getDate() - 13);
-  else if (preset === 'Ãšltimos 30 dias') start.setDate(start.getDate() - 29);
-  else if (preset === 'Este MÃªs') {
+  if (preset === 'Últimos 7 dias') start.setDate(start.getDate() - 6);
+  else if (preset === 'Últimos 14 dias') start.setDate(start.getDate() - 13);
+  else if (preset === 'Últimos 30 dias') start.setDate(start.getDate() - 29);
+  else if (preset === 'Este Mês') {
     start = new Date(end.getFullYear(), end.getMonth(), 1);
-  } else if (preset === 'MÃªs Passado') {
+  } else if (preset === 'Mês Passado') {
     const lastDayPrev = new Date(end.getFullYear(), end.getMonth(), 0);
     const firstDayPrev = new Date(lastDayPrev.getFullYear(), lastDayPrev.getMonth(), 1);
     return { start: formatYmdLocal(firstDayPrev), end: formatYmdLocal(lastDayPrev) };
@@ -78,7 +78,7 @@ const Campaigns: React.FC = () => {
   const [metricsDateRange, setMetricsDateRange] = useState<MetricsDateRange | null>(null);
   const [metricsStartDate, setMetricsStartDate] = useState<string>('');
   const [metricsEndDate, setMetricsEndDate] = useState<string>('');
-  const [datePreset, setDatePreset] = useState<string>('Ãšltimos 30 dias');
+  const [datePreset, setDatePreset] = useState<string>('Últimos 30 dias');
   const [assetSearch, setAssetSearch] = useState('');
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -130,7 +130,7 @@ const Campaigns: React.FC = () => {
       setMetricsDateRange(dateRange);
     } catch (err: unknown) {
       console.error(err);
-      setError('NÃ£o foi possÃ­vel carregar os dados iniciais.');
+      setError('Não foi possível carregar os dados iniciais.');
       try {
         const status = await marketingService.getStatus();
         setIsMetaConnected(status.connected);
@@ -230,7 +230,7 @@ const Campaigns: React.FC = () => {
     googleAdsService.getStatus().then((s) => setGoogleAdsConnected(!!s.connected)).catch(() => setGoogleAdsConnected(false));
   }, []);
 
-  /** Lista da API ou conta jÃ¡ salva no backend (para o valor do select). */
+  /** Lista da API ou conta já salva no backend (para o valor do select). */
   const googleAdsDisplayAccounts = useMemo((): GoogleAdsAccessibleAccount[] => {
     if (googleAdsAccounts.length > 0) {
       return googleAdsAccounts;
@@ -243,7 +243,7 @@ const Campaigns: React.FC = () => {
     return [
       {
         customerId: id,
-        descriptiveName: 'Conta jÃ¡ vinculada',
+        descriptiveName: 'Conta já vinculada',
         manager: false,
         managerCustomerId: mgr || undefined,
       },
@@ -290,17 +290,17 @@ const Campaigns: React.FC = () => {
         setGoogleAdsAccountsStatus(resp?.status ?? null);
         setGoogleAdsAccountsMessage(resp?.message ?? null);
       } catch (e) {
-        console.error('[TrÃ¡fego Pago] erro ao listar contas Google Ads', e);
+        console.error('[Tráfego Pago] erro ao listar contas Google Ads', e);
         setGoogleAdsAccounts([]);
         setGoogleAdsAccountsStatus('MAINTENANCE');
         setGoogleAdsAccountsMessage(
-          'A integraÃ§Ã£o com Google Ads estÃ¡ temporariamente em manutenÃ§Ã£o. Tente novamente mais tarde.',
+          'A integração com Google Ads está temporariamente em manutenção. Tente novamente mais tarde.',
         );
       } finally {
         setGoogleAdsAccountsLoading(false);
       }
     } catch (e) {
-      console.error('[TrÃ¡fego Pago] status Google Ads', e);
+      console.error('[Tráfego Pago] status Google Ads', e);
     }
   }, []);
 
@@ -354,7 +354,7 @@ const Campaigns: React.FC = () => {
   const handleToggleCampaign = async (c: CampaignListItem) => {
     const newStatus = c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
     setTogglingId(c.id);
-    // AtualizaÃ§Ã£o otimista: reflete o novo status na UI imediatamente
+    // Atualização otimista: reflete o novo status na UI imediatamente
     setCampaigns((prev) =>
       prev.map((camp) =>
         camp.id === c.id ? { ...camp, status: newStatus } : camp
@@ -433,8 +433,8 @@ const Campaigns: React.FC = () => {
       <div className="space-y-8 pb-12 max-w-7xl mx-auto animate-in fade-in duration-500">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-black text-slate-800 tracking-tight">TrÃ¡fego Pago</h2>
-            <p className="text-gray-500 font-medium">GestÃ£o e inteligÃªncia de mÃ­dia paga em tempo real</p>
+            <h2 className="text-3xl font-black text-slate-800 tracking-tight">Tráfego Pago</h2>
+            <p className="text-gray-500 font-medium">Gestão e inteligência de mídia paga em tempo real</p>
           </div>
           <div className="flex items-center gap-3 flex-wrap justify-end">
             <div className="relative">
@@ -463,7 +463,7 @@ const Campaigns: React.FC = () => {
                   }}
                   className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 focus:ring-2 focus:ring-indigo-500/20 outline-none"
                 />
-                <span className="text-gray-400 font-bold">atÃ©</span>
+                <span className="text-gray-400 font-bold">até</span>
                 <input
                   type="date"
                   value={metricsEndDate}
@@ -491,7 +491,7 @@ const Campaigns: React.FC = () => {
 
               {!paidOverviewLoading && paidOverview && !paidOverview.connected && (
                 <div className="p-6 rounded-[32px] border border-amber-100 bg-amber-50/80 text-amber-900 text-sm font-medium">
-                  {paidOverview.connectionMessage || (activePlatform === 'GOOGLE' ? 'Conecte o Google Ads em ConfiguraÃ§Ãµes.' : 'Conecte o Meta Ads em ConfiguraÃ§Ãµes.')}
+                  {paidOverview.connectionMessage || (activePlatform === 'GOOGLE' ? 'Conecte o Google Ads em Configurações.' : 'Conecte o Meta Ads em Configurações.')}
                 </div>
               )}
 
@@ -569,7 +569,7 @@ const Campaigns: React.FC = () => {
                               Conta Google Ads
                             </p>
                             <p className="text-xs font-bold text-indigo-950 mt-1">
-                              Escolha qual conta usar para mÃ©tricas e hierarquia (como na Meta, mas aqui na aba Google).
+                              Escolha qual conta usar para métricas e hierarquia (como na Meta, mas aqui na aba Google).
                             </p>
                           </div>
                           <button
@@ -586,15 +586,15 @@ const Campaigns: React.FC = () => {
                           <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 space-y-2">
                             <p className="text-[10px] font-black uppercase tracking-widest text-amber-800">
                               {googleAdsAccountsStatus === 'NOT_CONNECTED'
-                                ? 'ConexÃ£o necessÃ¡ria'
-                                : 'IntegraÃ§Ã£o em manutenÃ§Ã£o'}
+                                ? 'Conexão necessária'
+                                : 'Integração em manutenção'}
                             </p>
                             <p className="text-[11px] font-medium text-amber-950">{googleAdsAccountsMessage}</p>
                           </div>
                         )}
                         {googleAdsAccountsLoading ? (
                           <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
-                            Carregando contasâ€¦
+                            Carregando contas…
                           </p>
                         ) : googleAdsDisplayAccounts.length > 0 ? (
                           <div>
@@ -607,7 +607,7 @@ const Campaigns: React.FC = () => {
                               onChange={(e) => void handleGoogleAdsAccountSelect(e.target.value)}
                               className="w-full max-w-xl px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500/30 outline-none"
                             >
-                              <option value="">Selecione a contaâ€¦</option>
+                              <option value="">Selecione a conta…</option>
                               {googleAdsDisplayAccounts.map((a) => (
                                 <option key={a.customerId} value={a.customerId.replace(/\D/g, '')}>
                                   {a.descriptiveName}
@@ -617,15 +617,15 @@ const Campaigns: React.FC = () => {
                             </select>
                             {googleAdsAccounts.length === 0 && googleAdsCustomerId.replace(/\D/g, '').length > 0 && (
                               <p className="text-[10px] text-indigo-700 font-medium mt-2">
-                                Lista completa indisponÃ­vel; exibindo a conta jÃ¡ vinculada. Use &quot;Atualizar lista&quot;
+                                Lista completa indisponível; exibindo a conta já vinculada. Use &quot;Atualizar lista&quot;
                                 para tentar de novo.
                               </p>
                             )}
                           </div>
                         ) : (
                           <p className="text-[11px] font-medium text-indigo-900">
-                            Nenhuma conta encontrada. Verifique a API no Google Cloud ou reconecte em ConfiguraÃ§Ãµes â†’
-                            IntegraÃ§Ãµes.
+                            Nenhuma conta encontrada. Verifique a API no Google Cloud ou reconecte em Configurações →
+                            Integrações.
                           </p>
                         )}
                       </div>
@@ -665,7 +665,7 @@ const Campaigns: React.FC = () => {
                               className={`px-4 py-2 rounded-xl text-xs font-bold ${drillAdSetId ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 opacity-50'}`}
                               aria-current={drillAdSetId ? 'page' : undefined}
                             >
-                              AnÃºncios
+                              Anúncios
                             </span>
                           </div>
                         </div>
@@ -715,8 +715,8 @@ const Campaigns: React.FC = () => {
                           <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CTR</th>
                           <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Conv.</th>
                           <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CPL</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">TendÃªncia</th>
-                          <th className="px-8 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">AÃ§Ã£o</th>
+                          <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Tendência</th>
+                          <th className="px-8 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ação</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -744,17 +744,17 @@ const Campaigns: React.FC = () => {
                                   <div className={`w-2 h-2 rounded-full shrink-0 ${String(row.status).toUpperCase().includes('ACTIVE') && !String(row.status).toUpperCase().includes('PAUSED') ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-gray-300'}`} />
                                   <div>
                                     <p className="text-sm font-black text-slate-800 group-hover:text-indigo-600 transition-colors">{row.name}</p>
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{row.objective || 'â€”'}</p>
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{row.objective || '—'}</p>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-4 py-5 text-center text-sm font-black text-slate-800">
-                                {row.roas != null ? `${row.roas.toFixed(1)}x` : 'â€”'}
+                                {row.roas != null ? `${row.roas.toFixed(1)}x` : '—'}
                               </td>
-                              <td className="px-4 py-5 text-center text-sm font-bold text-slate-600">{row.spend != null ? `R$ ${row.spend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'â€”'}</td>
-                              <td className="px-4 py-5 text-center text-sm font-bold">{row.ctr != null ? `${row.ctr.toFixed(2)}%` : 'â€”'}</td>
-                              <td className="px-4 py-5 text-center text-sm font-black text-slate-800">{row.conversions ?? 'â€”'}</td>
-                              <td className="px-4 py-5 text-center text-sm font-black text-slate-800">{row.cpl != null ? `R$ ${row.cpl.toFixed(2)}` : 'â€”'}</td>
+                              <td className="px-4 py-5 text-center text-sm font-bold text-slate-600">{row.spend != null ? `R$ ${row.spend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</td>
+                              <td className="px-4 py-5 text-center text-sm font-bold">{row.ctr != null ? `${row.ctr.toFixed(2)}%` : '—'}</td>
+                              <td className="px-4 py-5 text-center text-sm font-black text-slate-800">{row.conversions ?? '—'}</td>
+                              <td className="px-4 py-5 text-center text-sm font-black text-slate-800">{row.cpl != null ? `R$ ${row.cpl.toFixed(2)}` : '—'}</td>
                               <td className="px-4 py-5 text-center min-h-[44px]">
                                 <div className="flex items-center justify-center min-h-[28px] w-full">{renderTrend(row.trend)}</div>
                               </td>
@@ -776,7 +776,7 @@ const Campaigns: React.FC = () => {
                                       <button
                                         type="button"
                                         className="p-2 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all"
-                                        title="Gerar UTM para este anÃºncio (campanha + conjunto + anÃºncio)"
+                                        title="Gerar UTM para este anúncio (campanha + conjunto + anúncio)"
                                         onClick={() => {
                                           setUtmAdModalCtx({
                                             platform: activePlatform,
@@ -813,7 +813,7 @@ const Campaigns: React.FC = () => {
                       </tbody>
                     </table>
                     {paidTableRows.length === 0 && (
-                      <div className="text-center py-12 text-gray-500 text-sm font-medium">Nenhum ativo neste nÃ­vel para o perÃ­odo.</div>
+                      <div className="text-center py-12 text-gray-500 text-sm font-medium">Nenhum ativo neste nível para o período.</div>
                     )}
                   </div>
                   )}
@@ -830,7 +830,7 @@ const Campaigns: React.FC = () => {
                   <TrendingUp size={24} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Performance por ReferÃªncia UTM</h3>
+                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Performance por Referência UTM</h3>
                 </div>
               </div>
               {!utmLoading && utmPerformance && utmPerformance.rows.length > 0 && utmPerformance.bestRoas > 0 && (
@@ -855,7 +855,7 @@ const Campaigns: React.FC = () => {
                 <table className="w-full text-left border-collapse min-w-[720px]">
                   <thead>
                     <tr className="bg-gray-50/50">
-                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Anuncio ReferÃªncia </th>
+                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Anuncio Referência </th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Leads</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CPL</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">ROAS</th>
@@ -908,7 +908,7 @@ const Campaigns: React.FC = () => {
               </div>
             )}
             {!utmLoading && utmPerformance && !utmPerformance.emptyMessage && utmPerformance.rows.length === 0 && (
-              <div className="text-center py-12 text-gray-500 text-sm font-medium">Nenhuma linha de atribuiÃ§Ã£o no perÃ­odo.</div>
+              <div className="text-center py-12 text-gray-500 text-sm font-medium">Nenhuma linha de atribuição no período.</div>
             )}
           </div>
         </div>
@@ -929,7 +929,7 @@ const Campaigns: React.FC = () => {
         }}
         ctx={utmAdModalCtx}
         companyId={storageService.getUser()?.company?.id ?? null}
-        onCopied={() => showToast('Copiado para a Ã¡rea de transferÃªncia', 'success')}
+        onCopied={() => showToast('Copiado para a área de transferência', 'success')}
       />
     </>
   );

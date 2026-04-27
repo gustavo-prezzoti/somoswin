@@ -13,11 +13,21 @@ class BroadcastContactFileParserTest {
     @Test
     void csvFirstColumnPerLine() {
         String csv = "5511999999999\n5511888888888;nome\n";
-        List<String> lines = BroadcastContactFileParser.extractRawLines(
+        List<String> lines = BroadcastContactFileParser.parseToE164Lines(
                 csv.getBytes(StandardCharsets.UTF_8), "contatos.csv");
         assertEquals(2, lines.size());
         assertEquals("5511999999999", lines.get(0));
         assertEquals("5511888888888", lines.get(1));
+    }
+
+    @Test
+    void csvThreeColumnsWithHeader() {
+        String csv = "ddi,ddd,telefone\n55,11,999999999\n55,21,988888888\n";
+        List<String> lines = BroadcastContactFileParser.parseToE164Lines(
+                csv.getBytes(StandardCharsets.UTF_8), "t.csv");
+        assertEquals(2, lines.size());
+        assertTrue(lines.contains("5511999999999"));
+        assertTrue(lines.contains("5521988888888"));
     }
 
     @Test
@@ -33,7 +43,7 @@ class BroadcastContactFileParserTest {
             wb.write(bos);
             xlsx = bos.toByteArray();
         }
-        List<String> lines = BroadcastContactFileParser.extractRawLines(xlsx, "lista.xlsx");
+        List<String> lines = BroadcastContactFileParser.parseToE164Lines(xlsx, "lista.xlsx");
         assertEquals(2, lines.size());
         assertTrue(lines.contains("5511777777777"));
         assertTrue(lines.contains("5511666666666"));

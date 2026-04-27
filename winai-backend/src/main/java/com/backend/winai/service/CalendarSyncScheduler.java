@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-@Profile("!meta-sync & !ai-recommendations-worker & !followup-worker & !google-oauth-worker")
+@Profile("!meta-sync & !ai-recommendations-worker & !followup-worker & !google-oauth-worker & !broadcast-worker")
 public class CalendarSyncScheduler {
 
     private final GoogleDriveConnectionRepository connectionRepository;

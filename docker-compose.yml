@@ -317,6 +317,55 @@ services:
     restart: unless-stopped
 
   # =====================================
+  # Broadcast Worker - Remarketing Base Ativa (envios agendados WhatsApp)
+  # =====================================
+  broadcast-worker:
+    build:
+      context: ./winai-backend
+      dockerfile: Dockerfile
+    container_name: winai-broadcast-worker
+    dns:
+      - 127.0.0.11
+      - 8.8.8.8
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 256M
+    environment:
+      - TZ=America/Sao_Paulo
+      - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true
+      - SPRING_PROFILES_ACTIVE=docker,broadcast-worker
+      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL}}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA=winai
+      - SPRING_FLYWAY_SCHEMAS=winai
+      - SPRING_FLYWAY_DEFAULT_SCHEMA=winai
+      - JWT_SECRET=${JWT_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5}
+      - OPENAI_REASONING_EFFORT=${OPENAI_REASONING_EFFORT:-low}
+      - UAZAP_BASE_URL=${UAZAP_BASE_URL}
+      - UAZAP_TOKEN=${UAZAP_TOKEN}
+      - UAZAP_INSTANCE=${UAZAP_INSTANCE}
+      - UAZAP_ADMIN_TOKEN=${UAZAP_ADMIN_TOKEN}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - META_SYNC_ENABLED=false
+    depends_on:
+      redis:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    networks:
+      - winai-network
+    restart: unless-stopped
+
+  # =====================================
   # Google OAuth Refresh Worker - Renovação de tokens
   # Doc Google: access token expira em 1h (3600s). Roda a cada 30 min.
   # https://developers.google.com/identity/protocols/oauth2/web-server

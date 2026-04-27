@@ -21,7 +21,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
-@Profile("!followup-worker")
+@Profile("!followup-worker & !broadcast-worker")
 @ConditionalOnProperty(name = "META_SYNC_ENABLED", havingValue = "false", matchIfMissing = true)
 public class AiResponseConsumer {
 

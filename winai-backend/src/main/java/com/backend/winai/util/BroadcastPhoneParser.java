@@ -15,6 +15,39 @@ public final class BroadcastPhoneParser {
 
     private BroadcastPhoneParser() {}
 
+    /**
+     * Monta E.164 em dígitos a partir de DDI, DDD e número (Brasil: DDI 55, DDD com 2 dígitos, celular 9 dígitos começando em 9).
+     * Retorna null se inválido.
+     */
+    public static String normalizeStructured(String ddiRaw, String dddRaw, String numberRaw) {
+        String ddi = ddiRaw == null ? "" : DIGITS.matcher(ddiRaw.trim()).replaceAll("");
+        String ddd = dddRaw == null ? "" : DIGITS.matcher(dddRaw.trim()).replaceAll("");
+        String num = numberRaw == null ? "" : DIGITS.matcher(numberRaw.trim()).replaceAll("");
+        if (ddi.isEmpty()) {
+            ddi = "55";
+        }
+        if ("55".equals(ddi)) {
+            if (ddd.length() != 2) {
+                return null;
+            }
+            if (num.length() != 8 && num.length() != 9) {
+                return null;
+            }
+            if (num.length() == 9 && num.charAt(0) != '9') {
+                return null;
+            }
+            return ddi + ddd + num;
+        }
+        if (ddi.length() < 1 || num.length() < 6) {
+            return null;
+        }
+        String combined = ddi + ddd + num;
+        if (combined.length() < 12 || combined.length() > 15) {
+            return null;
+        }
+        return combined;
+    }
+
     /** Retorna null se inválido; caso contrário só dígitos (ex.: 5511999999999). */
     public static String normalize(String raw) {
         if (raw == null) {

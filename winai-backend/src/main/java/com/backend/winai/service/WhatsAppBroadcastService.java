@@ -3,7 +3,11 @@ package com.backend.winai.service;
 import com.backend.winai.dto.request.SendMediaMessageRequest;
 import com.backend.winai.dto.request.SendWhatsAppMessageRequest;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
-import com.backend.winai.dto.whatsapp.broadcast.*;
+import com.backend.winai.dto.whatsapp.broadcast.ActiveBaseDashboardMetricsResponse;
+import com.backend.winai.dto.whatsapp.broadcast.BroadcastPhonePartDto;
+import com.backend.winai.dto.whatsapp.broadcast.CreateWhatsAppBroadcastRequest;
+import com.backend.winai.dto.whatsapp.broadcast.WhatsAppBroadcastCampaignResponse;
+import com.backend.winai.dto.whatsapp.broadcast.WhatsAppBroadcastDispatchReportDto;
 import com.backend.winai.entity.*;
 import com.backend.winai.repository.*;
 import com.backend.winai.util.BroadcastContactFileParser;
@@ -12,21 +16,25 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Disparos em massa (Base Ativa) via UaZap. Uso deve respeitar opt-in da base e políticas da Meta.
+ * Remarketing (Base Ativa): sequências agendadas via UaZap. Respeite opt-in e políticas da Meta.
  */
 @Service
 @Slf4j
@@ -34,11 +42,13 @@ public class WhatsAppBroadcastService {
 
     private final WhatsAppBroadcastCampaignRepository campaignRepository;
     private final WhatsAppBroadcastRecipientRepository recipientRepository;
+    private final WhatsAppBroadcastDispatchRepository dispatchRepository;
     private final UserWhatsAppConnectionRepository connectionRepository;
     private final LeadRepository leadRepository;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final WhatsAppService whatsAppService;
+    private final WhatsAppBroadcastSequenceGenerator sequenceGenerator;
 
     private WhatsAppBroadcastService self;
 
@@ -48,21 +58,43 @@ public class WhatsAppBroadcastService {
     @Value("${winai.broadcast.delay-between-messages-ms:1500}")
     private long delayBetweenMessagesMs;
 
+    @Value("${winai.broadcast.daily-min-contacts:3}")
+    private int dailyMinContacts;
+
+    @Value("${winai.broadcast.daily-max-contacts:7}")
+    private int dailyMaxContacts;
+
+    @Value("${winai.broadcast.window-start-hour:9}")
+    private int windowStartHour;
+
+    @Value("${winai.broadcast.window-end-hour:18}")
+    private int windowEndHour;
+
+    @Value("${winai.broadcast.sequence-min:5}")
+    private int sequenceMin;
+
+    @Value("${winai.broadcast.sequence-max:10}")
+    private int sequenceMax;
+
     public WhatsAppBroadcastService(
             WhatsAppBroadcastCampaignRepository campaignRepository,
             WhatsAppBroadcastRecipientRepository recipientRepository,
+            WhatsAppBroadcastDispatchRepository dispatchRepository,
             UserWhatsAppConnectionRepository connectionRepository,
             LeadRepository leadRepository,
             CompanyRepository companyRepository,
             UserRepository userRepository,
-            WhatsAppService whatsAppService) {
+            WhatsAppService whatsAppService,
+            WhatsAppBroadcastSequenceGenerator sequenceGenerator) {
         this.campaignRepository = campaignRepository;
         this.recipientRepository = recipientRepository;
+        this.dispatchRepository = dispatchRepository;
         this.connectionRepository = connectionRepository;
         this.leadRepository = leadRepository;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.whatsAppService = whatsAppService;
+        this.sequenceGenerator = sequenceGenerator;
     }
 
     @Autowired
@@ -70,63 +102,72 @@ public class WhatsAppBroadcastService {
         this.self = self;
     }
 
-    @Scheduled(fixedDelayString = "${winai.broadcast.worker-interval-ms:3000}")
-    public void runWorker() {
-        List<WhatsAppBroadcastRecipient> batch = recipientRepository
-                .findTop20ByStatusAndCampaign_StatusOrderByCreatedAtAsc(
-                        WhatsAppBroadcastRecipient.Status.PENDING,
-                        WhatsAppBroadcastCampaign.Status.SENDING);
-        for (WhatsAppBroadcastRecipient r : batch) {
+    /**
+     * Chamado pelo {@link WhatsAppBroadcastWorkerScheduler} quando o worker está habilitado.
+     */
+    public void processDueDispatchesBatch() {
+        List<UUID> ids = dispatchRepository.findDueIdsForSending(
+                WhatsAppBroadcastDispatch.Status.PENDING,
+                WhatsAppBroadcastCampaign.Status.SENDING,
+                ZonedDateTime.now(),
+                PageRequest.of(0, 20));
+        for (UUID id : ids) {
             try {
-                self.deliverOneRecipient(r.getId());
+                self.deliverOneDispatch(id);
                 Thread.sleep(delayBetweenMessagesMs);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                log.error("[Broadcast] Falha worker recipient={}", r.getId(), e);
+                log.error("[Broadcast] Falha worker dispatch={}", id, e);
             }
         }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void deliverOneRecipient(UUID recipientId) {
-        WhatsAppBroadcastRecipient r = recipientRepository.findByIdForDelivery(recipientId).orElse(null);
-        if (r == null) {
+    public void deliverOneDispatch(UUID dispatchId) {
+        WhatsAppBroadcastDispatch d = dispatchRepository.findByIdForDelivery(dispatchId).orElse(null);
+        if (d == null) {
             return;
         }
-        if (r.getStatus() != WhatsAppBroadcastRecipient.Status.PENDING) {
+        if (d.getStatus() != WhatsAppBroadcastDispatch.Status.PENDING) {
             return;
         }
+        if (d.getScheduledSendAt() != null && d.getScheduledSendAt().isAfter(ZonedDateTime.now())) {
+            return;
+        }
+        WhatsAppBroadcastRecipient r = d.getRecipient();
         WhatsAppBroadcastCampaign campaign = r.getCampaign();
         if (campaign.getStatus() != WhatsAppBroadcastCampaign.Status.SENDING) {
-            r.setStatus(WhatsAppBroadcastRecipient.Status.SKIPPED);
-            recipientRepository.save(r);
+            d.setStatus(WhatsAppBroadcastDispatch.Status.SKIPPED);
+            dispatchRepository.save(d);
+            syncRecipientAggregateStatus(r);
             return;
         }
         User user = campaign.getCreatedBy();
         if (user == null) {
-            failRecipient(r, campaign, "Sem usuário criador para envio");
+            failDispatch(d, campaign, "Sem usuário criador para envio");
             return;
         }
         user = userRepository.findById(user.getId()).orElse(null);
         if (user == null) {
-            failRecipient(r, campaign, "Usuário não encontrado");
+            failDispatch(d, campaign, "Usuário não encontrado");
             return;
         }
 
         UserWhatsAppConnection conn = campaign.getConnection();
         if (conn == null) {
-            failRecipient(r, campaign, "Conexão WhatsApp não configurada");
+            failDispatch(d, campaign, "Conexão WhatsApp não configurada");
             return;
         }
 
         try {
             WhatsAppMessageResponse response;
-            if (campaign.getImageUrl() != null && !campaign.getImageUrl().isBlank()) {
+            boolean first = d.getSequenceIndex() == 1;
+            if (first && campaign.getImageUrl() != null && !campaign.getImageUrl().isBlank()) {
                 SendMediaMessageRequest media = SendMediaMessageRequest.builder()
                         .phoneNumber(r.getPhoneE164())
-                        .caption(campaign.getMessageText())
+                        .caption(d.getBodyText())
                         .mediaUrl(campaign.getImageUrl())
                         .mediaType("image")
                         .uazapInstance(conn.getInstanceName())
@@ -137,10 +178,10 @@ public class WhatsAppBroadcastService {
                     media.setLeadId(r.getLead().getId());
                 }
                 response = whatsAppService.sendMediaMessage(media, user);
-            } else if (campaign.getVideoUrl() != null && !campaign.getVideoUrl().isBlank()) {
+            } else if (first && campaign.getVideoUrl() != null && !campaign.getVideoUrl().isBlank()) {
                 SendMediaMessageRequest media = SendMediaMessageRequest.builder()
                         .phoneNumber(r.getPhoneE164())
-                        .caption(campaign.getMessageText())
+                        .caption(d.getBodyText())
                         .mediaUrl(campaign.getVideoUrl())
                         .mediaType("video")
                         .uazapInstance(conn.getInstanceName())
@@ -154,7 +195,7 @@ public class WhatsAppBroadcastService {
             } else {
                 SendWhatsAppMessageRequest req = SendWhatsAppMessageRequest.builder()
                         .phoneNumber(r.getPhoneE164())
-                        .message(campaign.getMessageText())
+                        .message(d.getBodyText())
                         .uazapInstance(conn.getInstanceName())
                         .uazapBaseUrl(conn.getInstanceBaseUrl())
                         .uazapToken(conn.getInstanceToken())
@@ -165,30 +206,54 @@ public class WhatsAppBroadcastService {
                 response = whatsAppService.sendMessage(req, user);
             }
 
-            r.setStatus(WhatsAppBroadcastRecipient.Status.SENT);
-            r.setSentAt(ZonedDateTime.now());
+            d.setStatus(WhatsAppBroadcastDispatch.Status.SENT);
+            d.setSentAt(ZonedDateTime.now());
             if (response != null && response.getMessageId() != null) {
-                r.setProviderMessageId(response.getMessageId());
+                d.setProviderMessageId(response.getMessageId());
             }
-            recipientRepository.save(r);
+            dispatchRepository.save(d);
 
             campaign.setSentCount(campaign.getSentCount() + 1);
             campaignRepository.save(campaign);
+            syncRecipientAggregateStatus(r);
             maybeCompleteCampaign(campaign.getId());
         } catch (Exception e) {
-            log.warn("[Broadcast] Envio falhou para {}: {}", r.getPhoneE164(), e.getMessage());
-            failRecipient(r, campaign, truncate(e.getMessage(), 2000));
+            log.warn("[Broadcast] Envio falhou para {} seq {}: {}", r.getPhoneE164(), d.getSequenceIndex(), e.getMessage());
+            failDispatch(d, campaign, truncate(e.getMessage(), 2000));
         }
     }
 
-    private void failRecipient(WhatsAppBroadcastRecipient r, WhatsAppBroadcastCampaign campaign, String err) {
-        r.setStatus(WhatsAppBroadcastRecipient.Status.FAILED);
-        r.setErrorMessage(err);
-        r.setSentAt(ZonedDateTime.now());
-        recipientRepository.save(r);
+    private void failDispatch(WhatsAppBroadcastDispatch d, WhatsAppBroadcastCampaign campaign, String err) {
+        d.setStatus(WhatsAppBroadcastDispatch.Status.FAILED);
+        d.setErrorMessage(err);
+        d.setSentAt(ZonedDateTime.now());
+        dispatchRepository.save(d);
         campaign.setFailedCount(campaign.getFailedCount() + 1);
         campaignRepository.save(campaign);
+        syncRecipientAggregateStatus(d.getRecipient());
         maybeCompleteCampaign(campaign.getId());
+    }
+
+    private void syncRecipientAggregateStatus(WhatsAppBroadcastRecipient r) {
+        long pending = dispatchRepository.countByRecipient_IdAndStatus(r.getId(), WhatsAppBroadcastDispatch.Status.PENDING);
+        if (pending > 0) {
+            r.setStatus(WhatsAppBroadcastRecipient.Status.PENDING);
+            recipientRepository.save(r);
+            return;
+        }
+        long failed = dispatchRepository.countByRecipient_IdAndStatus(r.getId(), WhatsAppBroadcastDispatch.Status.FAILED);
+        if (failed > 0) {
+            r.setStatus(WhatsAppBroadcastRecipient.Status.FAILED);
+        } else {
+            long sent = dispatchRepository.countByRecipient_IdAndStatus(r.getId(), WhatsAppBroadcastDispatch.Status.SENT);
+            if (sent > 0) {
+                r.setStatus(WhatsAppBroadcastRecipient.Status.SENT);
+            } else {
+                r.setStatus(WhatsAppBroadcastRecipient.Status.SKIPPED);
+            }
+        }
+        r.setSentAt(ZonedDateTime.now());
+        recipientRepository.save(r);
     }
 
     private void maybeCompleteCampaign(UUID campaignId) {
@@ -196,8 +261,8 @@ public class WhatsAppBroadcastService {
         if (c == null || c.getStatus() != WhatsAppBroadcastCampaign.Status.SENDING) {
             return;
         }
-        long pending = recipientRepository.countByCampaign_IdAndStatus(campaignId,
-                WhatsAppBroadcastRecipient.Status.PENDING);
+        long pending = dispatchRepository.countByRecipient_Campaign_IdAndStatus(campaignId,
+                WhatsAppBroadcastDispatch.Status.PENDING);
         if (pending == 0) {
             c.setStatus(WhatsAppBroadcastCampaign.Status.COMPLETED);
             c.setCompletedAt(ZonedDateTime.now());
@@ -212,9 +277,6 @@ public class WhatsAppBroadcastService {
         return s.length() <= max ? s : s.substring(0, max);
     }
 
-    /**
-     * @param extraRawLinesFromFile linhas brutas vindas de CSV/XLSX (antes da normalização)
-     */
     @Transactional
     public WhatsAppBroadcastCampaignResponse createAndOptionallyStart(User user, CreateWhatsAppBroadcastRequest req,
             List<String> extraRawLinesFromFile) {
@@ -247,6 +309,10 @@ public class WhatsAppBroadcastService {
             throw new IllegalArgumentException("Máximo de " + maxRecipientsPerCampaign + " destinatários por campanha");
         }
 
+        String tz = req.getScheduleTimezone() != null && !req.getScheduleTimezone().isBlank()
+                ? req.getScheduleTimezone().trim()
+                : "America/Sao_Paulo";
+
         WhatsAppBroadcastCampaign campaign = WhatsAppBroadcastCampaign.builder()
                 .company(company)
                 .createdBy(user)
@@ -254,6 +320,9 @@ public class WhatsAppBroadcastService {
                 .name(req.getName().trim())
                 .status(WhatsAppBroadcastCampaign.Status.QUEUED)
                 .messageText(req.getMessageText())
+                .companyPrompt(req.getCompanyPrompt() != null ? req.getCompanyPrompt() : "")
+                .sequenceSize(null)
+                .scheduleTimezone(tz)
                 .imageUrl(blankToNull(req.getImageUrl()))
                 .videoUrl(blankToNull(req.getVideoUrl()))
                 .totalRecipients(phones.size())
@@ -288,6 +357,17 @@ public class WhatsAppBroadcastService {
 
     private List<String> collectPhones(CreateWhatsAppBroadcastRequest req, List<String> extraRawLinesFromFile) {
         List<String> lines = new ArrayList<>();
+        if (req.getPhoneParts() != null) {
+            for (BroadcastPhonePartDto p : req.getPhoneParts()) {
+                if (p == null) {
+                    continue;
+                }
+                String n = BroadcastPhoneParser.normalizeStructured(p.getDdi(), p.getDdd(), p.getNumber());
+                if (n != null) {
+                    lines.add(n);
+                }
+            }
+        }
         if (req.getPhones() != null) {
             lines.addAll(req.getPhones());
         }
@@ -304,7 +384,7 @@ public class WhatsAppBroadcastService {
 
     /** Parse de arquivo no servidor (validação única). */
     public List<String> parseContactsFile(byte[] bytes, String originalFilename) {
-        return BroadcastContactFileParser.extractRawLines(bytes, originalFilename);
+        return BroadcastContactFileParser.parseToE164Lines(bytes, originalFilename);
     }
 
     private Optional<Lead> findLeadForPhone(Company company, String phoneE164) {
@@ -334,9 +414,62 @@ public class WhatsAppBroadcastService {
             campaignRepository.save(c);
             throw new IllegalStateException("Sem destinatários");
         }
+
+        List<WhatsAppBroadcastRecipient> recipients =
+                recipientRepository.findByCampaign_IdOrderByCreatedAtAsc(c.getId());
+        if (recipients.isEmpty()) {
+            c.setStatus(WhatsAppBroadcastCampaign.Status.FAILED);
+            campaignRepository.save(c);
+            throw new IllegalStateException("Sem destinatários");
+        }
+
+        int n = c.getSequenceSize() != null ? c.getSequenceSize() : ThreadLocalRandom.current()
+                .nextInt(Math.min(sequenceMin, sequenceMax), Math.max(sequenceMin, sequenceMax) + 1);
+        if (n < sequenceMin) {
+            n = sequenceMin;
+        }
+        if (n > sequenceMax) {
+            n = sequenceMax;
+        }
+        c.setSequenceSize(n);
+
+        List<String> texts = sequenceGenerator.generateSequence(n, c.getCompanyPrompt(), c.getMessageText());
+
+        Map<UUID, List<WhatsAppBroadcastDispatch>> byRecipient = new HashMap<>();
+        List<WhatsAppBroadcastDispatch> allDispatches = new ArrayList<>();
+        for (WhatsAppBroadcastRecipient r : recipients) {
+            List<WhatsAppBroadcastDispatch> forR = new ArrayList<>();
+            for (int i = 0; i < texts.size(); i++) {
+                WhatsAppBroadcastDispatch d = WhatsAppBroadcastDispatch.builder()
+                        .recipient(r)
+                        .sequenceIndex(i + 1)
+                        .bodyText(texts.get(i))
+                        .status(WhatsAppBroadcastDispatch.Status.PENDING)
+                        .build();
+                forR.add(d);
+                allDispatches.add(d);
+            }
+            byRecipient.put(r.getId(), forR);
+        }
+
+        ZoneId zone = ZoneId.of(c.getScheduleTimezone() != null ? c.getScheduleTimezone() : "America/Sao_Paulo");
+        ZonedDateTime startedAt = ZonedDateTime.now(zone);
+        c.setStartedAt(startedAt);
         c.setStatus(WhatsAppBroadcastCampaign.Status.SENDING);
-        c.setStartedAt(ZonedDateTime.now());
+        c.setSentCount(0);
+        c.setFailedCount(0);
         campaignRepository.save(c);
+
+        WhatsAppBroadcastDispatchSchedulePlanner.assignScheduledTimes(
+                recipients,
+                byRecipient,
+                startedAt,
+                Math.min(dailyMinContacts, dailyMaxContacts),
+                Math.max(dailyMinContacts, dailyMaxContacts),
+                windowStartHour,
+                windowEndHour);
+
+        dispatchRepository.saveAll(allDispatches);
     }
 
     @Transactional
@@ -350,12 +483,30 @@ public class WhatsAppBroadcastService {
         c.setStatus(WhatsAppBroadcastCampaign.Status.CANCELLED);
         c.setCompletedAt(ZonedDateTime.now());
         campaignRepository.save(c);
+
+        List<WhatsAppBroadcastDispatch> pendingDispatches =
+                dispatchRepository.findByRecipient_Campaign_IdAndStatus(c.getId(), WhatsAppBroadcastDispatch.Status.PENDING);
+        for (WhatsAppBroadcastDispatch d : pendingDispatches) {
+            d.setStatus(WhatsAppBroadcastDispatch.Status.SKIPPED);
+        }
+        dispatchRepository.saveAll(pendingDispatches);
+
         recipientRepository.findByCampaign_IdOrderByCreatedAtAsc(c.getId()).stream()
                 .filter(r -> r.getStatus() == WhatsAppBroadcastRecipient.Status.PENDING)
                 .forEach(r -> {
                     r.setStatus(WhatsAppBroadcastRecipient.Status.SKIPPED);
                     recipientRepository.save(r);
                 });
+    }
+
+    @Transactional(readOnly = true)
+    public Page<WhatsAppBroadcastDispatchReportDto> listDispatchReports(
+            User user, UUID campaignId, Pageable pageable) {
+        WhatsAppBroadcastCampaign c = campaignRepository.findByIdAndCompany_Id(campaignId, user.getCompany().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Campanha não encontrada"));
+        return dispatchRepository
+                .pageByCampaignId(campaignId, pageable)
+                .map(d -> toDispatchReportDto(d, c.getSequenceSize()));
     }
 
     @Transactional(readOnly = true)
@@ -376,10 +527,10 @@ public class WhatsAppBroadcastService {
         UUID companyId = user.getCompany().getId();
         long base = leadRepository.countByCompany_IdAndPhoneIsNotNull(companyId);
         ZonedDateTime since = ZonedDateTime.now().minusDays(30);
-        long sent = recipientRepository.countByCompanyAndStatusSince(companyId,
-                WhatsAppBroadcastRecipient.Status.SENT, since);
-        long failed = recipientRepository.countByCompanyAndStatusSince(companyId,
-                WhatsAppBroadcastRecipient.Status.FAILED, since);
+        long sent = dispatchRepository.countByCompanyAndStatusSince(companyId,
+                WhatsAppBroadcastDispatch.Status.SENT, since);
+        long failed = dispatchRepository.countByCompanyAndStatusSince(companyId,
+                WhatsAppBroadcastDispatch.Status.FAILED, since);
         return ActiveBaseDashboardMetricsResponse.builder()
                 .totalContactsInBase(base)
                 .messagesSentLast30Days(sent)
@@ -389,13 +540,16 @@ public class WhatsAppBroadcastService {
     }
 
     private WhatsAppBroadcastCampaignResponse toResponse(WhatsAppBroadcastCampaign c, boolean includeReports) {
-        int progress = c.getTotalRecipients() > 0
-                ? (int) Math.round(100.0 * (c.getSentCount() + c.getFailedCount()) / c.getTotalRecipients())
+        long totalDispatches = dispatchRepository.countByRecipient_Campaign_Id(c.getId());
+        int denom = totalDispatches > 0 ? (int) totalDispatches
+                : (c.getSequenceSize() != null ? c.getSequenceSize() * Math.max(1, c.getTotalRecipients()) : 0);
+        int progress = denom > 0
+                ? (int) Math.round(100.0 * (c.getSentCount() + c.getFailedCount()) / denom)
                 : 0;
-        List<WhatsAppBroadcastRecipientResponse> reports = null;
+        List<WhatsAppBroadcastDispatchReportDto> dispatchReports = null;
         if (includeReports) {
-            reports = recipientRepository.findByCampaign_IdOrderByCreatedAtAsc(c.getId()).stream()
-                    .map(this::toRecipientResponse)
+            dispatchReports = dispatchRepository.findAllFetchedByCampaignId(c.getId()).stream()
+                    .map(d -> toDispatchReportDto(d, c.getSequenceSize()))
                     .toList();
         }
         return WhatsAppBroadcastCampaignResponse.builder()
@@ -403,6 +557,9 @@ public class WhatsAppBroadcastService {
                 .name(c.getName())
                 .status(c.getStatus().name())
                 .messageText(c.getMessageText())
+                .companyPrompt(c.getCompanyPrompt())
+                .sequenceSize(c.getSequenceSize())
+                .scheduleTimezone(c.getScheduleTimezone())
                 .imageUrl(c.getImageUrl())
                 .videoUrl(c.getVideoUrl())
                 .totalRecipients(c.getTotalRecipients())
@@ -412,25 +569,40 @@ public class WhatsAppBroadcastService {
                 .createdAt(c.getCreatedAt())
                 .startedAt(c.getStartedAt())
                 .completedAt(c.getCompletedAt())
-                .reports(reports)
+                .dispatchReports(dispatchReports)
                 .build();
     }
 
-    private WhatsAppBroadcastRecipientResponse toRecipientResponse(WhatsAppBroadcastRecipient r) {
-        String uiStatus = switch (r.getStatus()) {
-            case SENT -> "sent";
-            case FAILED -> "failed";
-            default -> "pending";
-        };
-        String name = r.getLead() != null ? r.getLead().getName() : "—";
-        return WhatsAppBroadcastRecipientResponse.builder()
-                .id(r.getId())
-                .contactId(r.getLead() != null ? r.getLead().getId().toString() : r.getId().toString())
-                .contactName(name)
-                .contactInfo(r.getPhoneE164())
-                .status(uiStatus)
-                .error(r.getErrorMessage())
-                .timestamp(r.getSentAt() != null ? r.getSentAt() : r.getCreatedAt())
+    private WhatsAppBroadcastDispatchReportDto toDispatchReportDto(WhatsAppBroadcastDispatch d, Integer campaignSequenceSize) {
+        WhatsAppBroadcastRecipient r = d.getRecipient();
+        int seqTotal = campaignSequenceSize != null
+                ? campaignSequenceSize
+                : (int) dispatchRepository.countByRecipient_Id(r.getId());
+        if (seqTotal <= 0) {
+            seqTotal = d.getSequenceIndex();
+        }
+        String statusLabel = d.getStatus() == WhatsAppBroadcastDispatch.Status.SENT ? "Enviado" : "Não enviado";
+        return WhatsAppBroadcastDispatchReportDto.builder()
+                .id(d.getId())
+                .recipientLabel(maskPhoneForUi(r.getPhoneE164()))
+                .sequenceIndex(d.getSequenceIndex())
+                .sequenceTotal(seqTotal)
+                .statusLabel(statusLabel)
+                .timestamp(d.getSentAt() != null ? d.getSentAt() : d.getScheduledSendAt() != null
+                        ? d.getScheduledSendAt()
+                        : d.getCreatedAt())
                 .build();
+    }
+
+    private static String maskPhoneForUi(String digits) {
+        if (digits == null || digits.length() < 4) {
+            return "—";
+        }
+        String tail = digits.substring(digits.length() - 4);
+        if (digits.startsWith("55") && digits.length() >= 12) {
+            String ddd = digits.substring(2, Math.min(4, digits.length() - 4));
+            return "+55 (" + ddd + ") *****-" + tail;
+        }
+        return "*****" + tail;
     }
 }

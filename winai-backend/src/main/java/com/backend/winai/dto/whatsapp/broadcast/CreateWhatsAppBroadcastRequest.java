@@ -25,11 +25,22 @@ public class CreateWhatsAppBroadcastRequest {
     @Size(max = 12000)
     private String messageText;
 
+    /** Regras / prompt da empresa para gerar as mensagens da sequência. */
+    @Size(max = 8000)
+    private String companyPrompt;
+
+    /** Ex.: America/Sao_Paulo */
+    @Size(max = 64)
+    private String scheduleTimezone;
+
     @NotNull
     private UUID connectionId;
 
     /** Números já normalizados ou brutos (um por entrada). */
     private List<String> phones;
+
+    /** DDI, DDD e telefone separados (validação Brasil quando DDI 55). */
+    private List<BroadcastPhonePartDto> phoneParts;
 
     /** Alternativa: texto multilinha com um número por linha. */
     private String phonesRaw;

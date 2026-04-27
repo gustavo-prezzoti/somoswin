@@ -28,5 +28,10 @@ public class WhatsAppBroadcastCampaignResponse {
     private ZonedDateTime createdAt;
     private ZonedDateTime startedAt;
     private ZonedDateTime completedAt;
-    private List<WhatsAppBroadcastRecipientResponse> reports;
+
+    private String companyPrompt;
+    private Integer sequenceSize;
+    private String scheduleTimezone;
+
+    private List<WhatsAppBroadcastDispatchReportDto> dispatchReports;
 }

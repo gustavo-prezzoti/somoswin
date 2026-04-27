@@ -36,7 +36,7 @@ public class WhatsAppController {
      */
     /**
      * GET /api/v1/whatsapp/company-instances
-     * Instâncias WhatsApp da empresa com status enriquecido pela API UaZap (Base Ativa / Aquecedor).
+     * Instâncias WhatsApp da empresa com status enriquecido pela API UaZap (Base Ativa / campanhas).
      */
     @GetMapping("/company-instances")
     public ResponseEntity<List<CompanyWhatsAppInstanceCardResponse>> listCompanyInstances(
