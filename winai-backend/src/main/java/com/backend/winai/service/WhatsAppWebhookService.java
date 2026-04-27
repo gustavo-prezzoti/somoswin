@@ -115,7 +115,7 @@ public class WhatsAppWebhookService {
 
             // Sincronizar foto de perfil da conversa com o lead
             if (conversation.getProfilePictureUrl() != null &&
-                    (lead.getProfilePictureUrl() == null ||
+                    (lead.getProfilePictureUrl() == null || 
                             !conversation.getProfilePictureUrl().equals(lead.getProfilePictureUrl()))) {
                 lead.setProfilePictureUrl(conversation.getProfilePictureUrl());
                 lead = leadRepository.save(lead);
