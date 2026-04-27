@@ -36,6 +36,18 @@ import { activityOverlapsPlaybookMonth } from '../utils/playbookActivity';
 type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 type ViewMode = 'TABLE' | 'GANTT' | 'CARDS';
 type TaskLevel = 'rapida' | 'media' | 'estrategica';
+type MonthSlot = 1 | 2 | 3;
+
+/**
+ * Trimestre civil (Q1=jan–mar, Q2=abr–jun, …) e mês 1–3 **dentro** do trimestre, alinhado ao calendário.
+ * Necessário para o F5 não voltar a Q1 e “sumir” com metas cujo recorte de datas cai no trimestre atual.
+ */
+function quarterAndMonthSlotFromDate(d: Date): { quarter: Quarter; month: MonthSlot } {
+  const m0 = d.getMonth();
+  const qn = Math.floor(m0 / 3) + 1;
+  const month = (m0 % 3) + 1;
+  return { quarter: `Q${qn}` as Quarter, month: month as MonthSlot };
+}
 
 const GOAL_TYPES: CreateGoalRequest['goalType'][] = [
   'LEADS',
@@ -283,8 +295,14 @@ const Goals: React.FC = () => {
   const isAdmin = user?.role === 'ADMIN';
 
   const [selectedYear] = useState(() => new Date().getFullYear());
-  const [activeQuarter, setActiveQuarter] = useState<Quarter>('Q1');
-  const [activeMonth, setActiveMonth] = useState(1);
+  const [activeQuarter, setActiveQuarter] = useState<Quarter>(
+    () => quarterAndMonthSlotFromDate(new Date()).quarter
+  );
+  const [activeMonth, setActiveMonth] = useState<MonthSlot>(
+    () => quarterAndMonthSlotFromDate(new Date()).month
+  );
+  /** Só 1x após carregar metas: se o recorte padrão não tiver nenhuma meta, foca o 1º trimestre que tiver. */
+  const didInitialQuarterSync = React.useRef(false);
   const [viewMode, setViewMode] = useState<ViewMode>('TABLE');
 
   const [goals, setGoals] = useState<GoalDTO[]>([]);
@@ -343,8 +361,24 @@ const Goals: React.FC = () => {
   }, [loadGoals]);
 
   useEffect(() => {
-    setActiveMonth(1);
-  }, [activeQuarter]);
+    if (isLoading) return;
+    if (goals.length === 0) return;
+    if (didInitialQuarterSync.current) return;
+    const anyInCurrent = goals.some((g) => goalInQuarter(g, activeQuarter, selectedYear));
+    if (anyInCurrent) {
+      didInitialQuarterSync.current = true;
+      return;
+    }
+    for (const q of ['Q1', 'Q2', 'Q3', 'Q4'] as const) {
+      if (goals.some((g) => goalInQuarter(g, q, selectedYear))) {
+        setActiveQuarter(q);
+        setActiveMonth(1);
+        didInitialQuarterSync.current = true;
+        return;
+      }
+    }
+    didInitialQuarterSync.current = true;
+  }, [isLoading, goals, selectedYear, activeQuarter]);
 
   const filteredGoals = useMemo(
     () => goals.filter((g) => goalInQuarter(g, activeQuarter, selectedYear)),
@@ -690,7 +724,10 @@ const Goals: React.FC = () => {
               <button
                 key={q}
                 type="button"
-                onClick={() => setActiveQuarter(q)}
+                onClick={() => {
+                  setActiveQuarter(q);
+                  setActiveMonth(1);
+                }}
                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${
                   activeQuarter === q ? 'bg-white text-emerald-600 shadow-md' : 'text-gray-400 hover:text-gray-600'
                 }`}
@@ -704,7 +741,7 @@ const Goals: React.FC = () => {
             <span className="px-2 py-2 text-[9px] font-black text-gray-400 uppercase tracking-widest self-center">
               Mês
             </span>
-            {[1, 2, 3].map((m) => (
+            {([1, 2, 3] as const).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -949,7 +986,7 @@ const Goals: React.FC = () => {
           <div className="space-y-10">
             <div className="flex items-center gap-4 bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm">
               <div className="flex-1 flex gap-2">
-                {[1, 2, 3].map((m) => (
+                {([1, 2, 3] as const).map((m) => (
                   <button
                     key={m}
                     type="button"
