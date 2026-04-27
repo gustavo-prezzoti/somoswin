@@ -508,9 +508,13 @@ export interface Company {
     subscriptionEndDate?: string;
 }
 
+export type UserPlanTier = 'STARTER' | 'PRO' | 'ENTERPRISE' | 'TEST';
+
 export interface Plan {
     id: string;
     name: string;
+    /** Faixa comercial (enum backend); pode vir ausente em respostas antigas. */
+    planTier?: UserPlanTier;
     displayName: string;
     price: number;
     setupFee: number;
@@ -519,6 +523,77 @@ export interface Plan {
     whatsappLimit: number;
     active: boolean;
     description?: string;
+}
+
+/** Resposta de GET /admin/plans/manage e GET /admin/plans/{id}. */
+export interface AdminPlanManageRow {
+    id: string;
+    name: string;
+    planTier: UserPlanTier;
+    displayName: string;
+    price: number;
+    setupFee: number;
+    leadLimit?: number | null;
+    userLimit?: number | null;
+    whatsappLimit: number;
+    active: boolean;
+    description?: string | null;
+    asaasPlanId?: string | null;
+    companiesCount: number;
+    pendingCompaniesCount: number;
+}
+
+export interface CreatePlanPayload {
+    name: string;
+    displayName: string;
+    planTier: UserPlanTier;
+    price: number;
+    setupFee: number;
+    leadLimit?: number | null;
+    userLimit?: number | null;
+    whatsappLimit?: number | null;
+    description?: string | null;
+    asaasPlanId?: string | null;
+}
+
+export interface UpdatePlanPayload {
+    displayName?: string;
+    planTier?: UserPlanTier;
+    price?: number;
+    setupFee?: number;
+    leadLimit?: number | null;
+    userLimit?: number | null;
+    whatsappLimit?: number | null;
+    active?: boolean;
+    description?: string | null;
+    asaasPlanId?: string | null;
+}
+
+export interface ClonePlanPayload {
+    displayName: string;
+    name?: string;
+    price?: number;
+    setupFee?: number;
+    leadLimit?: number | null;
+    userLimit?: number | null;
+    whatsappLimit?: number | null;
+    description?: string | null;
+}
+
+export function adminPlanManageRowToPlan(row: AdminPlanManageRow): Plan {
+    return {
+        id: row.id,
+        name: row.name,
+        planTier: row.planTier,
+        displayName: row.displayName,
+        price: row.price,
+        setupFee: row.setupFee,
+        leadLimit: row.leadLimit ?? undefined,
+        userLimit: row.userLimit ?? undefined,
+        whatsappLimit: row.whatsappLimit,
+        active: row.active,
+        description: row.description ?? undefined,
+    };
 }
 
 export interface CreateCompanyRequest {
@@ -712,6 +787,34 @@ const adminService = {
 
     getAllPlans: async (): Promise<Plan[]> => {
         return await httpClient.get<Plan[]>('/admin/plans');
+    },
+
+    getPlansForManage: async (): Promise<AdminPlanManageRow[]> => {
+        return await httpClient.get<AdminPlanManageRow[]>('/admin/plans/manage');
+    },
+
+    getAdminPlanById: async (planId: string): Promise<AdminPlanManageRow> => {
+        return await httpClient.get<AdminPlanManageRow>(`/admin/plans/${planId}`);
+    },
+
+    createPlan: async (data: CreatePlanPayload): Promise<AdminPlanManageRow> => {
+        return await httpClient.post<AdminPlanManageRow>('/admin/plans', data);
+    },
+
+    updatePlan: async (planId: string, data: UpdatePlanPayload): Promise<AdminPlanManageRow> => {
+        return await httpClient.put<AdminPlanManageRow>(`/admin/plans/${planId}`, data);
+    },
+
+    clonePlan: async (planId: string, data: ClonePlanPayload): Promise<AdminPlanManageRow> => {
+        return await httpClient.post<AdminPlanManageRow>(`/admin/plans/${planId}/clone`, data);
+    },
+
+    archivePlan: async (planId: string): Promise<void> => {
+        await httpClient.patch(`/admin/plans/${planId}/archive`);
+    },
+
+    deletePlan: async (planId: string): Promise<void> => {
+        await httpClient.delete(`/admin/plans/${planId}`);
     },
 
     // ========== INSTÂNCIAS WHATSAPP ==========

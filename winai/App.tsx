@@ -51,6 +51,7 @@ import AdminUserConnections from './src/components/Admin/AdminUserConnections';
 import AdminAgentsAI from './components/Admin/AdminAgentsAI';
 import AdminFinancas from './components/Admin/AdminFinancas';
 import AdminCompanies from './components/Admin/AdminCompanies';
+import AdminPlanos from './components/Admin/AdminPlanos';
 import AdminFollowUp from './components/Admin/AdminFollowUp';
 import AdminTerms from './components/Admin/AdminTerms';
 import AdminConsultancyLayout from './components/Admin/AdminConsultancyLayout';
@@ -665,6 +666,7 @@ const App: React.FC = () => {
           <Route path="users" element={<AdminUsers />} />
           <Route path="financas" element={<AdminFinancas />} />
           <Route path="companies" element={<AdminCompanies />} />
+          <Route path="planos" element={<AdminPlanos />} />
           <Route path="instances" element={<AdminInstances />} />
           <Route path="user-connections" element={<AdminUserConnections />} />
           <Route path="agents" element={<AdminAgentsAI />} />

@@ -1,5 +1,8 @@
 package com.backend.winai.service;
 
+import com.backend.winai.dto.request.ClonePlanRequest;
+import com.backend.winai.dto.request.CreatePlanRequest;
+import com.backend.winai.dto.request.UpdatePlanRequest;
 import com.backend.winai.dto.request.AdminCreateUserRequest;
 import com.backend.winai.dto.request.AdminEscutaStartRequest;
 import com.backend.winai.dto.request.IntelligentListeningStartRequest;
@@ -16,6 +19,7 @@ import com.backend.winai.dto.response.AdminPerformanceSnapshotResponse;
 import com.backend.winai.dto.response.AdminFinanceCompanyRowResponse;
 import com.backend.winai.dto.response.AdminFinanceKpisResponse;
 import com.backend.winai.dto.response.AdminFinanceOverviewResponse;
+import com.backend.winai.dto.response.AdminPlanManageResponse;
 import com.backend.winai.dto.response.AdminDashboardResponse;
 import com.backend.winai.dto.response.DashboardResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
@@ -29,6 +33,7 @@ import com.backend.winai.dto.uazap.UazapInstanceDTO;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.Plan;
 import com.backend.winai.entity.User;
+import com.backend.winai.entity.UserPlan;
 import com.backend.winai.entity.UserRole;
 import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.UserRepository;
@@ -90,6 +95,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -1224,6 +1230,202 @@ public class AdminService {
                 .collect(Collectors.toList());
     }
 
+    public List<AdminPlanManageResponse> getAllPlansForManage() {
+        return planRepository.findAll().stream()
+                .sorted(Comparator.comparing(Plan::getDisplayName, String.CASE_INSENSITIVE_ORDER))
+                .map(this::toPlanManageRow)
+                .collect(Collectors.toList());
+    }
+
+    public AdminPlanManageResponse getPlanForManage(UUID planId) {
+        Plan plan = planRepository.findById(planId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plano não encontrado"));
+        return toPlanManageRow(plan);
+    }
+
+    private AdminPlanManageResponse toPlanManageRow(Plan plan) {
+        long companiesCount = companyRepository.countByPlanEntity_Id(plan.getId());
+        long pendingCount = companyRepository.countByPendingPlan_Id(plan.getId());
+        return AdminPlanManageResponse.builder()
+                .id(plan.getId())
+                .name(plan.getName())
+                .planTier(plan.getPlanTier())
+                .displayName(plan.getDisplayName())
+                .price(plan.getPrice())
+                .setupFee(plan.getSetupFee())
+                .leadLimit(plan.getLeadLimit())
+                .userLimit(plan.getUserLimit())
+                .whatsappLimit(plan.getWhatsappLimit())
+                .active(Boolean.TRUE.equals(plan.getActive()))
+                .description(plan.getDescription())
+                .asaasPlanId(plan.getAsaasPlanId())
+                .companiesCount(companiesCount)
+                .pendingCompaniesCount(pendingCount)
+                .build();
+    }
+
+    private static String normalizePlanSlug(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome interno (slug) do plano é obrigatório");
+        }
+        String n = raw.trim().toUpperCase(Locale.ROOT);
+        if (!n.matches("[A-Z0-9_]+")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Nome interno do plano deve conter apenas A-Z, 0-9 e underscore");
+        }
+        return n;
+    }
+
+    private static String slugHintFromDisplayName(String displayName) {
+        if (displayName == null || displayName.isBlank()) {
+            return "PLAN";
+        }
+        String s = displayName.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_");
+        s = s.replaceAll("^_+|_+$", "");
+        return s.isEmpty() ? "PLAN" : s;
+    }
+
+    private String uniquePlanSlugFromBase(String base) {
+        String candidate = normalizePlanSlug(base);
+        if (planRepository.findByName(candidate).isEmpty()) {
+            return candidate;
+        }
+        for (int i = 0; i < 50; i++) {
+            String frag = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            candidate = normalizePlanSlug(base + "_" + frag);
+            if (planRepository.findByName(candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Não foi possível gerar slug único");
+    }
+
+    @Transactional
+    public AdminPlanManageResponse createPlan(CreatePlanRequest request) {
+        String name = normalizePlanSlug(request.getName());
+        if (planRepository.findByName(name).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Já existe um plano com este nome interno");
+        }
+        int wa = request.getWhatsappLimit() != null ? request.getWhatsappLimit() : 1;
+        Plan plan = Plan.builder()
+                .name(name)
+                .displayName(request.getDisplayName().trim())
+                .planTier(request.getPlanTier())
+                .price(request.getPrice())
+                .setupFee(request.getSetupFee())
+                .leadLimit(request.getLeadLimit())
+                .userLimit(request.getUserLimit())
+                .whatsappLimit(wa)
+                .active(true)
+                .description(request.getDescription() != null && !request.getDescription().isBlank()
+                        ? request.getDescription().trim() : null)
+                .asaasPlanId(request.getAsaasPlanId() != null && !request.getAsaasPlanId().isBlank()
+                        ? request.getAsaasPlanId().trim() : null)
+                .build();
+        planRepository.save(plan);
+        return toPlanManageRow(plan);
+    }
+
+    @Transactional
+    public AdminPlanManageResponse updatePlan(UUID planId, UpdatePlanRequest request) {
+        Plan plan = planRepository.findById(planId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plano não encontrado"));
+        long linked = companyRepository.countByPlanEntity_Id(planId);
+        if (request.getPlanTier() != null && request.getPlanTier() != plan.getPlanTier() && linked > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Não é possível alterar a faixa (tier) do plano enquanto houver empresas vinculadas");
+        }
+        if (request.getDisplayName() != null && !request.getDisplayName().isBlank()) {
+            plan.setDisplayName(request.getDisplayName().trim());
+        }
+        if (request.getPlanTier() != null) {
+            plan.setPlanTier(request.getPlanTier());
+        }
+        if (request.getPrice() != null) {
+            plan.setPrice(request.getPrice());
+        }
+        if (request.getSetupFee() != null) {
+            plan.setSetupFee(request.getSetupFee());
+        }
+        if (request.getLeadLimit() != null) {
+            plan.setLeadLimit(request.getLeadLimit());
+        }
+        if (request.getUserLimit() != null) {
+            plan.setUserLimit(request.getUserLimit());
+        }
+        if (request.getWhatsappLimit() != null) {
+            plan.setWhatsappLimit(request.getWhatsappLimit());
+        }
+        if (request.getActive() != null) {
+            plan.setActive(request.getActive());
+        }
+        if (request.getDescription() != null) {
+            plan.setDescription(request.getDescription().isBlank() ? null : request.getDescription().trim());
+        }
+        if (request.getAsaasPlanId() != null) {
+            plan.setAsaasPlanId(request.getAsaasPlanId().isBlank() ? null : request.getAsaasPlanId().trim());
+        }
+        planRepository.save(plan);
+        return toPlanManageRow(plan);
+    }
+
+    @Transactional
+    public AdminPlanManageResponse clonePlan(UUID sourcePlanId, ClonePlanRequest request) {
+        Plan source = planRepository.findById(sourcePlanId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plano fonte não encontrado"));
+        String base = (request.getName() != null && !request.getName().isBlank())
+                ? normalizePlanSlug(request.getName())
+                : slugHintFromDisplayName(request.getDisplayName());
+        String uniqueName = uniquePlanSlugFromBase(base);
+
+        BigDecimal price = request.getPrice() != null ? request.getPrice() : source.getPrice();
+        BigDecimal setup = request.getSetupFee() != null ? request.getSetupFee() : source.getSetupFee();
+        Integer lead = request.getLeadLimit() != null ? request.getLeadLimit() : source.getLeadLimit();
+        Integer user = request.getUserLimit() != null ? request.getUserLimit() : source.getUserLimit();
+        int wa = request.getWhatsappLimit() != null ? request.getWhatsappLimit()
+                : (source.getWhatsappLimit() != null ? source.getWhatsappLimit() : 1);
+        String desc = request.getDescription() != null
+                ? (request.getDescription().isBlank() ? null : request.getDescription().trim())
+                : source.getDescription();
+
+        Plan clone = Plan.builder()
+                .name(uniqueName)
+                .displayName(request.getDisplayName().trim())
+                .planTier(source.getPlanTier() != null ? source.getPlanTier() : UserPlan.STARTER)
+                .price(price)
+                .setupFee(setup)
+                .leadLimit(lead)
+                .userLimit(user)
+                .whatsappLimit(wa)
+                .active(true)
+                .description(desc)
+                .asaasPlanId(null)
+                .build();
+        planRepository.save(clone);
+        return toPlanManageRow(clone);
+    }
+
+    @Transactional
+    public void archivePlan(UUID planId) {
+        Plan plan = planRepository.findById(planId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plano não encontrado"));
+        plan.setActive(false);
+        planRepository.save(plan);
+    }
+
+    @Transactional
+    public void deletePlanIfUnused(UUID planId) {
+        long c = companyRepository.countByPlanEntity_Id(planId);
+        long p = companyRepository.countByPendingPlan_Id(planId);
+        if (c > 0 || p > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Plano vinculado a empresas ou pagamento pendente. Arquive ou migre as empresas antes de excluir.");
+        }
+        Plan plan = planRepository.findById(planId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plano não encontrado"));
+        planRepository.delete(plan);
+    }
+
     /**
      * Cria uma nova empresa a partir do DTO
      */
@@ -1366,7 +1568,8 @@ public class AdminService {
                     planChanged = company.getPlanEntity() == null
                             || !company.getPlanEntity().getId().equals(plan.getId());
                     company.setPlanEntity(plan);
-                    company.setPlan(com.backend.winai.entity.UserPlan.valueOf(plan.getName()));
+                    company.setPlan(plan.getPlanTier() != null ? plan.getPlanTier()
+                            : com.backend.winai.entity.UserPlan.STARTER);
                 }
             }
         }

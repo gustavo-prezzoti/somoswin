@@ -11,7 +11,6 @@ import {
     Calendar,
     FileText,
     Mail,
-    ArrowUpRight,
     AlertCircle,
 } from 'lucide-react';
 import adminService, { AdminLeadRow, AdminUser, Company } from '../../services/adminService';
@@ -280,13 +279,6 @@ const AdminClientes: React.FC = () => {
                                         )}
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                        <Link
-                                            to={`/admin/clientes?companyId=${encodeURIComponent(selected.id)}`}
-                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest shadow-sm hover:bg-emerald-700 transition-colors"
-                                        >
-                                            Ver cliente
-                                            <ArrowUpRight size={14} />
-                                        </Link>
                                         <Link
                                             to="/admin/users"
                                             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"

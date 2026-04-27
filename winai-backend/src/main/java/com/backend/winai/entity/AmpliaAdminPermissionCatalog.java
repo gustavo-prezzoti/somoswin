@@ -38,6 +38,9 @@ public final class AmpliaAdminPermissionCatalog {
         m.put(AmpliaAdminModule.contratos,
                 EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read, AmpliaAdminAction.create,
                         AmpliaAdminAction.update, AmpliaAdminAction.delete));
+        m.put(AmpliaAdminModule.planos,
+                EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read, AmpliaAdminAction.create,
+                        AmpliaAdminAction.update, AmpliaAdminAction.delete));
         m.put(AmpliaAdminModule.consultoria,
                 EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read, AmpliaAdminAction.create, AmpliaAdminAction.update));
 

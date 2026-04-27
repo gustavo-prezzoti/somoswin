@@ -184,11 +184,8 @@ public class AsaasService {
                 company.setSubscriptionStatus("PENDING");
                 company.setSubscriptionDueDate(firstDueDate);
                 company.setPlanEntity(plan);
-                try {
-                    company.setPlan(com.backend.winai.entity.UserPlan.valueOf(plan.getName()));
-                } catch (IllegalArgumentException e) {
-                    log.warn("[ASAAS] Plano '{}' não encontrado no enum UserPlan, mantendo plano atual", plan.getName());
-                }
+                company.setPlan(plan.getPlanTier() != null ? plan.getPlanTier()
+                        : com.backend.winai.entity.UserPlan.STARTER);
                 // Vigência: usa as datas já configuradas no site, ou hoje + 30 dias se não houver
                 if (company.getSubscriptionStartDate() == null) {
                     company.setSubscriptionStartDate(LocalDate.now());

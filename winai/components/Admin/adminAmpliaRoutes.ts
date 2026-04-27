@@ -8,11 +8,11 @@
  * | usuarios            | /admin/users               | Usuários                           |
  * | metaads             | /admin/meta-ads            | Meta Ads                           |
  * | metas               | /admin/metas               | Metas e objetivos                  |
- * | alertas             | /admin/alertas             | Notificações (badge opcional)      |
  * | performance         | /admin/performance         | Snapshot agregado                  |
  * | gestao_equipe     | /admin/gestao-equipe      | Colaboradores internos             |
  * | financas            | /admin/financas            | MRR, faturas, visão financeira     |
  * | contratos           | /admin/companies           | Contratos / empresas               |
+ * | planos              | /admin/planos              | Catálogo de planos (CRUD)          |
  * | instancias…followup | /admin/instances, etc.     | Rotas técnicas                     |
  * | notificacoes_globais | /admin/notificacoes-globais | Handoff / alertas WhatsApp       |
  * | consultoria         | /admin/consultancy         | Não listado no menu (rota direta)  |
@@ -26,7 +26,7 @@ export interface AdminNavItem {
     to: string;
     /** Se false, item ainda não tem tela dedicada */
     implemented?: boolean;
-    /** Ex.: contador em Alertas */
+    /** Contador opcional no item (ex.: notificações) */
     badge?: number;
 }
 
@@ -48,7 +48,6 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
             { id: 'usuarios', label: 'Usuários', to: '/admin/users', implemented: true },
             { id: 'metaads', label: 'Meta Ads', to: '/admin/meta-ads', implemented: true },
             { id: 'metas', label: 'Metas e Objetivos', to: '/admin/metas', implemented: true },
-            { id: 'alertas', label: 'Alertas', to: '/admin/alertas', implemented: true, badge: 3 },
             { id: 'performance', label: 'Performance', to: '/admin/performance', implemented: true },
         ],
     },
@@ -59,6 +58,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         items: [
             { id: 'gestao_equipe', label: 'Gestão de Equipe', to: '/admin/gestao-equipe', implemented: true },
             { id: 'contratos', label: 'Contratos', to: '/admin/companies', implemented: true },
+            { id: 'planos', label: 'Planos', to: '/admin/planos', implemented: true },
             { id: 'financas', label: 'Finanças', to: '/admin/financas', implemented: true },
         ],
     },

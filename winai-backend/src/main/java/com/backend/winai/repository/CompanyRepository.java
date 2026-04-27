@@ -28,4 +28,8 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
 
     @Query("SELECT c FROM Company c LEFT JOIN FETCH c.planEntity")
     List<Company> findAllWithPlanFetched();
+
+    long countByPlanEntity_Id(UUID planId);
+
+    long countByPendingPlan_Id(UUID planId);
 }

@@ -49,6 +49,7 @@ export const AMPLIA_ADMIN_MODULE_SECTIONS: AmpliaAdminModuleSection[] = [
         items: [
             { id: 'gestao_equipe', label: 'Gestão de Equipe', actions: ['list', 'read', 'create', 'update'] },
             { id: 'contratos', label: 'Contratos', actions: ['list', 'read', 'create', 'update', 'delete'] },
+            { id: 'planos', label: 'Planos', actions: ['list', 'read', 'create', 'update', 'delete'] },
             { id: 'financas', label: 'Finanças', actions: ['list'] },
             { id: 'consultoria', label: 'Consultoria', actions: ['list', 'read', 'create', 'update'] },
         ],

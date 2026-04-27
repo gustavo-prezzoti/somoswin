@@ -17,6 +17,7 @@ import {
     ChevronRight,
     X,
     Flag,
+    Layers,
 } from 'lucide-react';
 import {
     ADMIN_NAV_SECTIONS,
@@ -32,10 +33,10 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
     usuarios: User,
     metaads: Target,
     metas: Flag,
-    alertas: Bell,
     performance: BarChart3,
     gestao_equipe: Users,
     contratos: Building2,
+    planos: Layers,
     financas: DollarSign,
     instancias: Smartphone,
     conexoes: LinkIcon,

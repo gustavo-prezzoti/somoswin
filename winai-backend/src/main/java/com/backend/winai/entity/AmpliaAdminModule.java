@@ -17,6 +17,8 @@ public enum AmpliaAdminModule {
     performance,
     gestao_equipe,
     contratos,
+    /** Catálogo de planos (CRUD / clone) para contratos e Asaas */
+    planos,
     financas,
     instancias,
     conexoes,

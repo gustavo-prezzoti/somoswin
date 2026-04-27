@@ -25,6 +25,14 @@ public class Plan {
     @Column(nullable = false, unique = true)
     private String name;
 
+    /**
+     * Nível comercial (limites/comportamento); não precisa coincidir com {@link #name} (slug único).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan_tier", nullable = false)
+    @Builder.Default
+    private UserPlan planTier = UserPlan.STARTER;
+
     @Column(nullable = false)
     private String displayName;
 

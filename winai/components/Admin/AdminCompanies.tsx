@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { Plus, Search, Edit2, Trash2, Building2, Loader2, ArrowUpRight, Filter, CreditCard, Info, DollarSign, ExternalLink, XCircle, Calendar } from 'lucide-react';
-import adminService, { Company, CreateCompanyRequest, UpdateCompanyRequest, Plan, asaasService } from '../../services/adminService';
+import adminService, {
+    Company,
+    CreateCompanyRequest,
+    UpdateCompanyRequest,
+    Plan,
+    adminPlanManageRowToPlan,
+    asaasService,
+} from '../../services/adminService';
 import type { UserDTO } from '../../services/types';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
@@ -150,10 +157,18 @@ const AdminCompanies: React.FC = () => {
         let currentEndDate = company?.subscriptionEndDate || '';
         let currentSubscriptionStatus = company?.subscriptionStatus || 'PENDING';
 
-        // Fetch available plans
+        // Fetch available plans (ativos) + plano atual se estiver arquivado
         let availablePlans: Plan[] = [];
         try {
             availablePlans = await adminService.getAllPlans();
+            if (company?.planId && !availablePlans.some((p) => p.id === company.planId)) {
+                try {
+                    const row = await adminService.getAdminPlanById(company.planId);
+                    availablePlans = [adminPlanManageRowToPlan(row), ...availablePlans];
+                } catch {
+                    /* ignore */
+                }
+            }
         } catch (error) {
             console.error('Failed to fetch plans:', error);
         }

@@ -119,6 +119,7 @@ export function adminRouteToModule(pathname: string): string | null {
         performance: 'performance',
         users: 'usuarios',
         financas: 'financas',
+        planos: 'planos',
         companies: 'contratos',
         instances: 'instancias',
         'user-connections': 'conexoes',

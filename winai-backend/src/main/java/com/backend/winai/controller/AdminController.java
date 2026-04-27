@@ -10,6 +10,9 @@ import com.backend.winai.dto.request.AdminEscutaStartRequest;
 import com.backend.winai.dto.request.AdminLeadStatusPatchRequest;
 import com.backend.winai.dto.request.AdminUpdateUserRequest;
 import com.backend.winai.dto.request.UpdateInstanceConfigRequest;
+import com.backend.winai.dto.request.ClonePlanRequest;
+import com.backend.winai.dto.request.CreatePlanRequest;
+import com.backend.winai.dto.request.UpdatePlanRequest;
 import com.backend.winai.dto.request.CreateUserWhatsAppConnectionRequest;
 import com.backend.winai.dto.request.CreateTermsRequest;
 import com.backend.winai.dto.response.AdminConversationSummaryResponse;
@@ -22,6 +25,7 @@ import com.backend.winai.dto.response.AdminDashboardResponse;
 import com.backend.winai.dto.response.AdminFinanceOverviewResponse;
 import com.backend.winai.dto.response.AdminNotificationRowResponse;
 import com.backend.winai.dto.response.AdminPerformanceSnapshotResponse;
+import com.backend.winai.dto.response.AdminPlanManageResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
 import com.backend.winai.dto.response.AdminMeetingRowResponse;
 import com.backend.winai.dto.response.AdminLeadResponse;
@@ -507,11 +511,67 @@ public class AdminController {
 
     // ========== PLANOS ==========
 
-    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'contratos', 'list')")
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'contratos', 'list') or @adminSecurity.hasPermission(authentication, 'planos', 'list')")
     @Operation(summary = "Listar Planos", description = "Lista todos os planos ativos do sistema")
     @GetMapping("/plans")
     public ResponseEntity<List<com.backend.winai.entity.Plan>> getAllPlans() {
         return ResponseEntity.ok(adminService.getAllPlans());
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'planos', 'list')")
+    @Operation(summary = "Listar planos (gestão)", description = "Lista todos os planos com contagens de uso (ativos e inativos)")
+    @GetMapping("/plans/manage")
+    public ResponseEntity<List<AdminPlanManageResponse>> getAllPlansForManage() {
+        return ResponseEntity.ok(adminService.getAllPlansForManage());
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'contratos', 'list') or @adminSecurity.hasPermission(authentication, 'planos', 'list')")
+    @Operation(summary = "Buscar plano por ID", description = "Detalhe do plano para contratos ou gestão")
+    @GetMapping("/plans/{planId}")
+    public ResponseEntity<AdminPlanManageResponse> getPlanById(
+            @Parameter(description = "ID do plano") @PathVariable UUID planId) {
+        return ResponseEntity.ok(adminService.getPlanForManage(planId));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'planos', 'create')")
+    @Operation(summary = "Criar plano", description = "Adiciona plano ao catálogo")
+    @PostMapping("/plans")
+    public ResponseEntity<AdminPlanManageResponse> createPlan(@Valid @RequestBody CreatePlanRequest request) {
+        return ResponseEntity.ok(adminService.createPlan(request));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'planos', 'update')")
+    @Operation(summary = "Atualizar plano", description = "Atualiza campos do plano")
+    @PutMapping("/plans/{planId}")
+    public ResponseEntity<AdminPlanManageResponse> updatePlan(
+            @Parameter(description = "ID do plano") @PathVariable UUID planId,
+            @RequestBody UpdatePlanRequest request) {
+        return ResponseEntity.ok(adminService.updatePlan(planId, request));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'planos', 'create')")
+    @Operation(summary = "Clonar plano", description = "Duplica plano (novo slug e preço opcional)")
+    @PostMapping("/plans/{planId}/clone")
+    public ResponseEntity<AdminPlanManageResponse> clonePlan(
+            @Parameter(description = "ID do plano fonte") @PathVariable UUID planId,
+            @Valid @RequestBody ClonePlanRequest request) {
+        return ResponseEntity.ok(adminService.clonePlan(planId, request));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'planos', 'delete')")
+    @Operation(summary = "Arquivar plano", description = "Define plano como inativo")
+    @PatchMapping("/plans/{planId}/archive")
+    public ResponseEntity<Void> archivePlan(@Parameter(description = "ID do plano") @PathVariable UUID planId) {
+        adminService.archivePlan(planId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'planos', 'delete')")
+    @Operation(summary = "Excluir plano", description = "Remove plano se não houver empresas vinculadas")
+    @DeleteMapping("/plans/{planId}")
+    public ResponseEntity<Void> deletePlan(@Parameter(description = "ID do plano") @PathVariable UUID planId) {
+        adminService.deletePlanIfUnused(planId);
+        return ResponseEntity.ok().build();
     }
 
     // ========== INSTÂNCIAS WHATSAPP ==========
