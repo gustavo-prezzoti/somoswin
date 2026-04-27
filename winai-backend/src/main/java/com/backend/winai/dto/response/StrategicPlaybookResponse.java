@@ -1,7 +1,5 @@
 package com.backend.winai.dto.response;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,9 +17,7 @@ public class StrategicPlaybookResponse {
     private boolean published;
     private String canalPrioritario;
     private LocalDate projectStartDate;
-    @Schema(implementation = Object.class)
-    private JsonNode activities;
-    @Schema(implementation = Object.class)
-    private JsonNode answers;
+    private Object activities;
+    private Object answers;
     private ZonedDateTime publishedAt;
 }

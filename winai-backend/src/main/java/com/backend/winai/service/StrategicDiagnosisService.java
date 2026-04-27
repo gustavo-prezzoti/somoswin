@@ -43,6 +43,10 @@ public class StrategicDiagnosisService {
         CompanyStrategicDiagnosis row = diagnosisRepository.findByCompany_Id(companyId)
                 .orElseGet(() -> newRow(company));
         row = ensureDraftPlaybookPopulated(row);
+        int activityCount = draftActivityCount(row);
+        log.info(
+                "[strategic-diagnosis] GET admin rascunho companyId={} draftStep={} activityCount={} (postgres/jsonb, não mock)",
+                companyId, row.getDraftCurrentStep(), activityCount);
         return toAdminResponse(row);
     }
 
@@ -53,12 +57,17 @@ public class StrategicDiagnosisService {
         CompanyStrategicDiagnosis row = diagnosisRepository.findByCompany_Id(companyId)
                 .orElseGet(() -> newRow(company));
 
-        // JsonNode JSON null is a non-null Java object (NullNode); must not wipe the column.
-        if (req.getAnswers() != null && !req.getAnswers().isNull()) {
-            row.setDraftAnswersJson(req.getAnswers());
+        if (req.getAnswers() != null) {
+            JsonNode n = objectMapper.valueToTree(req.getAnswers());
+            if (n != null && !n.isNull()) {
+                row.setDraftAnswersJson(n);
+            }
         }
-        if (req.getActivities() != null && !req.getActivities().isNull()) {
-            row.setDraftActivitiesJson(req.getActivities());
+        if (req.getActivities() != null) {
+            JsonNode n = objectMapper.valueToTree(req.getActivities());
+            if (n != null && !n.isNull()) {
+                row.setDraftActivitiesJson(n);
+            }
         }
         if (req.getProjectStartDate() != null) {
             row.setDraftProjectStartDate(req.getProjectStartDate());
@@ -70,6 +79,8 @@ public class StrategicDiagnosisService {
             row.setUpdatedByUserId(user.getId());
         }
         row = diagnosisRepository.save(row);
+        log.info("[strategic-diagnosis] PUT admin rascunho salvo companyId={} activityCount={} draftStep={}",
+                companyId, draftActivityCount(row), row.getDraftCurrentStep());
         return toAdminResponse(row);
     }
 
@@ -96,7 +107,9 @@ public class StrategicDiagnosisService {
             row.setUpdatedByUserId(user.getId());
         }
         row = diagnosisRepository.save(row);
-        log.info("Strategic diagnosis published for company {}", companyId);
+        log.info(
+                "[strategic-diagnosis] POST publish companyId={} activityCount={} canal={} publishedAt={}",
+                companyId, draftActivityCount(row), row.getPublishedCanalPrioritario(), row.getPublishedAt());
         return toAdminResponse(row);
     }
 
@@ -110,17 +123,25 @@ public class StrategicDiagnosisService {
         if (company == null) {
             return StrategicPlaybookResponse.builder().published(false).build();
         }
-        return diagnosisRepository.findByCompany_Id(company.getId())
+        StrategicPlaybookResponse out = diagnosisRepository.findByCompany_Id(company.getId())
                 .filter(r -> r.getPublishedAt() != null)
                 .map(r -> StrategicPlaybookResponse.builder()
                         .published(true)
                         .canalPrioritario(r.getPublishedCanalPrioritario())
                         .projectStartDate(r.getPublishedProjectStartDate())
-                        .activities(r.getPublishedActivitiesJson())
-                        .answers(r.getPublishedAnswersJson())
+                        .activities(jsonNodeToApi(r.getPublishedActivitiesJson()))
+                        .answers(jsonNodeToApi(r.getPublishedAnswersJson()))
                         .publishedAt(r.getPublishedAt())
                         .build())
                 .orElse(StrategicPlaybookResponse.builder().published(false).build());
+        if (out.isPublished()) {
+            log.info("[strategic-diagnosis] GET dashboard playbook companyId={} published=true canal={}",
+                    company.getId(), out.getCanalPrioritario());
+        } else {
+            log.debug("[strategic-diagnosis] GET dashboard playbook companyId={} published=false (sem snapshot)",
+                    company.getId());
+        }
+        return out;
     }
 
     private CompanyStrategicDiagnosis newRow(Company company) {
@@ -177,17 +198,17 @@ public class StrategicDiagnosisService {
         Metrics draftMetrics = StrategicDiagnosisMetricsCalculator.calculateMetrics(answersMap);
         return StrategicDiagnosisAdminResponse.builder()
                 .companyId(row.getCompany().getId())
-                .draftAnswers(row.getDraftAnswersJson())
-                .draftActivities(row.getDraftActivitiesJson())
+                .draftAnswers(jsonNodeToApi(row.getDraftAnswersJson()))
+                .draftActivities(jsonNodeToApi(row.getDraftActivitiesJson()))
                 .draftProjectStartDate(row.getDraftProjectStartDate())
                 .draftCurrentStep(row.getDraftCurrentStep())
-                .draftMetrics(metricsToJson(draftMetrics))
+                .draftMetrics(jsonNodeToApi(metricsToJson(draftMetrics)))
                 .draftCanalPrioritario(StrategicDiagnosisMetricsCalculator.canalPrioritario(draftMetrics))
-                .publishedAnswers(row.getPublishedAnswersJson())
-                .publishedActivities(row.getPublishedActivitiesJson())
+                .publishedAnswers(jsonNodeToApi(row.getPublishedAnswersJson()))
+                .publishedActivities(jsonNodeToApi(row.getPublishedActivitiesJson()))
                 .publishedProjectStartDate(row.getPublishedProjectStartDate())
                 .publishedCanalPrioritario(row.getPublishedCanalPrioritario())
-                .publishedMetrics(row.getPublishedMetricsJson())
+                .publishedMetrics(jsonNodeToApi(row.getPublishedMetricsJson()))
                 .publishedAt(row.getPublishedAt())
                 .build();
     }
@@ -216,5 +237,21 @@ public class StrategicDiagnosisService {
         } catch (IllegalArgumentException e) {
             return Map.of();
         }
+    }
+
+    /** Evita expor {@link JsonNode} em DTOs REST (SpringDoc / introspection quebram). */
+    private Object jsonNodeToApi(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        return objectMapper.convertValue(node, Object.class);
+    }
+
+    private static int draftActivityCount(CompanyStrategicDiagnosis row) {
+        JsonNode act = row.getDraftActivitiesJson();
+        if (act == null || act.isNull() || !act.isArray()) {
+            return 0;
+        }
+        return act.size();
     }
 }

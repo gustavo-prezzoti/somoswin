@@ -41,6 +41,16 @@ function parsePlaybookActivities(raw: unknown): PlaybookActivityRow[] {
   return [];
 }
 
+const DIAG_LOG_PREFIX = '[DiagnósticoEstratégico]';
+
+function logStrategicDiagnosis(message: string, detail?: Record<string, unknown>) {
+  if (detail) {
+    console.info(`${DIAG_LOG_PREFIX} ${message}`, detail);
+  } else {
+    console.info(`${DIAG_LOG_PREFIX} ${message}`);
+  }
+}
+
 interface AdminStrategicDiagnosisProps {
   companyId: string;
 }
@@ -91,10 +101,32 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
       skipSaveRef.current = true;
       setLoadingDraft(true);
       try {
+        const t0 = performance.now();
+        logStrategicDiagnosis('GET rascunho → chamando API', {
+          companyId,
+          url: `/api/v1/admin/companies/${companyId}/strategic-diagnosis`,
+        });
         const d = await adminService.getStrategicDiagnosis(companyId);
+        const ms = Math.round(performance.now() - t0);
         if (cancelled) return;
+        const parsedActs = parsePlaybookActivities(d.draftActivities);
+        const answerKeys =
+          d.draftAnswers && typeof d.draftAnswers === 'object' && !Array.isArray(d.draftAnswers)
+            ? Object.keys(d.draftAnswers as object).length
+            : 0;
+        logStrategicDiagnosis('GET rascunho ← resposta da API (não é mock)', {
+          companyId,
+          ms,
+          companyIdFromPayload: d.companyId,
+          answerFieldCount: answerKeys,
+          activitiesCount: parsedActs.length,
+          draftCurrentStep: d.draftCurrentStep,
+          draftProjectStartDate: d.draftProjectStartDate ?? null,
+          draftCanalPrioritario: d.draftCanalPrioritario ?? null,
+          hasPublishedSnapshot: Boolean(d.publishedAt),
+        });
         setAnswers((d.draftAnswers as Record<string, unknown>) || {});
-        setActivities(parsePlaybookActivities(d.draftActivities));
+        setActivities(parsedActs);
         if (d.draftProjectStartDate) {
           setProjectStartDay(d.draftProjectStartDate);
         }
@@ -108,6 +140,10 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
         }
         hydratedRef.current = true;
       } catch (e) {
+        logStrategicDiagnosis('GET rascunho falhou', {
+          companyId,
+          error: getErrorMessage(e, String(e)),
+        });
         console.error(e);
       } finally {
         if (!cancelled) {
@@ -126,6 +162,14 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
   useEffect(() => {
     if (!companyId || !hydratedRef.current || skipSaveRef.current || loadingDraft) return;
     const t = setTimeout(() => {
+      const t0 = performance.now();
+      logStrategicDiagnosis('PUT rascunho → debounce disparado, enviando à API', {
+        companyId,
+        activitiesCount: activities.length,
+        answerFieldCount: Object.keys(answers).length,
+        projectStartDate: projectStartDay,
+        currentStep: isFinished ? 8 : currentBlockIndex,
+      });
       void adminService
         .saveStrategicDiagnosisDraft(companyId, {
           answers,
@@ -133,7 +177,21 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
           projectStartDate: projectStartDay,
           currentStep: isFinished ? 8 : currentBlockIndex,
         })
-        .catch((e) => console.error('save strategic diagnosis', e));
+        .then((saved) => {
+          logStrategicDiagnosis('PUT rascunho ← OK (persistido no servidor)', {
+            companyId,
+            ms: Math.round(performance.now() - t0),
+            draftCurrentStep: saved.draftCurrentStep,
+            activitiesCountAfter: parsePlaybookActivities(saved.draftActivities).length,
+          });
+        })
+        .catch((e) => {
+          logStrategicDiagnosis('PUT rascunho falhou', {
+            companyId,
+            error: getErrorMessage(e, String(e)),
+          });
+          console.error('save strategic diagnosis', e);
+        });
     }, 700);
     return () => clearTimeout(t);
   }, [companyId, answers, activities, projectStartDay, currentBlockIndex, isFinished, loadingDraft]);
@@ -176,11 +234,22 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
     if (!title) return;
     setIsGenerating(true);
     try {
+      logStrategicDiagnosis('POST generate-activity-description → IA', { companyId, title });
+      const t0 = performance.now();
       const text = await adminService.generateStrategicActivityDescription(companyId, title);
+      logStrategicDiagnosis('POST generate-activity-description ← OK', {
+        companyId,
+        ms: Math.round(performance.now() - t0),
+        descriptionChars: text?.length ?? 0,
+      });
       if (text && editingActivity) {
         setEditingActivity({ ...editingActivity, description: text });
       }
     } catch (error) {
+      logStrategicDiagnosis('POST generate-activity-description falhou', {
+        companyId,
+        error: getErrorMessage(error, String(error)),
+      });
       console.error("Erro ao gerar descrição:", error);
     } finally {
       setIsGenerating(false);
@@ -591,9 +660,19 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
                       setShowConfirmSend(false);
                       setPublishBusy(true);
                       try {
+                        const t0 = performance.now();
+                        logStrategicDiagnosis('POST publish → playbook para o cliente', { companyId });
                         await adminService.publishStrategicDiagnosis(companyId);
+                        logStrategicDiagnosis('POST publish ← OK (snapshot publicado)', {
+                          companyId,
+                          ms: Math.round(performance.now() - t0),
+                        });
                         setIsSent(true);
                       } catch (e) {
+                        logStrategicDiagnosis('POST publish falhou', {
+                          companyId,
+                          error: getErrorMessage(e, String(e)),
+                        });
                         window.alert(getErrorMessage(e, 'Falha ao publicar playbook.'));
                       } finally {
                         setPublishBusy(false);
