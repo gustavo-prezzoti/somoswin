@@ -1,5 +1,5 @@
 /**
- * Escuta Inteligente — sessões vinculadas a leads (API real, sem mock).
+ * Escuta Inteligente — sessões vinculadas a leads.
  */
 
 import { httpClient } from './http-client';

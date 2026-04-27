@@ -207,7 +207,7 @@ function daysPrazo(g: GoalDTO): number {
   return 30;
 }
 
-/** Baseline planejado do mês dentro do trimestre (mock: ~33% / mês). */
+/** Baseline planejado do mês dentro do trimestre (~33% por mês no trimestre). */
 function progressoEsperadoForMonth(activeMonth: number): number {
   return Math.min(100, Math.round((activeMonth / 3) * 100));
 }
