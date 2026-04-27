@@ -330,23 +330,40 @@ function priorityLabel(type: string): string {
   return 'Média';
 }
 
+/** Alinhado ao backend: preferir execução por tarefas quando existir. */
+function goalProgressPct(g: GoalDTO): number {
+  const ex = g.executionProgressPercentage;
+  if (ex != null && Number.isFinite(ex)) {
+    return Math.min(100, Math.max(0, Math.round(ex)));
+  }
+  return Math.min(100, Math.max(0, Math.round(g.progressPercentage ?? 0)));
+}
+
 function buildMonthlyGoalsWidgetData(goals: GoalDTO[]) {
+  const emptyCategories = () =>
+    (['Vendas', 'Tráfego', 'Operacional'] as const).map((name) => ({
+      name,
+      completed: 0,
+      total: 0,
+      hasGoals: false,
+      color: name === 'Vendas' ? 'bg-emerald-500' : name === 'Tráfego' ? 'bg-blue-500' : 'bg-amber-500',
+    }));
+
   if (!goals.length) {
     return {
       overall: [
         { name: 'Concluído', value: 0, color: '#10b981' },
-        { name: 'Pendente', value: 1, color: '#f1f5f9' },
+        { name: 'Sem metas ativas', value: 1, color: '#f1f5f9' },
       ],
-      categories: [
-        { name: 'Vendas', completed: 0, total: 1, color: 'bg-emerald-500' },
-        { name: 'Tráfego', completed: 0, total: 1, color: 'bg-blue-500' },
-        { name: 'Operacional', completed: 0, total: 1, color: 'bg-amber-500' },
-      ],
+      categories: emptyCategories(),
       priorityObjectives: [] as { title: string; status: string; priority: string }[],
+      progressHint:
+        'Dados vêm da API (GET /dashboard). Não há metas KPI ativas neste ciclo — cadastre em Metas e Objetivos.',
+      activeGoalCount: 0,
     };
   }
 
-  const completed = goals.filter((g) => (g.progressPercentage ?? 0) >= 100).length;
+  const completed = goals.filter((g) => goalProgressPct(g) >= 100).length;
   const pending = Math.max(0, goals.length - completed);
 
   const buckets: Record<'Vendas' | 'Tráfego' | 'Operacional', { total: number; done: number }> = {
@@ -357,7 +374,7 @@ function buildMonthlyGoalsWidgetData(goals: GoalDTO[]) {
   goals.forEach((g) => {
     const b = categoryBucket(g.type);
     buckets[b].total += 1;
-    if ((g.progressPercentage ?? 0) >= 100) buckets[b].done += 1;
+    if (goalProgressPct(g) >= 100) buckets[b].done += 1;
   });
 
   const categories = (['Vendas', 'Tráfego', 'Operacional'] as const).map((name) => {
@@ -366,19 +383,25 @@ function buildMonthlyGoalsWidgetData(goals: GoalDTO[]) {
     return {
       name,
       completed: done,
-      total: Math.max(total, 1),
+      total,
+      hasGoals: total > 0,
       color,
     };
   });
 
   const priorityObjectives = [...goals]
-    .sort((a, b) => (b.progressPercentage ?? 0) - (a.progressPercentage ?? 0))
+    .sort((a, b) => goalProgressPct(b) - goalProgressPct(a))
     .slice(0, 3)
     .map((g) => ({
       title: g.title,
-      status: `${g.progressPercentage ?? 0}%`,
+      status: `${goalProgressPct(g)}%`,
       priority: priorityLabel(g.type),
     }));
+
+  const progressHint =
+    completed === 0
+      ? `Integrado: ${goals.length} meta(s) ativa(s). Progresso geral = quantas atingiram 100% (resultado ou tarefas). Atualize em Metas.`
+      : undefined;
 
   return {
     overall: [
@@ -387,6 +410,8 @@ function buildMonthlyGoalsWidgetData(goals: GoalDTO[]) {
     ],
     categories,
     priorityObjectives,
+    progressHint,
+    activeGoalCount: goals.length,
   };
 }
 
@@ -517,6 +542,8 @@ const MonthlyGoalsWidget = ({ data }: { data: ReturnType<typeof buildMonthlyGoal
   const total = data.overall.reduce((acc, curr) => acc + curr.value, 0) || 1;
   const completed = data.overall.find((d) => d.name === 'Concluído')?.value || 0;
   const percentage = Math.round((completed / total) * 100);
+  const hint = 'progressHint' in data ? data.progressHint : undefined;
+  const activeCount = 'activeGoalCount' in data ? data.activeGoalCount : undefined;
 
   return (
     <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm flex flex-col gap-8">
@@ -526,14 +553,27 @@ const MonthlyGoalsWidget = ({ data }: { data: ReturnType<typeof buildMonthlyGoal
           <div>
             <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic">Metas do Mês</h2>
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              Ciclo {new Date().getFullYear()} • dados da sua conta
+              Ciclo {new Date().getFullYear()} • metas KPI via API (goalsOverview)
             </p>
+            {activeCount != null && activeCount > 0 && (
+              <p className="text-[10px] font-bold text-gray-500 mt-1">{activeCount} meta(s) ativa(s) neste ciclo</p>
+            )}
+            {hint && (
+              <p className="text-[10px] text-gray-500 font-medium mt-2 max-w-xl leading-relaxed normal-case">
+                {hint}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Progresso Geral</p>
             <p className="text-xl font-black text-emerald-600">{percentage}%</p>
+            {activeCount != null && (
+              <p className="text-[9px] font-bold text-gray-400 mt-0.5 normal-case">
+                {completed} de {activeCount} meta(s) em 100%
+              </p>
+            )}
           </div>
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
             <TrendingUp size={24} />
@@ -598,16 +638,23 @@ const MonthlyGoalsWidget = ({ data }: { data: ReturnType<typeof buildMonthlyGoal
               <div className="flex justify-between items-end">
                 <span className="text-xs font-black text-gray-700 uppercase tracking-wider">{cat.name}</span>
                 <span className="text-[10px] font-black text-gray-400">
-                  {cat.completed}/{cat.total}
+                  {cat.hasGoals ? `${cat.completed}/${cat.total}` : '—'}
                 </span>
               </div>
               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(100, (cat.completed / cat.total) * 100)}%` }}
-                  className={`h-full ${cat.color} rounded-full`}
-                />
+                {cat.hasGoals && cat.total > 0 ? (
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, (cat.completed / cat.total) * 100)}%` }}
+                    className={`h-full ${cat.color} rounded-full`}
+                  />
+                ) : null}
               </div>
+              {!cat.hasGoals && (
+                <p className="text-[9px] text-gray-400 font-medium normal-case">
+                  Nenhuma meta com este tipo (KPI) no ciclo.
+                </p>
+              )}
             </div>
           ))}
         </div>

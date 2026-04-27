@@ -560,9 +560,10 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
                   Adicionar Atividade
                 </button>
                 <ul className="space-y-4">
-                  {activities.filter((a) =>
-                    activityOverlapsPlaybookMonth(a.start, a.duration, month)
-                  ).map(activity => (
+                  {activities
+                    .filter((a) => activityOverlapsPlaybookMonth(a.start, a.duration, month))
+                    .sort((a, b) => a.start - b.start)
+                    .map(activity => (
                     <li key={activity.id} className="flex items-start gap-3 text-sm text-gray-600 group">
                       <CheckCircle2 size={16} className={`${activity.status === 'completed' ? 'text-emerald-500' : activity.status === 'in_progress' ? 'text-orange-500' : 'text-gray-300'} mt-0.5 shrink-0`} />
                       <div className="flex-1">

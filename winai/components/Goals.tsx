@@ -611,9 +611,9 @@ const Goals: React.FC = () => {
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[1, 2, 3].map((month) => {
-                const acts = strategicPlaybook.activities!.filter((a) =>
-                  activityOverlapsPlaybookMonth(a.start, a.duration, month)
-                );
+                const acts = strategicPlaybook
+                  .activities!.filter((a) => activityOverlapsPlaybookMonth(a.start, a.duration, month))
+                  .sort((a, b) => a.start - b.start);
                 return (
                   <div key={month} className="bg-white/90 rounded-2xl border border-black/5 p-4">
                     <h4 className="text-xs font-black uppercase text-gray-800 mb-3">
