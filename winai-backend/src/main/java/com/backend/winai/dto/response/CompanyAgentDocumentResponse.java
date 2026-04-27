@@ -16,6 +16,8 @@ public class CompanyAgentDocumentResponse {
     private UUID id;
     private UUID companyId;
     private String title;
+    /** Instruções de intenção / gatilhos para o modelo (catálogo da IA). */
+    private String sendWhenInstructions;
     private String publicUrl;
     private String mimeType;
     private String originalFilename;

@@ -1,5 +1,6 @@
 package com.backend.winai.service;
 
+import com.backend.winai.dto.request.UpdateAgentDocumentRequest;
 import com.backend.winai.dto.response.CompanyAgentDocumentResponse;
 import com.backend.winai.entity.Company;
 import com.backend.winai.entity.CompanyAgentDocument;
@@ -33,6 +34,9 @@ public class CompanyAgentDocumentService {
     @Value("${agent.documents.max-bytes:20971520}")
     private long maxBytes;
 
+    @Value("${agent.documents.max-instructions-chars:6000}")
+    private int maxInstructionsChars;
+
     @Transactional(readOnly = true)
     public List<CompanyAgentDocumentResponse> listByCompany(UUID companyId) {
         return documentRepository.findByCompany_IdOrderByCreatedAtDesc(companyId).stream()
@@ -48,7 +52,8 @@ public class CompanyAgentDocumentService {
     }
 
     @Transactional
-    public CompanyAgentDocumentResponse upload(UUID companyId, String title, MultipartFile file) throws IOException {
+    public CompanyAgentDocumentResponse upload(UUID companyId, String title, MultipartFile file, String sendWhenInstructions)
+            throws IOException {
         if (title == null || title.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Título é obrigatório");
         }
@@ -75,10 +80,13 @@ public class CompanyAgentDocumentService {
         supabaseStorageService.ensureBucketExists(BUCKET);
         String publicUrl = supabaseStorageService.uploadFile(BUCKET, filePath, file);
 
+        String instructions = normalizeAndValidateInstructions(sendWhenInstructions);
+
         CompanyAgentDocument entity = CompanyAgentDocument.builder()
                 .id(docId)
                 .company(company)
                 .title(title.trim())
+                .sendWhenInstructions(instructions)
                 .storageBucket(BUCKET)
                 .storagePath(filePath)
                 .publicUrl(publicUrl)
@@ -89,6 +97,33 @@ public class CompanyAgentDocumentService {
         documentRepository.save(entity);
         log.info("Agent document uploaded: {} for company {}", docId, companyId);
         return toResponse(entity);
+    }
+
+    @Transactional
+    public CompanyAgentDocumentResponse update(UUID documentId, UpdateAgentDocumentRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Corpo da requisição obrigatório");
+        }
+        CompanyAgentDocument doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento não encontrado"));
+        boolean touched = false;
+        if (request.getTitle() != null) {
+            String t = request.getTitle().trim();
+            if (t.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Título não pode ser vazio");
+            }
+            doc.setTitle(t);
+            touched = true;
+        }
+        if (request.getSendWhenInstructions() != null) {
+            doc.setSendWhenInstructions(normalizeAndValidateInstructions(request.getSendWhenInstructions()));
+            touched = true;
+        }
+        if (!touched) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nada para atualizar (title ou sendWhenInstructions)");
+        }
+        documentRepository.save(doc);
+        return toResponse(doc);
     }
 
     @Transactional
@@ -122,11 +157,27 @@ public class CompanyAgentDocumentService {
         return n.isEmpty() ? "file.bin" : n;
     }
 
+    private String normalizeAndValidateInstructions(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String t = raw.trim();
+        if (t.isEmpty()) {
+            return null;
+        }
+        if (t.length() > maxInstructionsChars) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Instruções excedem o máximo de " + maxInstructionsChars + " caracteres");
+        }
+        return t;
+    }
+
     private CompanyAgentDocumentResponse toResponse(CompanyAgentDocument d) {
         return CompanyAgentDocumentResponse.builder()
                 .id(d.getId())
                 .companyId(d.getCompany().getId())
                 .title(d.getTitle())
+                .sendWhenInstructions(d.getSendWhenInstructions())
                 .publicUrl(d.getPublicUrl())
                 .mimeType(d.getMimeType())
                 .originalFilename(d.getOriginalFilename())

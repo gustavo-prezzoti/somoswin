@@ -547,6 +547,8 @@ export interface CompanyAgentDocumentRow {
     id: string;
     companyId: string;
     title: string;
+    /** Gatilhos / intenção — entra no catálogo automático do agente (WhatsApp). */
+    sendWhenInstructions?: string | null;
     publicUrl: string;
     mimeType: string;
     originalFilename?: string | null;
@@ -834,11 +836,26 @@ const adminService = {
         return await httpClient.get<CompanyAgentDocumentRow[]>(`/admin/companies/${companyId}/agent-documents`);
     },
 
-    uploadAgentDocument: async (companyId: string, title: string, file: File): Promise<CompanyAgentDocumentRow> => {
+    uploadAgentDocument: async (
+        companyId: string,
+        title: string,
+        file: File,
+        sendWhenInstructions?: string | null
+    ): Promise<CompanyAgentDocumentRow> => {
         const fd = new FormData();
         fd.set('title', title);
         fd.set('file', file);
+        if (sendWhenInstructions != null && sendWhenInstructions.trim() !== '') {
+            fd.set('sendWhenInstructions', sendWhenInstructions.trim());
+        }
         return await httpClient.post<CompanyAgentDocumentRow>(`/admin/companies/${companyId}/agent-documents`, fd);
+    },
+
+    patchAgentDocument: async (
+        documentId: string,
+        data: { title?: string; sendWhenInstructions?: string | null }
+    ): Promise<CompanyAgentDocumentRow> => {
+        return await httpClient.patch<CompanyAgentDocumentRow>(`/admin/agent-documents/${documentId}`, data);
     },
 
     getAgentDocument: async (documentId: string): Promise<CompanyAgentDocumentRow> => {

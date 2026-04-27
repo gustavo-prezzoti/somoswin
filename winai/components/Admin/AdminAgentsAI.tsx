@@ -328,6 +328,11 @@ const AdminAgentsAI = () => {
                                             <div className="min-w-0 flex-1">
                                                 <span className="text-xs font-black text-gray-800 uppercase italic block truncate">{doc.title}</span>
                                                 <span className="text-[9px] font-bold text-gray-500 uppercase">{doc.mimeType}</span>
+                                                {doc.sendWhenInstructions?.trim() && (
+                                                    <p className="text-[9px] font-medium text-gray-600 mt-1 leading-snug line-clamp-3 whitespace-pre-wrap">
+                                                        Quando enviar: {doc.sendWhenInstructions}
+                                                    </p>
+                                                )}
                                             </div>
                                         </label>
                                     );

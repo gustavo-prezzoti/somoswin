@@ -28,6 +28,19 @@ import adminService, { PlaybookActivityRow } from '../../../services/adminServic
 import { getErrorMessage } from '../../../services/utils/errorHelper';
 import { DIAGNOSIS_BLOCKS } from './diagnosisQuestions';
 
+/** API pode devolver array, ou objeto com chaves numéricas; evita Gantt vazio. */
+function parsePlaybookActivities(raw: unknown): PlaybookActivityRow[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((x) => x != null && typeof x === 'object') as PlaybookActivityRow[];
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const vals = Object.values(raw as Record<string, unknown>);
+    const rows = vals.filter((v) => v != null && typeof v === 'object');
+    if (rows.length > 0) return rows as PlaybookActivityRow[];
+  }
+  return [];
+}
+
 interface AdminStrategicDiagnosisProps {
   companyId: string;
 }
@@ -46,6 +59,8 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
   const [publishBusy, setPublishBusy] = useState(false);
   const [projectStartDay, setProjectStartDay] = useState(() => new Date().toISOString().split('T')[0]);
   const skipSaveRef = useRef(true);
+  /** Só autosalvar depois do GET aplicar rascunho (evita gravar activities: [] por engano). */
+  const hydratedRef = useRef(false);
 
   const projectStartDate = useMemo(() => {
     const d = new Date(projectStartDay + 'T12:00:00');
@@ -72,13 +87,14 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      hydratedRef.current = false;
       skipSaveRef.current = true;
       setLoadingDraft(true);
       try {
         const d = await adminService.getStrategicDiagnosis(companyId);
         if (cancelled) return;
         setAnswers((d.draftAnswers as Record<string, unknown>) || {});
-        setActivities(Array.isArray(d.draftActivities) ? d.draftActivities : []);
+        setActivities(parsePlaybookActivities(d.draftActivities));
         if (d.draftProjectStartDate) {
           setProjectStartDay(d.draftProjectStartDate);
         }
@@ -90,6 +106,7 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
           setIsFinished(false);
           setCurrentBlockIndex(step);
         }
+        hydratedRef.current = true;
       } catch (e) {
         console.error(e);
       } finally {
@@ -107,7 +124,7 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
   }, [companyId]);
 
   useEffect(() => {
-    if (!companyId || skipSaveRef.current || loadingDraft) return;
+    if (!companyId || !hydratedRef.current || skipSaveRef.current || loadingDraft) return;
     const t = setTimeout(() => {
       void adminService
         .saveStrategicDiagnosisDraft(companyId, {

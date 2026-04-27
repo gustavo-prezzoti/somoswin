@@ -45,6 +45,10 @@ public class CompanyAgentDocument {
     @Column(name = "file_size")
     private Long fileSize;
 
+    /** Quando enviar este arquivo (texto livre; entra no catálogo do agente). */
+    @Column(name = "send_when_instructions", columnDefinition = "TEXT")
+    private String sendWhenInstructions;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;

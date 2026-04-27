@@ -42,6 +42,7 @@ public class StrategicDiagnosisService {
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
         CompanyStrategicDiagnosis row = diagnosisRepository.findByCompany_Id(companyId)
                 .orElseGet(() -> newRow(company));
+        row = ensureDraftPlaybookPopulated(row);
         return toAdminResponse(row);
     }
 
@@ -52,10 +53,11 @@ public class StrategicDiagnosisService {
         CompanyStrategicDiagnosis row = diagnosisRepository.findByCompany_Id(companyId)
                 .orElseGet(() -> newRow(company));
 
-        if (req.getAnswers() != null) {
+        // JsonNode JSON null is a non-null Java object (NullNode); must not wipe the column.
+        if (req.getAnswers() != null && !req.getAnswers().isNull()) {
             row.setDraftAnswersJson(req.getAnswers());
         }
-        if (req.getActivities() != null) {
+        if (req.getActivities() != null && !req.getActivities().isNull()) {
             row.setDraftActivitiesJson(req.getActivities());
         }
         if (req.getProjectStartDate() != null) {
@@ -77,6 +79,7 @@ public class StrategicDiagnosisService {
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
         CompanyStrategicDiagnosis row = diagnosisRepository.findByCompany_Id(companyId)
                 .orElseGet(() -> newRow(company));
+        row = ensureDraftPlaybookPopulated(row);
 
         Map<String, Object> answersMap = jsonNodeToMap(row.getDraftAnswersJson());
         Metrics metrics = StrategicDiagnosisMetricsCalculator.calculateMetrics(answersMap);
@@ -136,6 +139,37 @@ public class StrategicDiagnosisService {
         } catch (Exception e) {
             throw new RuntimeException("Falha ao inicializar diagnóstico", e);
         }
+    }
+
+    /**
+     * Recupera linhas antigas ou corrompidas (null / não-array / vazio) e evita playbook em branco na UI.
+     */
+    private CompanyStrategicDiagnosis ensureDraftPlaybookPopulated(CompanyStrategicDiagnosis row) {
+        boolean changed = false;
+        try {
+            JsonNode answers = row.getDraftAnswersJson();
+            if (answers == null || answers.isNull()) {
+                row.setDraftAnswersJson(objectMapper.readTree(StrategicDiagnosisDefaults.EMPTY_ANSWERS_JSON));
+                changed = true;
+            }
+            JsonNode act = row.getDraftActivitiesJson();
+            if (act == null || act.isNull() || !act.isArray() || act.size() == 0) {
+                row.setDraftActivitiesJson(objectMapper.readTree(StrategicDiagnosisDefaults.DEFAULT_ACTIVITIES_JSON));
+                changed = true;
+            }
+            if (row.getDraftProjectStartDate() == null) {
+                row.setDraftProjectStartDate(LocalDate.now());
+                changed = true;
+            }
+            if (changed) {
+                row = diagnosisRepository.save(row);
+                log.info("Strategic diagnosis draft healed (answers/activities/project start) for company {}",
+                        row.getCompany().getId());
+            }
+        } catch (Exception e) {
+            log.warn("ensureDraftPlaybookPopulated failed: {}", e.getMessage());
+        }
+        return row;
     }
 
     private StrategicDiagnosisAdminResponse toAdminResponse(CompanyStrategicDiagnosis row) {

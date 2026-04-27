@@ -922,11 +922,17 @@ public class AIAgentService {
         sb.append("Quando for adequado, responda em texto ao usuário. Se for enviar um arquivo desta lista, ")
                 .append("coloque na ÚLTIMA linha sozinha exatamente: ATTACH_DOC:<id>\n");
         sb.append("Use apenas um ID abaixo. Não coloque ATTACH_DOC em outras linhas.\n");
+        sb.append(
+                "Para cada item, respeite a linha «Quando enviar» (definida pelo consultor); só use ATTACH_DOC se a conversa atual se encaixar nessa intenção.\n");
         for (CompanyAgentDocument d : docs) {
             String waType = d.getMimeType() != null && d.getMimeType().toLowerCase().startsWith("image/") ? "image"
                     : "document";
             sb.append("- ").append(d.getId()).append(" | ").append(d.getTitle()).append(" | whatsapp_type=")
                     .append(waType).append("\n");
+            if (d.getSendWhenInstructions() != null && !d.getSendWhenInstructions().isBlank()) {
+                sb.append("  Quando enviar: ").append(d.getSendWhenInstructions().replace("\r\n", "\n").trim())
+                        .append("\n");
+            }
         }
         return sb.toString();
     }

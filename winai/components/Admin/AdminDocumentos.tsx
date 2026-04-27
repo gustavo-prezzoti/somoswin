@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, ExternalLink, FileText, Trash2, Upload } from 'lucide-react';
+import { Building2, ExternalLink, FileText, Pencil, Trash2, Upload, X } from 'lucide-react';
 import adminService, { Company, CompanyAgentDocumentRow } from '../../services/adminService';
 import type { UserDTO } from '../../services/types';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 import { hasAmpliaPermission } from './adminPermissions';
+
+const MAX_AGENT_DOC_INSTRUCTIONS = 6000;
 
 function formatBytes(n: number | null | undefined): string {
     if (n == null || n <= 0) return '—';
@@ -21,8 +23,13 @@ const AdminDocumentos: React.FC = () => {
     const [loadingCompanies, setLoadingCompanies] = useState(true);
     const [loadingDocs, setLoadingDocs] = useState(false);
     const [uploadTitle, setUploadTitle] = useState('');
+    const [uploadSendWhen, setUploadSendWhen] = useState('');
     const [uploadFile, setUploadFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
+    const [editForId, setEditForId] = useState<string | null>(null);
+    const [editTitle, setEditTitle] = useState('');
+    const [editSendWhen, setEditSendWhen] = useState('');
+    const [savingEdit, setSavingEdit] = useState(false);
 
     const me = useMemo((): UserDTO | null => {
         try {
@@ -36,6 +43,7 @@ const AdminDocumentos: React.FC = () => {
     const canList = hasAmpliaPermission(me, 'documentos', 'list');
     const canCreate = hasAmpliaPermission(me, 'documentos', 'create');
     const canDelete = hasAmpliaPermission(me, 'documentos', 'delete');
+    const canUpdate = hasAmpliaPermission(me, 'documentos', 'update');
 
     useEffect(() => {
         (async () => {
@@ -100,8 +108,14 @@ const AdminDocumentos: React.FC = () => {
         }
         setUploading(true);
         try {
-            await adminService.uploadAgentDocument(selectedCompanyId, uploadTitle.trim(), uploadFile);
+            await adminService.uploadAgentDocument(
+                selectedCompanyId,
+                uploadTitle.trim(),
+                uploadFile,
+                uploadSendWhen.trim() || undefined
+            );
             setUploadTitle('');
+            setUploadSendWhen('');
             setUploadFile(null);
             await refreshDocs();
             showToast('Documento enviado com sucesso.');
@@ -109,6 +123,43 @@ const AdminDocumentos: React.FC = () => {
             showToast(getErrorMessage(err, 'Falha no upload.'), 'error');
         } finally {
             setUploading(false);
+        }
+    };
+
+    const startEdit = (row: CompanyAgentDocumentRow) => {
+        setEditForId(row.id);
+        setEditTitle(row.title);
+        setEditSendWhen(row.sendWhenInstructions ?? '');
+    };
+
+    const cancelEdit = () => {
+        setEditForId(null);
+        setEditTitle('');
+        setEditSendWhen('');
+    };
+
+    const saveEdit = async () => {
+        if (!editForId || !editTitle.trim()) {
+            showToast('Título é obrigatório.', 'warning');
+            return;
+        }
+        if (editSendWhen.length > MAX_AGENT_DOC_INSTRUCTIONS) {
+            showToast(`Instruções: máximo ${MAX_AGENT_DOC_INSTRUCTIONS} caracteres.`, 'warning');
+            return;
+        }
+        setSavingEdit(true);
+        try {
+            await adminService.patchAgentDocument(editForId, {
+                title: editTitle.trim(),
+                sendWhenInstructions: editSendWhen.trim(),
+            });
+            cancelEdit();
+            await refreshDocs();
+            showToast('Documento atualizado.');
+        } catch (err) {
+            showToast(getErrorMessage(err, 'Não foi possível salvar.'), 'error');
+        } finally {
+            setSavingEdit(false);
         }
     };
 
@@ -144,7 +195,7 @@ const AdminDocumentos: React.FC = () => {
                 <div>
                     <h1 className="text-4xl font-black text-[#141414] tracking-tighter uppercase italic leading-none">Documentos do agente</h1>
                     <p className="text-gray-600 font-medium text-sm tracking-tight mt-2">
-                        Arquivos por empresa para a IA anexar no WhatsApp (catálogo + vínculo no agente).
+                        Arquivos por empresa para a IA anexar no WhatsApp. Defina em cada arquivo <span className="font-black">quando enviar</span> — isso entra no catálogo automático do agente.
                     </p>
                 </div>
 
@@ -193,6 +244,23 @@ const AdminDocumentos: React.FC = () => {
                                 className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-black file:font-black file:text-[10px] file:uppercase"
                             />
                         </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                                Quando enviar (catálogo da IA) — opcional
+                            </label>
+                            <textarea
+                                value={uploadSendWhen}
+                                onChange={(e) =>
+                                    setUploadSendWhen(e.target.value.slice(0, MAX_AGENT_DOC_INSTRUCTIONS))
+                                }
+                                rows={3}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-gray-800 text-sm leading-relaxed"
+                                placeholder="Ex.: Quando o cliente pedir orçamento, proposta ou valores. Ex.: Quando perguntar sobre garantia ou contrato."
+                            />
+                            <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-wide">
+                                {uploadSendWhen.length}/{MAX_AGENT_DOC_INSTRUCTIONS} · Aparece no prompt do agente junto ao ID do arquivo (ATTACH_DOC).
+                            </p>
+                        </div>
                     </div>
                     <button
                         type="submit"
@@ -235,39 +303,112 @@ const AdminDocumentos: React.FC = () => {
                                 <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
                                     <FileText size={24} />
                                 </div>
-                                {canDelete && (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDelete(d)}
-                                        className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                        aria-label="Excluir"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
-                                )}
+                                <div className="flex items-center gap-1 shrink-0">
+                                    {canUpdate && editForId !== d.id && (
+                                        <button
+                                            type="button"
+                                            onClick={() => startEdit(d)}
+                                            className="p-2 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all"
+                                            aria-label="Editar"
+                                        >
+                                            <Pencil size={18} />
+                                        </button>
+                                    )}
+                                    {canDelete && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDelete(d)}
+                                            className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                            aria-label="Excluir"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="font-black text-gray-900 uppercase italic text-sm leading-tight">{d.title}</h3>
-                                <p className="text-[10px] font-bold text-gray-500 mt-1 uppercase tracking-wide">
-                                    {d.mimeType} · {formatBytes(d.fileSize ?? undefined)}
-                                </p>
-                                {d.originalFilename && (
-                                    <p className="text-[10px] text-gray-400 mt-1 truncate" title={d.originalFilename}>
-                                        {d.originalFilename}
-                                    </p>
-                                )}
-                            </div>
-                            <div className="mt-auto pt-2 flex gap-2">
-                                <a
-                                    href={d.publicUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#141414] text-white rounded-xl text-[10px] font-black uppercase hover:bg-black"
-                                >
-                                    <ExternalLink size={12} />
-                                    Abrir
-                                </a>
-                            </div>
+                            {editForId === d.id ? (
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Título</label>
+                                        <input
+                                            type="text"
+                                            value={editTitle}
+                                            onChange={(e) => setEditTitle(e.target.value)}
+                                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl font-bold text-gray-800 text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                            Quando enviar
+                                        </label>
+                                        <textarea
+                                            value={editSendWhen}
+                                            onChange={(e) =>
+                                                setEditSendWhen(e.target.value.slice(0, MAX_AGENT_DOC_INSTRUCTIONS))
+                                            }
+                                            rows={4}
+                                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl font-bold text-gray-800 text-xs leading-relaxed"
+                                        />
+                                        <p className="text-[9px] font-bold text-gray-400 mt-1">
+                                            {editSendWhen.length}/{MAX_AGENT_DOC_INSTRUCTIONS}
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-2 flex-wrap">
+                                        <button
+                                            type="button"
+                                            disabled={savingEdit}
+                                            onClick={saveEdit}
+                                            className="px-4 py-2 bg-emerald-600 text-black rounded-xl text-[10px] font-black uppercase disabled:opacity-40"
+                                        >
+                                            {savingEdit ? 'Salvando…' : 'Salvar'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={savingEdit}
+                                            onClick={cancelEdit}
+                                            className="inline-flex items-center gap-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-[10px] font-black uppercase"
+                                        >
+                                            <X size={12} />
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div>
+                                        <h3 className="font-black text-gray-900 uppercase italic text-sm leading-tight">{d.title}</h3>
+                                        <p className="text-[10px] font-bold text-gray-500 mt-1 uppercase tracking-wide">
+                                            {d.mimeType} · {formatBytes(d.fileSize ?? undefined)}
+                                        </p>
+                                        {d.originalFilename && (
+                                            <p className="text-[10px] text-gray-400 mt-1 truncate" title={d.originalFilename}>
+                                                {d.originalFilename}
+                                            </p>
+                                        )}
+                                        <div className="mt-3 p-3 rounded-xl bg-gray-50 border border-black/5">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                                Quando enviar
+                                            </p>
+                                            <p className="text-xs font-bold text-gray-700 leading-snug whitespace-pre-wrap">
+                                                {d.sendWhenInstructions?.trim()
+                                                    ? d.sendWhenInstructions
+                                                    : '— Não definido. Edite para orientar a IA (ex.: pedido de orçamento → este PDF).'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-auto pt-2 flex gap-2">
+                                        <a
+                                            href={d.publicUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-[#141414] text-white rounded-xl text-[10px] font-black uppercase hover:bg-black"
+                                        >
+                                            <ExternalLink size={12} />
+                                            Abrir
+                                        </a>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     ))}
                 </div>

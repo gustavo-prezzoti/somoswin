@@ -14,6 +14,7 @@ import com.backend.winai.dto.request.ClonePlanRequest;
 import com.backend.winai.dto.request.CreatePlanRequest;
 import com.backend.winai.dto.request.UpdatePlanRequest;
 import com.backend.winai.dto.request.CreateUserWhatsAppConnectionRequest;
+import com.backend.winai.dto.request.UpdateAgentDocumentRequest;
 import com.backend.winai.dto.request.CreateTermsRequest;
 import com.backend.winai.dto.response.AdminConversationSummaryResponse;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
@@ -595,8 +596,18 @@ public class AdminController {
     public ResponseEntity<CompanyAgentDocumentResponse> uploadAgentDocument(
             @Parameter(description = "ID da empresa") @PathVariable UUID companyId,
             @RequestParam String title,
-            @RequestParam("file") MultipartFile file) throws IOException {
-        return ResponseEntity.ok(companyAgentDocumentService.upload(companyId, title, file));
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) String sendWhenInstructions) throws IOException {
+        return ResponseEntity.ok(companyAgentDocumentService.upload(companyId, title, file, sendWhenInstructions));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'documentos', 'update')")
+    @Operation(summary = "Atualizar metadados do documento do agente", description = "Título e/ou instruções de quando enviar (catálogo da IA)")
+    @PatchMapping("/agent-documents/{documentId}")
+    public ResponseEntity<CompanyAgentDocumentResponse> patchAgentDocument(
+            @Parameter(description = "ID do documento") @PathVariable UUID documentId,
+            @Valid @RequestBody UpdateAgentDocumentRequest request) {
+        return ResponseEntity.ok(companyAgentDocumentService.update(documentId, request));
     }
 
     @PreAuthorize("@adminSecurity.hasPermission(authentication, 'documentos', 'read')")
