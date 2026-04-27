@@ -203,7 +203,6 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
           <SidebarSection title="Principal" isCollapsed={!isSidebarOpen} />
           <nav className="space-y-1">
             <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" isActive={location.pathname === '/dashboard'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/notificacoes" icon={Bell} label="Notificações" isActive={location.pathname === '/notificacoes'} isCollapsed={!isSidebarOpen} />
           </nav>
 
           <SidebarSection title="Operação Vendas" isCollapsed={!isSidebarOpen} />

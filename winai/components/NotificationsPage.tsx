@@ -5,7 +5,7 @@ import { notificationService } from '../services/api/notification.service';
 import { NotificationDTO } from '../services/types';
 
 /**
- * Página dedicada de notificações (atalho no menu lateral do app).
+ * Página dedicada de notificações (rota /notificacoes; acesso por URL ou links internos).
  */
 const NotificationsPage: React.FC = () => {
   const [notifications, setNotifications] = useState<NotificationDTO[]>([]);

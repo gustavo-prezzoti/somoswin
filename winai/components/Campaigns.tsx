@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  DollarSign, Eye, MousePointerClick, Play, Plus, Minus, X, Save, Target, MapPin, Users as UsersIcon, Calendar as CalendarIcon, Briefcase, Loader2, RefreshCw, File as FileIcon, ArrowRight, ArrowLeft, CheckCircle2, TrendingUp, TrendingDown, AlertTriangle, FileText, ChevronRight, Zap, ArrowUpRight, ArrowDownRight,
+  DollarSign, Eye, MousePointerClick, Minus, Target, Loader2, RefreshCw, CheckCircle2, TrendingUp, TrendingDown, AlertTriangle, FileText, ChevronRight, Zap, ArrowUpRight, ArrowDownRight,
   Calendar, Search, Filter, MoreHorizontal, Copy, Pause, Trash2, Link2,
 } from 'lucide-react';
 import UtmAdTrackingModal from './UtmAdTrackingModal';
 import type { UtmAdTrackingContext } from './UtmAdTrackingModal';
-import { marketingService, CreateCampaignRequest, AdItemRequest, PagePost, CampaignListItem } from '../services';
+import { marketingService, type CampaignListItem } from '../services';
 import { storageService } from '../services/storage';
 import type { MetricsDateRange, PaidTrafficOverview, PaidTrafficPlatform, UtmPerformanceResponse } from '../services/api/marketing.service';
 import {
@@ -15,15 +15,13 @@ import {
 } from '../services/api/google-ads.service';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
-import { BodyPortal } from './ui/BodyPortal';
-import { META_LIMITS, parseApiErrorMessage } from '../utils/metaAdsLimits';
 
 const DATE_PRESET_OPTIONS = [
-  'Últimos 7 dias',
-  'Últimos 14 dias',
-  'Últimos 30 dias',
-  'Este Mês',
-  'Mês Passado',
+  'Ãšltimos 7 dias',
+  'Ãšltimos 14 dias',
+  'Ãšltimos 30 dias',
+  'Este MÃªs',
+  'MÃªs Passado',
   'Este Trimestre',
   'Personalizado',
 ] as const;
@@ -42,16 +40,16 @@ function computePresetDates(
 ): { start: string; end: string } {
   const minBound = new Date(bounds.minDate + 'T12:00:00');
   const now = new Date();
-  // Fim = hoje (local). Não usar min(maxBound, hoje): o último dia com insight Meta costuma ser ontem e escondia leads/UTM criados hoje. O backend continua limitando gasto Meta ao maxDate.
+  // Fim = hoje (local). NÃ£o usar min(maxBound, hoje): o Ãºltimo dia com insight Meta costuma ser ontem e escondia leads/UTM criados hoje. O backend continua limitando gasto Meta ao maxDate.
   let end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let start = new Date(end);
 
-  if (preset === 'Últimos 7 dias') start.setDate(start.getDate() - 6);
-  else if (preset === 'Últimos 14 dias') start.setDate(start.getDate() - 13);
-  else if (preset === 'Últimos 30 dias') start.setDate(start.getDate() - 29);
-  else if (preset === 'Este Mês') {
+  if (preset === 'Ãšltimos 7 dias') start.setDate(start.getDate() - 6);
+  else if (preset === 'Ãšltimos 14 dias') start.setDate(start.getDate() - 13);
+  else if (preset === 'Ãšltimos 30 dias') start.setDate(start.getDate() - 29);
+  else if (preset === 'Este MÃªs') {
     start = new Date(end.getFullYear(), end.getMonth(), 1);
-  } else if (preset === 'Mês Passado') {
+  } else if (preset === 'MÃªs Passado') {
     const lastDayPrev = new Date(end.getFullYear(), end.getMonth(), 0);
     const firstDayPrev = new Date(lastDayPrev.getFullYear(), lastDayPrev.getMonth(), 1);
     return { start: formatYmdLocal(firstDayPrev), end: formatYmdLocal(lastDayPrev) };
@@ -70,20 +68,8 @@ function computePresetDates(
 }
 
 const Campaigns: React.FC = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [selectedInterests, setSelectedInterests] = useState<{ id: string; name: string }[]>([]);
-  const [interestsSearch, setInterestsSearch] = useState('');
-  const [interestsResults, setInterestsResults] = useState<{ id: string; name: string }[]>([]);
-  const [interestsSearching, setInterestsSearching] = useState(false);
-  const [interestsDropdownOpen, setInterestsDropdownOpen] = useState(false);
-  const [imageUploading, setImageUploading] = useState(false);
-  const interestsSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const interestsContainerRef = useRef<HTMLDivElement>(null);
-  const [interestsHasSearched, setInterestsHasSearched] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
   const [isMetaConnected, setIsMetaConnected] = useState(false);
 
   const [campaigns, setCampaigns] = useState<CampaignListItem[]>([]);
@@ -92,7 +78,7 @@ const Campaigns: React.FC = () => {
   const [metricsDateRange, setMetricsDateRange] = useState<MetricsDateRange | null>(null);
   const [metricsStartDate, setMetricsStartDate] = useState<string>('');
   const [metricsEndDate, setMetricsEndDate] = useState<string>('');
-  const [datePreset, setDatePreset] = useState<string>('Últimos 30 dias');
+  const [datePreset, setDatePreset] = useState<string>('Ãšltimos 30 dias');
   const [assetSearch, setAssetSearch] = useState('');
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -105,7 +91,6 @@ const Campaigns: React.FC = () => {
   const [drillAdSetLabel, setDrillAdSetLabel] = useState('');
   const [utmAdModalOpen, setUtmAdModalOpen] = useState(false);
   const [utmAdModalCtx, setUtmAdModalCtx] = useState<UtmAdTrackingContext | null>(null);
-  const [showBudgetPace, setShowBudgetPace] = useState(false);
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
   const [googleAdsCustomerId, setGoogleAdsCustomerId] = useState('');
   const [googleAdsLoginCustomerId, setGoogleAdsLoginCustomerId] = useState('');
@@ -118,54 +103,6 @@ const Campaigns: React.FC = () => {
   const [utmLoading, setUtmLoading] = useState(false);
 
   const { toasts, showToast, removeToast } = useToast();
-
-  // Form validation errors (campo -> mensagem). Só preenchido após clicar em Next/Criar sem preencher.
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [validationAttempted, setValidationAttempted] = useState(false);
-
-  // Form states - Campanha Meta Ads para WhatsApp
-  const [formData, setFormData] = useState<CreateCampaignRequest>({
-    name: '',
-    objective: 'OUTCOME_TRAFFIC',
-    dailyBudget: 50,
-    startDate: '',
-    endDate: '',
-    countryCode: 'BR',
-    ageMin: 18,
-    ageMax: 65,
-    genders: '',
-    interests: '',
-    useExistingPost: false,
-    existingPostId: '',
-    adMessage: '',
-    headline: '',
-    adDescription: '',
-    imageUrl: '',
-    adSetName: '',
-    adName: '',
-    publisherPlatforms: 'facebook,instagram'
-  });
-
-  const defaultAdItem = (): AdItemRequest => ({
-    useExistingPost: false,
-    existingPostId: '',
-    adMessage: '',
-    headline: '',
-    adDescription: '',
-    imageUrl: '',
-    adName: ''
-  });
-  const [adItems, setAdItems] = useState<AdItemRequest[]>([defaultAdItem()]);
-
-  const [pagePosts, setPagePosts] = useState<PagePost[]>([]);
-  const [pagePostsLoading, setPagePostsLoading] = useState(false);
-  const [pagePostsError, setPagePostsError] = useState<string | null>(null);
-
-  const steps = [
-    { id: 0, title: 'Campanha', icon: Briefcase },
-    { id: 1, title: 'Grupo de Anúncio', icon: Target },
-    { id: 2, title: 'Anúncio', icon: Play },
-  ];
 
   // Campanhas filtradas por status e ordenadas: Ativas > Pausadas > Inativas
   const filteredAndSortedCampaigns = useMemo(() => {
@@ -193,7 +130,7 @@ const Campaigns: React.FC = () => {
       setMetricsDateRange(dateRange);
     } catch (err: unknown) {
       console.error(err);
-      setError('Não foi possível carregar os dados iniciais.');
+      setError('NÃ£o foi possÃ­vel carregar os dados iniciais.');
       try {
         const status = await marketingService.getStatus();
         setIsMetaConnected(status.connected);
@@ -228,50 +165,6 @@ const Campaigns: React.FC = () => {
   useEffect(() => {
     if (isMetaConnected) loadCampaigns();
   }, [isMetaConnected, metricsStartDate, metricsEndDate]);
-
-  useEffect(() => {
-    setShowBudgetPace(false);
-  }, [metricsStartDate, metricsEndDate]);
-
-  const runInterestsSearch = async () => {
-    const q = interestsSearch.trim();
-    if (!q) {
-      setInterestsResults([]);
-      return;
-    }
-    setInterestsSearching(true);
-    setInterestsHasSearched(true);
-    try {
-      const data = await marketingService.searchTargetingInterests(q);
-      setInterestsResults(data);
-      setInterestsDropdownOpen(true);
-    } catch {
-      setInterestsResults([]);
-    } finally {
-      setInterestsSearching(false);
-    }
-  };
-
-  // Debounce search de interesses (Meta API) - dispara ao digitar (1+ chars) ou Enter
-  useEffect(() => {
-    if (!interestsSearch.trim()) {
-      setInterestsResults([]);
-      setInterestsHasSearched(false);
-      return;
-    }
-    if (interestsSearchRef.current) clearTimeout(interestsSearchRef.current);
-    interestsSearchRef.current = setTimeout(runInterestsSearch, 400);
-    return () => { if (interestsSearchRef.current) clearTimeout(interestsSearchRef.current); };
-  }, [interestsSearch]);
-
-  // Scroll automático quando dropdown de interesses abre (facilita ver as opções)
-  useEffect(() => {
-    if (interestsDropdownOpen && interestsResults.length > 0 && interestsContainerRef.current) {
-      requestAnimationFrame(() => {
-        interestsContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
-    }
-  }, [interestsDropdownOpen, interestsResults.length]);
 
   const loadCampaigns = async () => {
     if (!isMetaConnected) return;
@@ -337,7 +230,7 @@ const Campaigns: React.FC = () => {
     googleAdsService.getStatus().then((s) => setGoogleAdsConnected(!!s.connected)).catch(() => setGoogleAdsConnected(false));
   }, []);
 
-  /** Lista da API ou conta já salva no backend (para o valor do select). */
+  /** Lista da API ou conta jÃ¡ salva no backend (para o valor do select). */
   const googleAdsDisplayAccounts = useMemo((): GoogleAdsAccessibleAccount[] => {
     if (googleAdsAccounts.length > 0) {
       return googleAdsAccounts;
@@ -350,7 +243,7 @@ const Campaigns: React.FC = () => {
     return [
       {
         customerId: id,
-        descriptiveName: 'Conta já vinculada',
+        descriptiveName: 'Conta jÃ¡ vinculada',
         manager: false,
         managerCustomerId: mgr || undefined,
       },
@@ -397,17 +290,17 @@ const Campaigns: React.FC = () => {
         setGoogleAdsAccountsStatus(resp?.status ?? null);
         setGoogleAdsAccountsMessage(resp?.message ?? null);
       } catch (e) {
-        console.error('[Tráfego Pago] erro ao listar contas Google Ads', e);
+        console.error('[TrÃ¡fego Pago] erro ao listar contas Google Ads', e);
         setGoogleAdsAccounts([]);
         setGoogleAdsAccountsStatus('MAINTENANCE');
         setGoogleAdsAccountsMessage(
-          'A integração com Google Ads está temporariamente em manutenção. Tente novamente mais tarde.',
+          'A integraÃ§Ã£o com Google Ads estÃ¡ temporariamente em manutenÃ§Ã£o. Tente novamente mais tarde.',
         );
       } finally {
         setGoogleAdsAccountsLoading(false);
       }
     } catch (e) {
-      console.error('[Tráfego Pago] status Google Ads', e);
+      console.error('[TrÃ¡fego Pago] status Google Ads', e);
     }
   }, []);
 
@@ -461,7 +354,7 @@ const Campaigns: React.FC = () => {
   const handleToggleCampaign = async (c: CampaignListItem) => {
     const newStatus = c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
     setTogglingId(c.id);
-    // Atualização otimista: reflete o novo status na UI imediatamente
+    // AtualizaÃ§Ã£o otimista: reflete o novo status na UI imediatamente
     setCampaigns((prev) =>
       prev.map((camp) =>
         camp.id === c.id ? { ...camp, status: newStatus } : camp
@@ -483,158 +376,6 @@ const Campaigns: React.FC = () => {
       setTogglingId(null);
     }
   };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    let parsed: string | number = value;
-    if (name === 'dailyBudget' || name === 'lifetimeBudget') parsed = parseFloat(value) || 0;
-    else if (name === 'ageMin' || name === 'ageMax') parsed = parseInt(value, 10) || 18;
-    setFormData(prev => ({ ...prev, [name]: parsed }));
-  };
-
-  const validateStep = (step: number): boolean => {
-    const errs: Record<string, string> = {};
-    if (step === 0) {
-      const n = formData.name?.trim() || '';
-      if (!n) errs.name = 'Nome da campanha é obrigatório';
-      else if (n.length > META_LIMITS.campaignName.max) errs.name = `Máximo ${META_LIMITS.campaignName.max} caracteres`;
-    }
-    if (step === 1) {
-      if (!formData.dailyBudget || formData.dailyBudget < 1) errs.dailyBudget = 'Orçamento diário mínimo: R$ 1,00';
-    }
-    if (step === 2) {
-      adItems.forEach((ad, i) => {
-        const num = i + 1;
-        const prefix = adItems.length > 1 ? `Anúncio ${num}: ` : '';
-        if (ad.useExistingPost) {
-          if (!ad.existingPostId?.trim()) errs[`ad_${i}_existingPostId`] = `${prefix}Selecione um post do Instagram`;
-        } else {
-          const msg = ad.adMessage?.trim() || '';
-          if (!msg) errs[`ad_${i}_adMessage`] = `${prefix}Texto do anúncio é obrigatório`;
-          else if (msg.length > META_LIMITS.primaryText.max) errs[`ad_${i}_adMessage`] = `${prefix}Máximo ${META_LIMITS.primaryText.max} caracteres`;
-          if (!ad.imageUrl?.trim()) errs[`ad_${i}_imageUrl`] = `${prefix}Imagem é obrigatória`;
-          const headline = ad.headline?.trim() || '';
-          if (headline && headline.length > META_LIMITS.headline.max) errs[`ad_${i}_headline`] = `${prefix}Máximo ${META_LIMITS.headline.max} caracteres`;
-          const desc = ad.adDescription?.trim() || '';
-          if (desc && desc.length > META_LIMITS.linkDescription.max) errs[`ad_${i}_adDescription`] = `${prefix}Máximo ${META_LIMITS.linkDescription.max} caracteres`;
-        }
-      });
-    }
-    setFormErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleNext = () => {
-    setValidationAttempted(true);
-    if (!validateStep(currentStep)) {
-      showToast('Preencha os campos obrigatórios.', 'error');
-      return;
-    }
-    setValidationAttempted(false);
-    if (currentStep < steps.length) {
-      setCurrentStep(prev => prev + 1);
-      setFormErrors({});
-    }
-  };
-
-  const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
-      setFormErrors({});
-      setValidationAttempted(false);
-    }
-  };
-
-  const handleCreate = async () => {
-    setValidationAttempted(true);
-    if (!validateStep(2)) {
-      showToast('Preencha os campos obrigatórios.', 'error');
-      return;
-    }
-    setValidationAttempted(false);
-    setIsSaving(true);
-    setFormErrors({});
-    try {
-      const payload = {
-        ...formData,
-        interests: selectedInterests.length > 0 ? JSON.stringify(selectedInterests) : '',
-        ads: adItems
-      };
-      await marketingService.createCampaign(payload);
-      setCurrentStep(3);
-      showToast('Campanha criada com sucesso! Ela foi criada em modo PAUSADO.', 'success');
-      if (isMetaConnected) loadCampaigns();
-    } catch (err: any) {
-      console.error('Erro ao criar campanha:', err);
-      const raw = err?.response?.data?.message ?? err?.data?.message ?? err?.message;
-      const msg = parseApiErrorMessage(raw) || 'Erro ao criar campanha. Verifique se o Meta Ads está conectado e os dados estão corretos.';
-      showToast(msg, 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const resetForm = () => {
-    setIsModalOpen(false);
-    setCurrentStep(0);
-    setFormErrors({});
-    setValidationAttempted(false);
-    setFormData({
-      name: '',
-      objective: 'OUTCOME_TRAFFIC',
-      dailyBudget: 50,
-      startDate: '',
-      endDate: '',
-      countryCode: 'BR',
-      ageMin: 18,
-      ageMax: 65,
-      genders: '',
-      interests: '',
-      useExistingPost: false,
-      existingPostId: '',
-      adMessage: '',
-      headline: '',
-      adDescription: '',
-      imageUrl: '',
-      adSetName: '',
-      adName: '',
-      publisherPlatforms: 'facebook,instagram'
-    });
-    setSelectedInterests([]);
-    setInterestsSearch('');
-    setInterestsResults([]);
-    setInterestsHasSearched(false);
-    setPagePosts([]);
-    setPagePostsError(null);
-    setAdItems([defaultAdItem()]);
-  };
-
-  const loadPagePosts = async () => {
-    setPagePostsLoading(true);
-    setPagePostsError(null);
-    try {
-      const posts = await marketingService.getPagePosts();
-      setPagePosts(posts);
-    } catch (err: any) {
-      const msg = err?.message || 'Erro ao buscar posts do Instagram.';
-      setPagePostsError(msg);
-      setPagePosts([]);
-      if (msg.includes('pages_read_engagement') || msg.includes('Page Public Content Access')) {
-        showToast('Permissão necessária: reconecte sua conta Meta em Configurações para liberar o acesso aos posts da página.', 'error');
-      } else {
-        showToast(msg, 'error');
-      }
-    } finally {
-      setPagePostsLoading(false);
-    }
-  };
-
-  const budgetDays = useMemo(() => {
-    if (!metricsStartDate || !metricsEndDate) return 1;
-    const a = new Date(metricsStartDate + 'T12:00:00');
-    const b = new Date(metricsEndDate + 'T12:00:00');
-    return Math.max(1, Math.round((b.getTime() - a.getTime()) / 86400000) + 1);
-  }, [metricsStartDate, metricsEndDate]);
 
   const paidTableRows = useMemo(() => {
     if (!paidOverview?.rows) return [];
@@ -692,8 +433,8 @@ const Campaigns: React.FC = () => {
       <div className="space-y-8 pb-12 max-w-7xl mx-auto animate-in fade-in duration-500">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-black text-slate-800 tracking-tight">Tráfego Pago</h2>
-            <p className="text-gray-500 font-medium">Gestão e inteligência de mídia paga em tempo real</p>
+            <h2 className="text-3xl font-black text-slate-800 tracking-tight">TrÃ¡fego Pago</h2>
+            <p className="text-gray-500 font-medium">GestÃ£o e inteligÃªncia de mÃ­dia paga em tempo real</p>
           </div>
           <div className="flex items-center gap-3 flex-wrap justify-end">
             <div className="relative">
@@ -722,7 +463,7 @@ const Campaigns: React.FC = () => {
                   }}
                   className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 focus:ring-2 focus:ring-indigo-500/20 outline-none"
                 />
-                <span className="text-gray-400 font-bold">até</span>
+                <span className="text-gray-400 font-bold">atÃ©</span>
                 <input
                   type="date"
                   value={metricsEndDate}
@@ -737,13 +478,6 @@ const Campaigns: React.FC = () => {
                 />
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors text-xs uppercase tracking-widest shadow-lg shadow-indigo-200"
-            >
-              <Plus size={18} /> Nova campanha
-            </button>
           </div>
         </div>
 
@@ -757,7 +491,7 @@ const Campaigns: React.FC = () => {
 
               {!paidOverviewLoading && paidOverview && !paidOverview.connected && (
                 <div className="p-6 rounded-[32px] border border-amber-100 bg-amber-50/80 text-amber-900 text-sm font-medium">
-                  {paidOverview.connectionMessage || (activePlatform === 'GOOGLE' ? 'Conecte o Google Ads em Configurações.' : 'Conecte o Meta Ads em Configurações.')}
+                  {paidOverview.connectionMessage || (activePlatform === 'GOOGLE' ? 'Conecte o Google Ads em ConfiguraÃ§Ãµes.' : 'Conecte o Meta Ads em ConfiguraÃ§Ãµes.')}
                 </div>
               )}
 
@@ -773,8 +507,7 @@ const Campaigns: React.FC = () => {
                     return (
                       <div
                         key={kpi.key}
-                        onClick={() => kpi.key === 'investment' && setShowBudgetPace(!showBudgetPace)}
-                        className={`bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm flex flex-col gap-4 group hover:shadow-xl transition-all duration-300 ${kpi.key === 'investment' ? 'cursor-pointer' : ''}`}
+                        className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm flex flex-col gap-4 group hover:shadow-xl transition-all duration-300"
                       >
                         <div className="flex justify-between items-start">
                           <div className={`p-3 rounded-2xl ${kpi.key === 'investment' ? 'bg-amber-50 text-amber-600' : trendOk ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
@@ -809,121 +542,6 @@ const Campaigns: React.FC = () => {
                 </div>
               )}
 
-              {!paidOverviewLoading && paidOverview?.budgetPace && showBudgetPace && (() => {
-                const bp = paidOverview.budgetPace;
-                const currentDaily = bp.spent / budgetDays;
-                const idealDaily = bp.planned / budgetDays;
-                const diff = bp.projectedEndAmount - bp.planned;
-                return (
-                  <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
-                    <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
-                          <Zap size={24} />
-                        </div>
-                        <div>
-                          <h3 className="text-xl font-black text-slate-800 tracking-tight">Ritmo de investimento</h3>
-                          <p className="text-sm text-gray-500 font-medium">Projeção de gastos vs. orçamento planejado</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-2xl font-black text-slate-800">
-                          R$ {bp.spent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-gray-400 font-bold ml-2">
-                          / R$ {bp.planned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-                      <div className="lg:col-span-2 space-y-8">
-                        <div className="space-y-4">
-                          <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
-                            <span className="text-gray-400">Progresso do gasto ({bp.percentageSpent}%)</span>
-                            <span className="text-indigo-600">Tempo decorrido ({bp.timeElapsed}%)</span>
-                          </div>
-                          <div className="h-4 bg-gray-100 rounded-full overflow-hidden relative">
-                            <div
-                              className="absolute inset-y-0 left-0 bg-amber-500 transition-all duration-1000"
-                              style={{ width: `${Math.min(100, bp.percentageSpent)}%` }}
-                            />
-                            <div
-                              className="absolute inset-y-0 left-0 border-r-2 border-indigo-600 z-10"
-                              style={{ width: `${Math.min(100, bp.timeElapsed)}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-gray-500 font-medium italic">
-                            {bp.percentageSpent > bp.timeElapsed
-                              ? 'Você está gastando mais rápido do que o tempo decorrido.'
-                              : 'Seu ritmo de gasto está alinhado ou abaixo do tempo decorrido.'}
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                          <div className="p-4 bg-gray-50 rounded-2xl">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Taxa diária atual</p>
-                            <p className="text-lg font-black text-slate-800">R$ {currentDaily.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          </div>
-                          <div className="p-4 bg-gray-50 rounded-2xl">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Taxa diária ideal</p>
-                            <p className="text-lg font-black text-slate-800">R$ {idealDaily.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          </div>
-                          <div className="p-4 bg-gray-50 rounded-2xl">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Projeção final</p>
-                            <p className="text-lg font-black text-slate-800">R$ {bp.projectedEndAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          </div>
-                          <div className="p-4 bg-gray-50 rounded-2xl">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Diferença</p>
-                            <p className={`text-lg font-black ${diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                              {diff > 0 ? '+' : '−'}
-                              R$ {Math.abs(diff).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Zap size={18} className="text-indigo-600" />
-                          <h4 className="font-black text-indigo-900 uppercase text-xs tracking-widest">Recomendação IA</h4>
-                        </div>
-                        <p className="text-sm text-indigo-800 font-medium leading-relaxed">{bp.recommendation}</p>
-                        <button
-                          type="button"
-                          onClick={() => showToast('Ajuste orçamentos nas campanhas Meta em Configurações ou na lista abaixo.', 'info')}
-                          className="mt-6 w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
-                        >
-                          Ajustar orçamentos
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {!paidOverviewLoading && paidOverview?.insightBanner?.visible && (
-                <div className="bg-slate-900 p-6 rounded-[32px] text-white flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xl shadow-slate-200">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-indigo-500 rounded-2xl flex items-center justify-center shrink-0">
-                      <Zap size={24} className="text-white" />
-                    </div>
-                    <div>
-                      <h4 className="text-lg font-black tracking-tight">{paidOverview.insightBanner.title}</h4>
-                      <p className="text-slate-400 text-sm font-medium mt-1">{paidOverview.insightBanner.description}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">{paidOverview.insightBanner.statusLabel}</p>
-                      <p className="text-sm font-bold text-emerald-400">{paidOverview.insightBanner.statusValue}</p>
-                    </div>
-                    <div className="h-10 w-px bg-slate-800" />
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">{paidOverview.insightBanner.actionTakenLabel}</p>
-                      <p className="text-sm font-medium text-slate-200">{paidOverview.insightBanner.actionTakenValue}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {paidOverview && (
                 <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
                   <div className="p-6 md:p-8 border-b border-gray-50 space-y-6">
@@ -951,7 +569,7 @@ const Campaigns: React.FC = () => {
                               Conta Google Ads
                             </p>
                             <p className="text-xs font-bold text-indigo-950 mt-1">
-                              Escolha qual conta usar para métricas e hierarquia (como na Meta, mas aqui na aba Google).
+                              Escolha qual conta usar para mÃ©tricas e hierarquia (como na Meta, mas aqui na aba Google).
                             </p>
                           </div>
                           <button
@@ -968,15 +586,15 @@ const Campaigns: React.FC = () => {
                           <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 space-y-2">
                             <p className="text-[10px] font-black uppercase tracking-widest text-amber-800">
                               {googleAdsAccountsStatus === 'NOT_CONNECTED'
-                                ? 'Conexão necessária'
-                                : 'Integração em manutenção'}
+                                ? 'ConexÃ£o necessÃ¡ria'
+                                : 'IntegraÃ§Ã£o em manutenÃ§Ã£o'}
                             </p>
                             <p className="text-[11px] font-medium text-amber-950">{googleAdsAccountsMessage}</p>
                           </div>
                         )}
                         {googleAdsAccountsLoading ? (
                           <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
-                            Carregando contas…
+                            Carregando contasâ€¦
                           </p>
                         ) : googleAdsDisplayAccounts.length > 0 ? (
                           <div>
@@ -989,25 +607,25 @@ const Campaigns: React.FC = () => {
                               onChange={(e) => void handleGoogleAdsAccountSelect(e.target.value)}
                               className="w-full max-w-xl px-4 py-3 rounded-xl border border-indigo-100 bg-white font-bold text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500/30 outline-none"
                             >
-                              <option value="">Selecione a conta…</option>
+                              <option value="">Selecione a contaâ€¦</option>
                               {googleAdsDisplayAccounts.map((a) => (
                                 <option key={a.customerId} value={a.customerId.replace(/\D/g, '')}>
                                   {a.descriptiveName}
-                                  {a.manager ? ' (gestor)' : ''} · {a.customerId.replace(/\D/g, '')}
+                                  {a.manager ? ' (gestor)' : ''} Â· {a.customerId.replace(/\D/g, '')}
                                 </option>
                               ))}
                             </select>
                             {googleAdsAccounts.length === 0 && googleAdsCustomerId.replace(/\D/g, '').length > 0 && (
                               <p className="text-[10px] text-indigo-700 font-medium mt-2">
-                                Lista completa indisponível; exibindo a conta já vinculada. Use &quot;Atualizar lista&quot;
+                                Lista completa indisponÃ­vel; exibindo a conta jÃ¡ vinculada. Use &quot;Atualizar lista&quot;
                                 para tentar de novo.
                               </p>
                             )}
                           </div>
                         ) : (
                           <p className="text-[11px] font-medium text-indigo-900">
-                            Nenhuma conta encontrada. Verifique a API no Google Cloud ou reconecte em Configurações →
-                            Integrações.
+                            Nenhuma conta encontrada. Verifique a API no Google Cloud ou reconecte em ConfiguraÃ§Ãµes â†’
+                            IntegraÃ§Ãµes.
                           </p>
                         )}
                       </div>
@@ -1047,7 +665,7 @@ const Campaigns: React.FC = () => {
                               className={`px-4 py-2 rounded-xl text-xs font-bold ${drillAdSetId ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 opacity-50'}`}
                               aria-current={drillAdSetId ? 'page' : undefined}
                             >
-                              Anúncios
+                              AnÃºncios
                             </span>
                           </div>
                         </div>
@@ -1097,8 +715,8 @@ const Campaigns: React.FC = () => {
                           <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CTR</th>
                           <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Conv.</th>
                           <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CPL</th>
-                          <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Tendência</th>
-                          <th className="px-8 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Ação</th>
+                          <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">TendÃªncia</th>
+                          <th className="px-8 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">AÃ§Ã£o</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -1126,17 +744,17 @@ const Campaigns: React.FC = () => {
                                   <div className={`w-2 h-2 rounded-full shrink-0 ${String(row.status).toUpperCase().includes('ACTIVE') && !String(row.status).toUpperCase().includes('PAUSED') ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-gray-300'}`} />
                                   <div>
                                     <p className="text-sm font-black text-slate-800 group-hover:text-indigo-600 transition-colors">{row.name}</p>
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{row.objective || '—'}</p>
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{row.objective || 'â€”'}</p>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-4 py-5 text-center text-sm font-black text-slate-800">
-                                {row.roas != null ? `${row.roas.toFixed(1)}x` : '—'}
+                                {row.roas != null ? `${row.roas.toFixed(1)}x` : 'â€”'}
                               </td>
-                              <td className="px-4 py-5 text-center text-sm font-bold text-slate-600">{row.spend != null ? `R$ ${row.spend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</td>
-                              <td className="px-4 py-5 text-center text-sm font-bold">{row.ctr != null ? `${row.ctr.toFixed(2)}%` : '—'}</td>
-                              <td className="px-4 py-5 text-center text-sm font-black text-slate-800">{row.conversions ?? '—'}</td>
-                              <td className="px-4 py-5 text-center text-sm font-black text-slate-800">{row.cpl != null ? `R$ ${row.cpl.toFixed(2)}` : '—'}</td>
+                              <td className="px-4 py-5 text-center text-sm font-bold text-slate-600">{row.spend != null ? `R$ ${row.spend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'â€”'}</td>
+                              <td className="px-4 py-5 text-center text-sm font-bold">{row.ctr != null ? `${row.ctr.toFixed(2)}%` : 'â€”'}</td>
+                              <td className="px-4 py-5 text-center text-sm font-black text-slate-800">{row.conversions ?? 'â€”'}</td>
+                              <td className="px-4 py-5 text-center text-sm font-black text-slate-800">{row.cpl != null ? `R$ ${row.cpl.toFixed(2)}` : 'â€”'}</td>
                               <td className="px-4 py-5 text-center min-h-[44px]">
                                 <div className="flex items-center justify-center min-h-[28px] w-full">{renderTrend(row.trend)}</div>
                               </td>
@@ -1158,7 +776,7 @@ const Campaigns: React.FC = () => {
                                       <button
                                         type="button"
                                         className="p-2 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all"
-                                        title="Gerar UTM para este anúncio (campanha + conjunto + anúncio)"
+                                        title="Gerar UTM para este anÃºncio (campanha + conjunto + anÃºncio)"
                                         onClick={() => {
                                           setUtmAdModalCtx({
                                             platform: activePlatform,
@@ -1195,7 +813,7 @@ const Campaigns: React.FC = () => {
                       </tbody>
                     </table>
                     {paidTableRows.length === 0 && (
-                      <div className="text-center py-12 text-gray-500 text-sm font-medium">Nenhum ativo neste nível para o período.</div>
+                      <div className="text-center py-12 text-gray-500 text-sm font-medium">Nenhum ativo neste nÃ­vel para o perÃ­odo.</div>
                     )}
                   </div>
                   )}
@@ -1212,7 +830,7 @@ const Campaigns: React.FC = () => {
                   <TrendingUp size={24} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Performance por Referência UTM</h3>
+                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Performance por ReferÃªncia UTM</h3>
                 </div>
               </div>
               {!utmLoading && utmPerformance && utmPerformance.rows.length > 0 && utmPerformance.bestRoas > 0 && (
@@ -1237,7 +855,7 @@ const Campaigns: React.FC = () => {
                 <table className="w-full text-left border-collapse min-w-[720px]">
                   <thead>
                     <tr className="bg-gray-50/50">
-                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Anuncio Referência </th>
+                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Anuncio ReferÃªncia </th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Leads</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CPL</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">ROAS</th>
@@ -1290,532 +908,11 @@ const Campaigns: React.FC = () => {
               </div>
             )}
             {!utmLoading && utmPerformance && !utmPerformance.emptyMessage && utmPerformance.rows.length === 0 && (
-              <div className="text-center py-12 text-gray-500 text-sm font-medium">Nenhuma linha de atribuição no período.</div>
+              <div className="text-center py-12 text-gray-500 text-sm font-medium">Nenhuma linha de atribuiÃ§Ã£o no perÃ­odo.</div>
             )}
           </div>
         </div>
 
-      <BodyPortal>
-      {/* Modal Wizard for Campaign Creation */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[10050] flex items-center justify-center p-4 md:p-10 modal-overlay bg-black/50 overflow-y-auto min-h-0" onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setIsModalOpen(false);
-          }
-        }}>
-          <div className="bg-white w-full max-w-3xl rounded-[48px] shadow-2xl overflow-hidden border border-emerald-900/10 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-
-            {/* Header */}
-            <div className="p-8 pb-4 flex justify-between items-center border-b border-gray-50 flex-shrink-0">
-              <div className="space-y-1">
-                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em]">Setup de Tráfego</span>
-                <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase italic">
-                  {currentStep === 3 ? 'Sucesso!' : steps[currentStep]?.title}
-                </h2>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-900 transition-colors"><X size={24} /></button>
-            </div>
-
-            {/* Steps Indicator */}
-            {currentStep < 3 && (
-              <div className="px-8 py-6 bg-gray-50/50 flex items-center justify-between relative overflow-hidden flex-shrink-0">
-                <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-gray-200 -z-0 -translate-y-1/2" />
-                <div className="absolute top-1/2 left-8 h-0.5 bg-emerald-500 -z-0 -translate-y-1/2 transition-all duration-500" style={{ width: `${(currentStep / Math.max(1, steps.length - 1)) * 100}%` }} />
-
-                {steps.map((step, index) => {
-                  const Icon = step.icon;
-                  const isActive = index === currentStep;
-                  const isCompleted = index < currentStep;
-                  return (
-                    <div key={step.id} className="relative z-10 flex flex-col items-center gap-2">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isActive ? 'bg-emerald-600 border-emerald-600 text-white scale-110 shadow-lg shadow-emerald-600/20' :
-                        isCompleted ? 'bg-emerald-100 border-emerald-100 text-emerald-600' : 'bg-white border-gray-200 text-gray-300'
-                        }`}>
-                        {isCompleted ? <CheckCircle2 size={18} /> : <Icon size={18} />}
-                      </div>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isActive ? 'text-emerald-700' : 'text-gray-400'}`}>{step.title}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Content Body */}
-            <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
-
-              {/* STEP 0: CAMPANHA - nome, objetivo Tráfego (doc Meta: WHATSAPP em OUTCOME_TRAFFIC) */}
-              {currentStep === 0 && (
-                <div className="space-y-6 animate-in slide-in-from-right duration-300">
-                  {validationAttempted && Object.keys(formErrors).length > 0 && (
-                    <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3">
-                      <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-rose-800">Preencha os campos obrigatórios</p>
-                        <div className="mt-2 space-y-1">
-                          {Object.values(formErrors).map((msg, i) => (
-                            <p key={i} className="text-sm text-rose-700">{msg}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <p className="text-[10px] text-gray-500 font-bold">Passo a passo — Campanha Meta Ads para WhatsApp</p>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome da Campanha <span className="text-rose-500">*</span></label>
-                    <input
-                      name="name"
-                      value={formData.name}
-                      onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, name: '' })); }}
-                      type="text"
-                      maxLength={META_LIMITS.campaignName.max}
-                      placeholder="Ex: Lançamento Março 2025"
-                      className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.name ? 'bg-rose-50 ring-2 ring-rose-300 focus:ring-emerald-500/20' : 'bg-gray-50 border-none focus:ring-2 focus:ring-emerald-500/20'}`}
-                    />
-                    <p className="text-[9px] text-gray-400 px-2">{formData.name?.length || 0}/{META_LIMITS.campaignName.max}</p>
-                    {formErrors.name && <p className="text-xs text-rose-600 px-2">{formErrors.name}</p>}
-                  </div>
-                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
-                    <p className="text-xs font-bold text-emerald-800">Objetivo: Tráfego (Click to WhatsApp)</p>
-                    <p className="text-[10px] text-emerald-700 mt-1">Orçamento será configurado no próximo passo (Conjunto de Anúncios).</p>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 1: CONJUNTO DE ANÚNCIOS - WhatsApp, orçamento, programação, público */}
-              {currentStep === 1 && (
-                <div className="space-y-6 animate-in slide-in-from-right duration-300">
-                  {validationAttempted && Object.keys(formErrors).length > 0 && (
-                    <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3">
-                      <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-rose-800">Preencha os campos obrigatórios</p>
-                        <div className="mt-2 space-y-1">
-                          {Object.values(formErrors).map((msg, i) => (
-                            <p key={i} className="text-sm text-rose-700">{msg}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
-                    <p className="text-xs font-bold text-emerald-800">Destino: WhatsApp</p>
-                    <p className="text-[10px] text-emerald-700 mt-1">Anúncios direcionarão cliques para o WhatsApp.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Onde exibir o anúncio</label>
-                    <p className="text-[9px] text-gray-400 px-2">Escolha em quais plataformas o anúncio será exibido. O clique sempre leva ao WhatsApp.</p>
-                    <div className="flex flex-wrap gap-4 p-4 rounded-2xl bg-gray-50">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={(formData.publisherPlatforms || 'facebook,instagram').includes('facebook')}
-                          onChange={(e) => {
-                            const current = (formData.publisherPlatforms || 'facebook,instagram').split(',').filter(Boolean);
-                            const next = e.target.checked ? [...current.filter(p => p !== 'facebook'), 'facebook'] : current.filter(p => p !== 'facebook');
-                            setFormData(prev => ({ ...prev, publisherPlatforms: next.join(',') }));
-                          }}
-                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <span className="text-sm font-bold text-gray-800">Facebook</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={(formData.publisherPlatforms || 'facebook,instagram').includes('instagram')}
-                          onChange={(e) => {
-                            const current = (formData.publisherPlatforms || 'facebook,instagram').split(',').filter(Boolean);
-                            const next = e.target.checked ? [...current.filter(p => p !== 'instagram'), 'instagram'] : current.filter(p => p !== 'instagram');
-                            setFormData(prev => ({ ...prev, publisherPlatforms: next.join(',') }));
-                          }}
-                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <span className="text-sm font-bold text-gray-800">Instagram</span>
-                      </label>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Orçamento diário (R$) <span className="text-rose-500">*</span></label>
-                    <div className="relative">
-                      <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-gray-400">R$</span>
-                      <input
-                        name="dailyBudget"
-                        value={formData.dailyBudget || ''}
-                        onChange={(e) => { handleInputChange(e); setFormErrors(prev => ({ ...prev, dailyBudget: '' })); }}
-                        type="number"
-                        min="1"
-                        step="0.01"
-                        placeholder="50,00"
-                        className={`w-full pl-14 pr-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all ${formErrors.dailyBudget ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
-                      />
-                    </div>
-                    {formErrors.dailyBudget && <p className="text-xs text-rose-600 px-2">{formErrors.dailyBudget}</p>}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data início</label>
-                      <input name="startDate" value={formData.startDate || ''} onChange={handleInputChange} type="date" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Data fim</label>
-                      <input name="endDate" value={formData.endDate || ''} onChange={handleInputChange} type="date" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                    </div>
-                  </div>
-                  <p className="text-[9px] text-gray-400">Opcional: somente início ou início e fim.</p>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do grupo (opcional)</label>
-                    <input name="adSetName" value={formData.adSetName || ''} onChange={handleInputChange} type="text" maxLength={META_LIMITS.adSetName.max} placeholder="Ex: Conjunto Brasil 18-35" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                  </div>
-                  <hr className="border-gray-200 my-6" />
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Público-alvo (localização, idade, gênero, interesses)</p>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><MapPin size={12} /> País (código ISO)</label>
-                    <select
-                      name="countryCode"
-                      value={formData.countryCode}
-                      onChange={handleInputChange}
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    >
-                      <option value="BR">Brasil (BR)</option>
-                      <option value="US">Estados Unidos (US)</option>
-                      <option value="PT">Portugal (PT)</option>
-                      <option value="AR">Argentina (AR)</option>
-                      <option value="MX">México (MX)</option>
-                      <option value="CO">Colômbia (CO)</option>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><CalendarIcon size={12} /> Idade Mínima</label>
-                      <input
-                        name="ageMin"
-                        value={formData.ageMin ?? 18}
-                        onChange={handleInputChange}
-                        type="number"
-                        min="18"
-                        max="65"
-                        className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2">Idade Máxima</label>
-                      <input
-                        name="ageMax"
-                        value={formData.ageMax ?? 65}
-                        onChange={handleInputChange}
-                        type="number"
-                        min="18"
-                        max="65"
-                        className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2">Gênero</label>
-                    <select
-                      name="genders"
-                      value={formData.genders || ''}
-                      onChange={handleInputChange}
-                      className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    >
-                      <option value="">Todos</option>
-                      <option value="1">Homens</option>
-                      <option value="2">Mulheres</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2 relative" ref={interestsContainerRef}>
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2 flex items-center gap-2"><UsersIcon size={12} /> Interesses <span className="text-gray-400 font-normal">(opcional)</span></label>
-                    <p className="text-[9px] text-gray-400 px-2">Busque e selecione interesses aceitos pela Meta Ads. Conecte o Meta Ads em Configurações.</p>
-                    <div className="relative">
-                      <input
-                        value={interestsSearch}
-                        onChange={(e) => setInterestsSearch(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), runInterestsSearch())}
-                        onFocus={() => interestsResults.length > 0 && setInterestsDropdownOpen(true)}
-                        onBlur={() => setTimeout(() => setInterestsDropdownOpen(false), 200)}
-                        type="text"
-                        placeholder="Digite para buscar (ex: futebol, marketing...) e pressione Enter"
-                        className="w-full px-6 py-4 pr-24 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => runInterestsSearch()}
-                        disabled={!interestsSearch.trim() || interestsSearching}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-emerald-600 text-white text-[10px] font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {interestsSearching ? '...' : 'Buscar'}
-                      </button>
-                    </div>
-                    {interestsHasSearched && interestsSearch.trim() && !interestsSearching && interestsResults.length === 0 && (
-                      <p className="text-[10px] text-amber-600 mt-1 px-2">
-                        {!isMetaConnected ? 'Conecte o Meta Ads em Configurações para buscar interesses.' : 'Nenhum resultado encontrado.'}
-                      </p>
-                    )}
-                    {interestsDropdownOpen && interestsResults.length > 0 && (
-                      <div className="absolute z-20 mt-1 w-full bg-white rounded-2xl border border-gray-200 shadow-xl max-h-48 overflow-y-auto">
-                        {interestsResults.map((r) => (
-                          <button
-                            key={r.id}
-                            type="button"
-                            onClick={() => {
-                              if (!selectedInterests.some(s => s.id === r.id)) {
-                                setSelectedInterests(prev => [...prev, r]);
-                              }
-                              setInterestsSearch('');
-                              setInterestsResults([]);
-                              setInterestsDropdownOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-3 hover:bg-emerald-50 text-sm font-medium text-gray-800"
-                          >
-                            {r.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {selectedInterests.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {selectedInterests.map((i) => (
-                          <span key={i.id} className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold">
-                            {i.name}
-                            <button type="button" onClick={() => setSelectedInterests(prev => prev.filter(x => x.id !== i.id))} className="hover:text-rose-600"><X size={12} /></button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 2: ANÚNCIOS - um ou mais (post existente ou criativo novo cada) */}
-              {currentStep === 2 && (
-                <div className="space-y-6 animate-in slide-in-from-right duration-300">
-                  {validationAttempted && Object.keys(formErrors).length > 0 && (
-                    <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3">
-                      <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-rose-800">Preencha os campos obrigatórios</p>
-                        <div className="mt-2 space-y-1">
-                          {Object.values(formErrors).map((msg, i) => (
-                            <p key={i} className="text-sm text-rose-700">{msg}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <p className="text-[10px] text-gray-500 font-bold">Crie um ou mais anúncios para testar (ex.: 3 criativos para validar). Mesmo grupo de anúncio, orçamento e público.</p>
-
-                  {adItems.map((ad, index) => (
-                    <div key={index} className="p-6 rounded-2xl border-2 border-gray-200 bg-gray-50/30 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Anúncio {index + 1}</span>
-                        {adItems.length > 1 && (
-                          <button type="button" onClick={() => setAdItems(prev => prev.filter((_, i) => i !== index))} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors" title="Remover anúncio">
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Tipo</label>
-                        <div className="flex gap-4">
-                          <label className={`flex-1 p-4 rounded-2xl border-2 cursor-pointer transition-all ${!ad.useExistingPost ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50 hover:border-emerald-300'}`}>
-                            <input type="radio" checked={!ad.useExistingPost} onChange={() => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, useExistingPost: false, existingPostId: '', adMessage: a.adMessage || '', headline: a.headline || '', adDescription: a.adDescription || '', imageUrl: a.imageUrl || '' } : a))} className="sr-only" />
-                            <p className="font-bold text-sm">Criar novo anúncio</p>
-                            <p className="text-[10px] text-gray-500 mt-1">Texto, título, descrição e imagem</p>
-                          </label>
-                          <label className={`flex-1 p-4 rounded-2xl border-2 cursor-pointer transition-all ${ad.useExistingPost ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50 hover:border-emerald-300'}`}>
-                            <input type="radio" checked={!!ad.useExistingPost} onChange={() => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, useExistingPost: true, adMessage: '', headline: '', adDescription: '', imageUrl: '' } : a))} className="sr-only" />
-                            <p className="font-bold text-sm">Usar post existente</p>
-                            <p className="text-[10px] text-gray-500 mt-1">Promover um post do Instagram</p>
-                          </label>
-                        </div>
-                      </div>
-
-                      {ad.useExistingPost ? (
-                    <div className="space-y-4">
-                      <label className="text-xs font-black text-gray-600 uppercase tracking-widest px-2 block">Selecione um post do seu Instagram <span className="text-rose-500">*</span></label>
-                      <div className="p-6 rounded-2xl border-2 border-gray-200 bg-gray-50/50">
-                        <button
-                          type="button"
-                          onClick={loadPagePosts}
-                          disabled={pagePostsLoading}
-                          className="w-full py-4 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
-                        >
-                          {pagePostsLoading ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
-                          {pagePostsLoading ? 'Carregando posts...' : 'Buscar posts do Instagram'}
-                        </button>
-                        {pagePostsError && (
-                          <div className="mt-4 p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-3">
-                            <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
-                            <div>
-                              <p className="text-sm font-bold text-rose-800">Erro ao buscar posts</p>
-                              <p className="text-xs text-rose-700 mt-1">{pagePostsError}</p>
-                              {(pagePostsError.includes('pages_read_engagement') || pagePostsError.includes('instagram')) && (
-                                <p className="text-xs text-rose-600 mt-2">Reconecte sua conta Meta em Configurações e vincule o Instagram para listar os posts.</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        <div className="mt-4 max-h-80 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100 bg-white">
-                          {pagePosts.length === 0 && !pagePostsLoading && !pagePostsError && (
-                            <p className="p-6 text-sm text-gray-500 text-center">Clique em &quot;Buscar posts do Instagram&quot; para carregar os posts.</p>
-                          )}
-                          {pagePosts.map((post) => (
-                            <button
-                              key={post.id}
-                              type="button"
-                              onClick={() => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, existingPostId: post.promotableId } : a))}
-                              className={`w-full text-left p-4 flex gap-4 transition-all ${ad.existingPostId === post.promotableId ? 'bg-emerald-50 border-l-4 border-emerald-500' : 'hover:bg-gray-50'}`}
-                            >
-                              {post.fullPicture && <img src={post.fullPicture} alt="" className="w-20 h-20 rounded-lg object-cover shrink-0" />}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-gray-800 line-clamp-2">{post.message || '(sem texto)'}</p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {post.createdTime
-                                    ? new Date(post.createdTime).toLocaleString('pt-BR', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })
-                                    : ''}
-                                </p>
-                                {!post.isEligibleForPromotion && <span className="text-xs text-amber-600 font-bold">Pode não ser elegível</span>}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {formErrors[`ad_${index}_existingPostId`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_existingPostId`]}</p>}
-                    </div>
-                      ) : (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Texto principal <span className="text-rose-500">*</span></label>
-                        <textarea
-                          value={ad.adMessage || ''}
-                          onChange={(e) => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, adMessage: e.target.value } : a))}
-                          rows={4}
-                          maxLength={META_LIMITS.primaryText.max}
-                          placeholder="Texto principal (125 chars visíveis no mobile)"
-                          className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none transition-all resize-none ${formErrors[`ad_${index}_adMessage`] ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`}
-                        />
-                        <p className="text-[9px] text-gray-400 px-2">{ad.adMessage?.length || 0}/{META_LIMITS.primaryText.max}</p>
-                        {formErrors[`ad_${index}_adMessage`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_adMessage`]}</p>}
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Título (máx 40 caracteres)</label>
-                        <input value={ad.headline || ''} onChange={(e) => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, headline: e.target.value } : a))} type="text" maxLength={META_LIMITS.headline.max} placeholder="Confira agora!" className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none ${formErrors[`ad_${index}_headline`] ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`} />
-                        <p className="text-[9px] text-gray-400 px-2">{ad.headline?.length || 0}/{META_LIMITS.headline.max}</p>
-                        {formErrors[`ad_${index}_headline`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_headline`]}</p>}
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Descrição (máx 30 caracteres)</label>
-                        <input value={ad.adDescription || ''} onChange={(e) => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, adDescription: e.target.value } : a))} type="text" maxLength={META_LIMITS.linkDescription.max} placeholder="Oferta especial" className={`w-full px-6 py-4 rounded-2xl font-bold text-sm outline-none ${formErrors[`ad_${index}_adDescription`] ? 'bg-rose-50 ring-2 ring-rose-300' : 'bg-gray-50 border-none'} focus:ring-2 focus:ring-emerald-500/20`} />
-                        <p className="text-[9px] text-gray-400 px-2">{ad.adDescription?.length || 0}/{META_LIMITS.linkDescription.max}</p>
-                        {formErrors[`ad_${index}_adDescription`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_adDescription`]}</p>}
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Imagem do anúncio <span className="text-rose-500">*</span></label>
-                        <label className={`block p-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formErrors[`ad_${index}_imageUrl`] ? 'bg-rose-50 border-rose-300' : 'bg-gray-50 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50'}`}>
-                          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              setImageUploading(true);
-                              setFormErrors(prev => ({ ...prev, [`ad_${index}_imageUrl`]: '' }));
-                              try {
-                                const { url } = await marketingService.uploadCampaignImage(file);
-                                setAdItems(prev => prev.map((a, i) => i === index ? { ...a, imageUrl: url } : a));
-                              } catch (err: any) {
-                                showToast(err?.message || 'Erro ao enviar imagem.', 'error');
-                              } finally {
-                                setImageUploading(false);
-                                e.target.value = '';
-                              }
-                            }}
-                            disabled={imageUploading}
-                          />
-                          <div className="flex items-center justify-center gap-2">
-                            {imageUploading ? <Loader2 size={18} className="animate-spin" /> : <FileIcon size={18} />}
-                            <span className="font-bold text-sm">{imageUploading ? 'Enviando...' : 'Enviar imagem'}</span>
-                          </div>
-                        </label>
-                        {formErrors[`ad_${index}_imageUrl`] && <p className="text-xs text-rose-600 px-2">{formErrors[`ad_${index}_imageUrl`]}</p>}
-                        {ad.imageUrl && (
-                          <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 max-w-[200px]">
-                            <img src={ad.imageUrl} alt="Preview" className="w-full h-24 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                          </div>
-                        )}
-                      </div>
-                    </>
-                      )}
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-2">Nome do anúncio (opcional)</label>
-                        <input value={ad.adName || ''} onChange={(e) => setAdItems(prev => prev.map((a, i) => i === index ? { ...a, adName: e.target.value } : a))} type="text" maxLength={META_LIMITS.adName.max} placeholder="Ex: Anúncio Principal" className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                      </div>
-                    </div>
-                  ))}
-
-                  <button type="button" onClick={() => setAdItems(prev => [...prev, defaultAdItem()])} className="w-full py-4 rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50/50 font-bold text-sm flex items-center justify-center gap-2 transition-colors">
-                    <Plus size={20} /> Adicionar outro anúncio
-                  </button>
-                </div>
-              )}
-
-              {/* STEP 3: SUCCESS */}
-              {currentStep === 3 && (
-                <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-in zoom-in-90 duration-500 py-10">
-                  <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
-                    <CheckCircle2 size={48} />
-                  </div>
-                  <h3 className="text-3xl font-black text-gray-900 tracking-tighter uppercase italic">Campanha Criada!</h3>
-                  <p className="text-gray-500 max-w-md mx-auto">
-                    Campanha criada no Meta Ads com sucesso! Ela foi criada em modo PAUSADO. Ative no Meta Ads Manager quando estiver pronto.
-                  </p>
-                  <button
-                    onClick={resetForm}
-                    className="bg-emerald-600 text-white font-black px-8 py-4 rounded-xl shadow-xl shadow-emerald-600/30 hover:bg-emerald-700 transition-all uppercase tracking-widest text-xs flex items-center gap-2"
-                  >
-                    Concluir e Fechar <ArrowRight size={16} />
-                  </button>
-                </div>
-              )}
-
-            </div>
-
-            {/* Footer Actions */}
-            {currentStep < 3 && (
-              <div className="p-8 border-t border-gray-50 flex justify-between items-center bg-white flex-shrink-0">
-                {currentStep > 0 ? (
-                  <button onClick={handleBack} className="text-gray-400 hover:text-gray-600 font-bold text-xs uppercase tracking-widest flex items-center gap-2 px-4 py-3">
-                    <ArrowLeft size={16} /> Voltar
-                  </button>
-                ) : (
-                  <div /> /* Spacer */
-                )}
-
-                {currentStep < 2 ? (
-                  <button onClick={handleNext} className="bg-gray-900 text-white font-black px-8 py-4 rounded-xl shadow-xl hover:bg-black transition-all uppercase tracking-widest text-xs flex items-center gap-2">
-                    Próximo Passo <ArrowRight size={16} />
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleCreate}
-                    disabled={isSaving}
-                    className="bg-emerald-600 text-white font-black px-8 py-4 rounded-xl shadow-xl shadow-emerald-600/30 hover:bg-emerald-700 transition-all uppercase tracking-widest text-xs flex items-center gap-2 disabled:opacity-70 disabled:grayscale"
-                  >
-                    {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                    {isSaving ? 'Enviando...' : 'Lançar Campanha'}
-                  </button>
-                )}
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
-      </BodyPortal>
 
       {/* Toast Container */}
       <div className="fixed bottom-6 right-6 z-[10060] flex flex-col gap-2 max-w-[calc(100vw-2rem)]">
@@ -1832,7 +929,7 @@ const Campaigns: React.FC = () => {
         }}
         ctx={utmAdModalCtx}
         companyId={storageService.getUser()?.company?.id ?? null}
-        onCopied={() => showToast('Copiado para a área de transferência', 'success')}
+        onCopied={() => showToast('Copiado para a Ã¡rea de transferÃªncia', 'success')}
       />
     </>
   );
