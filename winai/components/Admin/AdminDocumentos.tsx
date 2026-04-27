@@ -241,7 +241,7 @@ const AdminDocumentos: React.FC = () => {
                             <input
                                 type="file"
                                 onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
-                                className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-black file:font-black file:text-[10px] file:uppercase"
+                                className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-white file:font-black file:text-[10px] file:uppercase"
                             />
                         </div>
                         <div className="md:col-span-2">
@@ -265,7 +265,7 @@ const AdminDocumentos: React.FC = () => {
                     <button
                         type="submit"
                         disabled={uploading}
-                        className="px-8 py-3 bg-emerald-600 text-black rounded-xl font-black uppercase text-xs tracking-widest hover:brightness-110 disabled:opacity-40"
+                        className="px-8 py-3 bg-emerald-600 text-white rounded-xl font-black uppercase text-xs tracking-widest hover:brightness-110 disabled:opacity-40"
                     >
                         {uploading ? 'Enviando…' : 'Enviar'}
                     </button>
@@ -358,7 +358,7 @@ const AdminDocumentos: React.FC = () => {
                                             type="button"
                                             disabled={savingEdit}
                                             onClick={saveEdit}
-                                            className="px-4 py-2 bg-emerald-600 text-black rounded-xl text-[10px] font-black uppercase disabled:opacity-40"
+                                            className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase disabled:opacity-40"
                                         >
                                             {savingEdit ? 'Salvando…' : 'Salvar'}
                                         </button>

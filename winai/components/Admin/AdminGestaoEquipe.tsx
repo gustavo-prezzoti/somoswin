@@ -735,7 +735,7 @@ const AdminGestaoEquipe: React.FC = () => {
                                 <button
                                     type="submit"
                                     disabled={saving}
-                                    className="flex-1 py-3 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase disabled:opacity-50"
+                                    className="flex-1 py-3 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase disabled:opacity-50"
                                 >
                                     {saving ? 'Salvando…' : 'Criar'}
                                 </button>

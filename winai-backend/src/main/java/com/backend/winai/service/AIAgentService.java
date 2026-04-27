@@ -9,8 +9,12 @@ import java.util.stream.Collectors;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import com.backend.winai.dto.ai.AIContext;
 import com.backend.winai.entity.Company;
@@ -57,8 +61,11 @@ public class AIAgentService {
     private final com.backend.winai.repository.LeadRepository leadRepository;
     private final KnowledgeBaseAgentDocumentRepository knowledgeBaseAgentDocumentRepository;
     private final CompanyAgentDocumentRepository companyAgentDocumentRepository;
+    private final RestTemplate restTemplate;
     /** Proxy para self-invocation e garantir REQUIRES_NEW em persistAndNotifyByConversationId */
     private final AIAgentService self;
+
+    private static final int MAX_AGENT_DOC_SEND_BYTES = 25 * 1024 * 1024;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -84,6 +91,7 @@ public class AIAgentService {
             com.backend.winai.repository.LeadRepository leadRepository,
             KnowledgeBaseAgentDocumentRepository knowledgeBaseAgentDocumentRepository,
             CompanyAgentDocumentRepository companyAgentDocumentRepository,
+            RestTemplate restTemplate,
             @org.springframework.context.annotation.Lazy AIAgentService self) {
         this.openAiService = openAiService;
         this.connectionRepository = connectionRepository;
@@ -100,6 +108,7 @@ public class AIAgentService {
         this.leadRepository = leadRepository;
         this.knowledgeBaseAgentDocumentRepository = knowledgeBaseAgentDocumentRepository;
         this.companyAgentDocumentRepository = companyAgentDocumentRepository;
+        this.restTemplate = restTemplate;
         this.self = self;
     }
 
@@ -998,7 +1007,18 @@ public class AIAgentService {
                     .uazapToken(token)
                     .build();
 
-            WhatsAppMessage saved = uazapService.sendMediaMessage(req, conv.getCompany());
+            byte[] fileBytes = fetchAgentDocumentBytes(doc);
+            WhatsAppMessage saved;
+            if (fileBytes != null && fileBytes.length > 0) {
+                log.info("ATTACH_DOC: enviando mídia em base64 ({} bytes) doc {} — mesmo caminho que envio humano no painel",
+                        fileBytes.length, documentId);
+                saved = uazapService.sendMediaMessage(req, conv.getCompany(), fileBytes);
+            } else {
+                log.warn(
+                        "ATTACH_DOC: download do arquivo falhou ou vazio; tentando envio só com URL pública (pode falhar conforme o provedor WhatsApp) doc {}",
+                        documentId);
+                saved = uazapService.sendMediaMessage(req, conv.getCompany());
+            }
             WhatsAppConversation refreshed = conversationRepository.findByIdWithCompany(conv.getId()).orElse(conv);
             if (saved != null) {
                 sendWebSocketUpdate(conv.getCompany().getId(), saved, refreshed);
@@ -1006,6 +1026,37 @@ public class AIAgentService {
             log.info("ATTACH_DOC enviado: doc {} conversa {}", documentId, conv.getId());
         } catch (Exception e) {
             log.error("Falha ao enviar ATTACH_DOC {} para {}: {}", documentId, conv.getId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Baixa o arquivo público do storage (ex.: Supabase) para enviar em base64 via API de mídia,
+     * evitando depender do provedor WhatsApp acessar a URL externamente.
+     */
+    private byte[] fetchAgentDocumentBytes(CompanyAgentDocument doc) {
+        String publicUrl = doc.getPublicUrl();
+        if (publicUrl == null || publicUrl.isBlank()) {
+            return null;
+        }
+        try {
+            ResponseEntity<byte[]> response = restTemplate.exchange(
+                    publicUrl,
+                    HttpMethod.GET,
+                    HttpEntity.EMPTY,
+                    byte[].class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                log.warn("ATTACH_DOC: HTTP {} ao baixar {}", response.getStatusCode(), publicUrl);
+                return null;
+            }
+            byte[] body = response.getBody();
+            if (body.length > MAX_AGENT_DOC_SEND_BYTES) {
+                log.warn("ATTACH_DOC: arquivo muito grande ({} bytes); limite {}", body.length, MAX_AGENT_DOC_SEND_BYTES);
+                return null;
+            }
+            return body;
+        } catch (Exception e) {
+            log.warn("ATTACH_DOC: exceção ao baixar {}: {}", publicUrl, e.getMessage());
+            return null;
         }
     }
 

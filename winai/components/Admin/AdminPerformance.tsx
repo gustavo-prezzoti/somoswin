@@ -94,7 +94,7 @@ const AdminPerformance: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => void load()}
-                    className="px-6 py-3 bg-emerald-600 text-black rounded-xl text-xs font-black uppercase tracking-widest"
+                    className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest"
                 >
                     Tentar novamente
                 </button>

@@ -244,7 +244,7 @@ const AdminConsultancyGlobalAppearance: React.FC = () => {
               type="button"
               disabled={saving}
               onClick={() => void handleSave()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase tracking-widest disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50"
             >
               {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
               Salvar aparência

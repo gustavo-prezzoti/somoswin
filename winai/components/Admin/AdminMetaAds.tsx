@@ -287,7 +287,7 @@ const AdminMetaAds: React.FC = () => {
                                         type="button"
                                         disabled={!selected.connected || syncing}
                                         onClick={onSync}
-                                        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
+                                        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
                                     >
                                         <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
                                         {syncing ? 'Sincronizando…' : 'Sincronizar com Meta'}

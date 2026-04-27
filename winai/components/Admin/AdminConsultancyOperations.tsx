@@ -164,7 +164,7 @@ const AdminConsultancyOperations: React.FC = () => {
                         type="button"
                         disabled={savingRequestId === r.id}
                         onClick={() => void handleSaveMeetLink(r)}
-                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-600 text-black text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
                       >
                         {savingRequestId === r.id ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
                         Salvar

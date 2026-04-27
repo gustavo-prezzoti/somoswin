@@ -442,7 +442,7 @@ const AdminUsers: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => openUserModal()}
-                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-black text-xs font-black uppercase tracking-widest hover:brightness-110"
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest hover:brightness-110"
                     >
                         <Plus size={18} strokeWidth={3} />
                         Novo usuário

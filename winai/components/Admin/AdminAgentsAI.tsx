@@ -454,7 +454,7 @@ const AdminAgentsAI = () => {
                             <button
                                 onClick={handleLink}
                                 disabled={!selConn}
-                                className="px-8 bg-emerald-600 text-black rounded-2xl font-black hover:brightness-110 transition-all disabled:opacity-30 active:scale-95 flex items-center justify-center"
+                                className="px-8 bg-emerald-600 text-white rounded-2xl font-black hover:brightness-110 transition-all disabled:opacity-30 active:scale-95 flex items-center justify-center"
                             >
                                 <LinkIcon size={20} strokeWidth={3} />
                             </button>
@@ -530,7 +530,7 @@ const AdminAgentsAI = () => {
                         <button
                             onClick={() => openAgentModal()}
                             disabled={!selectedCompanyId}
-                            className="flex items-center justify-center gap-3 px-8 py-4 bg-emerald-600 text-black rounded-2xl hover:brightness-110 transition-all font-black uppercase text-xs tracking-widest disabled:opacity-30 active:scale-95"
+                            className="flex items-center justify-center gap-3 px-8 py-4 bg-emerald-600 text-white rounded-2xl hover:brightness-110 transition-all font-black uppercase text-xs tracking-widest disabled:opacity-30 active:scale-95"
                         >
                             <Plus size={20} strokeWidth={3} />
                             Novo Agente
