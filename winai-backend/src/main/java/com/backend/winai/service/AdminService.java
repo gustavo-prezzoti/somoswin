@@ -1774,8 +1774,9 @@ public class AdminService {
 
         log.info("Iniciando exclusão em cascata da empresa: {} ({})", company.getName(), companyId);
 
-        // Tabela sem entidade JPA no projeto (ex.: filtros de conversa WhatsApp) — FK para companies
+        // Tabelas sem entidade JPA no projeto — FK para companies
         jdbcTemplate.update("DELETE FROM winai.whatsapp_filters WHERE company_id = ?", companyId);
+        jdbcTemplate.update("DELETE FROM winai.clients WHERE company_id = ?", companyId);
 
         companyClientNoteRepository.deleteAll(companyClientNoteRepository.findByCompanyOrderByCreatedAtDesc(company));
         companyStrategicDiagnosisRepository.findByCompany_Id(companyId)
