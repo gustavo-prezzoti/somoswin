@@ -80,11 +80,16 @@ const AdminClientes: React.FC = () => {
         [sessionProfile]
     );
 
+    const canScheduleMeeting = useMemo(
+        () => hasAmpliaPermission(sessionProfile, 'clientes', 'create'),
+        [sessionProfile]
+    );
+
     const handleRequestDeleteClient = useCallback(
-        (companyId: string, companyName: string) => {
+        (companyId: string, _companyName: string) => {
             showConfirm({
                 title: 'Excluir cliente',
-                message: `Excluir permanentemente "${companyName}"? Todos os dados vinculados serão removidos em cascata (CRM, metas, agenda comercial, WhatsApp, bases de conhecimento, integrações, disparos, convites, notificações desta empresa, etc.). Os usuários serão desvinculados da empresa (contas preservadas). Não é possível desfazer.`,
+                message: 'Você deseja mesmo excluir este cliente?',
                 type: 'danger',
                 confirmText: 'Excluir',
                 cancelText: 'Cancelar',
@@ -153,6 +158,7 @@ const AdminClientes: React.FC = () => {
                         onRequestDeleteClient={() =>
                             handleRequestDeleteClient(modalClient.companyId, modalClient.name)
                         }
+                        canScheduleMeeting={canScheduleMeeting}
                     />
                 )}
             </AnimatePresence>

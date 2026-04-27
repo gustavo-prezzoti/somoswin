@@ -9,7 +9,8 @@ import {
     StickyNote,
     Plus,
     Building2,
-    FileText,
+    ExternalLink,
+    Activity,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import adminService, {
@@ -30,6 +31,8 @@ interface AdminClienteDetailModalProps {
     initialTab?: TabId;
     canDeleteClient?: boolean;
     onRequestDeleteClient?: () => void;
+    /** Agenda comercial — POST /admin/agenda/meetings */
+    canScheduleMeeting?: boolean;
 }
 
 function goalLooksOverdue(g: DashboardGoalDTO): boolean {
@@ -57,6 +60,36 @@ function formatNoteHeaderDate(iso: string | null | undefined): string {
     return `${y}-${m}-${day} ${h}:${min}`;
 }
 
+function todayIsoDate(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** API devolve `LocalDate` como string; evita `Invalid Date` ao ordenar/exibir. */
+function safeParseMeetingDate(dateStr: string | null | undefined): Date | null {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const trimmed = dateStr.trim();
+    if (!trimmed) return null;
+    const d =
+        trimmed.length <= 10
+            ? new Date(`${trimmed}T12:00:00`)
+            : new Date(trimmed);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatMeetingTimeDisplay(t: string | null | undefined): string {
+    if (t == null || String(t).trim() === '') return '—';
+    const s = String(t);
+    return s.length >= 8 ? s.slice(0, 5) : s.length >= 5 ? s.slice(0, 5) : s;
+}
+
+function formatClientLastAccess(iso: string | null | undefined): string {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
 const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
     client,
     ampliaStaffType,
@@ -64,6 +97,7 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
     initialTab = 'kpis',
     canDeleteClient = false,
     onRequestDeleteClient,
+    canScheduleMeeting = false,
 }) => {
     const navigate = useNavigate();
     const staffUpper = String(ampliaStaffType ?? '')
@@ -104,12 +138,37 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
     const [newNote, setNewNote] = useState('');
     const [noteSaving, setNoteSaving] = useState(false);
     const [tabError, setTabError] = useState<string | null>(null);
+    const [scheduleOpen, setScheduleOpen] = useState(false);
+    const [scheduleSaving, setScheduleSaving] = useState(false);
+    const [scheduleBanner, setScheduleBanner] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+    const [scheduleForm, setScheduleForm] = useState({
+        title: '',
+        contactName: '',
+        meetingDate: todayIsoDate(),
+        meetingTime: '10:00',
+        durationMinutes: 30,
+        notes: '',
+    });
 
     const companyId = client.companyId;
 
     useEffect(() => {
         setTabError(null);
     }, [activeTab]);
+
+    useEffect(() => {
+        setScheduleBanner(null);
+        setScheduleOpen(false);
+        setScheduleForm((prev) => ({
+            ...prev,
+            title: '',
+            contactName: client.name?.trim() || '',
+            meetingDate: todayIsoDate(),
+            meetingTime: '10:00',
+            durationMinutes: 30,
+            notes: '',
+        }));
+    }, [companyId, client.name]);
 
     useEffect(() => {
         let cancelled = false;
@@ -131,21 +190,24 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
         };
     }, [companyId]);
 
-    useEffect(() => {
-        if (activeTab !== 'meetings') return;
-        let cancelled = false;
-        setMeetingsLoading(true);
-        setTabError(null);
+    const loadMeetingsWindow = useCallback(async () => {
         const start = new Date();
         start.setMonth(start.getMonth() - 6);
         const end = new Date();
         end.setMonth(end.getMonth() + 3);
-        adminService
-            .getAgendaMeetings({
-                start: start.toISOString().slice(0, 10),
-                end: end.toISOString().slice(0, 10),
-                companyId,
-            })
+        return adminService.getAgendaMeetings({
+            start: start.toISOString().slice(0, 10),
+            end: end.toISOString().slice(0, 10),
+            companyId,
+        });
+    }, [companyId]);
+
+    useEffect(() => {
+        if (activeTab !== 'meetings' && activeTab !== 'kpis') return;
+        let cancelled = false;
+        setMeetingsLoading(true);
+        setTabError(null);
+        loadMeetingsWindow()
             .then((rows) => {
                 if (!cancelled) setMeetings(rows ?? []);
             })
@@ -158,7 +220,72 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
         return () => {
             cancelled = true;
         };
-    }, [activeTab, companyId]);
+    }, [activeTab, companyId, loadMeetingsWindow]);
+
+    const kpiMeetingStats = useMemo(() => {
+        let completed = 0;
+        let upcoming = 0;
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        for (const m of meetings) {
+            const st = (m.status || '').toUpperCase();
+            if (st === 'COMPLETED' || st === 'REALIZADO') {
+                completed += 1;
+                continue;
+            }
+            if (st === 'CANCELLED' || st === 'NO_SHOW') continue;
+            const d = safeParseMeetingDate(m.meetingDate);
+            if (d && d.getTime() >= startOfToday.getTime()) upcoming += 1;
+        }
+        return { completed, upcoming, total: meetings.length };
+    }, [meetings]);
+
+    const kpiGoalStats = useMemo(() => {
+        const active = goals.filter((g) => (g.status || '').toUpperCase() === 'ACTIVE');
+        const overdue = active.filter(goalLooksOverdue).length;
+        const avgProgress =
+            active.length === 0
+                ? null
+                : Math.round(
+                      active.reduce((s, g) => s + (g.progressPercentage ?? 0), 0) / active.length
+                  );
+        return { activeCount: active.length, avgProgress, overdue };
+    }, [goals]);
+
+    const handleScheduleSubmit = useCallback(async () => {
+        const contactName = scheduleForm.contactName.trim();
+        if (!contactName) {
+            setScheduleBanner({ type: 'err', text: 'Informe o nome do contato.' });
+            return;
+        }
+        setScheduleSaving(true);
+        setScheduleBanner(null);
+        try {
+            await adminService.createAgendaMeeting({
+                companyId,
+                title: scheduleForm.title.trim() || undefined,
+                contactName,
+                meetingDate: scheduleForm.meetingDate,
+                meetingTime: scheduleForm.meetingTime,
+                durationMinutes: scheduleForm.durationMinutes || 30,
+                notes: scheduleForm.notes.trim() || undefined,
+            });
+            const rows = await loadMeetingsWindow();
+            setMeetings(rows ?? []);
+            setScheduleBanner({ type: 'ok', text: 'Encontro agendado.' });
+            setScheduleOpen(false);
+            setScheduleForm((prev) => ({
+                ...prev,
+                title: '',
+                notes: '',
+                meetingDate: todayIsoDate(),
+            }));
+        } catch (e) {
+            setScheduleBanner({ type: 'err', text: getErrorMessage(e, 'Erro ao agendar') });
+        } finally {
+            setScheduleSaving(false);
+        }
+    }, [companyId, loadMeetingsWindow, scheduleForm]);
 
     useEffect(() => {
         if (activeTab !== 'notes') return;
@@ -277,6 +404,109 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
                         </div>
                     </div>
                 );
+            case 'kpis': {
+                if (goalsLoading || meetingsLoading) {
+                    return (
+                        <div className="h-48 flex items-center justify-center text-gray-400 text-xs font-bold uppercase tracking-widest">
+                            Carregando indicadores…
+                        </div>
+                    );
+                }
+                const endPlan = client.subscriptionEndDate
+                    ? new Date(client.subscriptionEndDate + 'T12:00:00').toLocaleDateString('pt-BR')
+                    : '—';
+                return (
+                    <div className="space-y-6">
+                        {(goalsError || tabError) && (
+                            <div className="space-y-2">
+                                {goalsError && (
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-950 text-sm p-4">
+                                        {goalsError}
+                                    </div>
+                                )}
+                                {tabError && (
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-950 text-sm p-4">
+                                        {tabError}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <h3 className="text-sm font-black italic tracking-tight uppercase">Indicadores do cliente</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="p-5 rounded-2xl border border-black/5 bg-gray-50/80 flex flex-col gap-3">
+                                <div className="flex items-start justify-between">
+                                    <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                                        <Activity size={20} />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-right">
+                                        Checkpoint e status
+                                    </span>
+                                </div>
+                                <p className="text-2xl font-black italic tracking-tighter text-[#141414]">
+                                    {client.checkpointStatus}
+                                </p>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                    Cliente: {client.clientStatus} · Plano até {endPlan}
+                                </p>
+                            </div>
+                            <div className="p-5 rounded-2xl border border-black/5 bg-gray-50/80 flex flex-col gap-3">
+                                <div className="flex items-start justify-between">
+                                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                                        <Clock size={20} />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-right">
+                                        Último acesso
+                                    </span>
+                                </div>
+                                <p className="text-2xl font-black italic tracking-tighter text-[#141414]">
+                                    {formatClientLastAccess(client.lastAccess)}
+                                </p>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                    Consultor: {client.consultantName}
+                                </p>
+                            </div>
+                            <div className="p-5 rounded-2xl border border-black/5 bg-gray-50/80 flex flex-col gap-3">
+                                <div className="flex items-start justify-between">
+                                    <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center">
+                                        <Target size={20} />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-right">
+                                        Metas ativas
+                                    </span>
+                                </div>
+                                <p className="text-2xl font-black italic tracking-tighter text-[#141414]">
+                                    {goalsError ? '—' : kpiGoalStats.activeCount}
+                                </p>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                    {goalsError
+                                        ? 'Metas indisponíveis'
+                                        : kpiGoalStats.activeCount === 0
+                                          ? 'Nenhuma meta ativa no ciclo'
+                                          : `Média ${kpiGoalStats.avgProgress ?? 0}% · Atrasadas ${kpiGoalStats.overdue}`}
+                                </p>
+                            </div>
+                            <div className="p-5 rounded-2xl border border-black/5 bg-gray-50/80 flex flex-col gap-3">
+                                <div className="flex items-start justify-between">
+                                    <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                                        <Calendar size={20} />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-right">
+                                        Encontros (período)
+                                    </span>
+                                </div>
+                                <p className="text-2xl font-black italic tracking-tighter text-[#141414]">
+                                    {tabError ? '—' : kpiMeetingStats.total}
+                                </p>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                                    {tabError
+                                        ? 'Agenda indisponível'
+                                        : `Realizados ${kpiMeetingStats.completed} · Próximos ${kpiMeetingStats.upcoming}`}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
             case 'notes':
                 if (tabError) {
                     return (
@@ -348,49 +578,172 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
                 }
                 return (
                     <div className="space-y-6">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
                             <h3 className="text-sm font-black italic tracking-tight uppercase">Histórico de Encontros</h3>
-                            <button
-                                onClick={() => {
-                                    onClose();
-                                    navigate('/admin');
-                                }}
-                                className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all flex items-center gap-2"
-                            >
-                                <Plus size={14} />
-                                Agendar Call
-                            </button>
+                            {canScheduleMeeting && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setScheduleBanner(null);
+                                        setScheduleOpen((v) => !v);
+                                    }}
+                                    className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all flex items-center gap-2"
+                                >
+                                    <Plus size={14} />
+                                    {scheduleOpen ? 'Fechar formulário' : 'Agendar encontro'}
+                                </button>
+                            )}
                         </div>
+                        {scheduleBanner && (
+                            <div
+                                className={`rounded-xl text-sm p-4 border ${
+                                    scheduleBanner.type === 'ok'
+                                        ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
+                                        : 'bg-amber-50 text-amber-950 border-amber-200'
+                                }`}
+                            >
+                                {scheduleBanner.text}
+                            </div>
+                        )}
+                        {canScheduleMeeting && scheduleOpen && (
+                            <div className="p-6 rounded-2xl border border-black/5 bg-gray-50/80 space-y-4">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                    Novo encontro — {client.name}
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                        Título (opcional)
+                                        <input
+                                            value={scheduleForm.title}
+                                            onChange={(e) => setScheduleForm((p) => ({ ...p, title: e.target.value }))}
+                                            className="mt-1 px-3 py-2 rounded-xl border border-black/10 bg-white text-sm font-medium normal-case"
+                                        />
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                        Nome do contato
+                                        <input
+                                            value={scheduleForm.contactName}
+                                            onChange={(e) =>
+                                                setScheduleForm((p) => ({ ...p, contactName: e.target.value }))
+                                            }
+                                            className="mt-1 px-3 py-2 rounded-xl border border-black/10 bg-white text-sm font-medium normal-case"
+                                        />
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                        Data
+                                        <input
+                                            type="date"
+                                            value={scheduleForm.meetingDate}
+                                            onChange={(e) =>
+                                                setScheduleForm((p) => ({ ...p, meetingDate: e.target.value }))
+                                            }
+                                            className="mt-1 px-3 py-2 rounded-xl border border-black/10 bg-white text-sm font-medium normal-case"
+                                        />
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                        Hora
+                                        <input
+                                            type="time"
+                                            value={scheduleForm.meetingTime}
+                                            onChange={(e) =>
+                                                setScheduleForm((p) => ({ ...p, meetingTime: e.target.value }))
+                                            }
+                                            className="mt-1 px-3 py-2 rounded-xl border border-black/10 bg-white text-sm font-medium normal-case"
+                                        />
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                        Duração (min)
+                                        <input
+                                            type="number"
+                                            min={15}
+                                            step={15}
+                                            value={scheduleForm.durationMinutes}
+                                            onChange={(e) =>
+                                                setScheduleForm((p) => ({
+                                                    ...p,
+                                                    durationMinutes: Number(e.target.value) || 30,
+                                                }))
+                                            }
+                                            className="mt-1 px-3 py-2 rounded-xl border border-black/10 bg-white text-sm font-medium normal-case"
+                                        />
+                                    </label>
+                                </div>
+                                <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                    Observações (opcional)
+                                    <textarea
+                                        value={scheduleForm.notes}
+                                        onChange={(e) => setScheduleForm((p) => ({ ...p, notes: e.target.value }))}
+                                        rows={3}
+                                        className="mt-1 px-3 py-2 rounded-xl border border-black/10 bg-white text-sm font-medium normal-case resize-none"
+                                    />
+                                </label>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        disabled={scheduleSaving}
+                                        onClick={() => void handleScheduleSubmit()}
+                                        className="px-6 py-3 bg-[#141414] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
+                                    >
+                                        {scheduleSaving ? 'Salvando…' : 'Confirmar agendamento'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         <div className="space-y-4">
                             {meetings.length > 0 ? (
                                 [...meetings]
-                                    .sort(
-                                        (a, b) =>
-                                            new Date(b.meetingDate).getTime() - new Date(a.meetingDate).getTime()
-                                    )
+                                    .sort((a, b) => {
+                                        const da = safeParseMeetingDate(a.meetingDate)?.getTime() ?? 0;
+                                        const db = safeParseMeetingDate(b.meetingDate)?.getTime() ?? 0;
+                                        return db - da;
+                                    })
                                     .map((meeting) => {
                                         const st = (meeting.status || '').toUpperCase();
                                         const done = st === 'COMPLETED' || st === 'REALIZADO';
-                                        const mDate = new Date(meeting.meetingDate + 'T12:00:00');
+                                        const mDate = safeParseMeetingDate(meeting.meetingDate);
+                                        const hasLink =
+                                            typeof meeting.meetingLink === 'string' &&
+                                            meeting.meetingLink.trim().length > 0;
                                         return (
                                             <div
                                                 key={meeting.id}
-                                                className="p-6 bg-gray-50 rounded-2xl border border-black/5 flex items-center justify-between group hover:border-emerald-500/30 transition-all"
+                                                className="p-6 bg-gray-50 rounded-2xl border border-black/5 flex items-center justify-between group hover:border-emerald-500/30 transition-all gap-4"
                                             >
-                                                <div className="flex items-center gap-6">
-                                                    <div className="flex flex-col items-center justify-center w-12 h-12 bg-white rounded-xl border border-black/5 shadow-sm">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase">
-                                                            {mDate
-                                                                .toLocaleDateString('pt-BR', { month: 'short' })
-                                                                .replace('.', '')}
-                                                        </span>
-                                                        <span className="text-lg font-black italic leading-none">{mDate.getDate()}</span>
+                                                <div className="flex items-center gap-6 min-w-0 flex-1">
+                                                    <div className="flex flex-col items-center justify-center w-12 h-12 shrink-0 bg-white rounded-xl border border-black/5 shadow-sm">
+                                                        {mDate ? (
+                                                            <>
+                                                                <span className="text-[10px] font-black text-gray-400 uppercase">
+                                                                    {mDate
+                                                                        .toLocaleDateString('pt-BR', {
+                                                                            month: 'short',
+                                                                        })
+                                                                        .replace('.', '')}
+                                                                </span>
+                                                                <span className="text-lg font-black italic leading-none">
+                                                                    {mDate.getDate()}
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-[10px] font-black text-gray-300">—</span>
+                                                        )}
                                                     </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-3 mb-1">
-                                                            <span className="text-xs font-black italic tracking-tight">
-                                                                {meetingTypeLabel(meeting.meetingKind)}
-                                                            </span>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-3 mb-1 flex-wrap">
+                                                            {meeting.title?.trim() ? (
+                                                                <>
+                                                                    <span className="text-xs font-black italic tracking-tight truncate max-w-[200px] sm:max-w-md">
+                                                                        {meeting.title.trim()}
+                                                                    </span>
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">
+                                                                        {meetingTypeLabel(meeting.meetingKind)}
+                                                                    </span>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-xs font-black italic tracking-tight">
+                                                                    {meetingTypeLabel(meeting.meetingKind)}
+                                                                </span>
+                                                            )}
                                                             <span
                                                                 className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${
                                                                     done
@@ -401,22 +754,41 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
                                                                 {meeting.statusLabel || meeting.status}
                                                             </span>
                                                         </div>
-                                                        <div className="flex items-center gap-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                        <div className="flex items-center gap-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest flex-wrap">
                                                             <span className="flex items-center gap-1">
-                                                                <Clock size={10} /> {meeting.meetingTime}
+                                                                <Clock size={10} />{' '}
+                                                                {formatMeetingTimeDisplay(meeting.meetingTime)}
                                                             </span>
                                                             <span>•</span>
                                                             <span>{meeting.durationMinutes ?? '—'} min</span>
                                                         </div>
                                                         {meeting.notes && (
                                                             <p className="mt-2 text-[10px] text-gray-500 italic font-medium">
-                                                                Motivo: {meeting.notes}
+                                                                {meeting.notes}
                                                             </p>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <button className="p-3 bg-white border border-black/5 rounded-xl text-gray-400 hover:text-black transition-all opacity-0 group-hover:opacity-100">
-                                                    <FileText size={16} />
+                                                <button
+                                                    type="button"
+                                                    title={hasLink ? 'Abrir link da reunião' : 'Sem link'}
+                                                    disabled={!hasLink}
+                                                    onClick={() => {
+                                                        if (hasLink) {
+                                                            window.open(
+                                                                meeting.meetingLink!.trim(),
+                                                                '_blank',
+                                                                'noopener,noreferrer'
+                                                            );
+                                                        }
+                                                    }}
+                                                    className={`shrink-0 p-3 bg-white border border-black/5 rounded-xl transition-all ${
+                                                        hasLink
+                                                            ? 'text-emerald-600 hover:bg-emerald-50 opacity-100'
+                                                            : 'text-gray-300 cursor-not-allowed opacity-60'
+                                                    }`}
+                                                >
+                                                    <ExternalLink size={16} />
                                                 </button>
                                             </div>
                                         );
@@ -424,7 +796,7 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
                             ) : (
                                 <div className="h-48 flex flex-col items-center justify-center text-gray-300 italic border border-dashed border-gray-200 rounded-2xl">
                                     <Calendar size={48} className="mb-4 opacity-20" />
-                                    <p className="text-xs font-bold uppercase tracking-widest">Nenhum encontro agendado</p>
+                                    <p className="text-xs font-bold uppercase tracking-widest">Nenhum encontro no período</p>
                                 </div>
                             )}
                         </div>
