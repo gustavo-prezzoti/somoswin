@@ -414,6 +414,39 @@ export interface AdminGoalsForCompanyResponse {
     goals: DashboardGoalDTO[];
 }
 
+export interface PlaybookActivityRow {
+    id: string;
+    category: string;
+    title: string;
+    start: number;
+    duration: number;
+    status: string;
+    description?: string;
+}
+
+export interface StrategicDiagnosisDraftPayload {
+    answers?: Record<string, unknown>;
+    activities?: PlaybookActivityRow[];
+    projectStartDate?: string;
+    currentStep?: number;
+}
+
+export interface StrategicDiagnosisAdminDTO {
+    companyId: string;
+    draftAnswers: Record<string, unknown>;
+    draftActivities: PlaybookActivityRow[];
+    draftProjectStartDate: string | null;
+    draftCurrentStep: number;
+    draftMetrics: Record<string, number> | null;
+    draftCanalPrioritario: string | null;
+    publishedAnswers?: Record<string, unknown> | null;
+    publishedActivities?: PlaybookActivityRow[] | null;
+    publishedProjectStartDate?: string | null;
+    publishedCanalPrioritario?: string | null;
+    publishedMetrics?: Record<string, number> | null;
+    publishedAt?: string | null;
+}
+
 export interface AdminUser {
     id: string;
     name: string;
@@ -1000,6 +1033,37 @@ const adminService = {
         return await httpClient.get<AdminGoalsForCompanyResponse>(
             `/admin/goals/companies/${companyId}${q ? `?${q}` : ''}`
         );
+    },
+
+    getStrategicDiagnosis: async (companyId: string): Promise<StrategicDiagnosisAdminDTO> => {
+        return await httpClient.get<StrategicDiagnosisAdminDTO>(
+            `/admin/companies/${companyId}/strategic-diagnosis`
+        );
+    },
+
+    saveStrategicDiagnosisDraft: async (
+        companyId: string,
+        body: StrategicDiagnosisDraftPayload
+    ): Promise<StrategicDiagnosisAdminDTO> => {
+        return await httpClient.put<StrategicDiagnosisAdminDTO>(
+            `/admin/companies/${companyId}/strategic-diagnosis`,
+            body
+        );
+    },
+
+    publishStrategicDiagnosis: async (companyId: string): Promise<StrategicDiagnosisAdminDTO> => {
+        return await httpClient.post<StrategicDiagnosisAdminDTO>(
+            `/admin/companies/${companyId}/strategic-diagnosis/publish`,
+            {}
+        );
+    },
+
+    generateStrategicActivityDescription: async (companyId: string, title: string): Promise<string> => {
+        const r = await httpClient.post<{ description: string }>(
+            `/admin/companies/${companyId}/strategic-diagnosis/generate-activity-description`,
+            { title }
+        );
+        return r.description ?? '';
     },
 
     // ========== AGENDA COMERCIAL (ADMIN GLOBAL) ==========

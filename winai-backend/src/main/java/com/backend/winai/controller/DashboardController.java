@@ -6,11 +6,13 @@ import com.backend.winai.dto.request.CreateGoalTaskRequest;
 import com.backend.winai.dto.request.UpdateGoalTaskRequest;
 import com.backend.winai.dto.response.DashboardResponse;
 import com.backend.winai.dto.response.DashboardResponse.DashboardTaskDTO;
+import com.backend.winai.dto.response.StrategicPlaybookResponse;
 import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.entity.User;
 import com.backend.winai.repository.UserRepository;
 import com.backend.winai.service.DashboardService;
 import com.backend.winai.service.ReportService;
+import com.backend.winai.service.StrategicDiagnosisService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -32,6 +34,7 @@ public class DashboardController {
         private final DashboardService dashboardService;
         private final UserRepository userRepository;
         private final ReportService reportService;
+        private final StrategicDiagnosisService strategicDiagnosisService;
 
         /**
          * GET /api/v1/dashboard
@@ -127,6 +130,19 @@ public class DashboardController {
                 User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
                                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
                 return ResponseEntity.ok(dashboardService.getAllGoals(userWithCompany, year, planningMonth));
+        }
+
+        /**
+         * GET /api/v1/dashboard/strategic-playbook
+         * Playbook 90 dias publicado pelo consultor (Metas / diagnóstico estratégico).
+         */
+        @GetMapping("/strategic-playbook")
+        public ResponseEntity<StrategicPlaybookResponse> getStrategicPlaybook(
+                        @AuthenticationPrincipal User user) {
+                User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
+                                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                return ResponseEntity.ok(strategicDiagnosisService
+                                .getPublishedForCompany(userWithCompany.getCompany()));
         }
 
         @PostMapping("/goals/{goalId}/tasks")

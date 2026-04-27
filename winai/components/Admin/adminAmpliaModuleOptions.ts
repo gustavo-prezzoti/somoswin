@@ -37,7 +37,7 @@ export const AMPLIA_ADMIN_MODULE_SECTIONS: AmpliaAdminModuleSection[] = [
             { id: 'clientes', label: 'Clientes', actions: ['list', 'read', 'create', 'update', 'delete'] },
             { id: 'usuarios', label: 'Usuários', actions: ['list', 'read', 'create', 'update', 'delete'] },
             { id: 'metaads', label: 'Meta Ads', actions: ['list', 'read', 'update'] },
-            { id: 'metas', label: 'Metas e Objetivos', actions: ['list', 'read'] },
+            { id: 'metas', label: 'Metas e Objetivos', actions: ['list', 'read', 'create', 'update'] },
             { id: 'alertas', label: 'Alertas', actions: ['list', 'update'] },
             { id: 'performance', label: 'Performance', actions: ['list'] },
         ],

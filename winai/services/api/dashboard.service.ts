@@ -35,6 +35,25 @@ export interface DashboardWeeklyTask {
     sortOrder: number;
 }
 
+export interface StrategicPlaybookActivityDTO {
+    id: string;
+    category: string;
+    title: string;
+    start: number;
+    duration: number;
+    status: string;
+    description?: string;
+}
+
+export interface StrategicPlaybookClientDTO {
+    published: boolean;
+    canalPrioritario?: string | null;
+    projectStartDate?: string | null;
+    activities?: StrategicPlaybookActivityDTO[] | null;
+    answers?: Record<string, unknown> | null;
+    publishedAt?: string | null;
+}
+
 export interface DashboardData {
     user: UserSummary;
     metrics: MetricsSummary;
@@ -281,6 +300,10 @@ export const dashboardService = {
                 ? `&planningMonth=${planningMonth}`
                 : '';
         return httpClient.get<GoalDTO[]>(`/dashboard/goals?year=${y}${pm}`);
+    },
+
+    async getStrategicPlaybook(): Promise<StrategicPlaybookClientDTO> {
+        return httpClient.get<StrategicPlaybookClientDTO>('/dashboard/strategic-playbook');
     },
 
     /**

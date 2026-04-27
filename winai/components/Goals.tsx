@@ -19,10 +19,17 @@ import {
   Clock,
   CheckCircle,
   ShieldAlert,
+  ShieldCheck,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import useAuth from '../services/hooks/useAuth';
-import { dashboardService, GoalDTO, CreateGoalRequest, GoalTaskDTO } from '../services/api/dashboard.service';
+import {
+  dashboardService,
+  GoalDTO,
+  CreateGoalRequest,
+  GoalTaskDTO,
+  StrategicPlaybookClientDTO,
+} from '../services/api/dashboard.service';
 import { BodyPortal } from './ui';
 
 type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
@@ -310,13 +317,18 @@ const Goals: React.FC = () => {
     endDate: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [strategicPlaybook, setStrategicPlaybook] = useState<StrategicPlaybookClientDTO | null>(null);
 
   const loadGoals = useCallback(async () => {
     const silent = goalsLoadedOnce.current;
     if (!silent) setIsLoading(true);
     try {
-      const data = await dashboardService.getAllGoals(selectedYear, activeMonth);
+      const [data, pb] = await Promise.all([
+        dashboardService.getAllGoals(selectedYear, activeMonth),
+        dashboardService.getStrategicPlaybook().catch(() => ({ published: false } as StrategicPlaybookClientDTO)),
+      ]);
       setGoals(data);
+      setStrategicPlaybook(pb);
     } catch (error) {
       console.error('Failed to load goals', error);
     } finally {
@@ -573,6 +585,69 @@ const Goals: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {strategicPlaybook?.published &&
+        strategicPlaybook.activities &&
+        strategicPlaybook.activities.length > 0 && (
+          <div className="bg-gradient-to-br from-slate-50 to-emerald-50/30 p-8 rounded-[32px] border border-emerald-100/80 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 text-emerald-700">
+              <ShieldCheck size={20} />
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                Playbook 90 dias (consultoria)
+              </span>
+            </div>
+            <p className="text-sm text-gray-600">
+              Canal prioritário:{' '}
+              <strong className="text-emerald-700 uppercase">
+                {(strategicPlaybook.canalPrioritario || '').replace(/_/g, ' ')}
+              </strong>
+              {strategicPlaybook.publishedAt && (
+                <span className="text-gray-400 font-medium text-xs ml-2">
+                  · Publicado em{' '}
+                  {new Date(strategicPlaybook.publishedAt).toLocaleDateString('pt-BR')}
+                </span>
+              )}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[1, 2, 3].map((month) => {
+                const monthStart = (month - 1) * 30 + 1;
+                const monthEndDay = month * 30;
+                const acts = strategicPlaybook.activities!.filter(
+                  (a) => a.start >= monthStart && a.start <= monthEndDay
+                );
+                return (
+                  <div key={month} className="bg-white/90 rounded-2xl border border-black/5 p-4">
+                    <h4 className="text-xs font-black uppercase text-gray-800 mb-3">
+                      Mês {month}: {month === 1 ? 'Fundação' : month === 2 ? 'Operação' : 'Escala'}
+                    </h4>
+                    <ul className="space-y-2 text-sm text-gray-700">
+                      {acts.map((a) => (
+                        <li key={a.id} className="flex gap-2">
+                          <CheckCircle2
+                            size={14}
+                            className={
+                              a.status === 'completed'
+                                ? 'text-emerald-500 shrink-0 mt-0.5'
+                                : a.status === 'in_progress'
+                                  ? 'text-amber-500 shrink-0 mt-0.5'
+                                  : 'text-gray-300 shrink-0 mt-0.5'
+                            }
+                          />
+                          <span>
+                            <span className="font-bold">{a.title}</span>
+                            {a.description && (
+                              <span className="block text-[11px] text-gray-500 mt-0.5">{a.description}</span>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>

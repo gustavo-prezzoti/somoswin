@@ -30,7 +30,9 @@ public final class AmpliaAdminPermissionCatalog {
                 EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read, AmpliaAdminAction.create,
                         AmpliaAdminAction.update, AmpliaAdminAction.delete));
         m.put(AmpliaAdminModule.metaads, EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read, AmpliaAdminAction.update));
-        m.put(AmpliaAdminModule.metas, EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read));
+        m.put(AmpliaAdminModule.metas,
+                EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read, AmpliaAdminAction.create,
+                        AmpliaAdminAction.update));
 
         m.put(AmpliaAdminModule.gestao_equipe,
                 EnumSet.of(AmpliaAdminAction.list, AmpliaAdminAction.read, AmpliaAdminAction.create, AmpliaAdminAction.update));

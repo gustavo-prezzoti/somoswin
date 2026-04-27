@@ -751,6 +751,60 @@ public class OpenAiService {
     }
 
     /**
+     * Uma frase curta em PT-BR para descrição de atividade do playbook (diagnóstico estratégico).
+     * Sem API key, retorna texto fallback (paridade com painel-admin strategicDiagnosisAi).
+     */
+    @SuppressWarnings("unchecked")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public String generateStrategicActivityDescription(String activityTitle) {
+        if (activityTitle == null || activityTitle.isBlank()) {
+            return "";
+        }
+        String title = activityTitle.trim();
+        if (!isChatEnabled()) {
+            return "Planejar e executar as ações necessárias para: " + title
+                    + ". (Configure OpenAI para descrições geradas por IA.)";
+        }
+        List<Map<String, Object>> messages = new ArrayList<>();
+        Map<String, Object> sys = new HashMap<>();
+        sys.put("role", "system");
+        sys.put("content",
+                "Você é consultor de marketing e vendas. Responda APENAS com uma frase curta e profissional em português do Brasil.");
+        messages.add(sys);
+        Map<String, Object> userMsg = new HashMap<>();
+        userMsg.put("role", "user");
+        userMsg.put("content", "Descreva o que deve ser feito na atividade chamada: \"" + title + "\".");
+        messages.add(userMsg);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", marketingSuggestModel);
+        body.put("messages", messages);
+        body.put("max_completion_tokens", 200);
+
+        Map<String, Object> responseBody = callOpenAIWithRetry(body);
+        if (responseBody == null || responseBody.containsKey("error")) {
+            return "Planejar e executar as ações necessárias para: " + title + ".";
+        }
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
+        if (choices == null || choices.isEmpty()) {
+            return "Planejar e executar as ações necessárias para: " + title + ".";
+        }
+        Map<String, Object> choice0 = choices.get(0);
+        if (choice0 == null) {
+            return "Planejar e executar as ações necessárias para: " + title + ".";
+        }
+        Map<String, Object> message = (Map<String, Object>) choice0.get("message");
+        if (message == null) {
+            return "Planejar e executar as ações necessárias para: " + title + ".";
+        }
+        String content = extractTextContent(message.get("content"));
+        if (content == null || content.isBlank()) {
+            return "Planejar e executar as ações necessárias para: " + title + ".";
+        }
+        return content.trim();
+    }
+
+    /**
      * Remove linhas que o modelo às vezes repete (query UTM, etc.) — isso não vai no criativo do anúncio.
      */
     private static String stripTrackingLinesFromMarketingSuggestion(String text) {

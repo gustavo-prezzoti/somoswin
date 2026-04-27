@@ -21,6 +21,9 @@ import adminService, {
 } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useAdminStaffView } from './AdminStaffViewContext';
+import AdminStrategicDiagnosis from './metas/AdminStrategicDiagnosis';
+import { hasAmpliaPermission } from './adminPermissions';
+import type { UserDTO } from '../../services/types';
 
 function goalTypeLabel(type: string): string {
     const m: Record<string, string> = {
@@ -43,6 +46,8 @@ function pct(n: number | null | undefined): number {
 const currentY = new Date().getFullYear();
 const YEARS = [currentY + 1, currentY, currentY - 1, currentY - 2, currentY - 3];
 
+type MetasTab = 'resumo' | 'diagnostico';
+
 const AdminMetasObjetivos: React.FC = () => {
     const staffView = useAdminStaffView();
     const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
@@ -62,6 +67,19 @@ const AdminMetasObjetivos: React.FC = () => {
     const [detail, setDetail] = useState<AdminGoalsForCompanyResponse | null>(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+    const [metasTab, setMetasTab] = useState<MetasTab>('resumo');
+
+    const meUser = useMemo((): UserDTO | null => {
+        try {
+            const raw = localStorage.getItem('win_user');
+            if (!raw) return null;
+            return JSON.parse(raw) as UserDTO;
+        } catch {
+            return null;
+        }
+    }, []);
+
+    const canMetasUpdate = hasAmpliaPermission(meUser, 'metas', 'update');
 
     useEffect(() => {
         const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -173,6 +191,35 @@ const AdminMetasObjetivos: React.FC = () => {
                             </span>
                         )}
                     </p>
+                    <div className="flex flex-wrap gap-2 mt-4">
+                        <button
+                            type="button"
+                            onClick={() => setMetasTab('resumo')}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${
+                                metasTab === 'resumo'
+                                    ? 'bg-[#141414] text-white'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                        >
+                            Resumo metas
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setMetasTab('diagnostico')}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${
+                                metasTab === 'diagnostico'
+                                    ? 'bg-[#141414] text-white'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                        >
+                            Diagnóstico estratégico
+                        </button>
+                    </div>
+                    {metasTab === 'diagnostico' && !canMetasUpdate && (
+                        <p className="text-xs text-amber-700 mt-2 font-medium">
+                            Sem permissão para editar/publicar o diagnóstico (necessário metas: atualizar).
+                        </p>
+                    )}
                 </div>
 
                 <div className="flex w-full shrink-0 flex-col gap-3 xl:max-w-xl xl:items-end">
@@ -247,6 +294,36 @@ const AdminMetasObjetivos: React.FC = () => {
                 </div>
             )}
 
+            {metasTab === 'diagnostico' && (
+                <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 shrink-0">
+                            Empresa
+                        </label>
+                        <select
+                            value={selectedId || ''}
+                            onChange={(e) => setSelectedId(e.target.value || null)}
+                            className="flex-1 min-w-[12rem] px-4 py-2.5 rounded-xl bg-gray-50 border border-black/10 text-sm text-[#141414] focus:outline-none focus:border-emerald-200"
+                        >
+                            <option value="">Selecionar…</option>
+                            {filtered.map((r) => (
+                                <option key={r.companyId} value={r.companyId}>
+                                    {r.companyName}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    {!selectedId ? (
+                        <p className="text-sm text-gray-500 font-medium text-center py-12">
+                            Escolha uma empresa para editar o diagnóstico e o playbook de 90 dias.
+                        </p>
+                    ) : (
+                        <AdminStrategicDiagnosis companyId={selectedId} />
+                    )}
+                </div>
+            )}
+
+            {metasTab === 'resumo' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 <div className="lg:col-span-4 space-y-3">
                     <div className="relative">
@@ -328,6 +405,7 @@ const AdminMetasObjetivos: React.FC = () => {
                     )}
                 </div>
             </div>
+            )}
         </motion.div>
     );
 };
