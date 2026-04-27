@@ -64,4 +64,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /** Colaboradores internos vinculados a este papel (para impedir exclusão). */
     long countByAmpliaStaffRole_Id(UUID ampliaStaffRoleId);
+
+    @Query("SELECT u.company.id, MAX(u.lastLogin) FROM User u WHERE u.company IS NOT NULL GROUP BY u.company.id")
+    List<Object[]> findMaxLastLoginByCompany();
+
+    /** Primeiro usuário por empresa (menor createdAt), para rótulo “consultor” no admin. */
+    @Query("SELECT u FROM User u JOIN FETCH u.company c WHERE u.company IS NOT NULL ORDER BY c.id, u.createdAt ASC, u.id ASC")
+    List<User> findAllCompanyUsersOrderForConsultantPick();
 }

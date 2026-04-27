@@ -56,4 +56,8 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
             @Param("read") Boolean read,
             @Param("userId") UUID userId,
             Pageable pageable);
+
+    @Modifying
+    @Query("DELETE FROM Notification n WHERE n.company.id = :companyId")
+    void deleteByCompany_Id(@Param("companyId") UUID companyId);
 }

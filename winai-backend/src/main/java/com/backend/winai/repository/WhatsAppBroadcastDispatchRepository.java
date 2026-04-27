@@ -57,4 +57,6 @@ public interface WhatsAppBroadcastDispatchRepository extends JpaRepository<Whats
             @Param("cStatus") WhatsAppBroadcastCampaign.Status cStatus,
             @Param("now") ZonedDateTime now,
             Pageable pageable);
+
+    void deleteByRecipient_Id(UUID recipientId);
 }

@@ -16,7 +16,10 @@ import com.backend.winai.dto.request.UpdatePlanRequest;
 import com.backend.winai.dto.request.CreateUserWhatsAppConnectionRequest;
 import com.backend.winai.dto.request.UpdateAgentDocumentRequest;
 import com.backend.winai.dto.request.CreateTermsRequest;
+import com.backend.winai.dto.response.AdminClientSummaryResponse;
 import com.backend.winai.dto.response.AdminConversationSummaryResponse;
+import com.backend.winai.dto.response.CompanyClientNoteResponse;
+import com.backend.winai.dto.request.CreateCompanyClientNoteRequest;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
 import com.backend.winai.dto.response.AdminEscutaSessionResponse;
 import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
@@ -29,7 +32,6 @@ import com.backend.winai.dto.response.AdminPerformanceSnapshotResponse;
 import com.backend.winai.dto.response.CompanyAgentDocumentResponse;
 import com.backend.winai.dto.response.AdminPlanManageResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
-import com.backend.winai.dto.response.AdminMeetingRowResponse;
 import com.backend.winai.dto.response.AdminLeadResponse;
 import com.backend.winai.dto.response.AmpliaStaffRoleResponse;
 import com.backend.winai.dto.response.AdminUserResponse;
@@ -43,6 +45,7 @@ import com.backend.winai.entity.MeetingStatus;
 import com.backend.winai.dto.response.TermsOfServiceResponse;
 import com.backend.winai.dto.response.UserTermsAcceptanceResponse;
 import com.backend.winai.service.CompanyAgentDocumentService;
+import com.backend.winai.service.CompanyClientNoteService;
 import com.backend.winai.service.AdminService;
 import com.backend.winai.service.AmpliaStaffRoleService;
 import com.backend.winai.service.InternalStaffService;
@@ -57,9 +60,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.backend.winai.entity.User;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
 import java.io.IOException;
@@ -76,6 +80,7 @@ import java.util.UUID;
 public class AdminController {
 
     private final AdminService adminService;
+    private final CompanyClientNoteService companyClientNoteService;
     private final CompanyAgentDocumentService companyAgentDocumentService;
     private final TermsOfServiceService termsOfServiceService;
     private final InternalStaffService internalStaffService;
@@ -225,6 +230,31 @@ public class AdminController {
             @Valid @RequestBody AdminLeadStatusPatchRequest body) {
         LeadStatus st = LeadStatus.valueOf(body.getStatus().trim().toUpperCase());
         return ResponseEntity.ok(adminService.patchAdminLeadStatus(leadId, st));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'clientes', 'list')")
+    @Operation(summary = "Clientes — resumo (tabela admin)", description = "Uma linha por empresa: nicho, assinatura, último acesso, checkpoint e vendedor (CRM). Opcional: staffUserId = escopo do colaborador.")
+    @GetMapping("/clients/summary")
+    public ResponseEntity<List<AdminClientSummaryResponse>> getAdminClientsSummary(
+            @RequestParam(required = false) UUID staffUserId) {
+        return ResponseEntity.ok(adminService.getAdminClientsSummary(staffUserId));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'clientes', 'read')")
+    @Operation(summary = "Clientes — notas persistidas por empresa")
+    @GetMapping("/companies/{companyId}/client-notes")
+    public ResponseEntity<List<CompanyClientNoteResponse>> listCompanyClientNotes(@PathVariable UUID companyId) {
+        return ResponseEntity.ok(companyClientNoteService.listByCompany(companyId));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'clientes', 'create')")
+    @Operation(summary = "Clientes — nova nota")
+    @PostMapping("/companies/{companyId}/client-notes")
+    public ResponseEntity<CompanyClientNoteResponse> createCompanyClientNote(
+            @PathVariable UUID companyId,
+            @Valid @RequestBody CreateCompanyClientNoteRequest body,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(companyClientNoteService.create(companyId, body, user));
     }
 
     @PreAuthorize("@adminSecurity.hasPermission(authentication, 'conexoes', 'list')")
@@ -506,8 +536,8 @@ public class AdminController {
         return ResponseEntity.ok(adminService.updateCompanyFromMap(companyId, companyDetails));
     }
 
-    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'contratos', 'delete')")
-    @Operation(summary = "Excluir Empresa", description = "Remove uma empresa do sistema")
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'contratos', 'delete') or @adminSecurity.hasPermission(authentication, 'clientes', 'delete')")
+    @Operation(summary = "Excluir Empresa", description = "Remove uma empresa do sistema (cascata: CRM, metas, agenda, WhatsApp, bases, integrações, etc.)")
     @DeleteMapping("/companies/{companyId}")
     public ResponseEntity<Void> deleteCompany(
             @Parameter(description = "ID da empresa") @PathVariable UUID companyId) {

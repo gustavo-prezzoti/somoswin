@@ -414,6 +414,30 @@ export interface AdminGoalsForCompanyResponse {
     goals: DashboardGoalDTO[];
 }
 
+/** Linha da tabela /admin/clientes (API real, paridade com painel-admin). */
+export interface AdminClientSummary {
+    companyId: string;
+    name: string;
+    niche: string;
+    planName: string;
+    subscriptionStartDate: string | null;
+    subscriptionEndDate: string | null;
+    lastAccess: string | null;
+    checkpointStatus: string;
+    clientStatus: string;
+    sellerId: string | null;
+    sellerName: string | null;
+    consultantName: string;
+}
+
+export interface CompanyClientNoteRow {
+    id: string;
+    body: string;
+    createdAt: string | null;
+    authorUserId: string;
+    authorName: string;
+}
+
 export interface PlaybookActivityRow {
     id: string;
     category: string;
@@ -968,6 +992,21 @@ const adminService = {
 
     patchCrmLeadStatus: async (leadId: string, status: string) => {
         return await httpClient.patch<AdminLeadRow>(`/admin/crm/leads/${leadId}/status`, { status });
+    },
+
+    getAdminClientsSummary: async (staffUserId?: string | null) => {
+        const sp = new URLSearchParams();
+        if (staffUserId) sp.set('staffUserId', staffUserId);
+        const qs = sp.toString();
+        return await httpClient.get<AdminClientSummary[]>(`/admin/clients/summary${qs ? `?${qs}` : ''}`);
+    },
+
+    getCompanyClientNotes: async (companyId: string) => {
+        return await httpClient.get<CompanyClientNoteRow[]>(`/admin/companies/${companyId}/client-notes`);
+    },
+
+    createCompanyClientNote: async (companyId: string, body: { body: string }) => {
+        return await httpClient.post<CompanyClientNoteRow>(`/admin/companies/${companyId}/client-notes`, body);
     },
 
     getAtendimentoConversations: async (params: { page?: number; size?: number; companyId?: string }) => {

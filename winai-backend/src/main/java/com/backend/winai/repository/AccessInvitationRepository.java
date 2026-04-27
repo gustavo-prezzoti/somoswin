@@ -17,4 +17,6 @@ public interface AccessInvitationRepository extends JpaRepository<AccessInvitati
     List<AccessInvitation> findByCompany_IdAndStatusOrderByCreatedAtDesc(UUID companyId, InvitationStatus status);
 
     long countByCompany_IdAndStatus(UUID companyId, InvitationStatus status);
+
+    void deleteByCompany_Id(UUID companyId);
 }

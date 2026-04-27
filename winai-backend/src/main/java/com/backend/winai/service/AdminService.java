@@ -9,6 +9,7 @@ import com.backend.winai.dto.request.IntelligentListeningStartRequest;
 import com.backend.winai.dto.request.AdminUpdateUserRequest;
 import com.backend.winai.dto.request.UpdateInstanceConfigRequest;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
+import com.backend.winai.dto.response.AdminClientSummaryResponse;
 import com.backend.winai.dto.response.AdminConversationSummaryResponse;
 import com.backend.winai.dto.response.AdminEscutaSessionResponse;
 import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
@@ -40,7 +41,13 @@ import com.backend.winai.repository.UserRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
+import com.backend.winai.repository.AccessInvitationRepository;
+import com.backend.winai.repository.CompanyPaidTrafficTargetRepository;
+import com.backend.winai.repository.ConsultancyCallRequestRepository;
+import com.backend.winai.repository.GoogleAdsConnectionRepository;
+import com.backend.winai.repository.KnowledgeBaseAgentDocumentRepository;
 import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
+import com.backend.winai.repository.LeadAttributionAnchorRepository;
 import com.backend.winai.repository.DashboardTaskRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.KnowledgeBaseRepository;
@@ -67,6 +74,10 @@ import com.backend.winai.repository.FollowUpConfigRepository;
 import com.backend.winai.repository.FollowUpStatusRepository;
 import com.backend.winai.repository.GlobalNotificationConfigRepository;
 import com.backend.winai.repository.TrafficAdvisorChatRepository;
+import com.backend.winai.repository.WhatsAppAttributionTokenRepository;
+import com.backend.winai.repository.WhatsAppBroadcastCampaignRepository;
+import com.backend.winai.repository.WhatsAppBroadcastDispatchRepository;
+import com.backend.winai.repository.WhatsAppBroadcastRecipientRepository;
 import com.backend.winai.entity.Lead;
 import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.entity.GoalStatus;
@@ -76,6 +87,8 @@ import com.backend.winai.entity.MeetingKind;
 import com.backend.winai.entity.MeetingStatus;
 import com.backend.winai.entity.Notification;
 import com.backend.winai.entity.UserWhatsAppConnection;
+import com.backend.winai.entity.WhatsAppBroadcastCampaign;
+import com.backend.winai.entity.WhatsAppBroadcastRecipient;
 import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.KnowledgeBase;
 import com.backend.winai.dto.request.AdminMeetingCreateRequest;
@@ -118,6 +131,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.AbstractMap;
 
 @Service
 @RequiredArgsConstructor
@@ -132,7 +146,17 @@ public class AdminService {
     private final UserWhatsAppConnectionRepository connectionRepository;
     private final KnowledgeBaseConnectionRepository knowledgeBaseConnectionRepository;
     private final LeadRepository leadRepository;
+    private final LeadAttributionAnchorRepository leadAttributionAnchorRepository;
+    private final AccessInvitationRepository accessInvitationRepository;
+    private final ConsultancyCallRequestRepository consultancyCallRequestRepository;
+    private final WhatsAppBroadcastCampaignRepository whatsAppBroadcastCampaignRepository;
+    private final WhatsAppBroadcastRecipientRepository whatsAppBroadcastRecipientRepository;
+    private final WhatsAppBroadcastDispatchRepository whatsAppBroadcastDispatchRepository;
+    private final WhatsAppAttributionTokenRepository whatsAppAttributionTokenRepository;
+    private final CompanyPaidTrafficTargetRepository companyPaidTrafficTargetRepository;
+    private final GoogleAdsConnectionRepository googleAdsConnectionRepository;
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final KnowledgeBaseAgentDocumentRepository knowledgeBaseAgentDocumentRepository;
     private final KnowledgeBaseChunkRepository knowledgeBaseChunkRepository;
     private final DashboardTaskRepository dashboardTaskRepository;
     private final MeetingRepository meetingRepository;
@@ -1213,6 +1237,125 @@ public class AdminService {
                 .collect(Collectors.toList());
     }
 
+    private static final String CHECKPOINT_EM_DIA = "Em dia";
+    private static final String CHECKPOINT_ATRASADO = "Atrasado";
+    private static final String CHECKPOINT_MUITO_ATRASADO = "Muito atrasado";
+
+    /**
+     * Resumo de clientes para /admin/clientes (paridade com painel-admin + dados reais).
+     * {@code staffUserId} opcional: mesma regra de escopo que finanças (empresas com lead do colaborador).
+     */
+    public List<AdminClientSummaryResponse> getAdminClientsSummary(UUID staffUserId) {
+        if (staffUserId != null) {
+            User staff = userRepository.findById(staffUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+            if (!Boolean.TRUE.equals(staff.getAmpliaInternalStaff())) {
+                throw new RuntimeException("Filtro disponível apenas para colaboradores internos");
+            }
+        }
+
+        List<Company> companies = new ArrayList<>(companyRepository.findAllWithPlanFetched());
+        if (staffUserId != null) {
+            Set<UUID> allowed = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserId));
+            companies = companies.stream().filter(c -> allowed.contains(c.getId())).collect(Collectors.toList());
+        }
+
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        Set<UUID> overdueGoalCompanyIds = new HashSet<>(goalRepository.findCompanyIdsWithOverdueActiveGoals(today));
+
+        Map<UUID, ZonedDateTime> lastLoginByCompany = new HashMap<>();
+        for (Object[] row : userRepository.findMaxLastLoginByCompany()) {
+            UUID cid = (UUID) row[0];
+            ZonedDateTime ll = (ZonedDateTime) row[1];
+            if (ll != null) {
+                lastLoginByCompany.put(cid, ll);
+            }
+        }
+
+        Map<UUID, Map.Entry<UUID, Long>> dominantSeller = new HashMap<>();
+        for (Object[] row : leadRepository.countLeadsGroupedByCompanyAndOwner()) {
+            UUID companyId = (UUID) row[0];
+            UUID ownerId = (UUID) row[1];
+            long cnt = ((Number) row[2]).longValue();
+            dominantSeller.merge(companyId, new AbstractMap.SimpleEntry<>(ownerId, cnt),
+                    (a, b) -> b.getValue() > a.getValue() ? b : a);
+        }
+
+        Set<UUID> sellerIds = dominantSeller.values().stream().map(Map.Entry::getKey).collect(Collectors.toSet());
+        Map<UUID, User> sellerUsers = userRepository.findAllById(sellerIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
+        Map<UUID, String> consultantNameByCompany = new HashMap<>();
+        for (User u : userRepository.findAllCompanyUsersOrderForConsultantPick()) {
+            consultantNameByCompany.putIfAbsent(u.getCompany().getId(), u.getName());
+        }
+
+        List<AdminClientSummaryResponse> out = new ArrayList<>();
+        for (Company c : companies) {
+            UUID id = c.getId();
+            Plan p = c.getPlanEntity();
+            String planName = p != null ? p.getDisplayName() : "—";
+            String start = c.getSubscriptionStartDate() != null ? c.getSubscriptionStartDate().toString() : null;
+            String end = c.getSubscriptionEndDate() != null ? c.getSubscriptionEndDate().toString() : null;
+            ZonedDateTime ll = lastLoginByCompany.get(id);
+            String lastAccess = ll != null ? ll.toString() : null;
+
+            String checkpoint = resolveCheckpointStatus(c, overdueGoalCompanyIds, today);
+            String clientStatus = mapClientStatus(checkpoint);
+
+            Map.Entry<UUID, Long> sellerEntry = dominantSeller.get(id);
+            UUID sellerId = sellerEntry != null ? sellerEntry.getKey() : null;
+            String sellerName = sellerId != null && sellerUsers.containsKey(sellerId)
+                    ? sellerUsers.get(sellerId).getName() : null;
+
+            String consultant = consultantNameByCompany.getOrDefault(id, "—");
+            String niche = c.getSegment() != null && !c.getSegment().isBlank() ? c.getSegment() : "—";
+
+            out.add(AdminClientSummaryResponse.builder()
+                    .companyId(id)
+                    .name(c.getName())
+                    .niche(niche)
+                    .planName(planName)
+                    .subscriptionStartDate(start)
+                    .subscriptionEndDate(end)
+                    .lastAccess(lastAccess)
+                    .checkpointStatus(checkpoint)
+                    .clientStatus(clientStatus)
+                    .sellerId(sellerId)
+                    .sellerName(sellerName)
+                    .consultantName(consultant)
+                    .build());
+        }
+
+        out.sort(Comparator.comparing(AdminClientSummaryResponse::getName, String.CASE_INSENSITIVE_ORDER));
+        return out;
+    }
+
+    private static String resolveCheckpointStatus(Company c, Set<UUID> overdueGoalCompanyIds, LocalDate today) {
+        String st = c.getSubscriptionStatus() != null ? c.getSubscriptionStatus() : "";
+        if ("OVERDUE".equalsIgnoreCase(st) || "CANCELLED".equalsIgnoreCase(st)) {
+            return CHECKPOINT_MUITO_ATRASADO;
+        }
+        LocalDate end = c.getSubscriptionEndDate();
+        if (end != null && end.isBefore(today)) {
+            return CHECKPOINT_MUITO_ATRASADO;
+        }
+        if (overdueGoalCompanyIds.contains(c.getId())) {
+            return CHECKPOINT_ATRASADO;
+        }
+        return CHECKPOINT_EM_DIA;
+    }
+
+    private static String mapClientStatus(String checkpoint) {
+        if (CHECKPOINT_MUITO_ATRASADO.equals(checkpoint)) {
+            return "Risco";
+        }
+        if (CHECKPOINT_ATRASADO.equals(checkpoint)) {
+            return "Atenção";
+        }
+        return "Normal";
+    }
+
     /**
      * Busca uma empresa por ID
      */
@@ -1623,6 +1766,17 @@ public class AdminService {
 
         log.info("Iniciando exclusão em cascata da empresa: {} ({})", company.getName(), companyId);
 
+        deleteWhatsAppBroadcastDataForCompany(company);
+        notificationRepository.deleteByCompany_Id(companyId);
+        dashboardTaskRepository.deleteByCompany_Id(companyId);
+        leadAttributionAnchorRepository.deleteAll(
+                leadAttributionAnchorRepository.findByCompanyOrderByCreatedAtDesc(company));
+        accessInvitationRepository.deleteByCompany_Id(companyId);
+        consultancyCallRequestRepository.deleteByCompany_Id(companyId);
+        whatsAppAttributionTokenRepository.deleteByCompany_Id(companyId);
+        companyPaidTrafficTargetRepository.deleteAll(companyPaidTrafficTargetRepository.findAllByCompany_Id(companyId));
+        googleAdsConnectionRepository.findByCompany_Id(companyId).ifPresent(googleAdsConnectionRepository::delete);
+
         // 1. WhatsApp e Mensagens (FollowUpStatus tem FK para conversation - deletar antes)
         List<WhatsAppConversation> conversations = conversationRepository.findByCompany(company);
         for (WhatsAppConversation conv : conversations) {
@@ -1640,6 +1794,7 @@ public class AdminService {
 
         List<KnowledgeBase> kbs = knowledgeBaseRepository.findByCompanyIdOrderByUpdatedAtDesc(company.getId());
         for (KnowledgeBase kb : kbs) {
+            knowledgeBaseAgentDocumentRepository.deleteByKnowledgeBase(kb);
             knowledgeBaseChunkRepository.deleteByKnowledgeBase(kb);
         }
         knowledgeBaseRepository.deleteAll(kbs);
@@ -1681,6 +1836,20 @@ public class AdminService {
         // 7. Por fim, a empresa
         companyRepository.delete(company);
         log.info("Empresa {} e todos os seus dados foram excluídos com sucesso", companyId);
+    }
+
+    private void deleteWhatsAppBroadcastDataForCompany(Company company) {
+        UUID cid = company.getId();
+        List<WhatsAppBroadcastCampaign> campaigns = whatsAppBroadcastCampaignRepository.findAllByCompany_Id(cid);
+        for (WhatsAppBroadcastCampaign c : campaigns) {
+            List<WhatsAppBroadcastRecipient> recs = whatsAppBroadcastRecipientRepository
+                    .findByCampaign_IdOrderByCreatedAtAsc(c.getId());
+            for (WhatsAppBroadcastRecipient r : recs) {
+                whatsAppBroadcastDispatchRepository.deleteByRecipient_Id(r.getId());
+            }
+            whatsAppBroadcastRecipientRepository.deleteAll(recs);
+            whatsAppBroadcastCampaignRepository.delete(c);
+        }
     }
 
     // ========== INSTÂNCIAS WHATSAPP ==========

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Building2, RefreshCw, ChevronDown, AlertCircle, Search } from 'lucide-react';
+import { Building2, ChevronDown, AlertCircle } from 'lucide-react';
 import adminService, { AdminGoalCompanyRow } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useAdminStaffView } from './AdminStaffViewContext';
@@ -11,6 +10,7 @@ import type { UserDTO } from '../../services/types';
 
 const LIST_YEAR = new Date().getFullYear();
 
+/** Mesmo layout e classes que `painel-admin/src/components/GoalsObjectivesView.tsx`. */
 const AdminMetasObjetivos: React.FC = () => {
     const staffView = useAdminStaffView();
     const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
@@ -22,8 +22,6 @@ const AdminMetasObjetivos: React.FC = () => {
     const [rows, setRows] = useState<AdminGoalCompanyRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [search, setSearch] = useState('');
-    const [debounced, setDebounced] = useState('');
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     const meUser = useMemo((): UserDTO | null => {
@@ -37,11 +35,6 @@ const AdminMetasObjetivos: React.FC = () => {
     }, []);
 
     const canMetasUpdate = hasAmpliaPermission(meUser, 'metas', 'update');
-
-    useEffect(() => {
-        const t = setTimeout(() => setDebounced(search.trim()), 300);
-        return () => clearTimeout(t);
-    }, [search]);
 
     const loadRows = useCallback(async () => {
         try {
@@ -59,7 +52,7 @@ const AdminMetasObjetivos: React.FC = () => {
             setRows(scoped);
             setSelectedId((prev) => {
                 if (prev && scoped.some((r) => r.companyId === prev)) return prev;
-                return scoped[0]?.companyId ?? null;
+                return null;
             });
         } catch (e) {
             setError(getErrorMessage(e, 'Erro ao carregar empresas'));
@@ -72,67 +65,6 @@ const AdminMetasObjetivos: React.FC = () => {
         loadRows();
     }, [loadRows]);
 
-    const filtered = useMemo(() => {
-        const q = debounced.toLowerCase();
-        if (!q) return rows;
-        return rows.filter((r) => r.companyName.toLowerCase().includes(q));
-    }, [rows, debounced]);
-
-    useEffect(() => {
-        setSelectedId((prev) => {
-            if (prev && filtered.some((r) => r.companyId === prev)) return prev;
-            return filtered[0]?.companyId ?? null;
-        });
-    }, [filtered]);
-
-    const companySelector = (
-        <div className="flex flex-col gap-3 w-full max-w-xl mx-auto">
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                <input
-                    type="search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Buscar empresa…"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-black/10 text-sm text-[#141414] placeholder:text-gray-400 focus:outline-none focus:border-emerald-500/50"
-                />
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-                <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 border-2 border-emerald-600 px-4 py-3 shadow-sm flex-1 min-w-[14rem] max-w-md">
-                    <Building2 className="text-emerald-700 shrink-0" size={18} />
-                    <select
-                        value={selectedId ?? ''}
-                        onChange={(e) => setSelectedId(e.target.value || null)}
-                        className="flex-1 min-w-0 bg-transparent font-black text-[#141414] uppercase italic text-[11px] sm:text-xs tracking-wide outline-none cursor-pointer appearance-none"
-                    >
-                        <option value="">Selecione a empresa…</option>
-                        {filtered.map((r) => (
-                            <option key={r.companyId} value={r.companyId}>
-                                {r.companyName}
-                            </option>
-                        ))}
-                    </select>
-                    <ChevronDown className="text-emerald-700 shrink-0 pointer-events-none" size={18} />
-                </div>
-                <button
-                    type="button"
-                    onClick={() => loadRows()}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border-2 border-emerald-600/30 bg-white text-emerald-700 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-50 transition-colors shrink-0"
-                    title="Atualizar lista"
-                >
-                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                    Atualizar
-                </button>
-                <Link
-                    to="/admin/clientes"
-                    className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-black/10 bg-white text-[10px] font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50 shrink-0"
-                >
-                    <Building2 size={14} /> Clientes
-                </Link>
-            </div>
-        </div>
-    );
-
     if (loading && rows.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
@@ -143,13 +75,9 @@ const AdminMetasObjetivos: React.FC = () => {
     }
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="max-w-4xl mx-auto px-4 pb-16"
-        >
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
             {error && (
-                <div className="rounded-xl p-4 flex items-center gap-3 bg-amber-50 text-amber-950 border border-amber-200/80 mb-6">
+                <div className="rounded-xl p-4 flex items-center gap-3 bg-amber-50 text-amber-950 border border-amber-200/80">
                     <AlertCircle size={20} className="text-amber-700 shrink-0" />
                     <span className="text-sm font-medium">{error}</span>
                     <button type="button" className="ml-auto text-xs font-bold uppercase underline" onClick={() => setError(null)}>
@@ -159,22 +87,64 @@ const AdminMetasObjetivos: React.FC = () => {
             )}
 
             {!canMetasUpdate && (
-                <p className="text-xs text-amber-800 mb-4 font-medium text-center bg-amber-50/80 border border-amber-100 rounded-xl py-3 px-4">
+                <p className="text-xs text-amber-800 font-medium bg-amber-50/80 border border-amber-100 rounded-xl py-3 px-4">
                     Sem permissão para editar ou publicar o diagnóstico (é necessária a permissão metas: atualizar).
                 </p>
             )}
 
             {staffFilterId && staffName && (
-                <p className="text-xs text-emerald-700 font-medium text-center mb-4">
+                <p className="text-xs text-emerald-700 font-medium">
                     Colaborador selecionado: apenas empresas em que {staffName} tem leads como responsável.
                 </p>
             )}
 
-            <AdminStrategicDiagnosis
-                companyId={selectedId}
-                companySelector={companySelector}
-                canEdit={canMetasUpdate}
-            />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="space-y-1">
+                    <h2 className="text-4xl font-black italic tracking-tighter uppercase">Diagnóstico Estratégico</h2>
+                    <p className="text-sm text-gray-400 font-medium">Passo a passo para criação do seu playbook de 90 dias</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative group min-w-[240px]">
+                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-emerald-500 transition-colors">
+                            <Building2 size={16} />
+                        </div>
+                        <select
+                            value={selectedId ?? ''}
+                            onChange={(e) => setSelectedId(e.target.value || null)}
+                            className="w-full pl-12 pr-10 py-3 bg-white border border-black/5 rounded-2xl text-xs font-black uppercase tracking-widest appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm cursor-pointer"
+                        >
+                            <option value="">Selecionar Cliente...</option>
+                            {rows.map((r) => (
+                                <option key={r.companyId} value={r.companyId}>
+                                    {r.companyName}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-400">
+                            <ChevronDown size={16} />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {!selectedId ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
+                    <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center text-gray-300 border-2 border-dashed border-gray-200">
+                        <Building2 size={48} />
+                    </div>
+                    <div className="space-y-2">
+                        <h3 className="text-2xl font-black italic tracking-tighter uppercase text-gray-400">Nenhum Cliente Selecionado</h3>
+                        <p className="text-gray-400 text-sm font-medium max-w-xs mx-auto">
+                            Selecione um cliente no menu superior para iniciar o diagnóstico estratégico.
+                        </p>
+                    </div>
+                </div>
+            ) : (
+                <motion.div key="diagnosis" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                    <AdminStrategicDiagnosis companyId={selectedId} canEdit={canMetasUpdate} />
+                </motion.div>
+            )}
         </motion.div>
     );
 };

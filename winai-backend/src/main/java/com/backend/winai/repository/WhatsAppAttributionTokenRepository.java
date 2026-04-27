@@ -14,4 +14,6 @@ public interface WhatsAppAttributionTokenRepository extends JpaRepository<WhatsA
 
     @Query("SELECT t FROM WhatsAppAttributionToken t JOIN FETCH t.company WHERE t.token = :token")
     Optional<WhatsAppAttributionToken> findByTokenFetchCompany(@Param("token") String token);
+
+    void deleteByCompany_Id(UUID companyId);
 }

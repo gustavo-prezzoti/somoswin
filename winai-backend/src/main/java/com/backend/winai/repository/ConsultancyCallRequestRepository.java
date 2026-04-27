@@ -21,4 +21,6 @@ public interface ConsultancyCallRequestRepository extends JpaRepository<Consulta
 
     @Query("SELECT r FROM ConsultancyCallRequest r JOIN FETCH r.company c LEFT JOIN FETCH r.requestedBy WHERE r.id = :id")
     Optional<ConsultancyCallRequest> findDetailedById(@Param("id") UUID id);
+
+    void deleteByCompany_Id(UUID companyId);
 }

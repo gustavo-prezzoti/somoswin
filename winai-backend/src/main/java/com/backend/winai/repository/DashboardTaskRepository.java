@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
 public interface DashboardTaskRepository extends JpaRepository<DashboardTask, Long> {
@@ -13,6 +14,8 @@ public interface DashboardTaskRepository extends JpaRepository<DashboardTask, Lo
     List<DashboardTask> findByCompanyOrderBySortOrderAscIdAsc(Company company);
 
     long countByCompany(Company company);
+
+    void deleteByCompany_Id(UUID companyId);
 
     long countByCompletedFalse();
 }

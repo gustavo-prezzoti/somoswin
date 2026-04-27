@@ -7,7 +7,7 @@ import {
   TrendingUp, 
   Zap, 
   ShieldCheck, 
-  BookOpen,
+  Layout,
   Sparkles,
   AlertCircle,
   Clock,
@@ -53,17 +53,12 @@ function logStrategicDiagnosis(message: string, detail?: Record<string, unknown>
 }
 
 interface AdminStrategicDiagnosisProps {
-  companyId: string | null;
-  companySelector: React.ReactNode;
-  /** Permissão metas:update — sem isso o fluxo fica só leitura na landing (CTA desabilitado). */
+  companyId: string;
+  /** Permissão metas:update — sem isso o CTA da landing fica desabilitado. */
   canEdit?: boolean;
 }
 
-const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({
-  companyId,
-  companySelector,
-  canEdit = true,
-}) => {
+const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ companyId, canEdit = true }) => {
   const [currentBlockIndex, setCurrentBlockIndex] = useState(-1);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [isFinished, setIsFinished] = useState(false);
@@ -103,19 +98,6 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({
   const [activities, setActivities] = useState<PlaybookActivityRow[]>([]);
 
   useEffect(() => {
-    if (!companyId) {
-      hydratedRef.current = false;
-      skipSaveRef.current = true;
-      setLoadingDraft(false);
-      setAnswers({});
-      setActivities([]);
-      setCurrentBlockIndex(-1);
-      setIsFinished(false);
-      setIsSent(false);
-      setProjectStartDay(new Date().toISOString().split('T')[0]);
-      return;
-    }
-
     let cancelled = false;
     (async () => {
       hydratedRef.current = false;
@@ -252,7 +234,7 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({
   };
 
   const handleGenerateDescription = async (title: string) => {
-    if (!title || !companyId) return;
+    if (!title) return;
     setIsGenerating(true);
     try {
       logStrategicDiagnosis('POST generate-activity-description → IA', { companyId, title });
@@ -288,10 +270,6 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({
   };
 
   const nextStep = () => {
-    if (!companyId) {
-      window.alert('Selecione uma empresa para continuar.');
-      return;
-    }
     if (currentBlockIndex < DIAGNOSIS_BLOCKS.length - 1) {
       setCurrentBlockIndex(prev => prev + 1);
       window.scrollTo(0, 0);
@@ -851,57 +829,47 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({
 
   if (currentBlockIndex === -1) {
     return (
-      <div className="max-w-2xl mx-auto text-center space-y-8 py-8 px-1">
-        <h1 className="text-3xl sm:text-4xl font-black italic tracking-tighter uppercase text-[#141414] leading-tight">
-          Diagnóstico estratégico
-        </h1>
-        <p className="text-sm sm:text-base text-gray-500 font-medium -mt-4">
-          Passo a passo para criação do seu playbook de 90 dias
-        </p>
-
-        <div className="w-full">{companySelector}</div>
-
+      <div className="max-w-2xl mx-auto text-center space-y-8 py-12">
         <div className="w-20 h-20 bg-[#141414] text-[#00FF00] rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl rotate-3">
           <Sparkles size={40} />
         </div>
-
-        <p className="text-gray-500 text-base sm:text-lg font-medium leading-relaxed max-w-xl mx-auto">
-          Responda a algumas perguntas sobre o seu negócio para gerarmos um playbook personalizado de 90 dias com IA.
-        </p>
-
+        <div className="space-y-4">
+          <p className="text-gray-500 text-lg font-medium leading-relaxed">
+            Responda a algumas perguntas sobre o seu negócio para gerarmos um playbook personalizado de 90 dias com IA.
+          </p>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
-          <div className="p-6 bg-white border border-black/5 rounded-3xl space-y-2 shadow-sm">
+          <div className="p-6 bg-white border border-black/5 rounded-3xl space-y-2">
             <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center">
-              <BookOpen size={18} />
+              <Layout size={18} />
             </div>
             <h4 className="text-xs font-black uppercase tracking-tight">8 Blocos</h4>
-            <p className="text-[10px] text-gray-400 font-bold uppercase leading-snug">Análise 360º do seu negócio</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase">Análise 360º do seu negócio</p>
           </div>
-          <div className="p-6 bg-white border border-black/5 rounded-3xl space-y-2 shadow-sm">
+          <div className="p-6 bg-white border border-black/5 rounded-3xl space-y-2">
             <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
               <Zap size={18} />
             </div>
             <h4 className="text-xs font-black uppercase tracking-tight">IA Engine</h4>
-            <p className="text-[10px] text-gray-400 font-bold uppercase leading-snug">Lógica e regras de decisão</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase">Lógica e regras de decisão</p>
           </div>
-          <div className="p-6 bg-white border border-black/5 rounded-3xl space-y-2 shadow-sm">
+          <div className="p-6 bg-white border border-black/5 rounded-3xl space-y-2">
             <div className="w-8 h-8 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center">
-              <CheckCircle2 size={18} />
+              <Target size={18} />
             </div>
             <h4 className="text-xs font-black uppercase tracking-tight">90 Dias</h4>
-            <p className="text-[10px] text-gray-400 font-bold uppercase leading-snug">Plano prático de execução</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase">Plano prático de execução</p>
           </div>
         </div>
-
-        <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <button
             type="button"
             onClick={nextStep}
-            disabled={!canEdit || !companyId}
-            title={!companyId ? 'Selecione uma empresa' : !canEdit ? 'Sem permissão para editar' : undefined}
+            disabled={!canEdit}
+            title={!canEdit ? 'Sem permissão para editar' : undefined}
             className="px-12 py-5 bg-[#141414] text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl flex items-center justify-center gap-3 group disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#141414]"
           >
-            Começar diagnóstico
+            Começar Diagnóstico
             <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>

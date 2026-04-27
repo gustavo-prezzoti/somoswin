@@ -95,4 +95,7 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     @Query("SELECT DISTINCT l.company.id FROM Lead l WHERE l.ownerUser.id = :ownerId AND l.company IS NOT NULL")
     List<UUID> findDistinctCompanyIdsByOwnerUserId(@Param("ownerId") UUID ownerId);
+
+    @Query("SELECT l.company.id, l.ownerUser.id, COUNT(l) FROM Lead l WHERE l.company IS NOT NULL AND l.ownerUser IS NOT NULL GROUP BY l.company.id, l.ownerUser.id")
+    List<Object[]> countLeadsGroupedByCompanyAndOwner();
 }

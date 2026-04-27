@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public interface GoalRepository extends JpaRepository<Goal, Long> {
@@ -36,4 +37,7 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
     // Find goals that should be expired (endDate passed and still ACTIVE)
     @Query("SELECT g FROM Goal g WHERE g.status = 'ACTIVE' AND g.endDate IS NOT NULL AND g.endDate < :today")
     List<Goal> findGoalsToExpire(@Param("today") LocalDate today);
+
+    @Query("SELECT DISTINCT g.company.id FROM Goal g WHERE g.status = 'ACTIVE' AND g.endDate IS NOT NULL AND g.endDate < :today")
+    List<UUID> findCompanyIdsWithOverdueActiveGoals(@Param("today") LocalDate today);
 }
