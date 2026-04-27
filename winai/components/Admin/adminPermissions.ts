@@ -124,6 +124,7 @@ export function adminRouteToModule(pathname: string): string | null {
         instances: 'instancias',
         'user-connections': 'conexoes',
         agents: 'agentes',
+        documentos: 'documentos',
         followup: 'followup',
         'notificacoes-globais': 'notificacoes_globais',
         settings: 'instancias',

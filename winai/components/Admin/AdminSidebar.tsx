@@ -18,6 +18,7 @@ import {
     X,
     Flag,
     Layers,
+    FileText,
 } from 'lucide-react';
 import {
     ADMIN_NAV_SECTIONS,
@@ -41,6 +42,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
     instancias: Smartphone,
     conexoes: LinkIcon,
     agentes: Bot,
+    documentos: FileText,
     followup: Clock,
     notificacoes_globais: Bell,
 };

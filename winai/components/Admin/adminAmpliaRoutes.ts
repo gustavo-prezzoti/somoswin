@@ -70,6 +70,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
             { id: 'instancias', label: 'Instâncias', to: '/admin/instances', implemented: true },
             { id: 'conexoes', label: 'Conexões', to: '/admin/user-connections', implemented: true },
             { id: 'agentes', label: 'Agentes IA', to: '/admin/agents', implemented: true },
+            { id: 'documentos', label: 'Documentos', to: '/admin/documentos', implemented: true },
             { id: 'followup', label: 'Follow-up', to: '/admin/followup', implemented: true },
             { id: 'notificacoes_globais', label: 'Notif. globais', to: '/admin/notificacoes-globais', implemented: true },
         ],

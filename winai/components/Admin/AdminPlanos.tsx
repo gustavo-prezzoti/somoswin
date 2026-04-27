@@ -7,10 +7,8 @@ import {
     Plus,
     Pencil,
     Copy,
-    Archive,
     Trash2,
     RefreshCw,
-    Info,
 } from 'lucide-react';
 import adminService, {
     AdminPlanManageRow,
@@ -125,8 +123,7 @@ const AdminPlanos: React.FC = () => {
                         </div>
                         <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Planos</h1>
                         <p className="text-sm text-gray-500 mt-1 max-w-xl">
-                            Catálogo usado em Contratos e no valor enviado ao Asaas ao criar assinatura. Alterar preço aqui
-                            não atualiza assinaturas já existentes — use um clone ou recrie a assinatura.
+                            Catálogo de planos vinculado aos contratos.
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -151,15 +148,6 @@ const AdminPlanos: React.FC = () => {
                         )}
                     </div>
                 </motion.div>
-
-                <div className="flex gap-2 items-start p-4 rounded-2xl bg-blue-50 border border-blue-100 text-blue-900 text-[11px] font-bold leading-relaxed mb-6">
-                    <Info size={18} className="shrink-0 mt-0.5" />
-                    <span>
-                        O slug interno (ex.: <code className="bg-white/80 px-1 rounded">PRO_ACME</code>) deve usar apenas
-                        A–Z, 0–9 e underscore. A <strong>faixa</strong> (Starter/Pro/…) define o comportamento no app; o{' '}
-                        <strong>preço</strong> define a cobrança no Asaas ao vincular este plano a um contrato.
-                    </span>
-                </div>
 
                 {error && (
                     <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-100 text-red-800 text-sm font-bold">
@@ -219,7 +207,7 @@ const AdminPlanos: React.FC = () => {
                                                     </span>
                                                 ) : (
                                                     <span className="text-[10px] font-black uppercase text-gray-500">
-                                                        Arquivado
+                                                        Inativo
                                                     </span>
                                                 )}
                                             </td>
@@ -249,28 +237,6 @@ const AdminPlanos: React.FC = () => {
                                                             title="Clonar"
                                                         >
                                                             <Copy size={16} />
-                                                        </button>
-                                                    )}
-                                                    {canDelete && r.active && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                showConfirm({
-                                                                    title: 'Arquivar plano',
-                                                                    message: `Arquivar "${r.displayName}"? Não aparecerá no dropdown de contratos novos.`,
-                                                                    confirmText: 'Arquivar',
-                                                                    type: 'warning',
-                                                                    onConfirm: async () => {
-                                                                        await adminService.archivePlan(r.id);
-                                                                        showToast('Plano arquivado.');
-                                                                        await load();
-                                                                    },
-                                                                })
-                                                            }
-                                                            className="p-2 rounded-lg text-amber-600 hover:bg-amber-50"
-                                                            title="Arquivar"
-                                                        >
-                                                            <Archive size={16} />
                                                         </button>
                                                     )}
                                                     {canDelete &&

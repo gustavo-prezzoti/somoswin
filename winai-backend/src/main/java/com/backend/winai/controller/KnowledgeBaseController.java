@@ -40,7 +40,7 @@ public class KnowledgeBaseController {
             @RequestBody CreateKnowledgeBaseRequest request,
             @RequestParam(required = false) UUID companyId) {
         KnowledgeBase kb = service.create(user, request.getName(), request.getContent(), request.getAgentPrompt(),
-                request.getSystemTemplate(), companyId);
+                request.getSystemTemplate(), companyId, request.getAgentDocumentIds());
         return ResponseEntity.ok(toResponse(kb));
     }
 
@@ -49,7 +49,7 @@ public class KnowledgeBaseController {
     public ResponseEntity<KnowledgeBaseResponse> update(@AuthenticationPrincipal User user, @PathVariable UUID id,
             @RequestBody UpdateKnowledgeBaseRequest request) {
         KnowledgeBase kb = service.update(user, id, request.getName(), request.getContent(), request.getAgentPrompt(),
-                request.getIsActive(), request.getSystemTemplate());
+                request.getIsActive(), request.getSystemTemplate(), request.getAgentDocumentIds());
         return ResponseEntity.ok(toResponse(kb));
     }
 
@@ -97,6 +97,7 @@ public class KnowledgeBaseController {
                 .agentPrompt(kb.getAgentPrompt())
                 .systemTemplate(kb.getSystemTemplate())
                 .isActive(kb.getIsActive())
+                .agentDocumentIds(service.getAgentDocumentIds(kb.getId()))
                 .createdAt(kb.getCreatedAt())
                 .updatedAt(kb.getUpdatedAt())
                 .build();

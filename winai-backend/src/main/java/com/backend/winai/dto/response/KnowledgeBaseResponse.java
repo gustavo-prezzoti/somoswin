@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -15,6 +16,7 @@ public class KnowledgeBaseResponse {
     private String agentPrompt;
     private Boolean isActive;
     private String systemTemplate;
+    private List<UUID> agentDocumentIds;
     private ZonedDateTime createdAt;
     private ZonedDateTime updatedAt;
 }

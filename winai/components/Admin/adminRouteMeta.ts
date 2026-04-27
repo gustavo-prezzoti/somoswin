@@ -21,6 +21,7 @@ const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
     { pattern: '/admin/instances', meta: { title: 'Instâncias', subtitle: 'WhatsApp e integrações' } },
     { pattern: '/admin/user-connections', meta: { title: 'Conexões', subtitle: 'Conexões e canais' } },
     { pattern: '/admin/agents', meta: { title: 'Agentes IA', subtitle: 'Agentes e automação' } },
+    { pattern: '/admin/documentos', meta: { title: 'Documentos', subtitle: 'Arquivos para anexos do agente no WhatsApp' } },
     { pattern: '/admin/followup', meta: { title: 'Follow-up', subtitle: 'Automação de follow-up' } },
     { pattern: '/admin/notificacoes-globais', meta: { title: 'Notificações globais', subtitle: 'Transbordo humano e alertas WhatsApp' } },
     { pattern: '/admin/settings', meta: { title: 'Configurações', subtitle: 'Configurações globais' } },

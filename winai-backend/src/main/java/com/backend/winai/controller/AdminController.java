@@ -25,6 +25,7 @@ import com.backend.winai.dto.response.AdminDashboardResponse;
 import com.backend.winai.dto.response.AdminFinanceOverviewResponse;
 import com.backend.winai.dto.response.AdminNotificationRowResponse;
 import com.backend.winai.dto.response.AdminPerformanceSnapshotResponse;
+import com.backend.winai.dto.response.CompanyAgentDocumentResponse;
 import com.backend.winai.dto.response.AdminPlanManageResponse;
 import com.backend.winai.dto.response.AdminInstanceResponse;
 import com.backend.winai.dto.response.AdminMeetingRowResponse;
@@ -40,6 +41,7 @@ import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.entity.MeetingStatus;
 import com.backend.winai.dto.response.TermsOfServiceResponse;
 import com.backend.winai.dto.response.UserTermsAcceptanceResponse;
+import com.backend.winai.service.CompanyAgentDocumentService;
 import com.backend.winai.service.AdminService;
 import com.backend.winai.service.AmpliaStaffRoleService;
 import com.backend.winai.service.InternalStaffService;
@@ -52,12 +54,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +75,7 @@ import java.util.UUID;
 public class AdminController {
 
     private final AdminService adminService;
+    private final CompanyAgentDocumentService companyAgentDocumentService;
     private final TermsOfServiceService termsOfServiceService;
     private final InternalStaffService internalStaffService;
     private final AmpliaStaffRoleService ampliaStaffRoleService;
@@ -572,6 +577,43 @@ public class AdminController {
     public ResponseEntity<Void> deletePlan(@Parameter(description = "ID do plano") @PathVariable UUID planId) {
         adminService.deletePlanIfUnused(planId);
         return ResponseEntity.ok().build();
+    }
+
+    // ========== DOCUMENTOS DO AGENTE (SUPABASE) ==========
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'documentos', 'list')")
+    @Operation(summary = "Listar documentos do agente", description = "Metadados dos arquivos por empresa")
+    @GetMapping("/companies/{companyId}/agent-documents")
+    public ResponseEntity<List<CompanyAgentDocumentResponse>> listAgentDocuments(
+            @Parameter(description = "ID da empresa") @PathVariable UUID companyId) {
+        return ResponseEntity.ok(companyAgentDocumentService.listByCompany(companyId));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'documentos', 'create')")
+    @Operation(summary = "Upload documento do agente", description = "Envia arquivo ao Supabase Storage e registra metadados")
+    @PostMapping(value = "/companies/{companyId}/agent-documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<CompanyAgentDocumentResponse> uploadAgentDocument(
+            @Parameter(description = "ID da empresa") @PathVariable UUID companyId,
+            @RequestParam String title,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        return ResponseEntity.ok(companyAgentDocumentService.upload(companyId, title, file));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'documentos', 'read')")
+    @Operation(summary = "Detalhe documento do agente")
+    @GetMapping("/agent-documents/{documentId}")
+    public ResponseEntity<CompanyAgentDocumentResponse> getAgentDocument(
+            @Parameter(description = "ID do documento") @PathVariable UUID documentId) {
+        return ResponseEntity.ok(companyAgentDocumentService.getById(documentId));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'documentos', 'delete')")
+    @Operation(summary = "Excluir documento do agente")
+    @DeleteMapping("/agent-documents/{documentId}")
+    public ResponseEntity<Void> deleteAgentDocument(
+            @Parameter(description = "ID do documento") @PathVariable UUID documentId) {
+        companyAgentDocumentService.delete(documentId);
+        return ResponseEntity.noContent().build();
     }
 
     // ========== INSTÂNCIAS WHATSAPP ==========

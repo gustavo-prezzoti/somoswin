@@ -510,6 +510,18 @@ export interface Company {
 
 export type UserPlanTier = 'STARTER' | 'PRO' | 'ENTERPRISE' | 'TEST';
 
+export interface CompanyAgentDocumentRow {
+    id: string;
+    companyId: string;
+    title: string;
+    publicUrl: string;
+    mimeType: string;
+    originalFilename?: string | null;
+    fileSize?: number | null;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
 export interface Plan {
     id: string;
     name: string;
@@ -783,6 +795,27 @@ const adminService = {
         await httpClient.delete(`/admin/companies/${companyId}`);
     },
 
+    // ========== DOCUMENTOS DO AGENTE ==========
+
+    listAgentDocuments: async (companyId: string): Promise<CompanyAgentDocumentRow[]> => {
+        return await httpClient.get<CompanyAgentDocumentRow[]>(`/admin/companies/${companyId}/agent-documents`);
+    },
+
+    uploadAgentDocument: async (companyId: string, title: string, file: File): Promise<CompanyAgentDocumentRow> => {
+        const fd = new FormData();
+        fd.set('title', title);
+        fd.set('file', file);
+        return await httpClient.post<CompanyAgentDocumentRow>(`/admin/companies/${companyId}/agent-documents`, fd);
+    },
+
+    getAgentDocument: async (documentId: string): Promise<CompanyAgentDocumentRow> => {
+        return await httpClient.get<CompanyAgentDocumentRow>(`/admin/agent-documents/${documentId}`);
+    },
+
+    deleteAgentDocument: async (documentId: string): Promise<void> => {
+        await httpClient.delete(`/admin/agent-documents/${documentId}`);
+    },
+
     // ========== PLANOS ==========
 
     getAllPlans: async (): Promise<Plan[]> => {
@@ -807,10 +840,6 @@ const adminService = {
 
     clonePlan: async (planId: string, data: ClonePlanPayload): Promise<AdminPlanManageRow> => {
         return await httpClient.post<AdminPlanManageRow>(`/admin/plans/${planId}/clone`, data);
-    },
-
-    archivePlan: async (planId: string): Promise<void> => {
-        await httpClient.patch(`/admin/plans/${planId}/archive`);
     },
 
     deletePlan: async (planId: string): Promise<void> => {

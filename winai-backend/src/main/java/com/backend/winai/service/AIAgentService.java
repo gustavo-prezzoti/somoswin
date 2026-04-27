@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.backend.winai.dto.ai.AIContext;
 import com.backend.winai.entity.Company;
+import com.backend.winai.entity.CompanyAgentDocument;
 import com.backend.winai.entity.KnowledgeBase;
 import com.backend.winai.entity.KnowledgeBaseConnection;
 import com.backend.winai.entity.UserWhatsAppConnection;
@@ -21,13 +22,17 @@ import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.WhatsAppMessage;
 import com.backend.winai.entity.Notification;
 import com.backend.winai.entity.User;
+import com.backend.winai.repository.CompanyAgentDocumentRepository;
+import com.backend.winai.repository.KnowledgeBaseAgentDocumentRepository;
 import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.UserRepository;
 import com.backend.winai.repository.NotificationRepository;
+import com.backend.winai.dto.request.SendMediaMessageRequest;
 import com.backend.winai.dto.request.SendWhatsAppMessageRequest;
+import com.backend.winai.util.AgentDocumentAttachParser;
 import com.backend.winai.dto.response.WhatsAppConversationResponse;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +55,8 @@ public class AIAgentService {
     private final FollowUpService followUpService;
     private final GlobalNotificationService globalNotificationService;
     private final com.backend.winai.repository.LeadRepository leadRepository;
+    private final KnowledgeBaseAgentDocumentRepository knowledgeBaseAgentDocumentRepository;
+    private final CompanyAgentDocumentRepository companyAgentDocumentRepository;
     /** Proxy para self-invocation e garantir REQUIRES_NEW em persistAndNotifyByConversationId */
     private final AIAgentService self;
 
@@ -75,6 +82,8 @@ public class AIAgentService {
             @org.springframework.context.annotation.Lazy FollowUpService followUpService,
             GlobalNotificationService globalNotificationService,
             com.backend.winai.repository.LeadRepository leadRepository,
+            KnowledgeBaseAgentDocumentRepository knowledgeBaseAgentDocumentRepository,
+            CompanyAgentDocumentRepository companyAgentDocumentRepository,
             @org.springframework.context.annotation.Lazy AIAgentService self) {
         this.openAiService = openAiService;
         this.connectionRepository = connectionRepository;
@@ -89,6 +98,8 @@ public class AIAgentService {
         this.followUpService = followUpService;
         this.globalNotificationService = globalNotificationService;
         this.leadRepository = leadRepository;
+        this.knowledgeBaseAgentDocumentRepository = knowledgeBaseAgentDocumentRepository;
+        this.companyAgentDocumentRepository = companyAgentDocumentRepository;
         this.self = self;
     }
 
@@ -155,8 +166,13 @@ public class AIAgentService {
                 // List<String> no processamento interno de tokens)
                 List<String> rawMessages = recentMessages.stream().map(OpenAiService.ChatMessage::getContent)
                         .collect(Collectors.toList());
+                String clinicPrompt = knowledgeBase.getAgentPrompt();
+                String docCatalog = buildAgentDocumentsCatalogAppendix(knowledgeBase.getId());
+                if (!docCatalog.isEmpty()) {
+                    clinicPrompt = (clinicPrompt != null ? clinicPrompt : "") + "\n\n" + docCatalog;
+                }
                 String aiResponse = openAiService.generateClinicorpResponse(userMessage, rawMessages, contextInfo,
-                        knowledgeBase.getAgentPrompt());
+                        clinicPrompt);
 
                 if (aiResponse != null) {
                     return aiResponse;
@@ -186,6 +202,11 @@ public class AIAgentService {
             if (contextBuilder.length() > 0) {
                 enhancedAgentPrompt = (enhancedAgentPrompt != null ? enhancedAgentPrompt : "")
                         + contextBuilder.toString();
+            }
+
+            String docCatalog = buildAgentDocumentsCatalogAppendix(knowledgeBase.getId());
+            if (!docCatalog.isEmpty()) {
+                enhancedAgentPrompt = (enhancedAgentPrompt != null ? enhancedAgentPrompt : "") + "\n\n" + docCatalog;
             }
 
             AIContext aiContext = AIContext.builder()
@@ -350,12 +371,22 @@ public class AIAgentService {
 
             // Detect Summary Tag
             boolean forceValidation = aiResponse.contains("[SUMMARY]");
+            String working = aiResponse;
             if (forceValidation) {
-                aiResponse = aiResponse.replace("[SUMMARY]", "").trim();
+                working = working.replace("[SUMMARY]", "").trim();
             }
 
-            // Send
-            sendSplitResponse(conv, aiResponse);
+            AgentDocumentAttachParser.Result attachParse = AgentDocumentAttachParser.parse(working);
+            String textToUser = attachParse.visibleText();
+            java.util.Optional<UUID> attachDocId = attachParse.attachDocumentId();
+
+            if (textToUser != null && !textToUser.isBlank()) {
+                sendSplitResponse(conv, textToUser);
+            }
+
+            if (attachDocId.isPresent()) {
+                sendKbLinkedAgentDocument(conv, attachDocId.get());
+            }
 
             // Update Follow-up
             try {
@@ -363,8 +394,15 @@ public class AIAgentService {
             } catch (Exception e) {
             }
 
-            // Update Memory
-            updateLeadMemory(conv, forceValidation ? "[SUMMARY]" : aiResponse);
+            // Update Memory (sem linha ATTACH_DOC)
+            String memoryText = textToUser != null && !textToUser.isBlank() ? textToUser : "";
+            if (attachDocId.isPresent()) {
+                memoryText = memoryText.isEmpty() ? "📎 Documento enviado" : memoryText + " 📎";
+            }
+            if (memoryText.isBlank()) {
+                memoryText = aiResponse;
+            }
+            updateLeadMemory(conv, forceValidation ? "[SUMMARY]" : memoryText);
         } else {
             log.warn("AI returned empty response in scheduled task for {}", conversationId);
         }
@@ -871,6 +909,98 @@ public class AIAgentService {
                 .isBlocked(conversation.getIsBlocked()).uazapInstance(conversation.getUazapInstance())
                 .supportMode(conversation.getSupportMode()).createdAt(conversation.getCreatedAt())
                 .updatedAt(conversation.getUpdatedAt()).build();
+    }
+
+    private String buildAgentDocumentsCatalogAppendix(UUID knowledgeBaseId) {
+        List<CompanyAgentDocument> docs = knowledgeBaseAgentDocumentRepository
+                .findDocumentsByKnowledgeBaseId(knowledgeBaseId);
+        if (docs == null || docs.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("## Documentos que você pode enviar pelo WhatsApp\n");
+        sb.append("Quando for adequado, responda em texto ao usuário. Se for enviar um arquivo desta lista, ")
+                .append("coloque na ÚLTIMA linha sozinha exatamente: ATTACH_DOC:<id>\n");
+        sb.append("Use apenas um ID abaixo. Não coloque ATTACH_DOC em outras linhas.\n");
+        for (CompanyAgentDocument d : docs) {
+            String waType = d.getMimeType() != null && d.getMimeType().toLowerCase().startsWith("image/") ? "image"
+                    : "document";
+            sb.append("- ").append(d.getId()).append(" | ").append(d.getTitle()).append(" | whatsapp_type=")
+                    .append(waType).append("\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Envia arquivo vinculado ao KB da conversa (Uazap + persistência interna do serviço de mídia).
+     */
+    private void sendKbLinkedAgentDocument(WhatsAppConversation conv, UUID documentId) {
+        try {
+            KnowledgeBase kb = findKnowledgeBaseForConversation(conv);
+            if (kb == null) {
+                log.warn("ATTACH_DOC: sem knowledge base para conversa {}", conv.getId());
+                return;
+            }
+            if (!knowledgeBaseAgentDocumentRepository.existsByKnowledgeBaseIdAndDocumentId(kb.getId(), documentId)) {
+                log.warn("ATTACH_DOC: documento {} não vinculado ao KB {}", documentId, kb.getId());
+                return;
+            }
+            CompanyAgentDocument doc = companyAgentDocumentRepository.findById(documentId).orElse(null);
+            if (doc == null) {
+                log.warn("ATTACH_DOC: documento não encontrado {}", documentId);
+                return;
+            }
+            if (!doc.getCompany().getId().equals(conv.getCompany().getId())) {
+                log.warn("ATTACH_DOC: documento de outra empresa");
+                return;
+            }
+
+            String mediaType = doc.getMimeType() != null && doc.getMimeType().toLowerCase().startsWith("image/")
+                    ? "image"
+                    : "document";
+
+            UserWhatsAppConnection connection = findConnectionForConversation(conv);
+            String instance = conv.getUazapInstance();
+            String baseUrl = conv.getUazapBaseUrl();
+            String token = conv.getUazapToken();
+            if (connection != null) {
+                if (instance == null || instance.isEmpty()) {
+                    instance = connection.getInstanceName();
+                }
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    baseUrl = connection.getInstanceBaseUrl();
+                }
+                if (token == null || token.isEmpty()) {
+                    token = connection.getInstanceToken();
+                }
+            }
+
+            String fileLabel = doc.getOriginalFilename() != null && !doc.getOriginalFilename().isBlank()
+                    ? doc.getOriginalFilename()
+                    : doc.getTitle();
+
+            SendMediaMessageRequest req = SendMediaMessageRequest.builder()
+                    .phoneNumber(conv.getPhoneNumber())
+                    .leadId(conv.getLead() != null ? conv.getLead().getId() : null)
+                    .mediaUrl(doc.getPublicUrl())
+                    .mediaType(mediaType)
+                    .mimeType(doc.getMimeType())
+                    .fileName(fileLabel)
+                    .documentName(doc.getTitle())
+                    .uazapInstance(instance)
+                    .uazapBaseUrl(baseUrl)
+                    .uazapToken(token)
+                    .build();
+
+            WhatsAppMessage saved = uazapService.sendMediaMessage(req, conv.getCompany());
+            WhatsAppConversation refreshed = conversationRepository.findByIdWithCompany(conv.getId()).orElse(conv);
+            if (saved != null) {
+                sendWebSocketUpdate(conv.getCompany().getId(), saved, refreshed);
+            }
+            log.info("ATTACH_DOC enviado: doc {} conversa {}", documentId, conv.getId());
+        } catch (Exception e) {
+            log.error("Falha ao enviar ATTACH_DOC {} para {}: {}", documentId, conv.getId(), e.getMessage(), e);
+        }
     }
 
     /**

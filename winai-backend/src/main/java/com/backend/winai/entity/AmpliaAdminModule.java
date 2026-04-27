@@ -23,6 +23,8 @@ public enum AmpliaAdminModule {
     instancias,
     conexoes,
     agentes,
+    /** Biblioteca de arquivos por empresa (Supabase) para o agente enviar no WhatsApp */
+    documentos,
     followup,
     prompts,
     /** Configuração admin: alertas WhatsApp / transbordo humano por empresa */

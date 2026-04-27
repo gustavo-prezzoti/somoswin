@@ -1,10 +1,14 @@
 package com.backend.winai.service;
 
+import com.backend.winai.entity.CompanyAgentDocument;
 import com.backend.winai.entity.KnowledgeBase;
+import com.backend.winai.entity.KnowledgeBaseAgentDocument;
 import com.backend.winai.entity.KnowledgeBaseChunk;
 import com.backend.winai.entity.KnowledgeBaseConnection;
 import com.backend.winai.entity.User;
 import com.backend.winai.entity.UserWhatsAppConnection;
+import com.backend.winai.repository.CompanyAgentDocumentRepository;
+import com.backend.winai.repository.KnowledgeBaseAgentDocumentRepository;
 import com.backend.winai.repository.KnowledgeBaseChunkRepository;
 import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
 import com.backend.winai.repository.KnowledgeBaseRepository;
@@ -29,6 +33,8 @@ public class KnowledgeBaseService {
     private final KnowledgeBaseRepository repository;
     private final KnowledgeBaseChunkRepository chunkRepository;
     private final KnowledgeBaseConnectionRepository connectionRepository;
+    private final KnowledgeBaseAgentDocumentRepository knowledgeBaseAgentDocumentRepository;
+    private final CompanyAgentDocumentRepository companyAgentDocumentRepository;
     private final UserWhatsAppConnectionRepository whatsAppConnectionRepository;
     private final CompanyRepository companyRepository;
     private final OpenAiService openAiService;
@@ -42,7 +48,7 @@ public class KnowledgeBaseService {
 
     @Transactional
     public KnowledgeBase create(User user, String name, String content, String agentPrompt, String systemTemplate,
-            UUID requestedCompanyId) {
+            UUID requestedCompanyId, java.util.List<UUID> agentDocumentIds) {
         Company targetCompany = resolveCompany(user, requestedCompanyId);
 
         KnowledgeBase kb = KnowledgeBase.builder()
@@ -56,6 +62,10 @@ public class KnowledgeBaseService {
 
         kb = repository.save(kb);
 
+        if (agentDocumentIds != null) {
+            replaceAgentDocuments(kb, agentDocumentIds);
+        }
+
         vectorizeAndSave(kb);
 
         return kb;
@@ -63,7 +73,7 @@ public class KnowledgeBaseService {
 
     @Transactional
     public KnowledgeBase update(User user, UUID id, String name, String content, String agentPrompt, Boolean isActive,
-            String systemTemplate) {
+            String systemTemplate, java.util.List<UUID> agentDocumentIds) {
         KnowledgeBase kb = repository.findById(id).orElseThrow(() -> new RuntimeException("Base não encontrada"));
         checkPermission(user, kb.getCompany());
 
@@ -79,10 +89,38 @@ public class KnowledgeBaseService {
 
         kb = repository.save(kb);
 
+        if (agentDocumentIds != null) {
+            replaceAgentDocuments(kb, agentDocumentIds);
+        }
+
         if (contentChanged) {
             vectorizeAndSave(kb);
         }
         return kb;
+    }
+
+    public java.util.List<UUID> getAgentDocumentIds(UUID knowledgeBaseId) {
+        return knowledgeBaseAgentDocumentRepository.findDocumentsByKnowledgeBaseId(knowledgeBaseId).stream()
+                .map(CompanyAgentDocument::getId)
+                .collect(Collectors.toList());
+    }
+
+    private void replaceAgentDocuments(KnowledgeBase kb, java.util.List<UUID> docIds) {
+        knowledgeBaseAgentDocumentRepository.deleteByKnowledgeBase(kb);
+        knowledgeBaseAgentDocumentRepository.flush();
+        if (docIds == null || docIds.isEmpty()) {
+            return;
+        }
+        java.util.UUID companyId = kb.getCompany().getId();
+        for (java.util.UUID docId : docIds) {
+            CompanyAgentDocument doc = companyAgentDocumentRepository.findByIdAndCompany_Id(docId, companyId)
+                    .orElseThrow(() -> new RuntimeException(
+                            "Documento não encontrado ou não pertence à empresa do agente: " + docId));
+            knowledgeBaseAgentDocumentRepository.save(KnowledgeBaseAgentDocument.builder()
+                    .knowledgeBase(kb)
+                    .document(doc)
+                    .build());
+        }
     }
 
     @Transactional

@@ -7,6 +7,7 @@ export interface KnowledgeBase {
     agentPrompt?: string;
     isActive: boolean;
     systemTemplate?: string;
+    agentDocumentIds?: string[];
     createdAt: string;
     updatedAt: string;
 }
@@ -16,6 +17,7 @@ export interface CreateKnowledgeBaseRequest {
     content: string;
     agentPrompt?: string;
     systemTemplate?: string;
+    agentDocumentIds?: string[];
 }
 
 export interface UpdateKnowledgeBaseRequest {
@@ -24,6 +26,7 @@ export interface UpdateKnowledgeBaseRequest {
     agentPrompt?: string;
     isActive: boolean;
     systemTemplate?: string;
+    agentDocumentIds?: string[];
 }
 
 export const knowledgeBaseService = {

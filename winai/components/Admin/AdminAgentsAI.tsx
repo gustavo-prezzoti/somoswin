@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { knowledgeBaseService, KnowledgeBase } from '../../services/api/knowledge-base.service';
-import { Plus, Edit2, Trash2, Bot, Database, Link as LinkIcon, Unlink, Smartphone, ShieldCheck, Zap, Building2, Search, ArrowRight, Activity } from 'lucide-react';
+import { Plus, Edit2, Trash2, Bot, Database, Link as LinkIcon, Unlink, Smartphone, ShieldCheck, Zap, Building2, Search, ArrowRight, FileText } from 'lucide-react';
 import { httpClient } from '../../services/api/http-client';
-import adminService, { Company } from '../../services/adminService';
+import adminService, { Company, CompanyAgentDocumentRow } from '../../services/adminService';
 import type { UserDTO } from '../../services/types';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
@@ -88,7 +88,8 @@ const AdminAgentsAI = () => {
                     content: data.content || '',
                     agentPrompt: data.agentPrompt || '',
                     isActive: data.isActive ?? true,
-                    systemTemplate: data.systemTemplate
+                    systemTemplate: data.systemTemplate,
+                    agentDocumentIds: data.agentDocumentIds ?? [],
                 });
             } else {
                 if (!selectedCompanyId) {
@@ -99,7 +100,8 @@ const AdminAgentsAI = () => {
                     name: data.name,
                     content: data.content || '',
                     agentPrompt: data.agentPrompt || '',
-                    systemTemplate: data.systemTemplate
+                    systemTemplate: data.systemTemplate,
+                    agentDocumentIds: data.agentDocumentIds,
                 }, selectedCompanyId);
             }
             loadBases();
@@ -111,11 +113,15 @@ const AdminAgentsAI = () => {
     };
 
     const openAgentModal = (agent: KnowledgeBase | null = null) => {
-        let currentData = { ...agent };
+        let currentData: Partial<KnowledgeBase> = agent
+            ? { ...agent, agentDocumentIds: agent.agentDocumentIds ? [...agent.agentDocumentIds] : [] }
+            : { agentDocumentIds: [] };
         const currentCompany = companies.find(c => c.id === selectedCompanyId);
 
         const ModalBody = () => {
             const [data, setData] = useState(currentData);
+            const [companyDocs, setCompanyDocs] = useState<CompanyAgentDocumentRow[]>([]);
+            const [docsLoading, setDocsLoading] = useState(false);
             const [isCustom, setIsCustom] = useState(!!data.agentPrompt);
             const [compMode, setCompMode] = useState<'IA' | 'HUMAN' | null>(() => {
                 const m = currentCompany?.defaultSupportMode;
@@ -142,6 +148,39 @@ const AdminAgentsAI = () => {
                 const newData = { ...data, ...fields };
                 setData(newData);
                 currentData = newData;
+            };
+
+            const canListDocs = hasAmpliaPermission(me, 'documentos', 'list');
+
+            useEffect(() => {
+                if (!selectedCompanyId || !canListDocs) {
+                    setCompanyDocs([]);
+                    return;
+                }
+                let cancelled = false;
+                (async () => {
+                    try {
+                        setDocsLoading(true);
+                        const list = await adminService.listAgentDocuments(selectedCompanyId);
+                        if (!cancelled) setCompanyDocs(list || []);
+                    } catch (e) {
+                        console.error(e);
+                        if (!cancelled) setCompanyDocs([]);
+                    } finally {
+                        if (!cancelled) setDocsLoading(false);
+                    }
+                })();
+                return () => {
+                    cancelled = true;
+                };
+            }, [selectedCompanyId, canListDocs]);
+
+            const toggleAgentDoc = (id: string) => {
+                const cur = [...(data.agentDocumentIds || [])];
+                const i = cur.indexOf(id);
+                if (i >= 0) cur.splice(i, 1);
+                else cur.push(id);
+                update({ agentDocumentIds: cur });
             };
 
             return (
@@ -251,6 +290,50 @@ const AdminAgentsAI = () => {
                             className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500/10 focus:bg-white transition-all font-bold text-gray-700 text-sm leading-relaxed h-64"
                             placeholder="Insira as informações que o agente deve saber..."
                         />
+                    </div>
+
+                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-3">
+                        <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                            <FileText size={12} className="text-emerald-600" />
+                            Documentos para anexo (WhatsApp)
+                        </label>
+                        {!canListDocs && (
+                            <p className="text-[11px] font-bold text-amber-700">
+                                Sem permissão para listar documentos. Peça acesso ao módulo Documentos ou vincule arquivos depois.
+                            </p>
+                        )}
+                        {canListDocs && docsLoading && (
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest animate-pulse">Carregando catálogo…</p>
+                        )}
+                        {canListDocs && !docsLoading && companyDocs.length === 0 && (
+                            <p className="text-[11px] text-gray-600 font-medium">
+                                Nenhum arquivo nesta empresa. Cadastre em <span className="font-black">Documentos</span> no menu técnico.
+                            </p>
+                        )}
+                        {canListDocs && !docsLoading && companyDocs.length > 0 && (
+                            <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                                {companyDocs.map((doc) => {
+                                    const checked = (data.agentDocumentIds || []).includes(doc.id);
+                                    return (
+                                        <label
+                                            key={doc.id}
+                                            className="flex items-start gap-3 p-3 bg-white rounded-xl border border-black/5 cursor-pointer hover:border-emerald-200 transition-colors"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => toggleAgentDoc(doc.id)}
+                                                className="mt-1 w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <span className="text-xs font-black text-gray-800 uppercase italic block truncate">{doc.title}</span>
+                                                <span className="text-[9px] font-bold text-gray-500 uppercase">{doc.mimeType}</span>
+                                            </div>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
             );
