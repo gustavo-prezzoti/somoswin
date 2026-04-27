@@ -36,7 +36,10 @@ import com.backend.winai.entity.Plan;
 import com.backend.winai.entity.User;
 import com.backend.winai.entity.UserPlan;
 import com.backend.winai.entity.UserRole;
+import com.backend.winai.repository.CompanyAgentDocumentRepository;
+import com.backend.winai.repository.CompanyClientNoteRepository;
 import com.backend.winai.repository.CompanyRepository;
+import com.backend.winai.repository.CompanyStrategicDiagnosisRepository;
 import com.backend.winai.repository.UserRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
@@ -105,6 +108,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
@@ -141,6 +145,10 @@ public class AdminService {
 
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
+    private final JdbcTemplate jdbcTemplate;
+    private final CompanyClientNoteRepository companyClientNoteRepository;
+    private final CompanyStrategicDiagnosisRepository companyStrategicDiagnosisRepository;
+    private final CompanyAgentDocumentRepository companyAgentDocumentRepository;
     private final WhatsAppMessageRepository messageRepository;
     private final WhatsAppConversationRepository conversationRepository;
     private final UserWhatsAppConnectionRepository connectionRepository;
@@ -1765,6 +1773,15 @@ public class AdminService {
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         log.info("Iniciando exclusão em cascata da empresa: {} ({})", company.getName(), companyId);
+
+        // Tabela sem entidade JPA no projeto (ex.: filtros de conversa WhatsApp) — FK para companies
+        jdbcTemplate.update("DELETE FROM winai.whatsapp_filters WHERE company_id = ?", companyId);
+
+        companyClientNoteRepository.deleteAll(companyClientNoteRepository.findByCompanyOrderByCreatedAtDesc(company));
+        companyStrategicDiagnosisRepository.findByCompany_Id(companyId)
+                .ifPresent(companyStrategicDiagnosisRepository::delete);
+        companyAgentDocumentRepository.deleteAll(
+                companyAgentDocumentRepository.findByCompany_IdOrderByCreatedAtDesc(companyId));
 
         deleteWhatsAppBroadcastDataForCompany(company);
         notificationRepository.deleteByCompany_Id(companyId);
