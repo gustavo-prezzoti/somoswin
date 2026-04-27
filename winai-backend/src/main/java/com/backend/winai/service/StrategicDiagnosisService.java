@@ -103,6 +103,8 @@ public class StrategicDiagnosisService {
         row.setPublishedCanalPrioritario(canal);
         row.setPublishedMetricsJson(metricsToJson(metrics));
         row.setPublishedAt(ZonedDateTime.now());
+        /** Alinha o rascunho ao "concluído" para o admin reabrir direto no playbook (GET /strategic-diagnosis). */
+        row.setDraftCurrentStep(8);
         if (user != null) {
             row.setUpdatedByUserId(user.getId());
         }

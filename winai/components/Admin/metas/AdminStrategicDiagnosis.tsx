@@ -44,6 +44,14 @@ function parsePlaybookActivities(raw: unknown): PlaybookActivityRow[] {
 
 const DIAG_LOG_PREFIX = '[DiagnósticoEstratégico]';
 
+/** Última pergunta do diagnóstico (bloco 8) — se preenchida, o fluxo de perguntas foi concluído. */
+const LAST_DIAG_VARIABLE = 'prioridade.kpi_principal';
+
+function draftLooksLikeCompletedDiagnosis(answers: Record<string, unknown>): boolean {
+  const v = answers[LAST_DIAG_VARIABLE];
+  return v != null && v !== '' && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean');
+}
+
 function logStrategicDiagnosis(message: string, detail?: Record<string, unknown>) {
   if (detail) {
     console.info(`${DIAG_LOG_PREFIX} ${message}`, detail);
@@ -112,7 +120,11 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
         const d = await adminService.getStrategicDiagnosis(companyId);
         const ms = Math.round(performance.now() - t0);
         if (cancelled) return;
-        const parsedActs = parsePlaybookActivities(d.draftActivities);
+        const parsedDraftActs = parsePlaybookActivities(d.draftActivities);
+        const publishedActs = parsePlaybookActivities(d.publishedActivities);
+        const hasPublished = Boolean(d.publishedAt);
+        const draftAns = (d.draftAnswers as Record<string, unknown>) || {};
+        const pubAns = (d.publishedAnswers as Record<string, unknown> | null | undefined) || {};
         const answerKeys =
           d.draftAnswers && typeof d.draftAnswers === 'object' && !Array.isArray(d.draftAnswers)
             ? Object.keys(d.draftAnswers as object).length
@@ -122,19 +134,32 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
           ms,
           companyIdFromPayload: d.companyId,
           answerFieldCount: answerKeys,
-          activitiesCount: parsedActs.length,
+          activitiesCount: parsedDraftActs.length,
+          publishedActivitiesCount: publishedActs.length,
           draftCurrentStep: d.draftCurrentStep,
           draftProjectStartDate: d.draftProjectStartDate ?? null,
           draftCanalPrioritario: d.draftCanalPrioritario ?? null,
-          hasPublishedSnapshot: Boolean(d.publishedAt),
+          hasPublishedSnapshot: hasPublished,
         });
-        setAnswers((d.draftAnswers as Record<string, unknown>) || {});
-        setActivities(parsedActs);
-        if (d.draftProjectStartDate) {
-          setProjectStartDay(d.draftProjectStartDate);
+        const answersToShow = hasPublished
+          ? Object.keys(pubAns).length > 0
+            ? { ...pubAns }
+            : { ...draftAns }
+          : { ...draftAns };
+        setAnswers(answersToShow);
+        const activitiesToShow =
+          hasPublished && publishedActs.length > 0 ? publishedActs : parsedDraftActs;
+        setActivities(activitiesToShow);
+        const startDay =
+          hasPublished && d.publishedProjectStartDate
+            ? d.publishedProjectStartDate
+            : d.draftProjectStartDate;
+        if (startDay) {
+          setProjectStartDay(startDay);
         }
         const step = d.draftCurrentStep ?? -1;
-        if (step >= 8) {
+        const rascunhoParecePronto = draftLooksLikeCompletedDiagnosis(draftAns);
+        if (hasPublished || step >= 8 || rascunhoParecePronto) {
           setIsFinished(true);
           setCurrentBlockIndex(DIAGNOSIS_BLOCKS.length - 1);
         } else {
