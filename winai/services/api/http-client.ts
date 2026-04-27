@@ -50,6 +50,8 @@ function extractErrorMessage(data: unknown, status: number): string {
 
 interface RequestConfig extends RequestInit {
     skipAuth?: boolean;
+    /** Aborta a requisição após N ms (ex.: DELETE pesado no admin). */
+    timeoutMs?: number;
 }
 
 class HttpClient {
@@ -108,7 +110,7 @@ class HttpClient {
      * Faz uma requisição HTTP com tratamento de autenticação
      */
     async request<T>(endpoint: string, config: RequestConfig = {}): Promise<T> {
-        const { skipAuth = false, ...fetchConfig } = config;
+        const { skipAuth = false, timeoutMs, signal: userSignal, ...fetchConfig } = config;
 
         // Log request (DEBUG)
         console.log(`🌐 API Request [${fetchConfig.method || 'GET'}]:`, endpoint);
@@ -141,10 +143,34 @@ class HttpClient {
             }
         }
 
-        let response = await fetch(`${this.baseUrl}${endpoint}`, {
-            ...fetchConfig,
-            headers,
-        });
+        const useTimeout = timeoutMs != null && timeoutMs > 0;
+        const timeoutController = useTimeout ? new AbortController() : null;
+        const timeoutId = timeoutController
+            ? window.setTimeout(() => timeoutController.abort(), timeoutMs)
+            : undefined;
+        const signal = timeoutController != null ? timeoutController.signal : userSignal;
+
+        let response: Response;
+        try {
+            response = await fetch(`${this.baseUrl}${endpoint}`, {
+                ...fetchConfig,
+                headers,
+                ...(signal ? { signal } : {}),
+            });
+        } catch (e: unknown) {
+            if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+            const aborted =
+                (e instanceof Error && e.name === 'AbortError') ||
+                (typeof DOMException !== 'undefined' && e instanceof DOMException && e.name === 'AbortError');
+            if (aborted && useTimeout) {
+                throw new ApiError(
+                    'Tempo da operação esgotado. Verifique o servidor ou tente novamente.',
+                    408
+                );
+            }
+            throw e;
+        }
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
 
         // Log response (DEBUG)
         console.log(`✅ API Response [${response.status}]:`, endpoint);

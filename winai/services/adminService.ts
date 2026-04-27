@@ -851,7 +851,9 @@ const adminService = {
     },
 
     deleteCompany: async (companyId: string): Promise<void> => {
-        await httpClient.delete(`/admin/companies/${companyId}`);
+        await httpClient.delete(`/admin/companies/${companyId}`, {
+            timeoutMs: 180_000,
+        });
     },
 
     // ========== DOCUMENTOS DO AGENTE ==========

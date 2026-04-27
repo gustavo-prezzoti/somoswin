@@ -96,8 +96,10 @@ const AdminClientes: React.FC = () => {
                 onConfirm: async () => {
                     await adminService.deleteCompany(companyId);
                     setModalClient((prev) => (prev?.companyId === companyId ? null : prev));
-                    await load();
                     showToast('Cliente removido.');
+                    // Não aguardar: o modal só fecha após onConfirm resolver; se /clients/summary
+                    // travar (DB/pool), o usuário ficaria com spinner infinito mesmo com DELETE ok.
+                    void load();
                 },
             });
         },
