@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -55,17 +56,33 @@ public class DashboardService {
         }
 
         /**
-         * Obtém os dados completos do dashboard para um usuário
+         * Últimos N dias (inclusivo até hoje). Mantido para compatibilidade.
          */
         @Transactional(readOnly = false)
         public DashboardResponse getDashboardData(User user, int days) {
+                LocalDate endDate = LocalDate.now();
+                LocalDate startDate = endDate.minusDays(Math.max(0, days - 1));
+                return getDashboardData(user, startDate, endDate);
+        }
+
+        /**
+         * Período explícito (ex.: mês calendário). Datas ajustadas ao fechamento em relação a hoje.
+         */
+        @Transactional(readOnly = false)
+        public DashboardResponse getDashboardData(User user, LocalDate startDate, LocalDate endDate) {
                 if (user == null || user.getCompany() == null) {
                         throw new RuntimeException("Usuário não possui empresa associada");
                 }
 
                 Company company = user.getCompany();
-                LocalDate endDate = LocalDate.now();
-                LocalDate startDate = endDate.minusDays(days - 1);
+                LocalDate today = LocalDate.now();
+                if (endDate.isAfter(today)) {
+                        endDate = today;
+                }
+                if (startDate.isAfter(endDate)) {
+                        startDate = endDate;
+                }
+                int days = (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
 
                 // Fetch Local Metrics (Leads, Meetings - sourced from internal system)
                 List<DashboardMetrics> localMetrics = company != null
@@ -74,7 +91,8 @@ public class DashboardService {
                                 : List.of();
 
                 // Fetch Live Meta Metrics (Spend, Impressions, Clicks)
-                List<java.util.Map<String, Object>> metaMetrics = marketingService.getRealTimeInsights(company, days);
+                List<java.util.Map<String, Object>> metaMetrics = marketingService.getRealTimeInsights(company, startDate,
+                                endDate);
 
                 // Merge Data
                 MetricsSummaryData currentSummary = calculateMergedSummary(localMetrics, metaMetrics, startDate, days);
@@ -155,7 +173,7 @@ public class DashboardService {
                                 .revenueGoal(buildRevenueGoalDto(company))
                                 .weeklyTasks(taskDtos)
                                 .insights(buildInsightDTOs(insights))
-                                .campaigns(buildCampaignSummaries(company, days))
+                                .campaigns(buildCampaignSummaries(company, startDate, endDate))
                                 .recentLeads(buildRecentLeads(company))
                                 .performanceScore(performanceScore)
                                 .operationStatus(determineOperationStatus(performanceScore))
@@ -271,12 +289,11 @@ public class DashboardService {
          * ({@link MetaPaidTrafficGraphService#fetchCampaigns(Company, LocalDate, LocalDate)} — Graph API no período),
          * não os campos agregados em {@code meta_campaigns} (que podem ficar zerados entre syncs).
          */
-        private List<DashboardResponse.CampaignSummaryDTO> buildCampaignSummaries(Company company, int days) {
+        private List<DashboardResponse.CampaignSummaryDTO> buildCampaignSummaries(Company company, LocalDate start,
+                        LocalDate end) {
                 if (company == null) {
                         return List.of();
                 }
-                LocalDate end = LocalDate.now();
-                LocalDate start = end.minusDays(Math.max(0, days - 1));
                 try {
                         List<PaidTrafficAssetRowDTO> rows = metaPaidTrafficGraphService.fetchCampaigns(company, start,
                                         end);
@@ -1172,7 +1189,9 @@ public class DashboardService {
                 if (company == null || !openAiService.isChatEnabled())
                         return;
 
-                List<DashboardResponse.CampaignSummaryDTO> campaigns = buildCampaignSummaries(company, 30);
+                LocalDate end = LocalDate.now();
+                LocalDate start = end.minusDays(29);
+                List<DashboardResponse.CampaignSummaryDTO> campaigns = buildCampaignSummaries(company, start, end);
                 if (campaigns.isEmpty())
                         return;
 

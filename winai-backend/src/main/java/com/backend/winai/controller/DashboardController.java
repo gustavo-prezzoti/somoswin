@@ -21,6 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 @RestController
@@ -39,14 +40,39 @@ public class DashboardController {
         @GetMapping
         public ResponseEntity<DashboardResponse> getDashboard(
                         @AuthenticationPrincipal User user,
-                        @RequestParam(defaultValue = "7") int days) {
+                        @RequestParam(required = false) Integer year,
+                        @RequestParam(required = false) Integer month,
+                        @RequestParam(required = false) Integer days) {
 
                 // Busca o usuário com a Company já carregada (evita
                 // LazyInitializationException)
                 User userWithCompany = userRepository.findByEmailWithCompany(user.getEmail())
                                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
-                DashboardResponse dashboard = dashboardService.getDashboardData(userWithCompany, days);
+                LocalDate today = LocalDate.now();
+                LocalDate start;
+                LocalDate end;
+                if (year != null && month != null && month >= 1 && month <= 12) {
+                        YearMonth ym = YearMonth.of(year, month);
+                        start = ym.atDay(1);
+                        end = ym.atEndOfMonth();
+                        if (end.isAfter(today)) {
+                                end = today;
+                        }
+                        if (start.isAfter(today)) {
+                                start = today;
+                                end = today;
+                        }
+                } else if (days != null && days > 0) {
+                        end = today;
+                        start = end.minusDays(days - 1);
+                } else {
+                        YearMonth currentYm = YearMonth.from(today);
+                        start = currentYm.atDay(1);
+                        end = today;
+                }
+
+                DashboardResponse dashboard = dashboardService.getDashboardData(userWithCompany, start, end);
                 return ResponseEntity.ok(dashboard);
         }
 

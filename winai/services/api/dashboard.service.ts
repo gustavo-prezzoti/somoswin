@@ -202,12 +202,27 @@ export interface InsightDTO {
 // Service
 // ============================================
 
+export type DashboardQuery =
+    | { year: number; month: number }
+    | { days: number };
+
 export const dashboardService = {
     /**
-     * Obtém os dados do dashboard
+     * Período: mês civil (`year` + `month` 1–12) ou janela legada `days` (últimos N dias).
+     * Sem parâmetros, o backend usa o mês corrente.
      */
-    async getDashboard(days: number = 7): Promise<DashboardData> {
-        return httpClient.get<DashboardData>(`/dashboard?days=${days}`);
+    async getDashboard(period?: DashboardQuery): Promise<DashboardData> {
+        const params = new URLSearchParams();
+        if (period) {
+            if ('days' in period) {
+                params.set('days', String(period.days));
+            } else {
+                params.set('year', String(period.year));
+                params.set('month', String(period.month));
+            }
+        }
+        const q = params.toString();
+        return httpClient.get<DashboardData>(q ? `/dashboard?${q}` : '/dashboard');
     },
 
     /**

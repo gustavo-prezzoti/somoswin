@@ -332,6 +332,16 @@ public class MarketingService {
     }
 
     public java.util.List<Map<String, Object>> getRealTimeInsights(Company company, int days) {
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(Math.max(0, days - 1));
+        return getRealTimeInsights(company, startDate, endDate);
+    }
+
+    /**
+     * Insights diários (Graph API) no intervalo [startDate, endDate] (inclusivo, limitado a hoje no fim).
+     */
+    public java.util.List<Map<String, Object>> getRealTimeInsights(Company company, LocalDate startDate,
+            LocalDate endDate) {
         Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
         if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()
                 || connectionOpt.get().getAdAccountId() == null) {
@@ -342,9 +352,13 @@ public class MarketingService {
         String accessToken = conn.getAccessToken();
 
         try {
-            LocalDate endDate = LocalDate.now();
-            // Alinha com o dashboard: ex. days=7 → 7 dias inclusive (hoje e os 6 anteriores).
-            LocalDate startDate = endDate.minusDays(Math.max(0, days - 1));
+            LocalDate today = LocalDate.now();
+            if (endDate.isAfter(today)) {
+                endDate = today;
+            }
+            if (startDate.isAfter(endDate)) {
+                return new ArrayList<>();
+            }
             String timeRange = String.format("{\"since\":\"%s\",\"until\":\"%s\"}", startDate, endDate);
 
             // Fetch daily breakdown

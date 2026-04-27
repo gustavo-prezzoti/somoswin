@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
@@ -11,12 +11,14 @@ import {
   ArrowDownRight,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Activity,
   Edit2,
   FileDown,
   Target,
   Loader2,
   RefreshCw,
+  Calendar,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BodyPortal } from './ui/BodyPortal';
@@ -37,27 +39,172 @@ import {
   GoalDTO,
   RevenueGoalDTO,
 } from '../services/api/dashboard.service';
-import { marketingService, PaidTrafficAssetRow } from '../services/api/marketing.service';
-
-type ReportRange = '7' | '30' | '90';
+import {
+  marketingService,
+  PaidTrafficAssetRow,
+  type PaidTrafficPlatform,
+} from '../services/api/marketing.service';
 
 const EFFICIENCY_PAGE_SIZE = 8;
+const MONTH_OPTION_COUNT = 24;
 
-function daysFromRange(r: ReportRange): number {
-  return r === '7' ? 7 : r === '30' ? 30 : 90;
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Mesmo critério do backend (dashboard / paid-traffic): N dias inclusive até hoje. */
-function dateRangeForReportDays(days: number): { startDate: string; endDate: string } {
-  const end = new Date();
-  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - Math.max(0, days - 1));
-  const ymd = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function buildMonthOptions(): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < MONTH_OPTION_COUNT; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const value = `${y}-${String(m).padStart(2, '0')}`;
+    const raw = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const label = raw.charAt(0).toUpperCase() + raw.slice(1);
+    out.push({ value, label });
+  }
+  return out;
+}
+
+function parseYm(value: string): { year: number; month: number } {
+  const [y, m] = value.split('-').map(Number);
+  return { year: y, month: m };
+}
+
+function currentYmValue(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Mesmo critério do backend (mês completo ou até hoje no mês corrente). */
+function dateRangeForYearMonth(year: number, month: number): { startDate: string; endDate: string } {
+  const start = new Date(year, month - 1, 1);
+  const now = new Date();
+  const isCurrent = year === now.getFullYear() && month === now.getMonth() + 1;
+  const end = isCurrent ? now : new Date(year, month, 0);
   return { startDate: ymd(start), endDate: ymd(end) };
 }
 
-/** Linhas da tabela — alinhadas ao que a tela Tráfego Pago mostra (Graph API por campanha). */
+type MonthSelectProps = {
+  value: string;
+  onChange: (ym: string) => void;
+  options: { value: string; label: string }[];
+};
+
+function MonthSelect({ value, onChange, options }: MonthSelectProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const [menuBox, setMenuBox] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const updateMenuPosition = useCallback(() => {
+    const el = buttonRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setMenuBox({ top: r.bottom + 6, left: r.left, width: Math.max(r.width, 14 * 16) });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuBox(null);
+      return;
+    }
+    updateMenuPosition();
+    window.addEventListener('scroll', updateMenuPosition, true);
+    window.addEventListener('resize', updateMenuPosition);
+    return () => {
+      window.removeEventListener('scroll', updateMenuPosition, true);
+      window.removeEventListener('resize', updateMenuPosition);
+    };
+  }, [open, updateMenuPosition]);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? 'Mês';
+  const dropdown =
+    open && menuBox ? (
+      <ul
+        ref={menuRef}
+        role="listbox"
+        style={{
+          position: 'fixed',
+          top: menuBox.top,
+          left: menuBox.left,
+          width: menuBox.width,
+          zIndex: 10000,
+        }}
+        className="max-h-60 overflow-y-auto rounded-2xl border border-gray-100 bg-white py-1.5 shadow-xl shadow-emerald-900/10"
+      >
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <li key={o.value} role="option" aria-selected={active}>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className={`w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest transition-colors ${
+                  active
+                    ? 'bg-emerald-50 text-emerald-700 shadow-[inset_3px_0_0_#10b981]'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {o.label}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    ) : null;
+
+  return (
+    <div ref={rootRef} className="relative w-full min-w-[14rem] sm:min-w-[16rem] max-w-md">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="relative w-full flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-center shadow-sm transition-all hover:border-emerald-500/35 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
+      >
+        <Calendar size={16} className="shrink-0 text-emerald-600" aria-hidden />
+        <span className="block min-w-0 flex-1 px-2 text-[10px] font-black uppercase tracking-widest text-gray-800 truncate text-center">
+          {selectedLabel}
+        </span>
+        <ChevronDown
+          size={15}
+          className={`shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
+      {dropdown}
+    </div>
+  );
+}
+
+/** Linhas da tabela — alinhadas ao que a tela Tráfego Pago mostra (por campanha e canal). */
 type EfficiencyTableRow = {
+  channel: string;
   name: string;
   objective?: string;
   status?: string;
@@ -66,6 +213,17 @@ type EfficiencyTableRow = {
   cpl: string;
   roas: string;
 };
+
+function channelLabelFromPlatform(platform: PaidTrafficPlatform): string {
+  return platform === 'META' ? 'Meta Ads' : 'Google Ads';
+}
+
+function efficiencyChannelPillClass(channel: string): string {
+  if (channel === 'Google Ads') {
+    return 'bg-sky-50 text-sky-800 ring-1 ring-sky-100';
+  }
+  return 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100';
+}
 
 const DASH_PLACEHOLDER = '—';
 
@@ -107,7 +265,11 @@ function isNonConversionObjective(obj?: string): boolean {
   );
 }
 
-function efficiencyRowsFromPaidTraffic(rows: PaidTrafficAssetRow[]): EfficiencyTableRow[] {
+function efficiencyRowsFromPaidTraffic(
+  rows: PaidTrafficAssetRow[],
+  platform: PaidTrafficPlatform
+): EfficiencyTableRow[] {
+  const channel = channelLabelFromPlatform(platform);
   return rows
     .filter((r) => r.level === 'CAMPAIGN')
     .map((r) => {
@@ -120,6 +282,7 @@ function efficiencyRowsFromPaidTraffic(rows: PaidTrafficAssetRow[]): EfficiencyT
       const showCpl = conversions > 0;
       const showRoas = roasNum > 0;
       return {
+        channel,
         name: r.name,
         objective: shortObjective(r.objective),
         status: r.status,
@@ -141,6 +304,7 @@ function efficiencyRowsFromDashboardCampaigns(campaigns: CampaignSummaryDTO[]): 
   return campaigns.map((c) => {
     const nonConv = isNonConversionObjective(c.objective);
     return {
+      channel: 'Meta Ads',
       name: c.name,
       objective: shortObjective(c.objective),
       status: c.status,
@@ -489,7 +653,8 @@ const MonthlyGoalsWidget = ({ data }: { data: ReturnType<typeof buildMonthlyGoal
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [reportRange, setReportRange] = useState<ReportRange>('30');
+  const [selectedYearMonth, setSelectedYearMonth] = useState(() => currentYmValue());
+  const monthOptions = useMemo(() => buildMonthOptions(), []);
   const [data, setData] = useState<DashboardData | null>(null);
   const [revenue, setRevenue] = useState<RevenueGoalDTO | null>(null);
   const [tasks, setTasks] = useState<DashboardWeeklyTask[]>([]);
@@ -499,21 +664,21 @@ const Dashboard: React.FC = () => {
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [tempGoal, setTempGoal] = useState('100000');
   const [tempRevenue, setTempRevenue] = useState('0');
-  /** Quando preenchido, a tabela "Análise de Eficiência" usa a mesma API que Tráfego Pago (métricas por campanha na Meta). */
-  const [metaEfficiencyRows, setMetaEfficiencyRows] = useState<EfficiencyTableRow[] | null>(null);
+  /** Quando preenchido, a tabela usa a API de Tráfego Pago (Meta + Google), por campanha e canal. */
+  const [paidEfficiencyRows, setPaidEfficiencyRows] = useState<EfficiencyTableRow[] | null>(null);
   const [efficiencyPage, setEfficiencyPage] = useState(1);
 
   const efficiencyTableRows = useMemo((): EfficiencyTableRow[] => {
     if (!data) return [];
     const campaigns = data.campaigns ?? [];
-    return metaEfficiencyRows && metaEfficiencyRows.length > 0
-      ? metaEfficiencyRows
+    return paidEfficiencyRows && paidEfficiencyRows.length > 0
+      ? paidEfficiencyRows
       : efficiencyRowsFromDashboardCampaigns(campaigns);
-  }, [data, metaEfficiencyRows]);
+  }, [data, paidEfficiencyRows]);
 
   useEffect(() => {
     setEfficiencyPage(1);
-  }, [reportRange]);
+  }, [selectedYearMonth]);
 
   useEffect(() => {
     const total = Math.max(1, Math.ceil(efficiencyTableRows.length / EFFICIENCY_PAGE_SIZE));
@@ -523,16 +688,23 @@ const Dashboard: React.FC = () => {
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setMetaEfficiencyRows(null);
+    setPaidEfficiencyRows(null);
     try {
-      const days = daysFromRange(reportRange);
-      const { startDate, endDate } = dateRangeForReportDays(days);
+      const { year, month } = parseYm(selectedYearMonth);
+      const { startDate, endDate } = dateRangeForYearMonth(year, month);
 
-      const [d, paidMeta] = await Promise.all([
-        dashboardService.getDashboard(days),
+      const [d, paidMeta, paidGoogle] = await Promise.all([
+        dashboardService.getDashboard({ year, month }),
         marketingService
           .getPaidTrafficOverview({
             platform: 'META',
+            startDate,
+            endDate,
+          })
+          .catch(() => null),
+        marketingService
+          .getPaidTrafficOverview({
+            platform: 'GOOGLE',
             startDate,
             endDate,
           })
@@ -546,13 +718,25 @@ const Dashboard: React.FC = () => {
       if (rg?.targetValue != null) setTempGoal(String(rg.targetValue));
       if (rg?.currentValue != null) setTempRevenue(String(rg.currentValue));
 
+      const merged: EfficiencyTableRow[] = [];
       if (
         paidMeta?.connected &&
         paidMeta.tableLevel === 'CAMPAIGNS' &&
         paidMeta.rows &&
         paidMeta.rows.length > 0
       ) {
-        setMetaEfficiencyRows(efficiencyRowsFromPaidTraffic(paidMeta.rows));
+        merged.push(...efficiencyRowsFromPaidTraffic(paidMeta.rows, 'META'));
+      }
+      if (
+        paidGoogle?.connected &&
+        paidGoogle.tableLevel === 'CAMPAIGNS' &&
+        paidGoogle.rows &&
+        paidGoogle.rows.length > 0
+      ) {
+        merged.push(...efficiencyRowsFromPaidTraffic(paidGoogle.rows, 'GOOGLE'));
+      }
+      if (merged.length > 0) {
+        setPaidEfficiencyRows(merged);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar dashboard';
@@ -560,7 +744,7 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [reportRange]);
+  }, [selectedYearMonth]);
 
   useEffect(() => {
     loadDashboard();
@@ -619,8 +803,12 @@ const Dashboard: React.FC = () => {
     if (!data) return;
     const docPdf = new jsPDF();
     const timestamp = new Date().toLocaleString('pt-BR');
-    const rangeText =
-      reportRange === '7' ? 'Últimos 7 Dias' : reportRange === '30' ? 'Últimos 30 Dias' : 'Últimos 90 Dias';
+    const { year: ry, month: rm } = parseYm(selectedYearMonth);
+    const rangeText = new Date(ry, rm - 1, 1).toLocaleDateString('pt-BR', {
+      month: 'long',
+      year: 'numeric',
+    });
+    const rangeTextCap = rangeText.charAt(0).toUpperCase() + rangeText.slice(1);
 
     docPdf.setFillColor(15, 23, 42);
     docPdf.rect(0, 0, 210, 50, 'F');
@@ -638,7 +826,7 @@ const Dashboard: React.FC = () => {
     docPdf.setFontSize(9);
     docPdf.setFont('helvetica', 'normal');
     docPdf.text(`GERADO EM: ${timestamp.toUpperCase()}`, 210 - 15, 32, { align: 'right' });
-    docPdf.text(`PERÍODO: ${rangeText.toUpperCase()}`, 210 - 15, 37, { align: 'right' });
+    docPdf.text(`PERÍODO: ${rangeTextCap.toUpperCase()}`, 210 - 15, 37, { align: 'right' });
 
     const leads = data.metrics.leadsCaptured.value;
     const cpl = data.metrics.cplAverage.value;
@@ -667,17 +855,18 @@ const Dashboard: React.FC = () => {
     });
 
     const pdfCampaignRows =
-      metaEfficiencyRows && metaEfficiencyRows.length > 0
-        ? metaEfficiencyRows
+      paidEfficiencyRows && paidEfficiencyRows.length > 0
+        ? paidEfficiencyRows
         : efficiencyRowsFromDashboardCampaigns(data.campaigns ?? []);
     if (pdfCampaignRows.length > 0) {
       docPdf.setFontSize(14);
       docPdf.setFont('helvetica', 'bold');
-      docPdf.text('2. CAMPANHAS (META)', 15, (docPdf as any).lastAutoTable.finalY + 15);
+      docPdf.text('2. EFICIÊNCIA POR CANAL', 15, (docPdf as any).lastAutoTable.finalY + 15);
       autoTable(docPdf, {
         startY: (docPdf as any).lastAutoTable.finalY + 20,
-        head: [['Campanha', 'Objetivo', 'Invest.', 'Leads', 'CPL', 'ROAS']],
+        head: [['Canal', 'Campanha', 'Objetivo', 'Invest.', 'Leads', 'CPL', 'ROAS']],
         body: pdfCampaignRows.map((c) => [
+          c.channel,
           c.name,
           c.objective ?? '—',
           c.spend,
@@ -759,20 +948,14 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-          <div className="flex bg-gray-50 p-1 rounded-2xl border border-gray-100 w-full sm:w-auto">
-            {(['7', '30', '90'] as const).map((range) => (
-              <button
-                key={range}
-                type="button"
-                onClick={() => setReportRange(range)}
-                className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  reportRange === range ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                {range === '7' ? '7D' : range === '30' ? '30D' : '90D'}
-              </button>
-            ))}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full lg:w-auto">
+          <div className="w-full sm:w-auto">
+            <label className="sr-only">Período (mês)</label>
+            <MonthSelect
+              value={selectedYearMonth}
+              onChange={setSelectedYearMonth}
+              options={monthOptions}
+            />
           </div>
           <button
             type="button"
@@ -921,27 +1104,35 @@ const Dashboard: React.FC = () => {
         <div className="lg:col-span-2">
           <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm h-full">
             <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-2">
-                <Activity size={20} className="text-emerald-600" />
-                <h2 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Análise de Eficiência</h2>
+              <div>
+                <div className="flex items-center gap-2">
+                  <Activity size={20} className="text-emerald-600" />
+                  <h2 className="text-xl font-black text-gray-900 tracking-tighter uppercase italic">Análise de Eficiência</h2>
+                </div>
+                <p className="mt-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-8">
+                  Por canal · Meta Ads e Google Ads
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => navigate('/campanhas')}
-                className="text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:underline"
+                className="text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:underline shrink-0"
               >
                 Campanhas
               </button>
             </div>
             {efficiencyTableRows.length === 0 ? (
               <p className="text-sm text-gray-500 font-medium">
-                Sem campanhas Meta no período. Conecte o Meta em Configurações e sincronize em Campanhas para preencher esta tabela com dados reais.
+                Sem campanhas no período nas contas conectadas. Conecte Meta Ads ou Google Ads em Configurações e use Tráfego Pago para sincronizar dados.
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[640px]">
                   <thead>
                     <tr className="border-b border-gray-50">
+                      <th className="pb-4 pr-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                        Canal
+                      </th>
                       <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Campanha</th>
                       <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Invest.</th>
                       <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Leads</th>
@@ -952,10 +1143,17 @@ const Dashboard: React.FC = () => {
                   <tbody className="divide-y divide-gray-50">
                     {efficiencyRowsPage.map((item, idx) => (
                       <tr
-                        key={`${item.name}-${(efficiencyPageSafe - 1) * EFFICIENCY_PAGE_SIZE + idx}`}
+                        key={`${item.channel}-${item.name}-${(efficiencyPageSafe - 1) * EFFICIENCY_PAGE_SIZE + idx}`}
                         className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
                         onClick={() => navigate('/campanhas')}
                       >
+                        <td className="py-4 pr-3 align-top">
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${efficiencyChannelPillClass(item.channel)}`}
+                          >
+                            {item.channel}
+                          </span>
+                        </td>
                         <td className="py-4 pr-4">
                           <span className="text-xs font-bold text-gray-800 line-clamp-1">{item.name}</span>
                           {(item.objective || item.status) && (
