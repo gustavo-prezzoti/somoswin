@@ -31,6 +31,7 @@ import {
   StrategicPlaybookClientDTO,
 } from '../services/api/dashboard.service';
 import { BodyPortal } from './ui';
+import { activityOverlapsPlaybookMonth } from '../utils/playbookActivity';
 
 type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 type ViewMode = 'TABLE' | 'GANTT' | 'CARDS';
@@ -610,10 +611,8 @@ const Goals: React.FC = () => {
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[1, 2, 3].map((month) => {
-                const monthStart = (month - 1) * 30 + 1;
-                const monthEndDay = month * 30;
-                const acts = strategicPlaybook.activities!.filter(
-                  (a) => a.start >= monthStart && a.start <= monthEndDay
+                const acts = strategicPlaybook.activities!.filter((a) =>
+                  activityOverlapsPlaybookMonth(a.start, a.duration, month)
                 );
                 return (
                   <div key={month} className="bg-white/90 rounded-2xl border border-black/5 p-4">

@@ -27,6 +27,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import adminService, { PlaybookActivityRow } from '../../../services/adminService';
 import { getErrorMessage } from '../../../services/utils/errorHelper';
 import { DIAGNOSIS_BLOCKS } from './diagnosisQuestions';
+import { activityOverlapsPlaybookMonth } from '../../../utils/playbookActivity';
 
 /** API pode devolver array, ou objeto com chaves numéricas; evita Gantt vazio. */
 function parsePlaybookActivities(raw: unknown): PlaybookActivityRow[] {
@@ -559,11 +560,9 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
                   Adicionar Atividade
                 </button>
                 <ul className="space-y-4">
-                  {activities.filter(a => {
-                    const monthStart = (month - 1) * 30 + 1;
-                    const monthEnd = month * 30;
-                    return a.start >= monthStart && a.start <= monthEnd;
-                  }).map(activity => (
+                  {activities.filter((a) =>
+                    activityOverlapsPlaybookMonth(a.start, a.duration, month)
+                  ).map(activity => (
                     <li key={activity.id} className="flex items-start gap-3 text-sm text-gray-600 group">
                       <CheckCircle2 size={16} className={`${activity.status === 'completed' ? 'text-emerald-500' : activity.status === 'in_progress' ? 'text-orange-500' : 'text-gray-300'} mt-0.5 shrink-0`} />
                       <div className="flex-1">
