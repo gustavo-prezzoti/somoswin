@@ -28,6 +28,7 @@ import adminService, { PlaybookActivityRow } from '../../../services/adminServic
 import { getErrorMessage } from '../../../services/utils/errorHelper';
 import { DIAGNOSIS_BLOCKS } from './diagnosisQuestions';
 import { activityOverlapsPlaybookMonth } from '../../../utils/playbookActivity';
+import { formatStrategicCanalLabel } from '../../../utils/strategicCanalLabel';
 
 /** API pode devolver array, ou objeto com chaves numéricas; evita Gantt vazio. */
 function parsePlaybookActivities(raw: unknown): PlaybookActivityRow[] {
@@ -436,7 +437,8 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
             </div>
             <h2 className="text-5xl font-black italic tracking-tighter uppercase">Seu Playbook de 90 Dias</h2>
             <p className="text-gray-400">
-              Canal prioritário: <span className="text-emerald-500 font-bold uppercase">{canalPrioritario.replace('_', ' ')}</span>.
+              Canal prioritário:{' '}
+              <span className="text-emerald-500 font-bold">{formatStrategicCanalLabel(canalPrioritario)}</span>.
             </p>
           </div>
           <div className="flex gap-3">

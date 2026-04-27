@@ -32,6 +32,7 @@ import {
 } from '../services/api/dashboard.service';
 import { BodyPortal } from './ui';
 import { activityOverlapsPlaybookMonth } from '../utils/playbookActivity';
+import { formatStrategicCanalLabel } from '../utils/strategicCanalLabel';
 
 type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 type ViewMode = 'TABLE' | 'GANTT' | 'CARDS';
@@ -633,8 +634,8 @@ const Goals: React.FC = () => {
             </div>
             <p className="text-sm text-gray-600">
               Canal prioritário:{' '}
-              <strong className="text-emerald-700 uppercase">
-                {(strategicPlaybook.canalPrioritario || '').replace(/_/g, ' ')}
+              <strong className="text-emerald-700">
+                {formatStrategicCanalLabel(strategicPlaybook.canalPrioritario)}
               </strong>
               {strategicPlaybook.publishedAt && (
                 <span className="text-gray-400 font-medium text-xs ml-2">
