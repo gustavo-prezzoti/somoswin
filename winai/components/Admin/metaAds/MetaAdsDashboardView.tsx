@@ -11,74 +11,10 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { AdminMetaAdsCompanyRow, MetaCampaignListItem } from '../../../services/adminService';
+import type { UtmPerformanceResponse } from '../../../services/api/marketing.service';
 import CreateCampaignModal from './CreateCampaignModal';
 
 const CAMPAIGN_PAGE_SIZE = 10;
-
-interface UTMPerformanceRow {
-    id: string;
-    utm: string;
-    campaign: string;
-    creative: string;
-    leads: number;
-    cpl: string;
-    roas: string;
-    status: 'EXCELENTE' | 'BOM' | 'ATENCAO';
-}
-
-/** Mock UTM — endpoint admin virá depois (plano ui-first). */
-const MOCK_UTM_PERFORMANCE: UTMPerformanceRow[] = [
-    {
-        id: '1',
-        utm: '[ref=VENDAS_META-CONJ_01-ANUN_01-CRIATIVO_10]',
-        campaign: 'VENDAS_META',
-        creative: 'CRIATIVO_10',
-        leads: 145,
-        cpl: 'R$ 8,5',
-        roas: '6.2x',
-        status: 'EXCELENTE',
-    },
-    {
-        id: '2',
-        utm: '[ref=SEARCH_BR-B2B_CONJ-AD_01-TEXT_01]',
-        campaign: 'SEARCH_BR',
-        creative: 'TEXT_01',
-        leads: 98,
-        cpl: 'R$ 12,4',
-        roas: '4.8x',
-        status: 'BOM',
-    },
-    {
-        id: '3',
-        utm: '[ref=FB_CONVERSIONS-CONJ_02-ANUN_02-CRIATIVO_05]',
-        campaign: 'FB_CONVERSIONS',
-        creative: 'CRIATIVO_05',
-        leads: 76,
-        cpl: 'R$ 15,2',
-        roas: '3.5x',
-        status: 'BOM',
-    },
-    {
-        id: '4',
-        utm: '[ref=RETARGETING_FB-VISITORS_30D-AD_05-VIDEO_02]',
-        campaign: 'RETARGETING_FB',
-        creative: 'VIDEO_02',
-        leads: 54,
-        cpl: 'R$ 18,9',
-        roas: '7.1x',
-        status: 'EXCELENTE',
-    },
-    {
-        id: '5',
-        utm: '[ref=VENDAS_META-CONJ_03-ANUN_04-CRIATIVO_08]',
-        campaign: 'VENDAS_META',
-        creative: 'CRIATIVO_08',
-        leads: 32,
-        cpl: 'R$ 25,6',
-        roas: '2.1x',
-        status: 'ATENCAO',
-    },
-];
 
 function formatMoney(n: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
@@ -103,7 +39,10 @@ function campaignMatchesFilter(c: MetaCampaignListItem, filterLabel: string): bo
     return true;
 }
 
-function computeKpis(rows: MetaCampaignListItem[]): {
+function computeKpis(
+    rows: MetaCampaignListItem[],
+    extras?: { crmRevenueTotal?: number | null },
+): {
     label: string;
     value: string;
     color: string;
@@ -120,6 +59,10 @@ function computeKpis(rows: MetaCampaignListItem[]): {
     const cpcAvg = clicks > 0 ? spend / clicks : null;
     const costPerConv = conversions > 0 ? spend / conversions : null;
 
+    const rev = extras?.crmRevenueTotal;
+    const roasVal =
+        rev != null && rev > 0 && spend > 0 ? rev / spend : null;
+
     return [
         { label: 'CAMPANHAS ATIVAS', value: String(activeCount), color: 'text-blue-500' },
         { label: 'TOTAL GASTO', value: spend > 0 ? formatMoney(spend) : '—', color: 'text-emerald-500' },
@@ -133,8 +76,17 @@ function computeKpis(rows: MetaCampaignListItem[]): {
             value: costPerConv != null ? formatMoney(costPerConv) : '—',
             color: 'text-orange-500',
         },
-        { label: 'ROAS', value: '—', sub: 'receita / gasto', color: 'text-emerald-500' },
-        { label: 'RECEITA TOTAL', value: '—', color: 'text-emerald-500' },
+        {
+            label: 'ROAS',
+            value: roasVal != null ? `${roasVal.toFixed(2)}x` : '—',
+            sub: 'receita CRM / gasto campanhas',
+            color: 'text-emerald-500',
+        },
+        {
+            label: 'RECEITA TOTAL',
+            value: rev != null && rev > 0 ? formatMoney(rev) : '—',
+            color: 'text-emerald-500',
+        },
     ];
 }
 
@@ -147,6 +99,23 @@ function cardStatus(row: AdminMetaAdsCompanyRow): 'active' | 'paused' | 'warning
 function displayAccountIdSuffix(row: AdminMetaAdsCompanyRow): string {
     const raw = row.adAccountId?.replace(/\D/g, '') ?? row.companyId.replace(/-/g, '');
     return raw.slice(0, 8) + '482910';
+}
+
+function formatCardSpend(row: AdminMetaAdsCompanyRow): string {
+    const v = row.syncedSpendTotal;
+    return v != null && v > 0 ? formatMoney(v) : '—';
+}
+
+function formatCardRoas(row: AdminMetaAdsCompanyRow): string {
+    const spend = row.syncedSpendTotal ?? 0;
+    const rev = row.estimatedRevenueTotal ?? 0;
+    if (spend > 0 && rev > 0) return `${(rev / spend).toFixed(2)}x`;
+    return '—';
+}
+
+function formatCardFooterConversions(row: AdminMetaAdsCompanyRow): string {
+    const c = row.syncedConversionsTotal;
+    return c != null && c > 0 ? `${formatIntCompact(c)} conv.` : '— conv.';
 }
 
 export interface MetaAdsDashboardViewProps {
@@ -162,6 +131,8 @@ export interface MetaAdsDashboardViewProps {
     syncing?: boolean;
     staffBanner?: React.ReactNode;
     errorBanner?: React.ReactNode | null;
+    utmPerformance: UtmPerformanceResponse | null;
+    utmLoading: boolean;
 }
 
 const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
@@ -177,6 +148,8 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
     syncing,
     staffBanner,
     errorBanner,
+    utmPerformance,
+    utmLoading,
 }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
@@ -206,7 +179,13 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
         return campaigns.filter((c) => campaignMatchesFilter(c, activeFilter));
     }, [campaigns, activeFilter]);
 
-    const kpis = useMemo(() => computeKpis(kpiRowsForFilter), [kpiRowsForFilter]);
+    const kpis = useMemo(
+        () =>
+            computeKpis(kpiRowsForFilter, {
+                crmRevenueTotal: selectedCompany?.estimatedRevenueTotal ?? null,
+            }),
+        [kpiRowsForFilter, selectedCompany?.estimatedRevenueTotal],
+    );
 
     const pagedCampaigns = useMemo(() => {
         return filteredCampaignRows.slice(0, CAMPAIGN_PAGE_SIZE);
@@ -245,14 +224,7 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
         'Total investido',
     ];
 
-    const bestUtmRoas = useMemo(() => {
-        let max = 0;
-        MOCK_UTM_PERFORMANCE.forEach((r) => {
-            const v = parseFloat(r.roas);
-            if (!Number.isNaN(v) && v > max) max = v;
-        });
-        return max;
-    }, []);
+    const bestUtmRoas = utmPerformance?.bestRoas ?? 0;
 
     const detailTitle =
         accountNameOverride?.trim() ||
@@ -358,17 +330,21 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
                                             <span className="text-[8px] font-bold text-gray-400 uppercase block mb-1">
                                                 Investimento
                                             </span>
-                                            <span className="text-sm font-black italic tracking-tight text-[#141414]">—</span>
+                                            <span className="text-sm font-black italic tracking-tight text-[#141414]">
+                                                {formatCardSpend(row)}
+                                            </span>
                                         </div>
                                         <div>
                                             <span className="text-[8px] font-bold text-gray-400 uppercase block mb-1">ROAS</span>
-                                            <span className="text-sm font-black italic tracking-tight text-emerald-500">—</span>
+                                            <span className="text-sm font-black italic tracking-tight text-emerald-500">
+                                                {formatCardRoas(row)}
+                                            </span>
                                         </div>
                                     </div>
 
                                     <div className="mt-6 pt-6 border-t border-black/5 flex items-center justify-between">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                            — Leads
+                                            {formatCardFooterConversions(row)}
                                         </span>
                                         <ChevronRight
                                             size={16}
@@ -675,84 +651,100 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
                             <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl self-start lg:self-center">
                                 <TrendingUp size={14} />
                                 <span className="text-[10px] font-black uppercase tracking-widest">
-                                    Melhor ROAS: {bestUtmRoas.toFixed(1)}x
+                                    Melhor ROAS:{' '}
+                                    {bestUtmRoas > 0 ? `${bestUtmRoas.toFixed(1)}x` : '—'}
                                 </span>
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-50/50">
-                                        <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                                            Referência UTM [REF=...]
-                                        </th>
-                                        <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
-                                            Leads
-                                        </th>
-                                        <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
-                                            CPL
-                                        </th>
-                                        <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
-                                            ROAS
-                                        </th>
-                                        <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
-                                            Status
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-black/5">
-                                    {MOCK_UTM_PERFORMANCE.map((item) => (
-                                        <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="px-8 py-6">
-                                                <div className="flex flex-col gap-2">
-                                                    <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black tracking-tight w-fit max-w-full break-all">
-                                                        {item.utm}
-                                                    </span>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                                        {item.campaign} • {item.creative}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-8 py-6 text-center">
-                                                <span className="text-lg font-black italic tracking-tighter text-[#141414]">
-                                                    {item.leads}
-                                                </span>
-                                            </td>
-                                            <td className="px-8 py-6 text-center">
-                                                <span className="text-sm font-bold text-gray-600">{item.cpl}</span>
-                                            </td>
-                                            <td className="px-8 py-6 text-center">
-                                                <span
-                                                    className={`text-lg font-black italic tracking-tighter ${
-                                                        parseFloat(item.roas) >= 4
-                                                            ? 'text-emerald-500'
-                                                            : parseFloat(item.roas) >= 2
-                                                              ? 'text-emerald-400'
-                                                              : 'text-orange-500'
-                                                    }`}
-                                                >
-                                                    {item.roas}
-                                                </span>
-                                            </td>
-                                            <td className="px-8 py-6 text-center">
-                                                <span
-                                                    className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                                                        item.status === 'EXCELENTE'
-                                                            ? 'bg-emerald-50 text-emerald-600'
-                                                            : item.status === 'BOM'
-                                                              ? 'bg-blue-50 text-blue-600'
-                                                              : 'bg-orange-50 text-orange-600'
-                                                    }`}
-                                                >
-                                                    {item.status}
-                                                </span>
-                                            </td>
+                        {utmLoading ? (
+                            <div className="flex justify-center py-16">
+                                <RefreshCw size={28} className="animate-spin text-emerald-500" />
+                            </div>
+                        ) : utmPerformance?.emptyMessage ? (
+                            <div className="px-8 py-12 text-center text-sm text-gray-500">{utmPerformance.emptyMessage}</div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50/50">
+                                            <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                                Referência UTM [REF=...]
+                                            </th>
+                                            <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
+                                                Leads
+                                            </th>
+                                            <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
+                                                CPL
+                                            </th>
+                                            <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
+                                                ROAS
+                                            </th>
+                                            <th className="px-8 py-6 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
+                                                Status
+                                            </th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody className="divide-y divide-black/5">
+                                        {(utmPerformance?.rows ?? []).map((item) => (
+                                            <tr key={item.groupKey} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="px-8 py-6">
+                                                    <div className="flex flex-col gap-2">
+                                                        {item.refLabel ? (
+                                                            <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black tracking-tight w-fit max-w-full break-all">
+                                                                {item.refLabel}
+                                                            </span>
+                                                        ) : null}
+                                                        <span className="text-[10px] font-bold text-gray-500 normal-case tracking-normal leading-snug max-w-xl">
+                                                            {item.subtitle}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <span className="text-lg font-black italic tracking-tighter text-[#141414]">
+                                                        {item.leads}
+                                                    </span>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <span className="text-sm font-bold text-gray-600">
+                                                        {formatMoney(item.cpl)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <span
+                                                        className={`text-lg font-black italic tracking-tighter ${
+                                                            item.roas >= 4
+                                                                ? 'text-emerald-500'
+                                                                : item.roas >= 2
+                                                                  ? 'text-emerald-400'
+                                                                  : 'text-orange-500'
+                                                        }`}
+                                                    >
+                                                        {item.roas.toFixed(2)}x
+                                                    </span>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <span
+                                                        className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                                                            item.status === 'excelente'
+                                                                ? 'bg-emerald-50 text-emerald-600'
+                                                                : item.status === 'bom'
+                                                                  ? 'bg-blue-50 text-blue-600'
+                                                                  : 'bg-orange-50 text-orange-600'
+                                                        }`}
+                                                    >
+                                                        {item.status}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {(utmPerformance?.rows ?? []).length === 0 && !utmPerformance?.emptyMessage && (
+                                    <div className="text-center py-12 text-gray-500 text-sm">Nenhuma linha.</div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </motion.div>
             )}

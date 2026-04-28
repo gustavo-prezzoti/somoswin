@@ -469,6 +469,16 @@ public class MarketingService {
     public TrafficMetricsResponse getTrafficMetrics(User user, String campaignId, LocalDate startDate, LocalDate endDate) {
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        return getTrafficMetrics(company, campaignId, startDate, endDate);
+    }
+
+    /**
+     * Métricas persistidas (meta_insights) para a empresa — mesmo critério que {@link #getTrafficMetrics(User, String, LocalDate, LocalDate)}.
+     */
+    public TrafficMetricsResponse getTrafficMetrics(Company company, String campaignId, LocalDate startDate, LocalDate endDate) {
+        if (company == null) {
+            return buildEmptyMetrics();
+        }
         Optional<MetaConnection> connectionOpt = metaConnectionRepository.findByCompany(company);
 
         if (connectionOpt.isEmpty() || !connectionOpt.get().isConnected()) {

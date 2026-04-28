@@ -22,6 +22,7 @@ import com.backend.winai.dto.response.AdminConversationSummaryResponse;
 import com.backend.winai.dto.response.CompanyClientNoteResponse;
 import com.backend.winai.dto.request.CreateCompanyClientNoteRequest;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
+import com.backend.winai.dto.marketing.paidtraffic.UtmPerformanceResponse;
 import com.backend.winai.dto.response.AdminEscutaSessionResponse;
 import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
 import com.backend.winai.dto.response.AdminGoalsForCompanyResponse;
@@ -353,6 +354,16 @@ public class AdminController {
     @GetMapping("/meta-ads/companies/{companyId}/campaigns")
     public ResponseEntity<CampaignsListResponse> getMetaAdsCampaigns(@PathVariable UUID companyId) {
         return ResponseEntity.ok(adminService.getAdminMetaAdsCampaigns(companyId));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'metaads', 'read')")
+    @Operation(summary = "Meta Ads — performance UTM por empresa", description = "Mesma lógica que Campanhas no app: leads + gasto Meta no período")
+    @GetMapping("/meta-ads/companies/{companyId}/utm-performance")
+    public ResponseEntity<UtmPerformanceResponse> getMetaAdsUtmPerformance(
+            @PathVariable UUID companyId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ResponseEntity.ok(adminService.getAdminMetaAdsUtmPerformance(companyId, startDate, endDate));
     }
 
     @PreAuthorize("@adminSecurity.hasPermission(authentication, 'metaads', 'update')")

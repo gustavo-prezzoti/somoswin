@@ -42,4 +42,9 @@ public interface MetaCampaignRepository extends JpaRepository<MetaCampaign, UUID
     @Query("SELECT c.id, c.name, COALESCE(SUM(m.spend), 0.0), COALESCE(SUM(m.impressions), 0L), COALESCE(SUM(m.clicks), 0L), COUNT(m) "
             + "FROM MetaCampaign m JOIN m.company c GROUP BY c.id, c.name ORDER BY COALESCE(SUM(m.spend), 0.0) DESC")
     List<Object[]> aggregateSpendByCompany();
+
+    /** Soma por empresa dos insights sincronizados nas linhas de campanha (snapshot último sync). */
+    @Query("SELECT c.id, COALESCE(SUM(m.spend), 0.0), COALESCE(SUM(m.impressions), 0L), COALESCE(SUM(m.clicks), 0L), COALESCE(SUM(m.conversions), 0L) "
+            + "FROM MetaCampaign m JOIN m.company c GROUP BY c.id")
+    List<Object[]> aggregateMetricsByCompany();
 }

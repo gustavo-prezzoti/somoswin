@@ -10,6 +10,7 @@ import com.backend.winai.entity.MetaAd;
 import com.backend.winai.entity.MetaAdSet;
 import com.backend.winai.entity.MetaCampaign;
 import com.backend.winai.entity.User;
+import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.MetaAdRepository;
 import com.backend.winai.repository.MetaAdSetRepository;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Service
@@ -39,6 +41,7 @@ public class PaidTrafficUtmService {
     private static final Pattern META_NUMERIC_ID = Pattern.compile("^\\d{8,}$");
 
     private final LeadRepository leadRepository;
+    private final CompanyRepository companyRepository;
     private final MarketingService marketingService;
     private final MetaPaidTrafficGraphService metaPaidTrafficGraphService;
     private final MetaCampaignRepository metaCampaignRepository;
@@ -46,7 +49,23 @@ public class PaidTrafficUtmService {
     private final MetaAdRepository metaAdRepository;
 
     public UtmPerformanceResponse getPerformance(User user, LocalDate startDate, LocalDate endDate) {
-        Company company = user.getCompany();
+        if (user == null || user.getCompany() == null) {
+            return UtmPerformanceResponse.builder()
+                    .rows(List.of())
+                    .bestRoas(0)
+                    .emptyMessage("Usuário sem empresa.")
+                    .build();
+        }
+        return getPerformanceForCompany(user.getCompany().getId(), startDate, endDate);
+    }
+
+    /**
+     * Mesma lógica que {@link #getPerformance(User, LocalDate, LocalDate)} para uma empresa (admin ou jobs).
+     */
+    public UtmPerformanceResponse getPerformanceForCompany(UUID companyId, LocalDate startDate, LocalDate endDate) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
         LocalDate start = startDate != null ? startDate : LocalDate.now().minusDays(29);
         LocalDate end = endDate != null ? endDate : LocalDate.now();
         if (start.isAfter(end)) {
@@ -95,7 +114,7 @@ public class PaidTrafficUtmService {
                     .build();
         }
 
-        double totalSpend = resolveAccountSpendForPeriod(user, start, end);
+        double totalSpend = resolveAccountSpendForPeriod(company, start, end);
 
         long attributedLeads = byKey.values().stream().mapToLong(a -> a.leadCount).sum();
         double spendPool = totalSpend;
@@ -252,12 +271,12 @@ public class PaidTrafficUtmService {
     }
 
     /** Mesmo gasto da Graph que os KPIs / tabela; fallback para insights persistidos. */
-    private double resolveAccountSpendForPeriod(User user, LocalDate start, LocalDate end) {
-        Optional<AccountInsightTotals> g = metaPaidTrafficGraphService.fetchAccountTotals(user, start, end);
+    private double resolveAccountSpendForPeriod(Company company, LocalDate start, LocalDate end) {
+        Optional<AccountInsightTotals> g = metaPaidTrafficGraphService.fetchAccountTotals(company, start, end);
         if (g.isPresent()) {
             return g.get().getSpend();
         }
-        TrafficMetricsResponse metrics = marketingService.getTrafficMetrics(user, null, start, end);
+        TrafficMetricsResponse metrics = marketingService.getTrafficMetrics(company, null, start, end);
         return parseMoney(metrics.getInvestment() != null ? metrics.getInvestment().getValue() : "0");
     }
 

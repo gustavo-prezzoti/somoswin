@@ -387,7 +387,17 @@ public class MetaPaidTrafficGraphService {
      * Totais da conta ({@code act_…/insights}) no intervalo — mesmo critério de período da tabela de campanhas.
      */
     public Optional<AccountInsightTotals> fetchAccountTotals(User user, LocalDate start, LocalDate end) {
-        Optional<MetaConnection> conn = connection(user);
+        if (user == null || user.getCompany() == null) {
+            return Optional.empty();
+        }
+        return fetchAccountTotals(user.getCompany(), start, end);
+    }
+
+    /**
+     * Mesmo que {@link #fetchAccountTotals(User, LocalDate, LocalDate)} para uma empresa (ex.: admin global).
+     */
+    public Optional<AccountInsightTotals> fetchAccountTotals(Company company, LocalDate start, LocalDate end) {
+        Optional<MetaConnection> conn = connection(company);
         if (conn.isEmpty()) {
             return Optional.empty();
         }

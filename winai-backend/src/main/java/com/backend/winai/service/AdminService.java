@@ -10,6 +10,7 @@ import com.backend.winai.dto.request.AdminUpdateUserRequest;
 import com.backend.winai.dto.request.PatchUserAppModulesRequest;
 import com.backend.winai.dto.request.UpdateInstanceConfigRequest;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
+import com.backend.winai.dto.marketing.paidtraffic.UtmPerformanceResponse;
 import com.backend.winai.dto.response.AdminClientSummaryResponse;
 import com.backend.winai.dto.response.AdminConversationSummaryResponse;
 import com.backend.winai.dto.response.AdminEscutaSessionResponse;
@@ -119,6 +120,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+
 import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.time.DayOfWeek;
@@ -201,6 +203,7 @@ public class AdminService {
     private final IntelligentListeningService intelligentListeningService;
     private final MarketingService marketingService;
     private final MetaSyncService metaSyncService;
+    private final PaidTrafficUtmService paidTrafficUtmService;
     private final DashboardService dashboardService;
     private final MeetingService meetingService;
     private final PasswordEncoder passwordEncoder;
@@ -698,38 +701,74 @@ public class AdminService {
     // ========== META ADS (ADMIN GLOBAL) ==========
 
     public List<AdminMetaAdsCompanyResponse> getAdminMetaAdsCompanies() {
+        Map<UUID, Double> syncedSpend = new HashMap<>();
+        Map<UUID, Long> syncedImp = new HashMap<>();
+        Map<UUID, Long> syncedClk = new HashMap<>();
+        Map<UUID, Long> syncedConv = new HashMap<>();
+        for (Object[] row : metaCampaignRepository.aggregateMetricsByCompany()) {
+            UUID id = (UUID) row[0];
+            syncedSpend.put(id, ((Number) row[1]).doubleValue());
+            syncedImp.put(id, ((Number) row[2]).longValue());
+            syncedClk.put(id, ((Number) row[3]).longValue());
+            syncedConv.put(id, ((Number) row[4]).longValue());
+        }
+        Map<UUID, Double> estimatedRev = new HashMap<>();
+        for (Object[] row : leadRepository.sumEstimatedValueByCompany()) {
+            UUID id = (UUID) row[0];
+            estimatedRev.put(id, estimatedValueAggregateToDouble(row[1]));
+        }
+
         List<Company> companies = companyRepository.findAll();
         List<AdminMetaAdsCompanyResponse> rows = new ArrayList<>();
         for (Company c : companies) {
             Optional<MetaConnection> mcOpt = metaConnectionRepository.findByCompany(c);
             long campCount = metaCampaignRepository.countByCompanyId(c.getId());
+            UUID cid = c.getId();
+            AdminMetaAdsCompanyResponse.AdminMetaAdsCompanyResponseBuilder b = AdminMetaAdsCompanyResponse.builder()
+                    .companyId(cid)
+                    .companyName(c.getName())
+                    .campaignCount(campCount)
+                    .syncedSpendTotal(syncedSpend.getOrDefault(cid, 0.0))
+                    .syncedImpressionsTotal(syncedImp.getOrDefault(cid, 0L))
+                    .syncedClicksTotal(syncedClk.getOrDefault(cid, 0L))
+                    .syncedConversionsTotal(syncedConv.getOrDefault(cid, 0L))
+                    .estimatedRevenueTotal(estimatedRev.getOrDefault(cid, 0.0));
             if (mcOpt.isEmpty()) {
-                rows.add(AdminMetaAdsCompanyResponse.builder()
-                        .companyId(c.getId())
-                        .companyName(c.getName())
-                        .connected(false)
+                rows.add(b.connected(false)
                         .adAccountId(null)
                         .accountName(null)
                         .pageId(null)
                         .instagramBusinessId(null)
-                        .campaignCount(campCount)
                         .build());
             } else {
                 MetaConnection mc = mcOpt.get();
-                rows.add(AdminMetaAdsCompanyResponse.builder()
-                        .companyId(c.getId())
-                        .companyName(c.getName())
-                        .connected(mc.isConnected())
+                rows.add(b.connected(mc.isConnected())
                         .adAccountId(mc.getAdAccountId())
                         .accountName(mc.getAccountName())
                         .pageId(mc.getPageId())
                         .instagramBusinessId(mc.getInstagramBusinessId())
-                        .campaignCount(campCount)
                         .build());
             }
         }
         rows.sort(Comparator.comparing(AdminMetaAdsCompanyResponse::getCompanyName, String.CASE_INSENSITIVE_ORDER));
         return rows;
+    }
+
+    private static double estimatedValueAggregateToDouble(Object o) {
+        if (o == null) {
+            return 0;
+        }
+        if (o instanceof BigDecimal bd) {
+            return bd.doubleValue();
+        }
+        if (o instanceof Number n) {
+            return n.doubleValue();
+        }
+        return 0;
+    }
+
+    public UtmPerformanceResponse getAdminMetaAdsUtmPerformance(UUID companyId, LocalDate startDate, LocalDate endDate) {
+        return paidTrafficUtmService.getPerformanceForCompany(companyId, startDate, endDate);
     }
 
     public CampaignsListResponse getAdminMetaAdsCampaigns(UUID companyId) {

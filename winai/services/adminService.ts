@@ -1,6 +1,7 @@
 // Admin Service - API calls para o painel administrativo
 import { httpClient } from './api/http-client';
 import type { MeetingData, MeetingStatusType } from './api/meeting.service';
+import type { UtmPerformanceResponse } from './api/marketing.service';
 
 export interface AdminStats {
     totalUsers: number;
@@ -326,6 +327,13 @@ export interface AdminMetaAdsCompanyRow {
     pageId: string | null;
     instagramBusinessId: string | null;
     campaignCount: number;
+    /** Soma dos insights sincronizados em meta_campaigns (snapshot). */
+    syncedSpendTotal?: number | null;
+    syncedImpressionsTotal?: number | null;
+    syncedClicksTotal?: number | null;
+    syncedConversionsTotal?: number | null;
+    /** Soma estimated_value dos leads (CRM). */
+    estimatedRevenueTotal?: number | null;
 }
 
 export interface MetaCampaignListItem {
@@ -1089,6 +1097,19 @@ const adminService = {
 
     syncMetaAdsCompany: async (companyId: string): Promise<{ status: string; message: string }> => {
         return await httpClient.post<{ status: string; message: string }>(`/admin/meta-ads/companies/${companyId}/sync`);
+    },
+
+    getMetaAdsUtmPerformance: async (
+        companyId: string,
+        params?: { startDate?: string; endDate?: string },
+    ): Promise<UtmPerformanceResponse> => {
+        const q = new URLSearchParams();
+        if (params?.startDate) q.set('startDate', params.startDate);
+        if (params?.endDate) q.set('endDate', params.endDate);
+        const qs = q.toString();
+        return await httpClient.get<UtmPerformanceResponse>(
+            `/admin/meta-ads/companies/${companyId}/utm-performance${qs ? `?${qs}` : ''}`,
+        );
     },
 
     getGoalCompanies: async (year?: number): Promise<AdminGoalCompanyRow[]> => {

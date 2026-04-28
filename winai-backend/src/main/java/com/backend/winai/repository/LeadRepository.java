@@ -98,4 +98,7 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     @Query("SELECT l.company.id, l.ownerUser.id, COUNT(l) FROM Lead l WHERE l.company IS NOT NULL AND l.ownerUser IS NOT NULL GROUP BY l.company.id, l.ownerUser.id")
     List<Object[]> countLeadsGroupedByCompanyAndOwner();
+
+    @Query("SELECT l.company.id, COALESCE(SUM(l.estimatedValue), 0) FROM Lead l GROUP BY l.company.id")
+    List<Object[]> sumEstimatedValueByCompany();
 }

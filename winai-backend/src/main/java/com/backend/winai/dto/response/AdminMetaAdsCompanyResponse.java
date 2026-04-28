@@ -21,4 +21,13 @@ public class AdminMetaAdsCompanyResponse {
     private String pageId;
     private String instagramBusinessId;
     private long campaignCount;
+
+    /** Soma dos campos sincronizados em meta_campaigns (último snapshot por campanha). */
+    private Double syncedSpendTotal;
+    private Long syncedImpressionsTotal;
+    private Long syncedClicksTotal;
+    private Long syncedConversionsTotal;
+
+    /** Soma de estimated_value dos leads da empresa (CRM). */
+    private Double estimatedRevenueTotal;
 }

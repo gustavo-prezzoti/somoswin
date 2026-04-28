@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { RefreshCw, Building2, AlertCircle } from 'lucide-react';
+import { format, subDays } from 'date-fns';
 import adminService, { AdminMetaAdsCompanyRow, MetaCampaignsListResponse } from '../../services/adminService';
+import type { UtmPerformanceResponse } from '../../services/api/marketing.service';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useAdminStaffView } from './AdminStaffViewContext';
 import MetaAdsDashboardView from './metaAds/MetaAdsDashboardView';
@@ -24,6 +26,8 @@ const AdminMetaAds: React.FC = () => {
     const [campaigns, setCampaigns] = useState<MetaCampaignsListResponse | null>(null);
     const [loadingCamp, setLoadingCamp] = useState(false);
     const [syncing, setSyncing] = useState(false);
+    const [utmPerformance, setUtmPerformance] = useState<UtmPerformanceResponse | null>(null);
+    const [utmLoading, setUtmLoading] = useState(false);
 
     useEffect(() => {
         const t = window.setTimeout(() => setDebounced(search.trim()), 300);
@@ -95,6 +99,30 @@ const AdminMetaAds: React.FC = () => {
         loadCampaigns(selectedId);
     }, [selectedId, loadCampaigns]);
 
+    const loadUtmForCompany = useCallback(async (companyId: string) => {
+        try {
+            setUtmLoading(true);
+            const endDate = format(new Date(), 'yyyy-MM-dd');
+            const startDate = format(subDays(new Date(), 29), 'yyyy-MM-dd');
+            const data = await adminService.getMetaAdsUtmPerformance(companyId, { startDate, endDate });
+            setUtmPerformance(data);
+            setError(null);
+        } catch (e) {
+            setUtmPerformance(null);
+            setError(getErrorMessage(e, 'Erro ao carregar performance UTM'));
+        } finally {
+            setUtmLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!selectedId) {
+            setUtmPerformance(null);
+            return;
+        }
+        void loadUtmForCompany(selectedId);
+    }, [selectedId, loadUtmForCompany]);
+
     const onSync = async () => {
         if (!selectedId) return;
         try {
@@ -103,6 +131,7 @@ const AdminMetaAds: React.FC = () => {
             await adminService.syncMetaAdsCompany(selectedId);
             await loadCompanies();
             await loadCampaigns(selectedId);
+            await loadUtmForCompany(selectedId);
         } catch (e) {
             setError(getErrorMessage(e, 'Falha ao sincronizar'));
         } finally {
@@ -182,6 +211,8 @@ const AdminMetaAds: React.FC = () => {
                 syncing={syncing}
                 staffBanner={staffBanner}
                 errorBanner={errorBanner}
+                utmPerformance={utmPerformance}
+                utmLoading={utmLoading}
             />
         </motion.div>
     );
