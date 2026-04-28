@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { UserDTO } from '../../services/types';
-import { canUseAmpliaAdminScreen, isAmpliaFullAdmin, canViewGestaoAmpliaEquipe } from './adminPermissions';
+import { canUseAmpliaAdminScreen } from './adminPermissions';
 import ConsultantMetricsView from './performance/ConsultantMetricsView';
 
 const AdminPerformance: React.FC = () => {
@@ -42,15 +42,9 @@ const AdminPerformance: React.FC = () => {
         );
     }
 
-    const canSelectMember = isAmpliaFullAdmin(user) || canViewGestaoAmpliaEquipe(user);
-
     return (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 max-w-[1600px] mx-auto">
-            <ConsultantMetricsView
-                canSelectMember={canSelectMember}
-                viewerUserId={user?.id ?? ''}
-                viewerIsInternalStaff={!!user?.ampliaInternalStaff}
-            />
+            <ConsultantMetricsView viewerUserId={user?.id ?? ''} viewerIsInternalStaff={!!user?.ampliaInternalStaff} />
         </motion.div>
     );
 };

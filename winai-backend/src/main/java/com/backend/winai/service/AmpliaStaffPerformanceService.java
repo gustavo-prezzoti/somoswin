@@ -119,6 +119,8 @@ public class AmpliaStaffPerformanceService {
 
         String uiMode = resolveUiMode(st, leadsTotal, pbCount);
         String roleName = user.getAmpliaStaffRole() != null ? user.getAmpliaStaffRole().getName() : null;
+        boolean salesMode = "sales".equals(uiMode);
+        boolean consultantMode = "consultant".equals(uiMode);
 
         return AdminAmpliaStaffPerformanceResponse.builder()
                 .staffUserId(user.getId())
@@ -128,8 +130,8 @@ public class AmpliaStaffPerformanceService {
                 .ampliaStaffRoleName(roleName)
                 .uiMode(uiMode)
                 .periodLabel(periodLabel)
-                .sales(shouldIncludeSales(st) ? salesBlock : null)
-                .consultant(shouldIncludeConsultant(st) ? consultantBlock : null)
+                .sales(salesMode ? salesBlock : null)
+                .consultant(consultantMode ? consultantBlock : null)
                 .build();
     }
 
@@ -143,22 +145,9 @@ public class AmpliaStaffPerformanceService {
         return raw.substring(0, 1).toUpperCase(Locale.forLanguageTag("pt-BR")) + raw.substring(1);
     }
 
-    private static boolean shouldIncludeSales(AmpliaStaffType st) {
-        if (st == null) {
-            return true;
-        }
-        return st == AmpliaStaffType.VENDEDOR || st == AmpliaStaffType.GESTOR;
-    }
-
-    private static boolean shouldIncludeConsultant(AmpliaStaffType st) {
-        if (st == null) {
-            return true;
-        }
-        return st == AmpliaStaffType.CONSULTOR || st == AmpliaStaffType.GESTOR;
-    }
-
     /**
-     * Consultor só playbook; Vendedor só vendas; Gestor ambos (manager).
+     * Só dois modos de painel: vendas ou consultoria (sem painel combinado “gestão”).
+     * GESTOR ou tipo desconhecido: prioriza consultoria se houver playbook publicado; senão vendas.
      */
     private static String resolveUiMode(AmpliaStaffType st, long leadsTotal, int playbooksPublished) {
         if (st == AmpliaStaffType.VENDEDOR) {
@@ -168,11 +157,11 @@ public class AmpliaStaffPerformanceService {
             return "consultant";
         }
         if (st == AmpliaStaffType.GESTOR) {
-            return "manager";
+            return playbooksPublished > 0 ? "consultant" : "sales";
         }
-        if (playbooksPublished > 0 && leadsTotal > 0) {
-            return "manager";
+        if (st == null) {
+            return playbooksPublished > 0 ? "consultant" : "sales";
         }
-        return playbooksPublished > 0 ? "consultant" : "sales";
+        return playbooksPublished > leadsTotal ? "consultant" : "sales";
     }
 }

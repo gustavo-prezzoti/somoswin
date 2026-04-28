@@ -40,16 +40,18 @@ export type AdminStaffViewContextValue = {
 
 const AdminStaffViewContext = createContext<AdminStaffViewContextValue | null>(null);
 
-/** Rótulo no seletor: admins plenos não vêm em /internal-staff — incluímos a sessão atual como opção. */
-function staffTypeLabelForSessionUser(user: UserDTO): string {
-    if (user.ampliaStaffType && String(user.ampliaStaffType).trim()) return String(user.ampliaStaffType);
-    const r = String(user.role ?? '')
+function isConsultorOuVendedorStaffType(raw: string | null | undefined): boolean {
+    const u = String(raw ?? '')
         .trim()
         .toUpperCase()
-        .replace('ROLE_', '');
-    if (r === 'SUPER_ADMIN') return 'Super admin';
-    if (r === 'ADMIN') return 'Administrador';
-    return r || 'Conta';
+        .replace(/\s+/g, '_');
+    return u === 'VENDEDOR' || u === 'CONSULTOR';
+}
+
+/** Rótulo no seletor — só consultor/vendedor entram na lista; evita “Administrador” genérico. */
+function staffTypeLabelForSessionUser(user: UserDTO): string {
+    if (user.ampliaStaffType && String(user.ampliaStaffType).trim()) return String(user.ampliaStaffType);
+    return 'Colaborador';
 }
 
 /** Entrada só com dados da sessão — sem métricas CRM inventadas (lista /internal-staff traz números reais). */
@@ -91,11 +93,17 @@ export const AdminStaffViewProvider: React.FC<{
     const [staffListRaw, setStaffListRaw] = useState<InternalStaffMember[]>([]);
     const [staffLoading, setStaffLoading] = useState(false);
 
+    const staffListFiltered = useMemo(
+        () => staffListRaw.filter((s) => isConsultorOuVendedorStaffType(s.ampliaStaffType)),
+        [staffListRaw],
+    );
+
     const staffList = useMemo(() => {
-        if (!canUseStaffTeam || !currentUser?.id) return staffListRaw;
-        if (staffListRaw.some((s) => s.id === currentUser.id)) return staffListRaw;
-        return [sessionUserAsStaffMember(currentUser), ...staffListRaw];
-    }, [canUseStaffTeam, currentUser, staffListRaw]);
+        if (!canUseStaffTeam || !currentUser?.id) return staffListFiltered;
+        if (!isConsultorOuVendedorStaffType(currentUser.ampliaStaffType)) return staffListFiltered;
+        if (staffListFiltered.some((s) => s.id === currentUser.id)) return staffListFiltered;
+        return [sessionUserAsStaffMember(currentUser), ...staffListFiltered];
+    }, [canUseStaffTeam, currentUser, staffListFiltered]);
 
     const setSelectedStaffUserId = useCallback((id: string | null) => {
         setSelectedStaffUserIdState(id);

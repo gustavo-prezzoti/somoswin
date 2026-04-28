@@ -10,6 +10,15 @@ interface AdminHeaderProps {
     onMenuClick?: () => void;
 }
 
+function ampliaStaffTypeLabel(raw: string | undefined): string {
+    const u = String(raw ?? '')
+        .trim()
+        .toUpperCase();
+    if (u === 'VENDEDOR') return 'Vendedor';
+    if (u === 'CONSULTOR') return 'Consultor';
+    return raw?.trim() || '';
+}
+
 /** Dropdown customizado — texto centralizado no gatilho e nas opções. */
 function StaffTeamDropdown({ staffView }: { staffView: AdminStaffViewContextValue }) {
     const [open, setOpen] = useState(false);
@@ -116,7 +125,7 @@ function StaffTeamDropdown({ staffView }: { staffView: AdminStaffViewContextValu
                                               active ? 'text-emerald-700' : 'text-gray-500'
                                           }`}
                                       >
-                                          {s.ampliaStaffType}
+                                          {ampliaStaffTypeLabel(s.ampliaStaffType)}
                                       </span>
                                   </button>
                               </li>

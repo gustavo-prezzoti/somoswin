@@ -32,8 +32,7 @@ public class AdminAmpliaStaffPerformanceResponse {
     private String ampliaStaffRoleName;
 
     /**
-     * sales = painel comercial (leads ganhos, receita CRM); consultant = playbook e tarefas de metas nas
-     * empresas onde publicou diagnóstico; manager = ambos resumidos.
+     * sales = painel comercial (CRM); consultant = playbook e tarefas de metas (sem modo combinado).
      */
     private String uiMode;
 

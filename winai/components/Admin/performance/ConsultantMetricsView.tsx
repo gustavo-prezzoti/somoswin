@@ -2,22 +2,10 @@
  * Performance por colaborador interno: Vendedor (CRM — negócios ganhos) vs Consultor (playbook + tarefas de metas).
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-    Target,
-    CheckCircle2,
-    TrendingUp,
-    Users,
-    BarChart3,
-    PieChart,
-    User,
-    ChevronDown,
-    Briefcase,
-    BookOpen,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Target, CheckCircle2, TrendingUp, Users, BarChart3, PieChart, Briefcase, BookOpen } from 'lucide-react';
+import { motion } from 'framer-motion';
 import adminService, { AdminAmpliaStaffPerformance, InternalStaffMember } from '../../../services/adminService';
 import { getErrorMessage } from '../../../services/utils/errorHelper';
-import { formatAmpliaStaffPermissionSummary } from '../adminAmpliaModuleOptions';
 import { useAdminStaffView } from '../AdminStaffViewContext';
 
 function formatMoney(n: number | null | undefined): string {
@@ -35,33 +23,13 @@ function formatShortDate(iso: string | null | undefined): string {
     }
 }
 
-/** Seed ou rótulo livre (sessão admin): mostrar papel legível */
-function staffTypeLabel(seedType: string | null | undefined): string {
-    const u = String(seedType ?? '')
-        .trim()
-        .toUpperCase();
-    if (u === 'VENDEDOR') return 'Vendedor';
-    if (u === 'CONSULTOR') return 'Consultor';
-    if (u === 'GESTOR') return 'Gestor';
-    return seedType?.trim() || '';
-}
-
-function staffSubtitle(member: InternalStaffMember): string {
-    const role = member.ampliaStaffRoleName?.trim();
-    const seed = staffTypeLabel(member.ampliaStaffType);
-    if (role && seed) return `${role} · ${seed}`;
-    return role || seed || 'Colaborador interno';
-}
-
 export interface ConsultantMetricsViewProps {
-    canSelectMember?: boolean;
     /** Usuário logado (win_user.id) — obrigatório para fixar visão do próprio colaborador */
     viewerUserId?: string;
     viewerIsInternalStaff?: boolean;
 }
 
 const ConsultantMetricsView: React.FC<ConsultantMetricsViewProps> = ({
-    canSelectMember = true,
     viewerUserId = '',
     viewerIsInternalStaff = false,
 }) => {
@@ -69,23 +37,18 @@ const ConsultantMetricsView: React.FC<ConsultantMetricsViewProps> = ({
     const [perf, setPerf] = useState<AdminAmpliaStaffPerformance | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
     const staffList = staffCtx?.staffList ?? [];
     const staffLoading = staffCtx?.staffLoading ?? false;
     const selectedStaffUserId = staffCtx?.selectedStaffUserId ?? null;
-    const setSelectedStaffUserId = staffCtx?.setSelectedStaffUserId;
+    const canUseStaffTeam = staffCtx?.canUseStaffTeam ?? false;
 
     const effectiveStaffId = useMemo(() => {
-        if (!canSelectMember && viewerIsInternalStaff && viewerUserId) {
-            return viewerUserId;
+        if (!canUseStaffTeam) {
+            return viewerIsInternalStaff && viewerUserId ? viewerUserId : null;
         }
-        if (selectedStaffUserId) return selectedStaffUserId;
-        if (staffList.length > 0) return staffList[0].id;
-        /* Colaborador interno sem lista ainda (ex.: só no contexto da sessão) */
-        if (viewerIsInternalStaff && viewerUserId) return viewerUserId;
-        return null;
-    }, [canSelectMember, viewerIsInternalStaff, viewerUserId, selectedStaffUserId, staffList]);
+        return selectedStaffUserId ?? null;
+    }, [canUseStaffTeam, viewerIsInternalStaff, viewerUserId, selectedStaffUserId]);
 
     useEffect(() => {
         if (!effectiveStaffId) {
@@ -123,16 +86,10 @@ const ConsultantMetricsView: React.FC<ConsultantMetricsViewProps> = ({
         const m = perf?.uiMode;
         if (m === 'sales') return 'Performance do Vendedor';
         if (m === 'consultant') return 'Performance do Consultor';
-        if (m === 'manager') return 'Performance (Gestão)';
         return 'Performance';
     }, [perf?.uiMode]);
 
-    const handlePickMember = (id: string) => {
-        setSelectedStaffUserId?.(id);
-        setIsSelectorOpen(false);
-    };
-
-    if (staffLoading && staffList.length === 0 && canSelectMember) {
+    if (staffLoading && staffList.length === 0 && canUseStaffTeam) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[30vh] gap-3 text-gray-500 text-sm font-bold uppercase tracking-widest">
                 Carregando equipe…
@@ -141,9 +98,20 @@ const ConsultantMetricsView: React.FC<ConsultantMetricsViewProps> = ({
     }
 
     if (!effectiveStaffId) {
+        if (canUseStaffTeam && selectedStaffUserId === null && !staffLoading) {
+            return (
+                <div className="glass-card p-8 text-center text-sm text-gray-600 space-y-2 max-w-xl mx-auto">
+                    <p className="font-bold text-[#141414]">Escolha um colaborador no menu superior</p>
+                    <p>
+                        Com &quot;Todos&quot; selecionado não há métricas individuais nesta página. Use o seletor
+                        &quot;Selecionar equipe&quot; no cabeçalho e escolha um consultor ou vendedor.
+                    </p>
+                </div>
+            );
+        }
         return (
             <div className="glass-card p-8 text-center text-sm text-gray-600">
-                Nenhum colaborador interno disponível. Ajuste permissões ou cadastre a equipe em Gestão da equipe.
+                Nenhum colaborador interno disponível para exibir nesta visão.
             </div>
         );
     }
@@ -152,8 +120,8 @@ const ConsultantMetricsView: React.FC<ConsultantMetricsViewProps> = ({
     const consultant = perf?.consultant;
     const ui = perf?.uiMode;
 
-    const showSales = ui === 'sales' || ui === 'manager';
-    const showConsultant = ui === 'consultant' || ui === 'manager';
+    const showSales = ui === 'sales';
+    const showConsultant = ui === 'consultant';
 
     return (
         <div className="space-y-8">
@@ -165,94 +133,6 @@ const ConsultantMetricsView: React.FC<ConsultantMetricsViewProps> = ({
                         {perf?.ampliaStaffRoleName ? ` · ${perf.ampliaStaffRoleName}` : null}
                     </p>
                 </div>
-
-                {canSelectMember && setSelectedStaffUserId && staffList.length > 0 && (
-                    <div className="relative">
-                        <button
-                            type="button"
-                            onClick={() => setIsSelectorOpen(!isSelectorOpen)}
-                            className="flex items-center gap-3 px-6 py-3 bg-white border border-black/5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all shadow-sm"
-                        >
-                            <User size={16} className="text-[#00FF00]" />
-                            {selectedRow?.name ?? perf?.name ?? 'Equipe'}
-                            <ChevronDown
-                                size={14}
-                                className={`transition-transform duration-300 ${isSelectorOpen ? 'rotate-180' : ''}`}
-                            />
-                        </button>
-
-                        <AnimatePresence>
-                            {isSelectorOpen && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    className="absolute right-0 mt-2 w-[min(calc(100vw-2rem),26rem)] bg-white rounded-2xl shadow-2xl border border-black/5 p-2 z-50"
-                                >
-                                    <div className="p-3 mb-2">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                                            Equipe interna — papel e permissões Amplia
-                                        </span>
-                                    </div>
-                                    <div className="space-y-1 max-h-[min(70vh,480px)] overflow-y-auto">
-                                        {staffList.map((member) => {
-                                            const permLine = formatAmpliaStaffPermissionSummary(
-                                                member.ampliaStaffPermissions,
-                                                member.ampliaStaffFullAccess ?? undefined,
-                                                member.ampliaStaffRoleName,
-                                            );
-                                            const selected = effectiveStaffId === member.id;
-                                            return (
-                                                <button
-                                                    key={member.id}
-                                                    type="button"
-                                                    onClick={() => handlePickMember(member.id)}
-                                                    className={`w-full text-left flex gap-3 p-3 rounded-xl transition-all ${
-                                                        selected ? 'bg-gray-900 text-white' : 'hover:bg-gray-50 text-gray-600'
-                                                    }`}
-                                                >
-                                                    <div
-                                                        className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center ${
-                                                            selected ? 'bg-white/10' : 'bg-gray-100'
-                                                        }`}
-                                                    >
-                                                        <User size={14} />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <p className="text-xs font-black uppercase tracking-tight leading-snug break-words">
-                                                                {member.name}
-                                                            </p>
-                                                            {selected && (
-                                                                <div className="w-2 h-2 mt-1 shrink-0 bg-[#00FF00] rounded-full shadow-[0_0_10px_#00FF00]" />
-                                                            )}
-                                                        </div>
-                                                        <p
-                                                            className={`text-[9px] font-bold uppercase tracking-wide mt-1 ${selected ? 'text-gray-300' : 'text-gray-500'}`}
-                                                        >
-                                                            {staffSubtitle(member)}
-                                                        </p>
-                                                        <p
-                                                            className={`text-[9px] leading-snug mt-1.5 break-words ${selected ? 'text-gray-400' : 'text-gray-500'}`}
-                                                        >
-                                                            {permLine}
-                                                        </p>
-                                                        <p
-                                                            className={`text-[9px] truncate mt-1 ${selected ? 'text-gray-500' : 'text-gray-400'}`}
-                                                            title={member.email}
-                                                        >
-                                                            {member.email}
-                                                        </p>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                )}
             </div>
 
             {loading && (
