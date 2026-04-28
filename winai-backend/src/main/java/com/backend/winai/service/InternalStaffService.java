@@ -5,10 +5,12 @@ import com.backend.winai.dto.request.PatchInternalStaffRequest;
 import com.backend.winai.dto.response.CreateInternalStaffResponse;
 import com.backend.winai.dto.response.InternalStaffMemberDashboardResponse;
 import com.backend.winai.dto.response.InternalStaffMemberResponse;
+import com.backend.winai.dto.response.StaffCompanyAssignmentItemResponse;
 import com.backend.winai.entity.AmpliaStaffRole;
 import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.entity.User;
 import com.backend.winai.entity.UserRole;
+import com.backend.winai.repository.CompanyStaffAssignmentRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.MeetingRepository;
 import com.backend.winai.repository.UserRepository;
@@ -26,9 +28,13 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +47,8 @@ public class InternalStaffService {
     private final UserRepository userRepository;
     private final LeadRepository leadRepository;
     private final MeetingRepository meetingRepository;
+    private final CompanyStaffAssignmentRepository assignmentRepository;
+    private final StaffPortfolioService staffPortfolioService;
     private final PasswordEncoder passwordEncoder;
     private final AmpliaStaffRoleService ampliaStaffRoleService;
 
@@ -49,18 +57,34 @@ public class InternalStaffService {
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+        Map<UUID, Long> assignmentCounts = new HashMap<>();
+        for (Object[] row : assignmentRepository.countAssignmentsGroupedByStaffUserId()) {
+            assignmentCounts.put((UUID) row[0], ((Number) row[1]).longValue());
+        }
         List<InternalStaffMemberResponse> out = new ArrayList<>();
         for (User u : users) {
-            out.add(toListRow(u, startWeek, endWeek));
+            long ac = assignmentCounts.getOrDefault(u.getId(), 0L);
+            out.add(toListRow(u, startWeek, endWeek, ac));
         }
         return out;
     }
 
-    private InternalStaffMemberResponse toListRow(User u, LocalDate startWeek, LocalDate endWeek) {
+    private InternalStaffMemberResponse toListRow(User u, LocalDate startWeek, LocalDate endWeek, long assignedCompanyCount) {
         UUID id = u.getId();
-        long total = leadRepository.countByOwnerUser_Id(id);
-        long won = leadRepository.countByOwnerUser_IdAndStatus(id, LeadStatus.WON);
-        long meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(id, startWeek, endWeek);
+        StaffPortfolioService.PortfolioResolution pr = staffPortfolioService.resolve(id);
+        long total;
+        long won;
+        long meetingsWeek;
+        if (pr.explicitAssignments() && !pr.assignedCompanyIds().isEmpty()) {
+            Collection<UUID> pids = pr.assignedCompanyIds();
+            total = leadRepository.countByCompanyIdIn(pids);
+            won = leadRepository.countByCompanyIdInAndStatus(pids, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForCompaniesBetween(pids, startWeek, endWeek);
+        } else {
+            total = leadRepository.countByOwnerUser_Id(id);
+            won = leadRepository.countByOwnerUser_IdAndStatus(id, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(id, startWeek, endWeek);
+        }
         int conv = total > 0 ? (int) Math.min(100, Math.round(won * 100.0 / total)) : 0;
         AmpliaStaffRole sr = u.getAmpliaStaffRole();
         InternalStaffMemberResponse.InternalStaffMemberResponseBuilder b = InternalStaffMemberResponse.builder()
@@ -73,7 +97,8 @@ public class InternalStaffService {
                 .leadsTotal(total)
                 .leadsWon(won)
                 .meetingsThisWeek(meetingsWeek)
-                .conversionPercent(conv);
+                .conversionPercent(conv)
+                .assignedCompanyCount(assignedCompanyCount);
         if (sr != null) {
             b.ampliaStaffRoleId(sr.getId())
                     .ampliaStaffRoleName(sr.getName())
@@ -144,7 +169,22 @@ public class InternalStaffService {
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
-        return toListRow(user, startWeek, endWeek);
+        long ac = assignmentRepository.countByStaffUser_Id(user.getId());
+        return toListRow(user, startWeek, endWeek, ac);
+    }
+
+    public List<StaffCompanyAssignmentItemResponse> listStaffCompanyAssignments(UUID staffUserId) {
+        User u = userRepository.findById(staffUserId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        if (!Boolean.TRUE.equals(u.getAmpliaInternalStaff())) {
+            throw new RuntimeException("Apenas colaboradores internos possuem carteira de clientes");
+        }
+        return assignmentRepository.findAssignedCompaniesProjection(staffUserId).stream()
+                .map(p -> StaffCompanyAssignmentItemResponse.builder()
+                        .companyId(p.getId())
+                        .companyName(p.getName())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     public InternalStaffMemberDashboardResponse getMemberDashboard(UUID userId) {
@@ -157,9 +197,20 @@ public class InternalStaffService {
         LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
 
-        long total = leadRepository.countByOwnerUser_Id(userId);
-        long won = leadRepository.countByOwnerUser_IdAndStatus(userId, LeadStatus.WON);
-        long meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(userId, startWeek, endWeek);
+        StaffPortfolioService.PortfolioResolution pr = staffPortfolioService.resolve(userId);
+        long total;
+        long won;
+        long meetingsWeek;
+        if (pr.explicitAssignments() && !pr.assignedCompanyIds().isEmpty()) {
+            Collection<UUID> pids = pr.assignedCompanyIds();
+            total = leadRepository.countByCompanyIdIn(pids);
+            won = leadRepository.countByCompanyIdInAndStatus(pids, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForCompaniesBetween(pids, startWeek, endWeek);
+        } else {
+            total = leadRepository.countByOwnerUser_Id(userId);
+            won = leadRepository.countByOwnerUser_IdAndStatus(userId, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(userId, startWeek, endWeek);
+        }
         String conv = total > 0 ? String.format(Locale.forLanguageTag("pt-BR"), "%.1f%%", won * 100.0 / total) : "0%";
 
         DateTimeFormatter monthFmt = DateTimeFormatter.ofPattern("MMM/yy", new Locale("pt", "BR"));
@@ -169,7 +220,12 @@ public class InternalStaffService {
             LocalDateTime start = month.atStartOfDay();
             LocalDateTime end = month.plusMonths(1).atStartOfDay();
             String label = month.format(monthFmt);
-            long v = leadRepository.countByOwnerUserAndCreatedAtRange(userId, start, end);
+            long v;
+            if (pr.explicitAssignments() && !pr.assignedCompanyIds().isEmpty()) {
+                v = leadRepository.countByCompanyIdInAndCreatedAtRange(pr.assignedCompanyIds(), start, end);
+            } else {
+                v = leadRepository.countByOwnerUserAndCreatedAtRange(userId, start, end);
+            }
             monthly.add(InternalStaffMemberDashboardResponse.MonthlyPoint.builder()
                     .name(label)
                     .value(v)

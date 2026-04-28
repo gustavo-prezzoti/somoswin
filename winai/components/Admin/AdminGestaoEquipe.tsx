@@ -20,6 +20,7 @@ import {
     ArrowDown,
     Plus,
     Loader2,
+    Link2,
 } from 'lucide-react';
 import {
     AreaChart,
@@ -37,9 +38,14 @@ import adminService, {
     InternalStaffMemberDashboard,
     CreateInternalStaffPayload,
     AmpliaStaffRoleRow,
+    StaffCompanyAssignmentOption,
 } from '../../services/adminService';
 import type { UserDTO } from '../../services/types';
-import { canViewGestaoAmpliaEquipe, hasAmpliaPermission, isAmpliaFullAdmin } from './adminPermissions';
+import {
+    canViewGestaoAmpliaEquipe,
+    hasAmpliaPermission,
+    isAmpliaFullAdmin,
+} from './adminPermissions';
 import { ADMIN_MODAL_BACKDROP_BLUR, ADMIN_MODAL_BACKDROP_DEFAULT, ADMIN_MODAL_INNER } from './adminModalStack';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
@@ -70,10 +76,13 @@ const StatCard = ({
 }: {
     label: string;
     value: string | number;
-    trend: string;
+    trend?: string;
     icon: React.ComponentType<{ size?: number; className?: string }>;
     color: string;
-}) => (
+}) => {
+    const trendSafe = trend ?? '—';
+    const trendUp = trendSafe.startsWith('+');
+    return (
     <div className="glass-card p-6 space-y-2">
         <div className="flex items-center justify-between">
             <div className={`w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center ${color}`}>
@@ -81,11 +90,11 @@ const StatCard = ({
             </div>
             <div
                 className={`flex items-center gap-1 text-[10px] font-bold ${
-                    trend.startsWith('+') ? 'text-emerald-500' : 'text-red-500'
+                    trendUp ? 'text-emerald-500' : 'text-red-500'
                 }`}
             >
-                {trend.startsWith('+') ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
-                {trend}
+                {trendUp ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
+                {trendSafe}
             </div>
         </div>
         <div>
@@ -93,7 +102,8 @@ const StatCard = ({
             <p className="text-2xl font-black italic tracking-tighter uppercase">{value}</p>
         </div>
     </div>
-);
+    );
+};
 
 const IndividualDashboardModal = ({
     member,
@@ -213,6 +223,7 @@ const IndividualDashboardModal = ({
                                         <StatCard
                                             label="Conversão"
                                             value={data?.conversionRateDisplay ?? '0%'}
+                                            trend="+0%"
                                             icon={Star}
                                             color="text-yellow-500"
                                         />
@@ -315,6 +326,12 @@ const AdminGestaoEquipe: React.FC = () => {
         password: '',
     });
     const [saving, setSaving] = useState(false);
+    const [portfolioMember, setPortfolioMember] = useState<InternalStaffMember | null>(null);
+    const [portfolioOptions, setPortfolioOptions] = useState<StaffCompanyAssignmentOption[]>([]);
+    const [portfolioSelected, setPortfolioSelected] = useState<Set<string>>(new Set());
+    const [portfolioSearch, setPortfolioSearch] = useState('');
+    const [portfolioLoading, setPortfolioLoading] = useState(false);
+    const [portfolioSaving, setPortfolioSaving] = useState(false);
 
     const storageUser = useMemo(() => {
         try {
@@ -326,6 +343,9 @@ const AdminGestaoEquipe: React.FC = () => {
     }, []);
 
     const canCreateStaff = hasAmpliaPermission(storageUser as UserDTO | null, 'gestao_equipe', 'create');
+    const canEditStaffPortfolio =
+        isAmpliaFullAdmin(storageUser as UserDTO | null) ||
+        hasAmpliaPermission(storageUser as UserDTO | null, 'gestao_equipe', 'update');
 
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
@@ -424,6 +444,49 @@ const AdminGestaoEquipe: React.FC = () => {
     const vendedores = scopeMembers.filter((m) => m.ampliaStaffType === 'VENDEDOR').length;
     const consultores = scopeMembers.filter((m) => m.ampliaStaffType === 'CONSULTOR' || m.ampliaStaffType === 'GESTOR').length;
     const onlineish = scopeMembers.filter((m) => m.active).length;
+
+    const openPortfolioModal = useCallback(async (member: InternalStaffMember) => {
+        setPortfolioMember(member);
+        setPortfolioSearch('');
+        setPortfolioLoading(true);
+        try {
+            const [opts, assigned] = await Promise.all([
+                adminService.listCompanyAssignmentOptions(),
+                adminService.getStaffCompanyAssignments(member.id),
+            ]);
+            setPortfolioOptions(opts);
+            setPortfolioSelected(new Set(assigned.map((a) => a.companyId)));
+        } catch (e) {
+            showToast(getErrorMessage(e, 'Erro ao carregar carteira'), 'error');
+            setPortfolioMember(null);
+        } finally {
+            setPortfolioLoading(false);
+        }
+    }, [showToast]);
+
+    const togglePortfolioCompany = useCallback((companyId: string) => {
+        setPortfolioSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(companyId)) next.delete(companyId);
+            else next.add(companyId);
+            return next;
+        });
+    }, []);
+
+    const savePortfolio = useCallback(async () => {
+        if (!portfolioMember) return;
+        try {
+            setPortfolioSaving(true);
+            await adminService.putStaffCompanyAssignments(portfolioMember.id, Array.from(portfolioSelected));
+            showToast('Carteira de clientes atualizada.', 'success');
+            setPortfolioMember(null);
+            await load();
+        } catch (e) {
+            showToast(getErrorMessage(e, 'Erro ao salvar carteira'), 'error');
+        } finally {
+            setPortfolioSaving(false);
+        }
+    }, [portfolioMember, portfolioSelected, load, showToast]);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -587,6 +650,11 @@ const AdminGestaoEquipe: React.FC = () => {
                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
                                                 {member.email}
                                             </p>
+                                            {(member.assignedCompanyCount ?? 0) > 0 && (
+                                                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-wider mt-1">
+                                                    {member.assignedCompanyCount} cliente(s) na carteira
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -643,7 +711,17 @@ const AdminGestaoEquipe: React.FC = () => {
                                     )}
                                 </div>
 
-                                <div className="flex items-center gap-3">
+                                <div className="flex flex-col sm:flex-row items-stretch gap-3">
+                                    {canEditStaffPortfolio && (
+                                        <button
+                                            type="button"
+                                            onClick={() => void openPortfolioModal(member)}
+                                            className="flex-1 py-3 bg-white border border-emerald-200 text-emerald-800 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-50 transition-all shadow-sm flex items-center justify-center gap-2"
+                                        >
+                                            <Link2 size={14} />
+                                            Carteira de clientes
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={() => setSelectedMember(member)}
@@ -667,6 +745,115 @@ const AdminGestaoEquipe: React.FC = () => {
                         loading={dashLoading}
                         onClose={() => setSelectedMember(null)}
                     />
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {portfolioMember && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className={ADMIN_MODAL_BACKDROP_DEFAULT}
+                    >
+                        <div className={ADMIN_MODAL_INNER}>
+                            <motion.div
+                                initial={{ scale: 0.95 }}
+                                animate={{ scale: 1 }}
+                                exit={{ scale: 0.95 }}
+                                className="bg-white rounded-[2rem] p-8 max-w-lg w-full max-h-[min(85vh,560px)] flex flex-col shadow-2xl border border-black/5"
+                            >
+                                <div className="flex items-start justify-between gap-4 mb-4">
+                                    <div>
+                                        <h3 className="text-xl font-black uppercase italic text-[#141414]">
+                                            Carteira de clientes
+                                        </h3>
+                                        <p className="text-xs text-gray-500 font-medium mt-1">
+                                            {portfolioMember.name} — selecione um ou mais clientes. As métricas passam a
+                                            refletir essa carteira.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPortfolioMember(null)}
+                                        className="p-2 hover:bg-gray-100 rounded-full shrink-0"
+                                        aria-label="Fechar"
+                                    >
+                                        <X size={22} />
+                                    </button>
+                                </div>
+                                {portfolioLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-16 gap-2">
+                                        <Loader2 className="animate-spin text-emerald-500" size={32} />
+                                        <span className="text-xs font-bold text-gray-500 uppercase">Carregando…</span>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="relative mb-3">
+                                            <Search
+                                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                                                size={16}
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar cliente…"
+                                                value={portfolioSearch}
+                                                onChange={(e) => setPortfolioSearch(e.target.value)}
+                                                className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-black/10 text-sm font-bold"
+                                            />
+                                        </div>
+                                        <p className="text-[10px] font-bold text-gray-500 mb-2">
+                                            {portfolioSelected.size} selecionado(s)
+                                        </p>
+                                        <div className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1 border border-black/5 rounded-xl p-2">
+                                            {portfolioOptions
+                                                .filter((o) => {
+                                                    const q = portfolioSearch.trim().toLowerCase();
+                                                    if (!q) return true;
+                                                    return o.companyName.toLowerCase().includes(q);
+                                                })
+                                                .map((o) => {
+                                                    const checked = portfolioSelected.has(o.companyId);
+                                                    return (
+                                                        <label
+                                                            key={o.companyId}
+                                                            className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer text-sm font-bold ${
+                                                                checked ? 'bg-emerald-50 text-emerald-900' : 'hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                                                checked={checked}
+                                                                onChange={() => togglePortfolioCompany(o.companyId)}
+                                                            />
+                                                            <span className="flex-1 truncate">{o.companyName}</span>
+                                                        </label>
+                                                    );
+                                                })}
+                                        </div>
+                                        <div className="flex gap-2 pt-4 mt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setPortfolioMember(null)}
+                                                className="flex-1 py-3 rounded-xl border border-black/10 text-xs font-black uppercase"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={portfolioSaving}
+                                                onClick={() => void savePortfolio()}
+                                                className="flex-1 py-3 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase disabled:opacity-50"
+                                            >
+                                                {portfolioSaving ? 'Salvando…' : 'Salvar carteira'}
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </motion.div>
+                        </div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 

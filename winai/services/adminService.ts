@@ -135,6 +135,18 @@ export interface InternalStaffMember {
     leadsWon?: number;
     meetingsThisWeek?: number;
     conversionPercent?: number;
+    /** Clientes associados explicitamente na carteira admin (company_staff_assignment). */
+    assignedCompanyCount?: number;
+}
+
+export interface StaffCompanyAssignmentOption {
+    companyId: string;
+    companyName: string;
+}
+
+export interface StaffCompanyAssignmentItem {
+    companyId: string;
+    companyName: string;
 }
 
 export interface AmpliaStaffRoleRow {
@@ -858,6 +870,18 @@ const adminService = {
 
     getInternalStaffDashboard: async (id: string): Promise<InternalStaffMemberDashboard> => {
         return await httpClient.get<InternalStaffMemberDashboard>(`/admin/internal-staff/${id}/dashboard`);
+    },
+
+    listCompanyAssignmentOptions: async (): Promise<StaffCompanyAssignmentOption[]> => {
+        return await httpClient.get<StaffCompanyAssignmentOption[]>('/admin/internal-staff/company-assignment-options');
+    },
+
+    getStaffCompanyAssignments: async (staffId: string): Promise<StaffCompanyAssignmentItem[]> => {
+        return await httpClient.get<StaffCompanyAssignmentItem[]>(`/admin/internal-staff/${staffId}/company-assignments`);
+    },
+
+    putStaffCompanyAssignments: async (staffId: string, companyIds: string[]): Promise<void> => {
+        await httpClient.put(`/admin/internal-staff/${staffId}/company-assignments`, { companyIds });
     },
 
     getAmpliaStaffPerformance: async (staffUserId: string): Promise<AdminAmpliaStaffPerformance> => {

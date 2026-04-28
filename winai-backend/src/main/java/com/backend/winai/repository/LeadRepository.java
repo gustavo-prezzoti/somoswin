@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -111,4 +112,42 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     @Query("SELECT l FROM Lead l JOIN FETCH l.company c WHERE l.ownerUser.id = :uid AND l.status = :status ORDER BY l.updatedAt DESC")
     List<Lead> findTopByOwnerAndStatusWithCompany(@Param("uid") UUID uid, @Param("status") LeadStatus status, Pageable pageable);
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.company.id IN :companyIds")
+    long countByCompanyIdIn(@Param("companyIds") Collection<UUID> companyIds);
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.company.id IN :companyIds AND l.status = :status")
+    long countByCompanyIdInAndStatus(@Param("companyIds") Collection<UUID> companyIds, @Param("status") LeadStatus status);
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.company.id IN :companyIds AND l.createdAt >= :start AND l.createdAt < :end")
+    long countByCompanyIdInAndCreatedAtRange(@Param("companyIds") Collection<UUID> companyIds,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    @Query("SELECT COALESCE(SUM(l.estimatedValue), 0) FROM Lead l WHERE l.company.id IN :companyIds AND l.status = :status")
+    BigDecimal sumEstimatedValueByCompanyIdInAndStatus(@Param("companyIds") Collection<UUID> companyIds,
+            @Param("status") LeadStatus status);
+
+    @Query("SELECT l FROM Lead l JOIN FETCH l.company c WHERE l.company.id IN :companyIds AND l.status = :status ORDER BY l.updatedAt DESC")
+    List<Lead> findTopByCompanyIdInAndStatusWithCompany(@Param("companyIds") Collection<UUID> companyIds,
+            @Param("status") LeadStatus status,
+            Pageable pageable);
+
+    @Query(value = "SELECT l FROM Lead l LEFT JOIN l.company c WHERE l.company.id IN :companyIds AND ("
+            + "LOWER(l.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+            + "LOWER(l.email) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+            + "LOWER(COALESCE(l.phone, '')) LIKE CONCAT('%', :q, '%') OR "
+            + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')))",
+            countQuery = "SELECT count(l) FROM Lead l LEFT JOIN l.company c WHERE l.company.id IN :companyIds AND ("
+                    + "LOWER(l.name) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "LOWER(l.email) LIKE LOWER(CONCAT('%', :q, '%')) OR "
+                    + "LOWER(COALESCE(l.phone, '')) LIKE CONCAT('%', :q, '%') OR "
+                    + "LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<Lead> searchLeadsForCompanies(@Param("companyIds") Collection<UUID> companyIds, @Param("q") String q,
+            Pageable pageable);
+
+    Page<Lead> findByCompany_IdInOrderByCreatedAtDesc(Collection<UUID> companyIds, Pageable pageable);
+
+    Page<Lead> findByCompany_IdInAndStatusOrderByCreatedAtDesc(Collection<UUID> companyIds, LeadStatus status,
+            Pageable pageable);
 }

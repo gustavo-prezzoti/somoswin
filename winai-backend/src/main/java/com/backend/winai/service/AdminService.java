@@ -142,6 +142,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Collection;
 import java.util.stream.Collectors;
 import java.util.AbstractMap;
 
@@ -207,6 +208,7 @@ public class AdminService {
     private final MetaSyncService metaSyncService;
     private final PaidTrafficUtmService paidTrafficUtmService;
     private final DashboardService dashboardService;
+    private final StaffPortfolioService staffPortfolioService;
     private final MeetingService meetingService;
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -334,14 +336,25 @@ public class AdminService {
         LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
         LocalDate horizonEnd = today.plusWeeks(2);
 
-        long leadsTotal = leadRepository.countByOwnerUser_Id(staffUserId);
-        long leadsWon = leadRepository.countByOwnerUser_IdAndStatus(staffUserId, LeadStatus.WON);
-        long meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(staffUserId, startWeek, endWeek);
+        StaffPortfolioService.PortfolioResolution pr = staffPortfolioService.resolve(staffUserId);
+        long leadsTotal;
+        long leadsWon;
+        long meetingsWeek;
+        if (pr.explicitAssignments() && !pr.assignedCompanyIds().isEmpty()) {
+            Collection<UUID> pids = pr.assignedCompanyIds();
+            leadsTotal = leadRepository.countByCompanyIdIn(pids);
+            leadsWon = leadRepository.countByCompanyIdInAndStatus(pids, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForCompaniesBetween(pids, startWeek, endWeek);
+        } else {
+            leadsTotal = leadRepository.countByOwnerUser_Id(staffUserId);
+            leadsWon = leadRepository.countByOwnerUser_IdAndStatus(staffUserId, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(staffUserId, startWeek, endWeek);
+        }
 
         String leadsSubtitle = leadsWon + " ganhos no funil";
 
         List<Company> staffScopeCompanies = new ArrayList<>(companyRepository.findAllWithPlanFetched());
-        Set<UUID> allowedCompanyIds = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserId));
+        Set<UUID> allowedCompanyIds = new HashSet<>(staffPortfolioService.scopeCompanyIdsForAggregations(staffUserId));
         staffScopeCompanies = staffScopeCompanies.stream()
                 .filter(c -> allowedCompanyIds.contains(c.getId()))
                 .collect(Collectors.toList());
@@ -365,7 +378,7 @@ public class AdminService {
                 AdminDashboardResponse.Kpi.builder()
                         .label("ENCONTROS SEMANA")
                         .value(String.valueOf(meetingsWeek))
-                        .subtitle("Leads com você como responsável")
+                        .subtitle(pr.explicitAssignments() ? "Carteira de clientes associada" : "Leads com você como responsável")
                         .icon("CALENDAR")
                         .build(),
                 AdminDashboardResponse.Kpi.builder()
@@ -375,7 +388,9 @@ public class AdminService {
                         .icon("DOLLAR")
                         .build());
 
-        List<Meeting> rawMeetings = meetingRepository.findForLeadOwnerDateRange(staffUserId, today, horizonEnd);
+        List<Meeting> rawMeetings = pr.explicitAssignments() && !pr.assignedCompanyIds().isEmpty()
+                ? meetingRepository.findForCompaniesDateRange(pr.assignedCompanyIds(), today, horizonEnd)
+                : meetingRepository.findForLeadOwnerDateRange(staffUserId, today, horizonEnd);
         List<AdminDashboardResponse.MeetingRow> meetingRows = rawMeetings.stream()
                 .limit(15)
                 .map(m -> AdminDashboardResponse.MeetingRow.builder()
@@ -408,7 +423,7 @@ public class AdminService {
         ZoneId zone = ZoneId.systemDefault();
         List<GoalTask> tasks;
         if (staffUserIdOrNull != null) {
-            Set<UUID> companyIds = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserIdOrNull));
+            Set<UUID> companyIds = new HashSet<>(staffPortfolioService.scopeCompanyIdsForAggregations(staffUserIdOrNull));
             if (companyIds.isEmpty()) {
                 tasks = List.of();
             } else {
@@ -580,9 +595,20 @@ public class AdminService {
         LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
 
-        long totalLeads = leadRepository.countByOwnerUser_Id(staffUserId);
-        long leadsWon = leadRepository.countByOwnerUser_IdAndStatus(staffUserId, LeadStatus.WON);
-        long meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(staffUserId, startWeek, endWeek);
+        StaffPortfolioService.PortfolioResolution pr = staffPortfolioService.resolve(staffUserId);
+        long totalLeads;
+        long leadsWon;
+        long meetingsWeek;
+        if (pr.explicitAssignments() && !pr.assignedCompanyIds().isEmpty()) {
+            Collection<UUID> pids = pr.assignedCompanyIds();
+            totalLeads = leadRepository.countByCompanyIdIn(pids);
+            leadsWon = leadRepository.countByCompanyIdInAndStatus(pids, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForCompaniesBetween(pids, startWeek, endWeek);
+        } else {
+            totalLeads = leadRepository.countByOwnerUser_Id(staffUserId);
+            leadsWon = leadRepository.countByOwnerUser_IdAndStatus(staffUserId, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(staffUserId, startWeek, endWeek);
+        }
 
         return AdminPerformanceSnapshotResponse.builder()
                 .totalCompanies(0L)
@@ -977,8 +1003,19 @@ public class AdminService {
             if (!Boolean.TRUE.equals(staff.getAmpliaInternalStaff())) {
                 throw new RuntimeException("Filtro disponível apenas para colaboradores internos");
             }
+            StaffPortfolioService.PortfolioResolution pr = staffPortfolioService.resolve(staffUserId);
             Page<Lead> leads;
-            if (q != null && !q.trim().isEmpty()) {
+            if (pr.explicitAssignments() && !pr.assignedCompanyIds().isEmpty()) {
+                Collection<UUID> pids = pr.assignedCompanyIds();
+                if (q != null && !q.trim().isEmpty()) {
+                    leads = leadRepository.searchLeadsForCompanies(pids, q.trim(), pageable);
+                } else if (status != null && !status.trim().isEmpty()) {
+                    LeadStatus st = LeadStatus.valueOf(status.trim().toUpperCase());
+                    leads = leadRepository.findByCompany_IdInAndStatusOrderByCreatedAtDesc(pids, st, pageable);
+                } else {
+                    leads = leadRepository.findByCompany_IdInOrderByCreatedAtDesc(pids, pageable);
+                }
+            } else if (q != null && !q.trim().isEmpty()) {
                 leads = leadRepository.searchAllLeadsForOwner(staffUserId, q.trim(), pageable);
             } else if (status != null && !status.trim().isEmpty()) {
                 LeadStatus st = LeadStatus.valueOf(status.trim().toUpperCase());
@@ -1370,7 +1407,7 @@ public class AdminService {
 
         List<Company> companies = new ArrayList<>(companyRepository.findAllWithPlanFetched());
         if (staffUserId != null) {
-            Set<UUID> allowed = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserId));
+            Set<UUID> allowed = new HashSet<>(staffPortfolioService.scopeCompanyIdsForAggregations(staffUserId));
             companies = companies.stream().filter(c -> allowed.contains(c.getId())).collect(Collectors.toList());
         }
 
@@ -2335,7 +2372,7 @@ public class AdminService {
 
         List<Company> companies = new ArrayList<>(companyRepository.findAllWithPlanFetched());
         if (staffUserId != null) {
-            Set<UUID> allowed = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserId));
+            Set<UUID> allowed = new HashSet<>(staffPortfolioService.scopeCompanyIdsForAggregations(staffUserId));
             companies = companies.stream().filter(c -> allowed.contains(c.getId())).collect(Collectors.toList());
         }
 

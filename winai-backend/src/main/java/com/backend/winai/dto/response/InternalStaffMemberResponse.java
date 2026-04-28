@@ -31,4 +31,6 @@ public class InternalStaffMemberResponse {
     private long meetingsThisWeek;
     /** Taxa de conversão aproximada leads ganhos / total atribuídos (0–100). */
     private int conversionPercent;
+    /** Quantidade de clientes associados explicitamente (carteira admin). */
+    private long assignedCompanyCount;
 }

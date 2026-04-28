@@ -32,4 +32,7 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
     long countByPlanEntity_Id(UUID planId);
 
     long countByPendingPlan_Id(UUID planId);
+
+    @Query("SELECT c.id AS id, c.name AS name FROM Company c ORDER BY LOWER(c.name)")
+    List<CompanyIdNameProjection> findAllCompanyIdAndNameOrderedByName();
 }

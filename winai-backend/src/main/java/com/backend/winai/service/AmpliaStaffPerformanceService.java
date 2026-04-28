@@ -24,6 +24,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -40,6 +41,7 @@ public class AmpliaStaffPerformanceService {
     private final MeetingRepository meetingRepository;
     private final CompanyStrategicDiagnosisRepository diagnosisRepository;
     private final GoalTaskRepository goalTaskRepository;
+    private final StaffPortfolioService staffPortfolioService;
 
     public AdminAmpliaStaffPerformanceResponse getStaffPerformance(UUID staffUserId) {
         User user = userRepository.findByIdWithAmpliaStaffRole(staffUserId)
@@ -51,20 +53,62 @@ public class AmpliaStaffPerformanceService {
         String periodLabel = buildPeriodLabel();
         AmpliaStaffType st = user.getAmpliaStaffType();
 
-        long leadsTotal = leadRepository.countByOwnerUser_Id(staffUserId);
-        long leadsWon = leadRepository.countByOwnerUser_IdAndStatus(staffUserId, LeadStatus.WON);
-        int conv = leadsTotal > 0 ? (int) Math.min(100, Math.round(leadsWon * 100.0 / leadsTotal)) : 0;
+        StaffPortfolioService.PortfolioResolution portfolio = staffPortfolioService.resolve(staffUserId);
+        boolean portfolioExplicit = portfolio.explicitAssignments();
+        Collection<UUID> portfolioCompanyIds = portfolio.assignedCompanyIds();
 
         LocalDate today = LocalDate.now(TZ);
         LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
-        long meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(staffUserId, startWeek, endWeek);
 
-        BigDecimal revBd = leadRepository.sumEstimatedValueByOwnerAndStatus(staffUserId, LeadStatus.WON);
+        long leadsTotal;
+        long leadsWon;
+        long meetingsWeek;
+        BigDecimal revBd;
+        List<Lead> wonPage;
+
+        int pbCount;
+        int companiesPb;
+        long tasksDone;
+        long tasksAll;
+        Integer progressPct;
+        List<CompanyStrategicDiagnosis> recentDiag;
+
+        if (portfolioExplicit && !portfolioCompanyIds.isEmpty()) {
+            leadsTotal = leadRepository.countByCompanyIdIn(portfolioCompanyIds);
+            leadsWon = leadRepository.countByCompanyIdInAndStatus(portfolioCompanyIds, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForCompaniesBetween(portfolioCompanyIds, startWeek, endWeek);
+            revBd = leadRepository.sumEstimatedValueByCompanyIdInAndStatus(portfolioCompanyIds, LeadStatus.WON);
+            wonPage = leadRepository.findTopByCompanyIdInAndStatusWithCompany(portfolioCompanyIds, LeadStatus.WON,
+                    PageRequest.of(0, 12));
+
+            pbCount = (int) diagnosisRepository.countPublishedByCompanyIdIn(portfolioCompanyIds);
+            companiesPb = (int) diagnosisRepository.countDistinctCompaniesWithPublishedPlaybookIn(portfolioCompanyIds);
+            tasksDone = goalTaskRepository.countCompletedInPlaybookCompaniesIn(portfolioCompanyIds);
+            tasksAll = goalTaskRepository.countAllTasksInPlaybookCompaniesIn(portfolioCompanyIds);
+            progressPct = tasksAll > 0 ? (int) Math.min(100, Math.round(tasksDone * 100.0 / tasksAll)) : null;
+            recentDiag = diagnosisRepository.findPublishedByCompanyIdInOrderByPublishedAtDesc(portfolioCompanyIds,
+                    PageRequest.of(0, 10));
+        } else {
+            leadsTotal = leadRepository.countByOwnerUser_Id(staffUserId);
+            leadsWon = leadRepository.countByOwnerUser_IdAndStatus(staffUserId, LeadStatus.WON);
+            meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(staffUserId, startWeek, endWeek);
+            revBd = leadRepository.sumEstimatedValueByOwnerAndStatus(staffUserId, LeadStatus.WON);
+            wonPage = leadRepository.findTopByOwnerAndStatusWithCompany(
+                    staffUserId, LeadStatus.WON, PageRequest.of(0, 12));
+
+            pbCount = (int) diagnosisRepository.countByPublishedAtIsNotNullAndUpdatedByUserId(staffUserId);
+            List<UUID> companyIds = diagnosisRepository.findDistinctCompanyIdsPublishedBy(staffUserId);
+            companiesPb = companyIds.size();
+            tasksDone = goalTaskRepository.countCompletedInPlaybookCompaniesByPublisher(staffUserId);
+            tasksAll = goalTaskRepository.countAllTasksInPlaybookCompaniesByPublisher(staffUserId);
+            progressPct = tasksAll > 0 ? (int) Math.min(100, Math.round(tasksDone * 100.0 / tasksAll)) : null;
+            recentDiag = diagnosisRepository.findPublishedByUserOrderByPublishedAtDesc(staffUserId, PageRequest.of(0, 10));
+        }
+
+        int conv = leadsTotal > 0 ? (int) Math.min(100, Math.round(leadsWon * 100.0 / leadsTotal)) : 0;
         double revenueWon = revBd != null ? revBd.doubleValue() : 0.0;
 
-        List<Lead> wonPage = leadRepository.findTopByOwnerAndStatusWithCompany(
-                staffUserId, LeadStatus.WON, PageRequest.of(0, 12));
         List<AdminAmpliaStaffPerformanceResponse.ClosedDealRow> deals = new ArrayList<>();
         for (Lead l : wonPage) {
             String cn = l.getCompany() != null ? l.getCompany().getName() : "—";
@@ -86,16 +130,6 @@ public class AmpliaStaffPerformanceService {
                 .recentDeals(deals)
                 .build();
 
-        int pbCount = (int) diagnosisRepository.countByPublishedAtIsNotNullAndUpdatedByUserId(staffUserId);
-        List<UUID> companyIds = diagnosisRepository.findDistinctCompanyIdsPublishedBy(staffUserId);
-        int companiesPb = companyIds.size();
-
-        long tasksDone = goalTaskRepository.countCompletedInPlaybookCompaniesByPublisher(staffUserId);
-        long tasksAll = goalTaskRepository.countAllTasksInPlaybookCompaniesByPublisher(staffUserId);
-        Integer progressPct = tasksAll > 0 ? (int) Math.min(100, Math.round(tasksDone * 100.0 / tasksAll)) : null;
-
-        List<CompanyStrategicDiagnosis> recentDiag =
-                diagnosisRepository.findPublishedByUserOrderByPublishedAtDesc(staffUserId, PageRequest.of(0, 10));
         List<AdminAmpliaStaffPerformanceResponse.PlaybookDeliveryRow> deliveries = new ArrayList<>();
         for (CompanyStrategicDiagnosis d : recentDiag) {
             ZonedDateTime p = d.getPublishedAt();

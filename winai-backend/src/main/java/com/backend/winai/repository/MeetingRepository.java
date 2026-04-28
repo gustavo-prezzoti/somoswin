@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -167,5 +168,16 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
         @Query("SELECT m FROM Meeting m JOIN FETCH m.company c LEFT JOIN FETCH m.lead l WHERE l.ownerUser.id = :userId "
                         + "AND m.meetingDate >= :start AND m.meetingDate <= :end ORDER BY m.meetingDate ASC, m.meetingTime ASC")
         List<Meeting> findForLeadOwnerDateRange(@Param("userId") UUID userId, @Param("start") LocalDate start,
+                        @Param("end") LocalDate end);
+
+        @Query("SELECT COUNT(m) FROM Meeting m WHERE m.company.id IN :companyIds AND m.meetingDate BETWEEN :start AND :end")
+        long countMeetingsForCompaniesBetween(@Param("companyIds") Collection<UUID> companyIds,
+                        @Param("start") LocalDate start,
+                        @Param("end") LocalDate end);
+
+        @Query("SELECT m FROM Meeting m JOIN FETCH m.company c WHERE m.company.id IN :companyIds "
+                        + "AND m.meetingDate >= :start AND m.meetingDate <= :end ORDER BY m.meetingDate ASC, m.meetingTime ASC")
+        List<Meeting> findForCompaniesDateRange(@Param("companyIds") Collection<UUID> companyIds,
+                        @Param("start") LocalDate start,
                         @Param("end") LocalDate end);
 }

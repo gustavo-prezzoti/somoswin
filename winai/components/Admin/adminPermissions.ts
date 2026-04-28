@@ -22,7 +22,7 @@ export function moduleHasAnyAccess(perms: string[] | undefined, moduleId: string
     const mod = moduleId.trim();
     if (list.includes(mod)) return true;
     const prefix = `${mod}:`;
-    return list.some((k) => k === mod || k.startsWith(prefix));
+    return list.some((k) => typeof k === 'string' && (k === mod || k.startsWith(prefix)));
 }
 
 /**
@@ -136,6 +136,6 @@ export function adminRouteToModule(pathname: string): string | null {
 }
 
 /** Subrota só para admin pleno (ex.: Papéis). */
-export function isFullAdminOnlyAdminPath(pathname: string): boolean {
-    return pathname.startsWith('/admin/gestao-equipe/papeis');
+export function isFullAdminOnlyAdminPath(pathname: string | undefined): boolean {
+    return (pathname ?? '').startsWith('/admin/gestao-equipe/papeis');
 }

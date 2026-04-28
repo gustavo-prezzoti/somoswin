@@ -4,6 +4,7 @@ import com.backend.winai.dto.request.CreateAmpliaStaffRoleRequest;
 import com.backend.winai.dto.request.CreateInternalStaffRequest;
 import com.backend.winai.dto.request.PatchAmpliaStaffRoleRequest;
 import com.backend.winai.dto.request.PatchInternalStaffRequest;
+import com.backend.winai.dto.request.PutStaffCompanyAssignmentsRequest;
 import com.backend.winai.dto.request.AdminMeetingCreateRequest;
 import com.backend.winai.dto.request.AdminCreateUserRequest;
 import com.backend.winai.dto.request.AdminEscutaStartRequest;
@@ -44,6 +45,8 @@ import com.backend.winai.dto.response.AdminUserResponse;
 import com.backend.winai.dto.response.CreateInternalStaffResponse;
 import com.backend.winai.dto.response.InternalStaffMemberDashboardResponse;
 import com.backend.winai.dto.response.InternalStaffMemberResponse;
+import com.backend.winai.dto.response.StaffCompanyAssignmentItemResponse;
+import com.backend.winai.dto.response.StaffCompanyAssignmentOptionResponse;
 import com.backend.winai.dto.response.MeetingResponse;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
 import com.backend.winai.entity.LeadStatus;
@@ -57,6 +60,7 @@ import com.backend.winai.service.CompanyClientNoteService;
 import com.backend.winai.service.AdminService;
 import com.backend.winai.service.AmpliaStaffRoleService;
 import com.backend.winai.service.InternalStaffService;
+import com.backend.winai.service.StaffPortfolioService;
 import com.backend.winai.service.TermsOfServiceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -79,6 +83,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -94,6 +99,7 @@ public class AdminController {
     private final CompanyAgentDocumentService companyAgentDocumentService;
     private final TermsOfServiceService termsOfServiceService;
     private final InternalStaffService internalStaffService;
+    private final StaffPortfolioService staffPortfolioService;
     private final AmpliaStaffRoleService ampliaStaffRoleService;
 
     // ========== ESTATÍSTICAS ==========
@@ -225,6 +231,39 @@ public class AdminController {
     @GetMapping("/internal-staff/{id}/dashboard")
     public ResponseEntity<InternalStaffMemberDashboardResponse> getInternalStaffDashboard(@PathVariable UUID id) {
         return ResponseEntity.ok(internalStaffService.getMemberDashboard(id));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'gestao_equipe', 'list')")
+    @Operation(summary = "Carteira cliente ↔ equipe — opções de empresas (picker)")
+    @GetMapping("/internal-staff/company-assignment-options")
+    public ResponseEntity<List<StaffCompanyAssignmentOptionResponse>> listCompanyAssignmentOptions() {
+        List<StaffCompanyAssignmentOptionResponse> rows = staffPortfolioService.listAssignmentOptions().stream()
+                .map(p -> StaffCompanyAssignmentOptionResponse.builder()
+                        .companyId(p.getId())
+                        .companyName(p.getName())
+                        .build())
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(rows);
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'gestao_equipe', 'read')")
+    @Operation(summary = "Carteira cliente ↔ equipe — empresas associadas ao colaborador")
+    @GetMapping("/internal-staff/{staffId}/company-assignments")
+    public ResponseEntity<List<StaffCompanyAssignmentItemResponse>> getStaffCompanyAssignments(@PathVariable UUID staffId) {
+        return ResponseEntity.ok(internalStaffService.listStaffCompanyAssignments(staffId));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'gestao_equipe', 'update')")
+    @Operation(summary = "Carteira cliente ↔ equipe — substituir associações do colaborador")
+    @PutMapping("/internal-staff/{staffId}/company-assignments")
+    public ResponseEntity<Void> putStaffCompanyAssignments(
+            @PathVariable UUID staffId,
+            @Valid @RequestBody PutStaffCompanyAssignmentsRequest body,
+            @AuthenticationPrincipal User principal) {
+        UUID actorId = principal != null ? principal.getId() : null;
+        staffPortfolioService.replaceAssignments(staffId, body.getCompanyIds() != null ? body.getCompanyIds() : List.of(),
+                actorId);
+        return ResponseEntity.noContent().build();
     }
 
     @PreAuthorize("@adminSecurity.hasPermission(authentication, 'clientes', 'list')")
