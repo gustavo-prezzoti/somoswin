@@ -127,8 +127,7 @@ export interface MetaAdsDashboardViewProps {
     campaigns: MetaCampaignListItem[];
     campaignsLoading: boolean;
     accountNameOverride?: string | null;
-    onSync?: () => void;
-    syncing?: boolean;
+    onCampaignCreated?: () => void;
     staffBanner?: React.ReactNode;
     errorBanner?: React.ReactNode | null;
     utmPerformance: UtmPerformanceResponse | null;
@@ -144,8 +143,7 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
     campaigns,
     campaignsLoading,
     accountNameOverride,
-    onSync,
-    syncing,
+    onCampaignCreated,
     staffBanner,
     errorBanner,
     utmPerformance,
@@ -271,7 +269,7 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">
-                        Meta Ads Dashboard
+                        META ADS DASHBOARD
                     </h2>
                     <p className="text-sm text-gray-400 font-medium">Gestão e Otimização com Claude AI</p>
                 </div>
@@ -387,21 +385,11 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-2 justify-end">
-                            {onSync && (
-                                <button
-                                    type="button"
-                                    disabled={!selectedCompany?.connected || syncing}
-                                    onClick={onSync}
-                                    className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                                >
-                                    <RefreshCw size={16} className={syncing ? 'animate-spin text-emerald-600' : ''} />
-                                    {syncing ? 'Sincronizando…' : 'Sincronizar'}
-                                </button>
-                            )}
                             <button
                                 type="button"
+                                disabled={!selectedCompany?.connected}
                                 onClick={() => setShowCreateCampaign(true)}
-                                className="flex items-center gap-2 px-8 py-3 bg-[#141414] text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg"
+                                className="flex items-center gap-2 px-8 py-3 bg-[#141414] text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 <Megaphone size={16} className="text-[#00FF00]" />
                                 Criar Campanha
@@ -410,10 +398,15 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
                     </div>
 
                     <AnimatePresence>
-                        {showCreateCampaign && (
+                        {showCreateCampaign && selectedCompanyId && (
                             <CreateCampaignModal
                                 onClose={() => setShowCreateCampaign(false)}
                                 accountName={detailTitle}
+                                companyId={selectedCompanyId}
+                                metaConnected={!!selectedCompany?.connected}
+                                onSuccess={() => {
+                                    onCampaignCreated?.();
+                                }}
                             />
                         )}
                     </AnimatePresence>

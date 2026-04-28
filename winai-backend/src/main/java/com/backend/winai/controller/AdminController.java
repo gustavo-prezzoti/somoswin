@@ -22,6 +22,7 @@ import com.backend.winai.dto.response.AdminConversationSummaryResponse;
 import com.backend.winai.dto.response.CompanyClientNoteResponse;
 import com.backend.winai.dto.request.CreateCompanyClientNoteRequest;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
+import com.backend.winai.dto.marketing.CreateCampaignRequest;
 import com.backend.winai.dto.marketing.paidtraffic.UtmPerformanceResponse;
 import com.backend.winai.dto.response.AdminEscutaSessionResponse;
 import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
@@ -372,6 +373,24 @@ public class AdminController {
     public ResponseEntity<Map<String, String>> syncMetaAdsCompany(@PathVariable UUID companyId) {
         adminService.syncAdminMetaAdsForCompany(companyId);
         return ResponseEntity.ok(Map.of("status", "sync_started", "message", "Sincronização iniciada em background"));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'metaads', 'update')")
+    @Operation(summary = "Meta Ads — criar campanha (WhatsApp)", description = "Marketing API para a empresa selecionada; mesmo fluxo que o app cliente.")
+    @PostMapping("/meta-ads/companies/{companyId}/campaigns")
+    public ResponseEntity<Void> createAdminMetaAdsCampaign(
+            @PathVariable UUID companyId,
+            @Valid @RequestBody CreateCampaignRequest request) {
+        adminService.createAdminMetaAdsCampaign(companyId, request);
+        return ResponseEntity.ok().build();
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'metaads', 'update')")
+    @Operation(summary = "Meta Ads — upload de imagem para criativo")
+    @PostMapping(value = "/meta-ads/upload-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadAdminMetaAdsCampaignImage(@RequestParam("file") MultipartFile file)
+            throws IOException {
+        return ResponseEntity.ok(adminService.uploadAdminMetaAdsCampaignImage(file));
     }
 
     @PreAuthorize("@adminSecurity.hasPermission(authentication, 'metas', 'list')")

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, 
   ChevronRight, 
@@ -31,17 +32,42 @@ import {
   Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import adminService from '../../../services/adminService';
+import type { CreateCampaignRequest } from '../../../services/api/marketing.service';
+import { getErrorMessage } from '../../../services/utils/errorHelper';
 
 interface CreateCampaignModalProps {
   onClose: () => void;
   accountName: string;
+  companyId: string;
+  metaConnected: boolean;
+  onSuccess: () => void;
 }
 
 type Step = 'objective' | 'campaign' | 'adset' | 'ad' | 'review';
 
-const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, accountName }) => {
+function mapCountryLabelToCode(location: string): string {
+  const t = location.toLowerCase();
+  if (t.includes('brasil') || t.includes('brazil')) return 'BR';
+  return 'BR';
+}
+
+function parseAgeMax(s: string): number {
+  if (s === '65+') return 65;
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) ? n : 65;
+}
+
+const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
+  onClose,
+  accountName,
+  companyId,
+  metaConnected,
+  onSuccess,
+}) => {
   const [step, setStep] = useState<Step>('objective');
-  const [objective, setObjective] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -53,9 +79,9 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
     budgetStrategy: 'HIGHEST_VOLUME',
     abTest: false,
     adSetName: '',
-    conversionLocation: 'website',
+    conversionLocation: 'whatsapp',
     performanceGoal: 'MAX_CONVERSIONS',
-    startDate: '2026-03-31',
+    startDate: '',
     startTime: '13:00',
     endDate: '',
     endTime: '',
@@ -75,17 +101,22 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
     conversationConfig: false,
     tracking: true,
     pixelId: '1234567890',
-    uploadedFile: null as File | null
+    uploadedFile: null as File | null,
+    imageUrlPaste: '',
   });
 
-  const objectives = [
-    { id: 'awareness', title: 'Reconhecimento', desc: 'Mostre seus anúncios para as pessoas com maior probabilidade de lembrá-los.', icon: '📢' },
-    { id: 'traffic', title: 'Tráfego', desc: 'Encaminhe as pessoas para um destino, como seu site, aplicativo ou evento do Facebook.', icon: '🔗' },
-    { id: 'engagement', title: 'Engajamento', desc: 'Obtenha mais visualizações de vídeo, engajamento com a publicação, curtidas na Página ou participações em eventos.', icon: '💬' },
-    { id: 'leads', title: 'Cadastros', desc: 'Gere cadastros para seu negócio ou marca.', icon: '👥' },
-    { id: 'app_promotion', title: 'Promoção do app', desc: 'Encontre novas pessoas para instalar seu aplicativo e continuar usando-o.', icon: '📱' },
-    { id: 'sales', title: 'Vendas', desc: 'Encontre pessoas com probabilidade de comprar seu produto ou serviço.', icon: '🛍️' },
-  ];
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    setFormData((prev) => ({ ...prev, startDate: prev.startDate || today }));
+  }, []);
 
   const nextStep = () => {
     if (step === 'objective') setStep('campaign');
@@ -103,24 +134,13 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
 
   const renderObjectiveStep = () => (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {objectives.map((obj) => (
-          <button
-            key={obj.id}
-            onClick={() => setObjective(obj.id)}
-            className={`p-6 rounded-2xl border-2 text-left transition-all flex items-start gap-4 ${
-              objective === obj.id 
-                ? 'border-[#00FF00] bg-emerald-50/30' 
-                : 'border-black/5 hover:border-black/10 bg-white'
-            }`}
-          >
-            <span className="text-3xl">{obj.icon}</span>
-            <div>
-              <h4 className="font-black uppercase tracking-tight text-sm mb-1">{obj.title}</h4>
-              <p className="text-xs text-gray-500 font-medium leading-relaxed">{obj.desc}</p>
-            </div>
-          </button>
-        ))}
+      <div className="p-8 rounded-[2rem] border-2 border-[#00FF00]/80 bg-emerald-50/40">
+        <h4 className="font-black uppercase tracking-tight text-base mb-3 text-[#141414]">Tráfego → WhatsApp (clique para conversa)</h4>
+        <p className="text-sm text-gray-600 leading-relaxed">
+          Este fluxo usa a Marketing API para criar uma campanha <strong className="text-[#141414]">OUTCOME_TRAFFIC</strong>, conjunto com destino{' '}
+          <strong className="text-[#141414]">WhatsApp</strong> e anúncio com criativo novo (texto + imagem). A campanha é criada{' '}
+          <strong className="text-[#141414]">pausada</strong>; ative quando estiver pronto no Gerenciador de Anúncios.
+        </p>
       </div>
     </div>
   );
@@ -535,6 +555,17 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
           </div>
 
           <div className="space-y-4">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Ou URL pública da imagem</label>
+            <input
+              type="url"
+              value={formData.imageUrlPaste}
+              onChange={(e) => setFormData({ ...formData, imageUrlPaste: e.target.value })}
+              placeholder="https://…"
+              className="w-full p-4 bg-white border border-black/5 rounded-xl text-sm focus:outline-none"
+            />
+          </div>
+
+          <div className="space-y-4">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Texto Principal</label>
             <textarea 
               value={formData.primaryText}
@@ -549,8 +580,20 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
               type="text" 
               value={formData.headline}
               onChange={(e) => setFormData({...formData, headline: e.target.value})}
+              maxLength={40}
               className="w-full p-4 bg-white border border-black/5 rounded-xl text-sm focus:outline-none"
               placeholder="Título chamativo..."
+            />
+          </div>
+          <div className="space-y-4">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Descrição do link (opcional, máx. 30)</label>
+            <input
+              type="text"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              maxLength={30}
+              className="w-full p-4 bg-white border border-black/5 rounded-xl text-sm focus:outline-none"
+              placeholder="Texto curto no anúncio"
             />
           </div>
         </div>
@@ -681,7 +724,7 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
           </div>
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase mb-1">Objetivo</p>
-            <p className="text-sm font-black italic uppercase">{objective || 'Não selecionado'}</p>
+            <p className="text-sm font-black italic uppercase">Tráfego → WhatsApp (OUTCOME_TRAFFIC)</p>
           </div>
         </div>
 
@@ -714,7 +757,7 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
 
   const getStepTitle = () => {
     switch (step) {
-      case 'objective': return 'Escolha um objetivo de campanha';
+      case 'objective': return 'Fluxo Meta: WhatsApp';
       case 'campaign': return 'Configurações da Campanha';
       case 'adset': return 'Configurações do Conjunto de Anúncios';
       case 'ad': return 'Criação do Anúncio';
@@ -723,20 +766,69 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
   };
 
   const isNextDisabled = () => {
-    if (step === 'objective') return !objective;
-    if (step === 'campaign') return !formData.campaignName;
-    if (step === 'adset') return !formData.adSetName || (!formData.advantageBudget && !formData.campaignBudget);
-    if (step === 'ad') return !formData.adName || (!formData.primaryText && !formData.uploadedFile);
+    if (step === 'objective') return false;
+    if (step === 'campaign') return !formData.campaignName.trim();
+    if (step === 'adset') return !formData.adSetName.trim();
+    if (step === 'ad') {
+      const hasImg = !!formData.uploadedFile || !!formData.imageUrlPaste.trim();
+      return !formData.adName.trim() || !formData.primaryText.trim() || !hasImg;
+    }
     return false;
   };
 
-  return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 md:p-8">
+  const handlePublish = async () => {
+    if (!metaConnected || !companyId) {
+      setSubmitError('Esta empresa não está com Meta Ads conectado.');
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      let imageUrl: string | undefined;
+      if (formData.uploadedFile) {
+        const up = await adminService.uploadMetaAdsCampaignImage(formData.uploadedFile);
+        imageUrl = up.url;
+      } else if (formData.imageUrlPaste.trim()) {
+        imageUrl = formData.imageUrlPaste.trim();
+      }
+      if (!imageUrl) {
+        setSubmitError('Envie uma imagem ou informe uma URL pública da imagem.');
+        return;
+      }
+      const dailyBudget = Math.max(1, parseFloat(String(formData.campaignBudget).replace(',', '.')) || 50);
+      const payload: CreateCampaignRequest = {
+        name: formData.campaignName.trim(),
+        objective: 'OUTCOME_TRAFFIC',
+        dailyBudget,
+        countryCode: mapCountryLabelToCode(formData.location),
+        ageMin: parseInt(formData.ageMin, 10),
+        ageMax: parseAgeMax(formData.ageMax),
+        adSetName: formData.adSetName.trim(),
+        adName: formData.adName.trim(),
+        adMessage: formData.primaryText.trim(),
+        headline: (formData.headline || '').trim().slice(0, 40) || undefined,
+        adDescription: (formData.description || '').trim().slice(0, 30) || undefined,
+        imageUrl,
+        publisherPlatforms: 'facebook,instagram',
+        startDate: formData.startDate || undefined,
+      };
+      await adminService.createMetaAdsCampaign(companyId, payload);
+      onSuccess();
+      onClose();
+    } catch (e) {
+      setSubmitError(getErrorMessage(e, 'Falha ao criar campanha'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const modalBody = (
+    <div className="fixed inset-0 z-[10060] flex items-center justify-center p-4 md:p-8">
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
+        onClick={() => !submitting && onClose()}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
       />
       
@@ -744,7 +836,8 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-6xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh]"
+        className="relative z-[1] w-full max-w-6xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh]"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="px-8 py-6 border-b border-black/5 flex items-center justify-between bg-gray-50/50">
@@ -783,14 +876,20 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
               })}
             </div>
 
-            <button 
-              onClick={onClose}
-              className="p-3 bg-white border border-black/5 rounded-2xl text-gray-400 hover:text-black transition-all shadow-sm"
+          <button 
+            type="button"
+            onClick={() => !submitting && onClose()}
+              disabled={submitting}
+              className="p-3 bg-white border border-black/5 rounded-2xl text-gray-400 hover:text-black transition-all shadow-sm disabled:opacity-40"
             >
               <X size={20} />
             </button>
           </div>
         </div>
+
+        {submitError && (
+          <div className="px-8 py-3 bg-red-50 border-b border-red-100 text-sm text-red-700 font-medium">{submitError}</div>
+        )}
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-8 bg-white">
@@ -821,8 +920,9 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
         {/* Footer Controls */}
         <div className="px-8 py-6 border-t border-black/5 bg-gray-50/50 flex items-center justify-between">
           <button 
+            type="button"
             onClick={prevStep}
-            disabled={step === 'objective'}
+            disabled={submitting || step === 'objective'}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
               step === 'objective' ? 'opacity-0 pointer-events-none' : 'bg-white border border-black/5 text-gray-400 hover:text-black'
             }`}
@@ -833,28 +933,33 @@ const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, acco
 
           <div className="flex items-center gap-3">
             <button 
-              onClick={onClose}
-              className="px-6 py-3 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-all"
+              type="button"
+              onClick={() => !submitting && onClose()}
+              disabled={submitting}
+              className="px-6 py-3 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-all disabled:opacity-40"
             >
               Cancelar
             </button>
             <button 
-              onClick={step === 'review' ? onClose : nextStep}
-              disabled={isNextDisabled()}
+              type="button"
+              onClick={step === 'review' ? () => void handlePublish() : nextStep}
+              disabled={submitting || isNextDisabled()}
               className={`flex items-center gap-2 px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg ${
-                isNextDisabled() 
+                submitting || isNextDisabled()
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
                   : step === 'review' ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-[#141414] text-white hover:bg-black'
               }`}
             >
-              {step === 'review' ? 'Publicar Campanha' : 'Continuar'}
-              {step !== 'review' && <ChevronRight size={16} />}
+              {submitting ? 'Publicando…' : step === 'review' ? 'Publicar Campanha' : 'Continuar'}
+              {!submitting && step !== 'review' && <ChevronRight size={16} />}
             </button>
           </div>
         </div>
       </motion.div>
     </div>
   );
+
+  return createPortal(modalBody, document.body);
 };
 
 export default CreateCampaignModal;

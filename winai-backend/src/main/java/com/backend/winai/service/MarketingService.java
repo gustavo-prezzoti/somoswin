@@ -279,6 +279,11 @@ public class MarketingService {
     }
 
     public Map<String, String> uploadCampaignImage(User user, MultipartFile file) throws IOException {
+        return uploadCampaignImage(file);
+    }
+
+    /** Upload público para criativos Meta (Supabase); não depende da empresa. */
+    public Map<String, String> uploadCampaignImage(MultipartFile file) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new RuntimeException("Selecione uma imagem para enviar");
         }
@@ -1385,7 +1390,13 @@ public class MarketingService {
     public void createCampaign(User user, CreateCampaignRequest request) {
         Company company = companyRepository.findById(user.getCompany().getId())
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        createCampaignForCompany(company, request);
+    }
 
+    /**
+     * Mesma lógica que {@link #createCampaign(User, CreateCampaignRequest)} para uma empresa qualquer (ex.: admin staff).
+     */
+    public void createCampaignForCompany(Company company, CreateCampaignRequest request) {
         MetaConnection conn = metaConnectionRepository.findByCompany(company)
                 .filter(MetaConnection::isConnected)
                 .orElseThrow(() -> new RuntimeException("Conecte sua conta Meta Ads em Configurações antes de criar campanhas"));
@@ -1408,7 +1419,7 @@ public class MarketingService {
 
         // Doc Meta "Objective Mapping": WHATSAPP está em LINK_CLICKS→OUTCOME_TRAFFIC
         String objective = "OUTCOME_TRAFFIC";
-        String effectiveLink = resolveEffectiveLink(user, request, pageId, accessToken);
+        String effectiveLink = resolveEffectiveLink(company, request, pageId, accessToken);
 
         long dailyBudgetCents = Math.max(100, Math.round((request.getDailyBudget() != null ? request.getDailyBudget() : 50.0) * 100));
 
@@ -1525,12 +1536,17 @@ public class MarketingService {
     }
 
     private String resolveEffectiveLink(User user, CreateCampaignRequest request, String pageId, String accessToken) {
+        Company c = user != null ? user.getCompany() : null;
+        return resolveEffectiveLink(c, request, pageId, accessToken);
+    }
+
+    private String resolveEffectiveLink(Company company, CreateCampaignRequest request, String pageId, String accessToken) {
         String phone = request.getWhatsappPhone();
         if (phone == null || phone.isBlank()) {
             phone = fetchPageWhatsAppNumber(pageId, accessToken);
         }
-        if (phone == null || phone.isBlank() && user != null) {
-            java.util.List<String> numbers = getPageWhatsAppNumbers(user);
+        if ((phone == null || phone.isBlank()) && company != null) {
+            java.util.List<String> numbers = getPageWhatsAppNumbers(company);
             if (numbers != null && !numbers.isEmpty()) {
                 phone = numbers.get(0);
             }
@@ -1605,12 +1621,19 @@ public class MarketingService {
      * Com User token: owned_pages e página direta também retornam whatsapp_number.
      */
     public List<String> getPageWhatsAppNumbers(User user) {
-        log.info("[META] getPageWhatsAppNumbers called for company {}", user.getCompany().getId());
-        MetaConnection conn = metaConnectionRepository.findByCompany(user.getCompany())
+        return getPageWhatsAppNumbers(user.getCompany());
+    }
+
+    /**
+     * Lista números WhatsApp por empresa (mesma lógica que {@link #getPageWhatsAppNumbers(User)}).
+     */
+    public List<String> getPageWhatsAppNumbers(Company company) {
+        log.info("[META] getPageWhatsAppNumbers called for company {}", company.getId());
+        MetaConnection conn = metaConnectionRepository.findByCompany(company)
                 .filter(MetaConnection::isConnected)
                 .orElse(null);
         if (conn == null) {
-            log.info("[META] No Meta connection for company {} - returning empty WhatsApp numbers", user.getCompany().getId());
+            log.info("[META] No Meta connection for company {} - returning empty WhatsApp numbers", company.getId());
             return Collections.emptyList();
         }
         String accessToken = conn.getAccessToken();
@@ -1672,7 +1695,7 @@ public class MarketingService {
             }
         }
 
-        log.info("[META] getPageWhatsAppNumbers returning {} number(s) for company {}", seen.size(), user.getCompany().getId());
+        log.info("[META] getPageWhatsAppNumbers returning {} number(s) for company {}", seen.size(), company.getId());
         return new ArrayList<>(seen);
     }
 

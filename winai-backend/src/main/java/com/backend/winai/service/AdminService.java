@@ -10,6 +10,7 @@ import com.backend.winai.dto.request.AdminUpdateUserRequest;
 import com.backend.winai.dto.request.PatchUserAppModulesRequest;
 import com.backend.winai.dto.request.UpdateInstanceConfigRequest;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
+import com.backend.winai.dto.marketing.CreateCampaignRequest;
 import com.backend.winai.dto.marketing.paidtraffic.UtmPerformanceResponse;
 import com.backend.winai.dto.response.AdminClientSummaryResponse;
 import com.backend.winai.dto.response.AdminConversationSummaryResponse;
@@ -119,6 +120,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 
 import java.math.RoundingMode;
@@ -780,6 +782,21 @@ public class AdminService {
     @Transactional
     public void syncAdminMetaAdsForCompany(UUID companyId) {
         metaSyncService.syncForCompany(companyId);
+    }
+
+    /**
+     * Cria campanha Meta na empresa alvo e sincroniza campanhas locais em seguida.
+     */
+    @Transactional
+    public void createAdminMetaAdsCampaign(UUID companyId, CreateCampaignRequest request) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+        marketingService.createCampaignForCompany(company, request);
+        metaSyncService.syncForCompany(companyId);
+    }
+
+    public Map<String, String> uploadAdminMetaAdsCampaignImage(MultipartFile file) throws IOException {
+        return marketingService.uploadCampaignImage(file);
     }
 
     // ========== METAS E OBJETIVOS (ADMIN GLOBAL) ==========

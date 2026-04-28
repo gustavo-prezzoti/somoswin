@@ -1,7 +1,7 @@
 // Admin Service - API calls para o painel administrativo
 import { httpClient } from './api/http-client';
 import type { MeetingData, MeetingStatusType } from './api/meeting.service';
-import type { UtmPerformanceResponse } from './api/marketing.service';
+import type { CreateCampaignRequest, UtmPerformanceResponse } from './api/marketing.service';
 
 export interface AdminStats {
     totalUsers: number;
@@ -1097,6 +1097,16 @@ const adminService = {
 
     syncMetaAdsCompany: async (companyId: string): Promise<{ status: string; message: string }> => {
         return await httpClient.post<{ status: string; message: string }>(`/admin/meta-ads/companies/${companyId}/sync`);
+    },
+
+    createMetaAdsCampaign: async (companyId: string, body: CreateCampaignRequest): Promise<void> => {
+        await httpClient.post(`/admin/meta-ads/companies/${companyId}/campaigns`, body);
+    },
+
+    uploadMetaAdsCampaignImage: async (file: File): Promise<{ url: string }> => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return await httpClient.post<{ url: string }>('/admin/meta-ads/upload-image', fd);
     },
 
     getMetaAdsUtmPerformance: async (

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { RefreshCw, Building2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import adminService, { AdminMetaAdsCompanyRow, MetaCampaignsListResponse } from '../../services/adminService';
 import type { UtmPerformanceResponse } from '../../services/api/marketing.service';
@@ -25,7 +24,6 @@ const AdminMetaAds: React.FC = () => {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [campaigns, setCampaigns] = useState<MetaCampaignsListResponse | null>(null);
     const [loadingCamp, setLoadingCamp] = useState(false);
-    const [syncing, setSyncing] = useState(false);
     const [utmPerformance, setUtmPerformance] = useState<UtmPerformanceResponse | null>(null);
     const [utmLoading, setUtmLoading] = useState(false);
 
@@ -123,24 +121,6 @@ const AdminMetaAds: React.FC = () => {
         void loadUtmForCompany(selectedId);
     }, [selectedId, loadUtmForCompany]);
 
-    const onSync = async () => {
-        if (!selectedId) return;
-        try {
-            setSyncing(true);
-            setError(null);
-            await adminService.syncMetaAdsCompany(selectedId);
-            await loadCompanies();
-            await loadCampaigns(selectedId);
-            await loadUtmForCompany(selectedId);
-        } catch (e) {
-            setError(getErrorMessage(e, 'Falha ao sincronizar'));
-        } finally {
-            setSyncing(false);
-        }
-    };
-
-    const connectedCount = useMemo(() => rows.filter((r) => r.connected).length, [rows]);
-
     const staffBanner =
         staffFilterId && staffName ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-900">
@@ -176,28 +156,6 @@ const AdminMetaAds: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6 max-w-[1800px] mx-auto"
         >
-            <div className="flex flex-col lg:flex-row lg:items-end justify-end gap-4">
-                <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                        {connectedCount}/{rows.length} com Meta ativo
-                    </span>
-                    <Link
-                        to="/admin/clientes"
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-xs font-black uppercase tracking-widest text-[#141414] hover:bg-gray-50"
-                    >
-                        <Building2 size={14} /> Clientes
-                    </Link>
-                    <button
-                        type="button"
-                        onClick={() => loadCompanies()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/5 text-[#141414] hover:bg-gray-50"
-                    >
-                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                        <span className="text-xs font-black uppercase tracking-widest">Atualizar lista</span>
-                    </button>
-                </div>
-            </div>
-
             <MetaAdsDashboardView
                 companies={filtered}
                 searchTerm={search}
@@ -207,8 +165,13 @@ const AdminMetaAds: React.FC = () => {
                 campaigns={campaigns?.campaigns ?? []}
                 campaignsLoading={loadingCamp}
                 accountNameOverride={campaigns?.accountName ?? selected?.accountName ?? null}
-                onSync={onSync}
-                syncing={syncing}
+                onCampaignCreated={async () => {
+                    await loadCompanies();
+                    if (selectedId) {
+                        await loadCampaigns(selectedId);
+                        await loadUtmForCompany(selectedId);
+                    }
+                }}
                 staffBanner={staffBanner}
                 errorBanner={errorBanner}
                 utmPerformance={utmPerformance}
