@@ -53,7 +53,8 @@ services:
       # Vários workers + API no mesmo Postgres: default alto esgota max_connections (ex.: Supabase).
       - HIKARI_MAX_POOL_SIZE=${HIKARI_MAX_POOL_SIZE:-20}
 
-      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL}}
+      # JDBC Supabase (jdbc:postgresql://…pooler…:6543) ou fallback DATABASE_URL estilo Python (postgresql://…)
+      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL:-${DATABASE_URL}}}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - DATABASE_USERNAME=${DATABASE_USERNAME}
@@ -168,7 +169,7 @@ services:
       - TZ=America/Sao_Paulo
       - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true
       - SPRING_PROFILES_ACTIVE=docker,meta-sync
-      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL}}
+      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL:-${DATABASE_URL}}}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
@@ -230,7 +231,7 @@ services:
       - TZ=America/Sao_Paulo
       - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true
       - SPRING_PROFILES_ACTIVE=docker,ai-recommendations-worker
-      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL}}
+      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL:-${DATABASE_URL}}}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
@@ -280,7 +281,7 @@ services:
       - TZ=America/Sao_Paulo
       - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true
       - SPRING_PROFILES_ACTIVE=docker,followup-worker
-      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL}}
+      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL:-${DATABASE_URL}}}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
@@ -339,7 +340,7 @@ services:
       - TZ=America/Sao_Paulo
       - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true
       - SPRING_PROFILES_ACTIVE=docker,broadcast-worker
-      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL}}
+      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL:-${DATABASE_URL}}}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
@@ -388,7 +389,7 @@ services:
       - TZ=America/Sao_Paulo
       - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true
       - SPRING_PROFILES_ACTIVE=docker,google-oauth-worker
-      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL}}
+      - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL:-${DATABASE_URL}}}
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
