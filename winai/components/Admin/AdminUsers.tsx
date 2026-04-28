@@ -1,12 +1,9 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     Plus,
     Pencil,
-    Trash2,
-    Lock,
-    Unlock,
     User as UserIcon,
     Building2,
     Shield,
@@ -17,7 +14,12 @@ import {
     Check,
     ChevronLeft,
     ChevronRight,
-    ListChecks,
+    ChevronUp,
+    ChevronDown,
+    FileText,
+    Filter,
+    Loader2,
+    X,
 } from 'lucide-react';
 import adminService, { AdminUser, CreateUserRequest, UpdateUserRequest, Company } from '../../services/adminService';
 import type { UserDTO } from '../../services/types';
@@ -26,22 +28,59 @@ import { useModal } from './ModalContext';
 import { canUseAmpliaAdminScreen, hasAmpliaPermission } from './adminPermissions';
 import {
     COMPANY_APP_MODULE_KEYS,
-    COMPANY_APP_MODULE_LABELS,
+    COMPANY_APP_MODULE_TABLE_HEADERS,
+    type CompanyAppModuleKey,
 } from '../../utils/appModuleAccess';
 
-function roleLabel(role: string): string {
-    if (role === 'SUPER_ADMIN') return 'Super admin';
-    if (role === 'ADMIN') return 'Administrador';
-    return 'Usuário';
+function buildModuleDraft(u: AdminUser): { full: boolean; modules: Record<string, boolean> } {
+    const full = !!u.appFullAccess;
+    const modules: Record<string, boolean> = {};
+    for (const k of COMPANY_APP_MODULE_KEYS) {
+        modules[k] = full ? true : u.appModuleGrants?.[k] !== false;
+    }
+    return { full, modules };
 }
 
-function roleBadgeClass(role: string): string {
-    if (role === 'SUPER_ADMIN') return 'bg-emerald-50 text-emerald-600 border border-emerald-200';
-    if (role === 'ADMIN') return 'bg-gray-100 text-gray-800 border border-black/5';
-    return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25';
+function isPermissionsRowLocked(u: AdminUser): boolean {
+    return u.role === 'SUPER_ADMIN' || (u.role === 'ADMIN' && !!u.companyId);
 }
 
 const PAGE_SIZE = 12;
+
+function MatrixCheckbox({
+    checked,
+    disabled,
+    busy,
+    onToggle,
+}: {
+    checked: boolean;
+    disabled?: boolean;
+    busy?: boolean;
+    onToggle?: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            disabled={disabled || busy}
+            onClick={(e) => {
+                e.stopPropagation();
+                onToggle?.();
+            }}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all border mx-auto ${
+                checked
+                    ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                    : 'bg-white border-gray-200 hover:border-gray-300'
+            } ${disabled || busy ? 'opacity-45 cursor-not-allowed' : ''}`}
+            aria-pressed={checked}
+        >
+            {busy ? (
+                <Loader2 className={`animate-spin w-3.5 h-3.5 ${checked ? 'text-white' : 'text-emerald-600'}`} />
+            ) : checked ? (
+                <Check size={15} strokeWidth={3} />
+            ) : null}
+        </button>
+    );
+}
 
 const AdminUsers: React.FC = () => {
     const navigate = useNavigate();
@@ -55,8 +94,8 @@ const AdminUsers: React.FC = () => {
     const [totalPages, setTotalPages] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-    const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
-    const [permDraft, setPermDraft] = useState<{ full: boolean; modules: Record<string, boolean> } | null>(null);
+    const [companyExpanded, setCompanyExpanded] = useState<Record<string, boolean>>({});
+    const [hideInactive, setHideInactive] = useState(false);
     const [savingPermUserId, setSavingPermUserId] = useState<string | null>(null);
 
     const meUser = useMemo((): UserDTO | null => {
@@ -88,46 +127,19 @@ const AdminUsers: React.FC = () => {
         return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt'));
     }, [users]);
 
-    const initPermDraft = useCallback((u: AdminUser) => {
-        if (u.role === 'ADMIN' && u.companyId) return null;
-        if (u.role === 'SUPER_ADMIN') return null;
-        const full = !!u.appFullAccess;
-        const modules: Record<string, boolean> = {};
-        for (const k of COMPANY_APP_MODULE_KEYS) {
-            modules[k] = full ? true : u.appModuleGrants?.[k] !== false;
-        }
-        return { full, modules };
-    }, []);
-
-    const handleTogglePermissions = (u: AdminUser) => {
-        if (!canUpdateUser) return;
-        if (expandedUserId === u.id) {
-            setExpandedUserId(null);
-            setPermDraft(null);
-            return;
-        }
-        setExpandedUserId(u.id);
-        setPermDraft(initPermDraft(u));
-    };
-
-    const handleSavePermissions = async (u: AdminUser) => {
-        if (!permDraft) return;
-        try {
-            setSavingPermUserId(u.id);
-            await adminService.patchUserAppModules(u.id, {
-                fullAccess: permDraft.full,
-                modules: permDraft.modules,
+    useEffect(() => {
+        setCompanyExpanded((prev) => {
+            const next = { ...prev };
+            let changed = false;
+            usersByCompany.forEach(([label]) => {
+                if (next[label] === undefined) {
+                    next[label] = true;
+                    changed = true;
+                }
             });
-            showToast('Permissões do app atualizadas.');
-            setExpandedUserId(null);
-            setPermDraft(null);
-            await loadUsers();
-        } catch (err: any) {
-            showToast(getErrorMessage(err, 'Não foi possível salvar as permissões.'), 'error');
-        } finally {
-            setSavingPermUserId(null);
-        }
-    };
+            return changed ? next : prev;
+        });
+    }, [usersByCompany]);
 
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
@@ -206,15 +218,58 @@ const AdminUsers: React.FC = () => {
         loadUsers();
     }, [isAuthenticated, loadUsers]);
 
-    const handleToggleStatus = async (userId: string) => {
-        try {
-            await adminService.toggleUserStatus(userId);
-            showToast('Status do usuário alterado.');
-            await loadUsers();
-        } catch (err: any) {
-            showToast(getErrorMessage(err, 'Falha ao alterar o status do usuário.'), 'error');
-        }
-    };
+    const persistModules = useCallback(
+        async (user: AdminUser, full: boolean, modules: Record<string, boolean>) => {
+            try {
+                setSavingPermUserId(user.id);
+                await adminService.patchUserAppModules(user.id, { fullAccess: full, modules });
+                setUsers((prev) =>
+                    prev.map((u) =>
+                        u.id === user.id
+                            ? {
+                                  ...u,
+                                  appFullAccess: full,
+                                  appModuleGrants: full ? undefined : modules,
+                              }
+                            : u,
+                    ),
+                );
+                showToast('Permissões atualizadas.');
+            } catch (err: any) {
+                showToast(getErrorMessage(err, 'Não foi possível salvar as permissões.'), 'error');
+                await loadUsers();
+            } finally {
+                setSavingPermUserId(null);
+            }
+        },
+        [loadUsers],
+    );
+
+    const handleModuleToggle = useCallback(
+        async (user: AdminUser, key: CompanyAppModuleKey) => {
+            if (!canUpdateUser || !user.companyId || savingPermUserId) return;
+            if (isPermissionsRowLocked(user)) return;
+            const d = buildModuleDraft(user);
+            const nextModules = { ...d.modules, [key]: !d.modules[key] };
+            await persistModules(user, false, nextModules);
+        },
+        [canUpdateUser, persistModules, savingPermUserId],
+    );
+
+    const handleFullAccessToggle = useCallback(
+        async (user: AdminUser) => {
+            if (!canUpdateUser || !user.companyId || savingPermUserId) return;
+            if (isPermissionsRowLocked(user)) return;
+            const d = buildModuleDraft(user);
+            const nextFull = !d.full;
+            const nextModules: Record<string, boolean> = {};
+            COMPANY_APP_MODULE_KEYS.forEach((k) => {
+                nextModules[k] = true;
+            });
+            await persistModules(user, nextFull, nextModules);
+        },
+        [canUpdateUser, persistModules, savingPermUserId],
+    );
 
     const handleDelete = async (userId: string, permanent: boolean = false) => {
         showConfirm({
@@ -468,6 +523,15 @@ const AdminUsers: React.FC = () => {
     const fromIdx = totalElements === 0 ? 0 : listPage * PAGE_SIZE + 1;
     const toIdx = Math.min((listPage + 1) * PAGE_SIZE, totalElements);
 
+    const filteredUsersByCompany = useMemo(() => {
+        return usersByCompany
+            .map(([label, groupUsers]) => {
+                const filtered = hideInactive ? groupUsers.filter((u) => u.active) : groupUsers;
+                return [label, filtered] as [string, AdminUser[]];
+            })
+            .filter(([, groupUsers]) => groupUsers.length > 0);
+    }, [usersByCompany, hideInactive]);
+
     if (isAuthenticated === false) {
         return <Navigate to="/admin/login" replace />;
     }
@@ -485,476 +549,213 @@ const AdminUsers: React.FC = () => {
         <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col min-h-0 gap-4 max-w-[1800px] mx-auto w-full h-[calc(100dvh-13rem)] max-h-[calc(100dvh-13rem)]"
+            className="flex flex-col min-h-0 gap-5 max-w-[1920px] mx-auto w-full h-[calc(100dvh-13rem)] max-h-[calc(100dvh-13rem)] text-[#141414] bg-[#f7f7f5] rounded-3xl p-4 md:p-6"
         >
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 shrink-0">
+            <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 shrink-0">
                 <div>
-                    <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">Usuários</h2>
-                    <p className="text-sm text-gray-400 font-medium mt-1">
-                        Contas e permissões por empresa.{' '}
-                        <Link to="/admin/clientes" className="text-emerald-600 hover:underline font-bold">
-                            Ver clientes
-                        </Link>
+                    <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tight text-[#141414]">Usuários</h2>
+                    <p className="text-sm text-gray-500 font-medium mt-2 max-w-xl">
+                        Gestão de acessos e permissões por empresa
                     </p>
                 </div>
                 {canCreateUser && (
                     <button
                         type="button"
                         onClick={() => openUserModal()}
-                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest hover:brightness-110"
+                        className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-[#141414] text-white text-[11px] font-black uppercase tracking-[0.15em] hover:bg-black/90 transition-colors shadow-sm shrink-0"
                     >
-                        <Plus size={18} strokeWidth={3} />
+                        <Plus size={18} strokeWidth={2.5} className="text-emerald-400" />
                         Novo usuário
                     </button>
                 )}
             </div>
 
-            <div className="relative shrink-0">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <input
-                    type="search"
-                    placeholder="Buscar por nome, e-mail ou empresa…"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 border border-black/5 text-sm text-[#141414] placeholder:text-gray-600 focus:outline-none focus:border-emerald-200"
-                />
+            <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+                <div className="relative flex-1 min-w-0">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-400 pointer-events-none" />
+                    <input
+                        type="search"
+                        placeholder="Buscar por nome, email ou empresa..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-11 pr-5 py-3.5 rounded-full bg-white border border-gray-200 text-sm text-[#141414] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300/80 shadow-sm"
+                    />
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setHideInactive((v) => !v)}
+                    className={`inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-full border text-[11px] font-black uppercase tracking-[0.12em] transition-colors shrink-0 ${
+                        hideInactive
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                    <Filter size={16} strokeWidth={2} />
+                    Filtros
+                </button>
             </div>
 
             {totalElements > 0 && (
-                <p className="text-[10px] font-bold text-gray-500 shrink-0">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest shrink-0">
                     {fromIdx}–{toIdx} de {totalElements} usuário(s)
+                    {hideInactive ? ' · só ativos' : ''}
                 </p>
             )}
 
-            <div className="glass-card rounded-2xl border border-black/5 overflow-hidden flex flex-col flex-1 min-h-0">
-                <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
-                    <table className="w-full text-left border-collapse hidden md:table">
-                        <thead>
-                            <tr className="border-b border-black/5 bg-gray-50">
-                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Usuário</th>
-                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Nível</th>
-                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Empresa</th>
-                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
-                                <th className="px-5 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {users.length === 0 && !loading ? (
-                                <tr>
-                                    <td colSpan={5} className="px-5 py-16 text-center text-gray-500 text-sm">
-                                        Nenhum usuário encontrado.
-                                    </td>
-                                </tr>
-                            ) : (
-                                usersByCompany.flatMap(([companyLabel, groupUsers]) => [
-                                    <tr key={`g-${companyLabel}`} className="bg-gray-50/90">
-                                        <td colSpan={5} className="px-5 py-2.5 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                            <span className="inline-flex items-center gap-2 text-[#141414]/70">
-                                                <Building2 size={12} className="text-emerald-600" />
-                                                {companyLabel}
-                                            </span>
-                                        </td>
-                                    </tr>,
-                                    ...groupUsers.flatMap((user) => {
-                                        const rows: React.ReactNode[] = [
-                                            <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="relative shrink-0">
-                                                            <img
-                                                                src={
-                                                                    user.avatarUrl ||
-                                                                    `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
-                                                                }
-                                                                alt={user.name}
-                                                                className="w-11 h-11 rounded-xl object-cover border border-black/5"
-                                                            />
-                                                            <div
-                                                                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
-                                                                    user.active ? 'bg-emerald-600' : 'bg-rose-500'
-                                                                }`}
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-bold text-[#141414] text-sm leading-tight">{user.name}</p>
-                                                            <p className="text-[10px] text-gray-500 mt-0.5">{user.email}</p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <span
-                                                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${roleBadgeClass(
-                                                            user.role
-                                                        )}`}
-                                                    >
-                                                        <Shield size={10} />
-                                                        {roleLabel(user.role)}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        <Building2 size={12} className="text-gray-600 shrink-0" />
-                                                        <span className="text-xs text-gray-600 truncate max-w-[180px]">
-                                                            {user.companyName || '—'}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <span
-                                                        className={`text-[10px] font-black uppercase tracking-widest ${
-                                                            user.active ? 'text-emerald-600' : 'text-rose-400'
-                                                        }`}
-                                                    >
-                                                        {user.active ? 'Ativo' : 'Desativado'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-4 text-right">
-                                                    <div className="flex gap-1 justify-end opacity-70 group-hover:opacity-100 transition-opacity flex-wrap">
-                                                        {canUpdateUser && user.companyId && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleTogglePermissions(user)}
-                                                                className={`p-2.5 rounded-lg border border-transparent hover:bg-gray-50 hover:border-black/5 ${
-                                                                    expandedUserId === user.id
-                                                                        ? 'text-emerald-600 bg-emerald-500/10'
-                                                                        : 'text-gray-400 hover:text-emerald-600'
-                                                                }`}
-                                                                title="Permissões do app"
-                                                            >
-                                                                <ListChecks size={16} />
-                                                            </button>
-                                                        )}
-                                                        {canUpdateUser && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openUserModal(user)}
-                                                                className="p-2.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                                title="Editar"
-                                                            >
-                                                                <Pencil size={16} />
-                                                            </button>
-                                                        )}
-                                                        {canUpdateUser && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleToggleStatus(user.id)}
-                                                                className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                                title={user.active ? 'Bloquear' : 'Desbloquear'}
-                                                            >
-                                                                {user.active ? <Lock size={16} /> : <Unlock size={16} />}
-                                                            </button>
-                                                        )}
-                                                        {canDeleteUser && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleDelete(user.id, true)}
-                                                                className="p-2.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                                title="Excluir"
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
-                                                        )}
-                                                        {canUpdateUser && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleResetPassword(user.id, user.name, user.email)}
-                                                                className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                                title="Resetar senha"
-                                                            >
-                                                                <Key size={16} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>,
-                                        ];
-                                        if (expandedUserId === user.id) {
-                                            rows.push(
-                                                <tr key={`${user.id}-perm`} className="bg-emerald-500/[0.06]">
-                                                    <td colSpan={5} className="px-5 py-4 border-t border-emerald-500/15 align-top">
-                                                        {user.role === 'SUPER_ADMIN' && (
-                                                            <p className="text-xs text-gray-600">
-                                                                Super administrador tem acesso irrestrito; permissões de módulos do app não se aplicam.
-                                                            </p>
-                                                        )}
-                                                        {user.role === 'ADMIN' && user.companyId && (
-                                                            <p className="text-xs text-gray-600">
-                                                                Administrador da empresa tem acesso total aos módulos do aplicativo Somoswin.
-                                                            </p>
-                                                        )}
-                                                        {permDraft &&
-                                                            user.role !== 'SUPER_ADMIN' &&
-                                                            !(user.role === 'ADMIN' && user.companyId) && (
-                                                                <div className="space-y-4">
-                                                                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                                                                            checked={permDraft.full}
-                                                                            onChange={(e) => {
-                                                                                const v = e.target.checked;
-                                                                                setPermDraft((d) => {
-                                                                                    if (!d) return d;
-                                                                                    const modules = { ...d.modules };
-                                                                                    COMPANY_APP_MODULE_KEYS.forEach((k) => {
-                                                                                        modules[k] = true;
-                                                                                    });
-                                                                                    return { full: v, modules };
-                                                                                });
-                                                                            }}
-                                                                        />
-                                                                        <span className="text-xs font-bold text-[#141414]">
-                                                                            Acesso total ao app Somoswin
-                                                                        </span>
-                                                                    </label>
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                                        {COMPANY_APP_MODULE_KEYS.map((key) => (
-                                                                            <label
-                                                                                key={key}
-                                                                                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${
-                                                                                    permDraft.full
-                                                                                        ? 'border-gray-100 bg-gray-50 text-gray-400'
-                                                                                        : 'border-black/5 bg-white cursor-pointer'
-                                                                                }`}
-                                                                            >
-                                                                                <input
-                                                                                    type="checkbox"
-                                                                                    className="rounded border-gray-300 text-emerald-600 shrink-0"
-                                                                                    disabled={permDraft.full}
-                                                                                    checked={permDraft.modules[key] !== false}
-                                                                                    onChange={(e) => {
-                                                                                        const checked = e.target.checked;
-                                                                                        setPermDraft((d) =>
-                                                                                            d
-                                                                                                ? {
-                                                                                                      ...d,
-                                                                                                      full: false,
-                                                                                                      modules: {
-                                                                                                          ...d.modules,
-                                                                                                          [key]: checked,
-                                                                                                      },
-                                                                                                  }
-                                                                                                : d,
-                                                                                        );
-                                                                                    }}
-                                                                                />
-                                                                                <span className="font-semibold text-[#141414]">
-                                                                                    {COMPANY_APP_MODULE_LABELS[key]}
-                                                                                </span>
-                                                                            </label>
-                                                                        ))}
-                                                                    </div>
-                                                                    <div className="flex justify-end gap-2 pt-1">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setExpandedUserId(null);
-                                                                                setPermDraft(null);
-                                                                            }}
-                                                                            className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-black/10 text-gray-600 hover:bg-gray-50"
-                                                                        >
-                                                                            Cancelar
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={savingPermUserId === user.id}
-                                                                            onClick={() => handleSavePermissions(user)}
-                                                                            className="px-5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest hover:brightness-110 disabled:opacity-50"
-                                                                        >
-                                                                            {savingPermUserId === user.id ? 'Salvando…' : 'Salvar'}
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                    </td>
-                                                </tr>,
-                                            );
-                                        }
-                                        return rows;
-                                    }),
-                                ])
-                            )}
-                        </tbody>
-                    </table>
-
-                    <div className="md:hidden grid grid-cols-1 gap-3 p-4">
-                        {users.length === 0 && !loading && (
-                            <p className="text-center text-gray-500 text-sm py-8 col-span-full">Nenhum usuário encontrado.</p>
-                        )}
-                        {usersByCompany.map(([companyLabel, groupUsers]) => (
-                            <div key={`m-${companyLabel}`} className="space-y-3">
-                                <div className="flex items-center gap-2 px-1 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                    <Building2 size={12} className="text-emerald-600" />
-                                    {companyLabel}
-                                </div>
-                                {groupUsers.map((user) => (
-                                    <div key={user.id} className="rounded-xl border border-black/5 bg-gray-50 p-4 space-y-3">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <img
-                                                    src={
-                                                        user.avatarUrl ||
-                                                        `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
-                                                    }
-                                                    alt={user.name}
-                                                    className="w-12 h-12 rounded-xl object-cover border border-black/5 shrink-0"
-                                                />
-                                                <div className="min-w-0">
-                                                    <p className="font-bold text-[#141414] text-sm truncate">{user.name}</p>
-                                                    <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
-                                                </div>
-                                            </div>
-                                            <span
-                                                className={`shrink-0 px-2 py-1 rounded-md text-[8px] font-black uppercase ${roleBadgeClass(
-                                                    user.role
-                                                )}`}
-                                            >
-                                                {user.role}
-                                            </span>
+            <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-y-auto pr-1 custom-scrollbar">
+                {users.length === 0 && !loading ? (
+                    <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-20 text-center text-sm text-gray-500">
+                        Nenhum usuário encontrado.
+                    </div>
+                ) : (
+                    filteredUsersByCompany.map(([companyLabel, groupUsers]) => {
+                        const activeCount = groupUsers.filter((u) => u.active).length;
+                        const expanded = companyExpanded[companyLabel] !== false;
+                        return (
+                            <div
+                                key={companyLabel}
+                                className="rounded-2xl border border-gray-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-hidden"
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setCompanyExpanded((prev) => ({
+                                            ...prev,
+                                            [companyLabel]: !expanded,
+                                        }))
+                                    }
+                                    className="w-full flex items-center justify-between gap-4 px-5 py-4 bg-white hover:bg-gray-50/80 transition-colors text-left"
+                                >
+                                    <div className="flex items-center gap-4 min-w-0">
+                                        <div className="w-11 h-11 rounded-xl bg-[#141414] flex items-center justify-center shrink-0 shadow-sm">
+                                            <Building2 className="text-emerald-400" size={22} strokeWidth={2} />
                                         </div>
-                                        <p className="text-xs text-gray-400 flex items-center gap-1">
-                                            <Building2 size={12} /> {user.companyName || '—'}
-                                        </p>
-                                        {expandedUserId === user.id && (
-                                            <div className="rounded-lg border border-emerald-500/20 bg-white p-3 text-xs space-y-3">
-                                                {user.role === 'SUPER_ADMIN' && (
-                                                    <p className="text-gray-600">
-                                                        Super administrador tem acesso irrestrito ao app.
-                                                    </p>
-                                                )}
-                                                {user.role === 'ADMIN' && user.companyId && (
-                                                    <p className="text-gray-600">
-                                                        Administrador da empresa tem acesso total aos módulos do app.
-                                                    </p>
-                                                )}
-                                                {permDraft &&
-                                                    user.role !== 'SUPER_ADMIN' &&
-                                                    !(user.role === 'ADMIN' && user.companyId) && (
-                                                        <>
-                                                            <label className="flex items-center gap-2">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="rounded border-gray-300 text-emerald-600"
-                                                                    checked={permDraft.full}
-                                                                    onChange={(e) => {
-                                                                        const v = e.target.checked;
-                                                                        setPermDraft((d) => {
-                                                                            if (!d) return d;
-                                                                            const modules = { ...d.modules };
-                                                                            COMPANY_APP_MODULE_KEYS.forEach((k) => {
-                                                                                modules[k] = true;
-                                                                            });
-                                                                            return { full: v, modules };
-                                                                        });
-                                                                    }}
-                                                                />
-                                                                <span className="font-bold text-[#141414]">Acesso total ao app</span>
-                                                            </label>
-                                                            <div className="grid grid-cols-1 gap-2">
-                                                                {COMPANY_APP_MODULE_KEYS.map((key) => (
-                                                                    <label
-                                                                        key={key}
-                                                                        className={`flex items-center gap-2 ${
-                                                                            permDraft.full ? 'text-gray-400' : ''
-                                                                        }`}
-                                                                    >
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            className="rounded border-gray-300 text-emerald-600"
-                                                                            disabled={permDraft.full}
-                                                                            checked={permDraft.modules[key] !== false}
-                                                                            onChange={(e) => {
-                                                                                const checked = e.target.checked;
-                                                                                setPermDraft((d) =>
-                                                                                    d
-                                                                                        ? {
-                                                                                              ...d,
-                                                                                              full: false,
-                                                                                              modules: {
-                                                                                                  ...d.modules,
-                                                                                                  [key]: checked,
-                                                                                              },
-                                                                                          }
-                                                                                        : d
-                                                                                );
-                                                                            }}
-                                                                        />
-                                                                        {COMPANY_APP_MODULE_LABELS[key]}
-                                                                    </label>
-                                                                ))}
-                                                            </div>
-                                                            <div className="flex gap-2 justify-end pt-1">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setExpandedUserId(null);
-                                                                        setPermDraft(null);
-                                                                    }}
-                                                                    className="px-3 py-2 rounded-lg border border-black/10 text-[10px] font-black uppercase"
-                                                                >
-                                                                    Cancelar
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    disabled={savingPermUserId === user.id}
-                                                                    onClick={() => handleSavePermissions(user)}
-                                                                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-[10px] font-black uppercase disabled:opacity-50"
-                                                                >
-                                                                    {savingPermUserId === user.id ? 'Salvando…' : 'Salvar'}
-                                                                </button>
-                                                            </div>
-                                                        </>
-                                                    )}
-                                            </div>
-                                        )}
-                                        <div className="flex gap-2 flex-wrap">
-                                            {canUpdateUser && user.companyId && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleTogglePermissions(user)}
-                                                    className={`flex-1 py-2 rounded-lg text-xs font-black uppercase border border-black/5 ${
-                                                        expandedUserId === user.id
-                                                            ? 'bg-emerald-500/15 text-emerald-700'
-                                                            : 'bg-gray-50 text-gray-700'
-                                                    }`}
-                                                >
-                                                    Permissões
-                                                </button>
-                                            )}
-                                            {canUpdateUser && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openUserModal(user)}
-                                                    className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-gray-700 border border-black/5"
-                                                >
-                                                    Editar
-                                                </button>
-                                            )}
-                                            {canUpdateUser && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleToggleStatus(user.id)}
-                                                    className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-amber-400 border border-black/5"
-                                                >
-                                                    {user.active ? 'Bloquear' : 'Ativar'}
-                                                </button>
-                                            )}
-                                            {canDeleteUser && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDelete(user.id, true)}
-                                                    className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            )}
+                                        <div className="min-w-0">
+                                            <h3 className="text-[13px] font-black text-[#141414] uppercase tracking-wide truncate">
+                                                {companyLabel}
+                                            </h3>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.14em] mt-1">
+                                                {activeCount} usuário{activeCount !== 1 ? 's' : ''}{' '}
+                                                ativo{activeCount !== 1 ? 's' : ''}
+                                            </p>
                                         </div>
                                     </div>
-                                ))}
+                                    <div className="flex items-center gap-4 shrink-0 text-gray-400">
+                                        <FileText size={18} strokeWidth={1.75} />
+                                        {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                    </div>
+                                </button>
+                                {expanded && (
+                                    <div className="border-t border-gray-100 overflow-x-auto">
+                                        <table className="w-full min-w-[1040px] text-left border-collapse">
+                                            <thead>
+                                                <tr className="border-b border-gray-100 bg-[#fafafa]">
+                                                    <th className="sticky left-0 z-20 bg-[#fafafa] px-4 py-3 text-[9px] font-black text-gray-400 uppercase tracking-[0.12em] border-r border-gray-100 min-w-[200px]">
+                                                        Usuário
+                                                    </th>
+                                                    {COMPANY_APP_MODULE_KEYS.map((key) => (
+                                                        <th
+                                                            key={key}
+                                                            className="px-2 py-3 text-[8px] font-black text-gray-400 uppercase tracking-[0.06em] text-center w-[56px] leading-tight"
+                                                        >
+                                                            {COMPANY_APP_MODULE_TABLE_HEADERS[key]}
+                                                        </th>
+                                                    ))}
+                                                    <th className="px-2 py-3 text-[9px] font-black text-emerald-700 uppercase tracking-[0.1em] text-center bg-emerald-50/90 min-w-[76px] border-x border-emerald-100">
+                                                        Acesso total
+                                                    </th>
+                                                    <th className="px-3 py-3 text-[9px] font-black text-gray-400 uppercase tracking-[0.12em] text-right min-w-[76px]">
+                                                        Ações
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {groupUsers.map((user) => {
+                                                    const d = buildModuleDraft(user);
+                                                    const locked = isPermissionsRowLocked(user);
+                                                    const busy = savingPermUserId === user.id;
+                                                    const canEditModules = canUpdateUser && !!user.companyId && !locked;
+
+                                                    return (
+                                                        <tr
+                                                            key={user.id}
+                                                            className="group border-b border-gray-50 hover:bg-gray-50/60 transition-colors"
+                                                        >
+                                                            <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50/60 px-4 py-3 border-r border-gray-100 transition-colors">
+                                                                <div className="flex items-start gap-2.5">
+                                                                    <Shield
+                                                                        className="text-gray-300 shrink-0 mt-0.5"
+                                                                        size={17}
+                                                                        strokeWidth={1.5}
+                                                                    />
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-[11px] font-black text-[#141414] uppercase tracking-wide truncate">
+                                                                            {user.name}
+                                                                        </p>
+                                                                        <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                                                                            {user.email}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            {COMPANY_APP_MODULE_KEYS.map((key) => (
+                                                                <td
+                                                                    key={key}
+                                                                    className="px-1 py-3 align-middle bg-white group-hover:bg-gray-50/60 transition-colors"
+                                                                >
+                                                                    <MatrixCheckbox
+                                                                        checked={
+                                                                            locked ? true : d.full ? true : d.modules[key]
+                                                                        }
+                                                                        disabled={!canEditModules || locked || d.full}
+                                                                        busy={busy}
+                                                                        onToggle={() => handleModuleToggle(user, key)}
+                                                                    />
+                                                                </td>
+                                                            ))}
+                                                            <td className="bg-emerald-50/60 group-hover:bg-emerald-50/90 px-2 py-3 align-middle border-x border-emerald-100/80 transition-colors">
+                                                                <MatrixCheckbox
+                                                                    checked={locked ? true : d.full}
+                                                                    disabled={!canEditModules || locked}
+                                                                    busy={busy}
+                                                                    onToggle={() => handleFullAccessToggle(user)}
+                                                                />
+                                                            </td>
+                                                            <td className="px-2 py-3 text-right bg-white group-hover:bg-gray-50/60 transition-colors">
+                                                                <div className="flex items-center justify-end gap-0.5">
+                                                                    {canUpdateUser && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openUserModal(user)}
+                                                                            className="p-2 rounded-lg text-gray-300 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                                                                            title="Editar"
+                                                                        >
+                                                                            <Pencil size={15} />
+                                                                        </button>
+                                                                    )}
+                                                                    {canDeleteUser && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleDelete(user.id, false)}
+                                                                            className="p-2 rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                                                                            title="Remover acesso"
+                                                                        >
+                                                                            <X size={17} strokeWidth={2} />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
-                        ))}
-                    </div>
-                </div>
+                        );
+                    })
+                )}
                 {showListPagination && (
                     <div className="flex items-center justify-center gap-2 py-3 px-4 border-t border-black/5 bg-gray-50/80 shrink-0 flex-wrap">
                         <button

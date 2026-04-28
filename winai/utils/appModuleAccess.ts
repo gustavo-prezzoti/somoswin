@@ -10,6 +10,18 @@ export type CompanyAppModuleKey =
     | 'ACTIVE_BASE'
     | 'CONSULTANCY';
 
+/** Cabeçalhos da matriz em /admin/users (mesma ordem que COMPANY_APP_MODULE_KEYS). */
+export const COMPANY_APP_MODULE_TABLE_HEADERS: Record<CompanyAppModuleKey, string> = {
+    CRM: 'CRM E LEADS',
+    WHATSAPP: 'ATENDIMENTO',
+    INTELLIGENT_LISTENING: 'ESCUTA INTELIGENTE',
+    CALENDAR: 'AGENDA COMERCIAL',
+    GOALS: 'METAS E OBJETIVOS',
+    MARKETING: 'TRÁFEGO PAGO',
+    ACTIVE_BASE: 'BASE ATIVA',
+    CONSULTANCY: 'CONSULTORIA ESTRATÉGICA',
+};
+
 export const COMPANY_APP_MODULE_KEYS: CompanyAppModuleKey[] = [
     'CRM',
     'WHATSAPP',
@@ -30,18 +42,6 @@ export const COMPANY_APP_MODULE_LABELS: Record<CompanyAppModuleKey, string> = {
     MARKETING: 'Tráfego pago',
     ACTIVE_BASE: 'Base ativa',
     CONSULTANCY: 'Consultoria estratégica',
-};
-
-/** Rota do app cliente → chave de módulo (paridade com sidebar). */
-export const ROUTE_APP_MODULE: Partial<Record<string, CompanyAppModuleKey>> = {
-    '/crm': 'CRM',
-    '/whatsapp': 'WHATSAPP',
-    '/video-chamada': 'INTELLIGENT_LISTENING',
-    '/calendario': 'CALENDAR',
-    '/metas': 'GOALS',
-    '/campanhas': 'MARKETING',
-    '/base-ativa': 'ACTIVE_BASE',
-    '/mentoria': 'CONSULTANCY',
 };
 
 export function canAccessCompanyAppModule(
