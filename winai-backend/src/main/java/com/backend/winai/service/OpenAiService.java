@@ -314,6 +314,25 @@ public class OpenAiService {
         }
     }
 
+    /**
+     * Mesma pipeline de {@link #generateResponse(String, String, List)} com modelo
+     * explícito (ex.: gpt-4o-mini para análises administrativas). Restaura o modelo
+     * anterior ao final.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public String generateResponseWithModel(String modelOverride, String systemPrompt, String userMessage) {
+        if (modelOverride == null || modelOverride.isBlank()) {
+            return generateResponse(systemPrompt, userMessage);
+        }
+        String prev = this.currentTextModel;
+        try {
+            this.currentTextModel = modelOverride.trim();
+            return generateResponse(systemPrompt, userMessage);
+        } finally {
+            this.currentTextModel = prev;
+        }
+    }
+
     public String generateResponseWithContext(String agentPrompt, String knowledgeBaseContent, String userMessage,
             List<ChatMessage> recentMessages) {
         return generateResponseWithContext(agentPrompt, knowledgeBaseContent, userMessage, null, recentMessages);

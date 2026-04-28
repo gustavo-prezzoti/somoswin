@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -101,4 +102,13 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     @Query("SELECT l.company.id, COALESCE(SUM(l.estimatedValue), 0) FROM Lead l GROUP BY l.company.id")
     List<Object[]> sumEstimatedValueByCompany();
+
+    @Query("SELECT COALESCE(SUM(l.estimatedValue), 0) FROM Lead l WHERE l.company.id = :companyId")
+    BigDecimal sumEstimatedValueForCompany(@Param("companyId") UUID companyId);
+
+    @Query("SELECT COALESCE(SUM(l.estimatedValue), 0) FROM Lead l WHERE l.ownerUser.id = :uid AND l.status = :status")
+    BigDecimal sumEstimatedValueByOwnerAndStatus(@Param("uid") UUID uid, @Param("status") LeadStatus status);
+
+    @Query("SELECT l FROM Lead l JOIN FETCH l.company c WHERE l.ownerUser.id = :uid AND l.status = :status ORDER BY l.updatedAt DESC")
+    List<Lead> findTopByOwnerAndStatusWithCompany(@Param("uid") UUID uid, @Param("status") LeadStatus status, Pageable pageable);
 }

@@ -1,0 +1,178 @@
+package com.backend.winai.service;
+
+import com.backend.winai.dto.response.AdminAmpliaStaffPerformanceResponse;
+import com.backend.winai.entity.AmpliaStaffType;
+import com.backend.winai.entity.CompanyStrategicDiagnosis;
+import com.backend.winai.entity.Lead;
+import com.backend.winai.entity.LeadStatus;
+import com.backend.winai.entity.User;
+import com.backend.winai.repository.CompanyStrategicDiagnosisRepository;
+import com.backend.winai.repository.GoalTaskRepository;
+import com.backend.winai.repository.LeadRepository;
+import com.backend.winai.repository.MeetingRepository;
+import com.backend.winai.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class AmpliaStaffPerformanceService {
+
+    private static final ZoneId TZ = ZoneId.systemDefault();
+
+    private final UserRepository userRepository;
+    private final LeadRepository leadRepository;
+    private final MeetingRepository meetingRepository;
+    private final CompanyStrategicDiagnosisRepository diagnosisRepository;
+    private final GoalTaskRepository goalTaskRepository;
+
+    public AdminAmpliaStaffPerformanceResponse getStaffPerformance(UUID staffUserId) {
+        User user = userRepository.findByIdWithAmpliaStaffRole(staffUserId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        if (!Boolean.TRUE.equals(user.getAmpliaInternalStaff())) {
+            throw new RuntimeException("Performance detalhada disponível apenas para colaboradores internos");
+        }
+
+        String periodLabel = buildPeriodLabel();
+        AmpliaStaffType st = user.getAmpliaStaffType();
+
+        long leadsTotal = leadRepository.countByOwnerUser_Id(staffUserId);
+        long leadsWon = leadRepository.countByOwnerUser_IdAndStatus(staffUserId, LeadStatus.WON);
+        int conv = leadsTotal > 0 ? (int) Math.min(100, Math.round(leadsWon * 100.0 / leadsTotal)) : 0;
+
+        LocalDate today = LocalDate.now(TZ);
+        LocalDate startWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate endWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+        long meetingsWeek = meetingRepository.countMeetingsForLeadOwnerBetween(staffUserId, startWeek, endWeek);
+
+        BigDecimal revBd = leadRepository.sumEstimatedValueByOwnerAndStatus(staffUserId, LeadStatus.WON);
+        double revenueWon = revBd != null ? revBd.doubleValue() : 0.0;
+
+        List<Lead> wonPage = leadRepository.findTopByOwnerAndStatusWithCompany(
+                staffUserId, LeadStatus.WON, PageRequest.of(0, 12));
+        List<AdminAmpliaStaffPerformanceResponse.ClosedDealRow> deals = new ArrayList<>();
+        for (Lead l : wonPage) {
+            String cn = l.getCompany() != null ? l.getCompany().getName() : "—";
+            Double val = l.getEstimatedValue() != null ? l.getEstimatedValue().doubleValue() : null;
+            deals.add(AdminAmpliaStaffPerformanceResponse.ClosedDealRow.builder()
+                    .leadName(l.getName())
+                    .companyName(cn)
+                    .valueBrl(val)
+                    .statusLabel("Ganho")
+                    .build());
+        }
+
+        AdminAmpliaStaffPerformanceResponse.SalesBlock salesBlock = AdminAmpliaStaffPerformanceResponse.SalesBlock.builder()
+                .leadsTotal(leadsTotal)
+                .leadsWon(leadsWon)
+                .conversionPercent(conv)
+                .meetingsThisWeek(meetingsWeek)
+                .revenueWonTotal(revenueWon)
+                .recentDeals(deals)
+                .build();
+
+        int pbCount = (int) diagnosisRepository.countByPublishedAtIsNotNullAndUpdatedByUserId(staffUserId);
+        List<UUID> companyIds = diagnosisRepository.findDistinctCompanyIdsPublishedBy(staffUserId);
+        int companiesPb = companyIds.size();
+
+        long tasksDone = goalTaskRepository.countCompletedInPlaybookCompaniesByPublisher(staffUserId);
+        long tasksAll = goalTaskRepository.countAllTasksInPlaybookCompaniesByPublisher(staffUserId);
+        Integer progressPct = tasksAll > 0 ? (int) Math.min(100, Math.round(tasksDone * 100.0 / tasksAll)) : null;
+
+        List<CompanyStrategicDiagnosis> recentDiag =
+                diagnosisRepository.findPublishedByUserOrderByPublishedAtDesc(staffUserId, PageRequest.of(0, 10));
+        List<AdminAmpliaStaffPerformanceResponse.PlaybookDeliveryRow> deliveries = new ArrayList<>();
+        for (CompanyStrategicDiagnosis d : recentDiag) {
+            ZonedDateTime p = d.getPublishedAt();
+            String iso = p != null ? p.toInstant().toString() : null;
+            String cname = d.getCompany() != null ? d.getCompany().getName() : "—";
+            deliveries.add(AdminAmpliaStaffPerformanceResponse.PlaybookDeliveryRow.builder()
+                    .companyName(cname)
+                    .publishedAt(iso)
+                    .build());
+        }
+
+        AdminAmpliaStaffPerformanceResponse.ConsultantBlock consultantBlock =
+                AdminAmpliaStaffPerformanceResponse.ConsultantBlock.builder()
+                        .playbooksPublished(pbCount)
+                        .companiesWithPlaybook(companiesPb)
+                        .goalTasksCompleted(tasksDone)
+                        .goalTasksTotal(tasksAll > 0 ? tasksAll : null)
+                        .playbookGoalProgressPercent(progressPct)
+                        .recentDeliveries(deliveries)
+                        .build();
+
+        String uiMode = resolveUiMode(st, leadsTotal, pbCount);
+        String roleName = user.getAmpliaStaffRole() != null ? user.getAmpliaStaffRole().getName() : null;
+
+        return AdminAmpliaStaffPerformanceResponse.builder()
+                .staffUserId(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .ampliaStaffType(st != null ? st.name() : null)
+                .ampliaStaffRoleName(roleName)
+                .uiMode(uiMode)
+                .periodLabel(periodLabel)
+                .sales(shouldIncludeSales(st) ? salesBlock : null)
+                .consultant(shouldIncludeConsultant(st) ? consultantBlock : null)
+                .build();
+    }
+
+    private static String buildPeriodLabel() {
+        LocalDate today = LocalDate.now(TZ);
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMMM yyyy", new Locale("pt", "BR"));
+        String raw = today.format(fmt);
+        if (raw.isEmpty()) {
+            return "";
+        }
+        return raw.substring(0, 1).toUpperCase(Locale.forLanguageTag("pt-BR")) + raw.substring(1);
+    }
+
+    private static boolean shouldIncludeSales(AmpliaStaffType st) {
+        if (st == null) {
+            return true;
+        }
+        return st == AmpliaStaffType.VENDEDOR || st == AmpliaStaffType.GESTOR;
+    }
+
+    private static boolean shouldIncludeConsultant(AmpliaStaffType st) {
+        if (st == null) {
+            return true;
+        }
+        return st == AmpliaStaffType.CONSULTOR || st == AmpliaStaffType.GESTOR;
+    }
+
+    /**
+     * Consultor só playbook; Vendedor só vendas; Gestor ambos (manager).
+     */
+    private static String resolveUiMode(AmpliaStaffType st, long leadsTotal, int playbooksPublished) {
+        if (st == AmpliaStaffType.VENDEDOR) {
+            return "sales";
+        }
+        if (st == AmpliaStaffType.CONSULTOR) {
+            return "consultant";
+        }
+        if (st == AmpliaStaffType.GESTOR) {
+            return "manager";
+        }
+        if (playbooksPublished > 0 && leadsTotal > 0) {
+            return "manager";
+        }
+        return playbooksPublished > 0 ? "consultant" : "sales";
+    }
+}

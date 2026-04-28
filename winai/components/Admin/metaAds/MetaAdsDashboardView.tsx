@@ -10,7 +10,9 @@ import {
     ChevronRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import adminService from '../../../services/adminService';
 import type { AdminMetaAdsCompanyRow, MetaCampaignListItem } from '../../../services/adminService';
+import { getErrorMessage } from '../../../services/utils/errorHelper';
 import type { UtmPerformanceResponse } from '../../../services/api/marketing.service';
 import CreateCampaignModal from './CreateCampaignModal';
 
@@ -118,6 +120,19 @@ function formatCardFooterConversions(row: AdminMetaAdsCompanyRow): string {
     return c != null && c > 0 ? `${formatIntCompact(c)} conv.` : '— conv.';
 }
 
+/** Chaves enviadas ao backend (alinhadas a MetaAdsAiAnalysisService). */
+const AI_PRESETS: { label: string; key: string }[] = [
+    { label: 'Melhor CTR', key: 'melhor_ctr' },
+    { label: 'Maior gasto', key: 'maior_gasto' },
+    { label: 'Ativas', key: 'ativas' },
+    { label: 'Mais conversões', key: 'mais_conv' },
+    { label: 'ROAS por campanha', key: 'roas_campanha' },
+    { label: 'CPC barato', key: 'cpc_barato' },
+    { label: 'Pausar quais?', key: 'pausar_quais' },
+    { label: 'Desempenho geral', key: 'desempenho_geral' },
+    { label: 'Total investido', key: 'total_investido' },
+];
+
 export interface MetaAdsDashboardViewProps {
     companies: AdminMetaAdsCompanyRow[];
     searchTerm: string;
@@ -151,12 +166,39 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
 }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+    const [analysisFallback, setAnalysisFallback] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const [aiQuestion, setAiQuestion] = useState('');
     const [activeFilter, setActiveFilter] = useState('Ativas');
     const [showCreateCampaign, setShowCreateCampaign] = useState(false);
 
     useEffect(() => {
         setActiveFilter('Ativas');
+        setAnalysisResult(null);
+        setAnalysisError(null);
+        setAnalysisFallback(false);
     }, [selectedCompanyId]);
+
+    const runAnalysis = async (presetKey?: string) => {
+        if (!selectedCompanyId) return;
+        setIsAnalyzing(true);
+        setAnalysisResult(null);
+        setAnalysisError(null);
+        try {
+            const res = await adminService.postMetaAdsAiAnalysis(selectedCompanyId, {
+                filterLabel: activeFilter,
+                preset: presetKey ?? null,
+                userQuestion: aiQuestion.trim() ? aiQuestion.trim() : null,
+            });
+            setAnalysisResult(res.analysis);
+            setAnalysisFallback(res.fallback);
+        } catch (e) {
+            setAnalysisError(getErrorMessage(e, 'Erro ao gerar análise'));
+            setAnalysisResult(null);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
 
     const filteredCompanies = useMemo(() => {
         const q = searchTerm.toLowerCase().trim();
@@ -190,37 +232,6 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
     }, [filteredCampaignRows]);
 
     const totalFiltered = filteredCampaignRows.length;
-
-    const handleAnalyze = () => {
-        setIsAnalyzing(true);
-        setAnalysisResult(null);
-        window.setTimeout(() => {
-            setIsAnalyzing(false);
-            setAnalysisResult(`### 📊 ANÁLISE DE ROAS
-
-🟢 ≥ 3x ótimo | 🟡 1-3x aceitável | 🔴 < 1x prejuízo
-
-💰 ROAS geral: 31.41x (receita R$ 1.888.580,68)
-
-🗺️ Ranking por campanha:
-1. 🟢 CA-01 | VENDAS | ABO | QUENTE
-   ROAS: 8.60x | receita R$ 1.483.309
-2. 🟢 CA-87 | VENDAS | CBO | FRIO
-   ROAS: 5.20x | receita R$ 240.520`);
-        }, 1500);
-    };
-
-    const aiButtons = [
-        'Melhor CTR',
-        'Maior gasto',
-        'Ativas',
-        'Mais conversões',
-        'ROAS por campanha',
-        'CPC barato',
-        'Pausar quais?',
-        'Desempenho geral',
-        'Total investido',
-    ];
 
     const bestUtmRoas = utmPerformance?.bestRoas ?? 0;
 
@@ -271,7 +282,9 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
                     <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[#141414]">
                         META ADS DASHBOARD
                     </h2>
-                    <p className="text-sm text-gray-400 font-medium">Gestão e Otimização com Claude AI</p>
+                    <p className="text-sm text-gray-400 font-medium">
+                        Gestão e análise com IA (dados reais CRM + campanhas)
+                    </p>
                 </div>
             </div>
 
@@ -440,14 +453,15 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
                         </div>
 
                         <div className="flex flex-wrap gap-2">
-                            {aiButtons.map((btn) => (
+                            {AI_PRESETS.map(({ label, key }) => (
                                 <button
-                                    key={btn}
+                                    key={key}
                                     type="button"
-                                    onClick={handleAnalyze}
-                                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-600 transition-all"
+                                    disabled={campaignsLoading || !selectedCompany?.connected}
+                                    onClick={() => void runAnalysis(key)}
+                                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-bold text-gray-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
-                                    {btn}
+                                    {label}
                                 </button>
                             ))}
                         </div>
@@ -455,19 +469,29 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
                         <div className="relative">
                             <input
                                 type="text"
+                                value={aiQuestion}
+                                onChange={(e) => setAiQuestion(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') void runAnalysis(undefined);
+                                }}
                                 placeholder="Qual é o ROAS de cada campanha?"
-                                className="w-full px-4 py-3 bg-gray-50 border border-black/5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#00FF00]/20 transition-all text-[#141414]"
+                                disabled={campaignsLoading || !selectedCompany?.connected}
+                                className="w-full px-4 py-3 bg-gray-50 border border-black/5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#00FF00]/20 transition-all text-[#141414] disabled:opacity-50"
                             />
                             <button
                                 type="button"
-                                onClick={handleAnalyze}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
+                                disabled={campaignsLoading || !selectedCompany?.connected || isAnalyzing}
+                                onClick={() => void runAnalysis(undefined)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-40"
                             >
                                 <ArrowRight size={18} />
                             </button>
                         </div>
 
                         <AnimatePresence>
+                            {analysisError && (
+                                <p className="text-xs font-bold text-rose-600">{analysisError}</p>
+                            )}
                             {isAnalyzing && (
                                 <div className="flex items-center justify-center py-8">
                                     <RefreshCw size={24} className="animate-spin text-emerald-500" />
@@ -479,6 +503,11 @@ const MetaAdsDashboardView: React.FC<MetaAdsDashboardViewProps> = ({
                                     animate={{ opacity: 1, y: 0 }}
                                     className="p-6 bg-gray-50 rounded-2xl border border-black/5"
                                 >
+                                    {analysisFallback && (
+                                        <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-3">
+                                            Modo texto local — modelo indisponível ou erro na IA
+                                        </p>
+                                    )}
                                     <div className="prose prose-sm max-w-none">
                                         <div className="text-xs text-gray-800 font-medium leading-relaxed whitespace-pre-line font-mono">
                                             {analysisResult}

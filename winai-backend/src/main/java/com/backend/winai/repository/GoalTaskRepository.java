@@ -35,4 +35,12 @@ public interface GoalTaskRepository extends JpaRepository<GoalTask, Long> {
             @Param("goalStatus") GoalStatus goalStatus,
             @Param("until") LocalDate until,
             @Param("companyIds") Collection<UUID> companyIds);
+
+    @Query("SELECT COUNT(gt) FROM GoalTask gt JOIN gt.goal g JOIN CompanyStrategicDiagnosis d ON d.company = g.company "
+            + "WHERE gt.completed = true AND d.publishedAt IS NOT NULL AND d.updatedByUserId = :uid")
+    long countCompletedInPlaybookCompaniesByPublisher(@Param("uid") UUID uid);
+
+    @Query("SELECT COUNT(gt) FROM GoalTask gt JOIN gt.goal g JOIN CompanyStrategicDiagnosis d ON d.company = g.company "
+            + "WHERE d.publishedAt IS NOT NULL AND d.updatedByUserId = :uid")
+    long countAllTasksInPlaybookCompaniesByPublisher(@Param("uid") UUID uid);
 }

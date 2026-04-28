@@ -47,7 +47,11 @@ const AdminPerformance: React.FC = () => {
 
     return (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 max-w-[1600px] mx-auto">
-            <ConsultantMetricsView canSelectMember={canSelectMember} />
+            <ConsultantMetricsView
+                canSelectMember={canSelectMember}
+                viewerUserId={user?.id ?? ''}
+                viewerIsInternalStaff={!!user?.ampliaInternalStaff}
+            />
         </motion.div>
     );
 };

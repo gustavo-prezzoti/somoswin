@@ -165,6 +165,48 @@ export interface InternalStaffMemberDashboard {
     monthlyLeads: InternalStaffMonthlyPoint[];
 }
 
+export interface AdminAmpliaStaffPerformanceSales {
+    leadsTotal: number;
+    leadsWon: number;
+    conversionPercent: number;
+    meetingsThisWeek: number;
+    revenueWonTotal: number | null;
+    recentDeals: AdminAmpliaStaffPerformanceDeal[];
+}
+
+export interface AdminAmpliaStaffPerformanceDeal {
+    leadName: string;
+    companyName: string;
+    valueBrl: number | null;
+    statusLabel: string;
+}
+
+export interface AdminAmpliaStaffPerformanceConsultant {
+    playbooksPublished: number;
+    companiesWithPlaybook: number;
+    goalTasksCompleted: number;
+    goalTasksTotal: number | null;
+    playbookGoalProgressPercent: number | null;
+    recentDeliveries: AdminAmpliaStaffPerformanceDelivery[];
+}
+
+export interface AdminAmpliaStaffPerformanceDelivery {
+    companyName: string;
+    publishedAt: string | null;
+}
+
+export interface AdminAmpliaStaffPerformance {
+    staffUserId: string;
+    name: string;
+    email: string;
+    ampliaStaffType: string | null;
+    ampliaStaffRoleName: string | null;
+    uiMode: string;
+    periodLabel: string;
+    sales: AdminAmpliaStaffPerformanceSales | null;
+    consultant: AdminAmpliaStaffPerformanceConsultant | null;
+}
+
 export interface CreateInternalStaffPayload {
     name: string;
     email: string;
@@ -356,6 +398,17 @@ export interface MetaCampaignListItem {
 export interface MetaCampaignsListResponse {
     campaigns: MetaCampaignListItem[];
     accountName: string | null;
+}
+
+export interface MetaAdsAiAnalysisRequest {
+    filterLabel?: string;
+    preset?: string | null;
+    userQuestion?: string | null;
+}
+
+export interface MetaAdsAiAnalysisResponse {
+    analysis: string;
+    fallback: boolean;
 }
 
 export interface AdminGoalCompanyRow {
@@ -806,6 +859,10 @@ const adminService = {
         return await httpClient.get<InternalStaffMemberDashboard>(`/admin/internal-staff/${id}/dashboard`);
     },
 
+    getAmpliaStaffPerformance: async (staffUserId: string): Promise<AdminAmpliaStaffPerformance> => {
+        return await httpClient.get<AdminAmpliaStaffPerformance>(`/admin/performance/staff/${staffUserId}`);
+    },
+
     // ========== CRUD DE USUÁRIOS ==========
 
     getAllUsers: async (): Promise<AdminUser[]> => {
@@ -1093,6 +1150,16 @@ const adminService = {
 
     getMetaAdsCampaigns: async (companyId: string): Promise<MetaCampaignsListResponse> => {
         return await httpClient.get<MetaCampaignsListResponse>(`/admin/meta-ads/companies/${companyId}/campaigns`);
+    },
+
+    postMetaAdsAiAnalysis: async (
+        companyId: string,
+        body: MetaAdsAiAnalysisRequest,
+    ): Promise<MetaAdsAiAnalysisResponse> => {
+        return await httpClient.post<MetaAdsAiAnalysisResponse>(
+            `/admin/meta-ads/companies/${companyId}/ai-analysis`,
+            body,
+        );
     },
 
     syncMetaAdsCompany: async (companyId: string): Promise<{ status: string; message: string }> => {

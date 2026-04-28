@@ -27,7 +27,10 @@ import com.backend.winai.dto.marketing.paidtraffic.UtmPerformanceResponse;
 import com.backend.winai.dto.response.AdminEscutaSessionResponse;
 import com.backend.winai.dto.response.AdminGoalCompanyRowResponse;
 import com.backend.winai.dto.response.AdminGoalsForCompanyResponse;
+import com.backend.winai.dto.request.MetaAdsAiAnalysisRequest;
+import com.backend.winai.dto.response.AdminAmpliaStaffPerformanceResponse;
 import com.backend.winai.dto.response.AdminMetaAdsCompanyResponse;
+import com.backend.winai.dto.response.MetaAdsAiAnalysisResponse;
 import com.backend.winai.dto.response.AdminDashboardResponse;
 import com.backend.winai.dto.response.AdminFinanceOverviewResponse;
 import com.backend.winai.dto.response.AdminNotificationRowResponse;
@@ -47,6 +50,8 @@ import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.entity.MeetingStatus;
 import com.backend.winai.dto.response.TermsOfServiceResponse;
 import com.backend.winai.dto.response.UserTermsAcceptanceResponse;
+import com.backend.winai.service.AmpliaStaffPerformanceService;
+import com.backend.winai.service.MetaAdsAiAnalysisService;
 import com.backend.winai.service.CompanyAgentDocumentService;
 import com.backend.winai.service.CompanyClientNoteService;
 import com.backend.winai.service.AdminService;
@@ -83,6 +88,8 @@ import java.util.UUID;
 public class AdminController {
 
     private final AdminService adminService;
+    private final MetaAdsAiAnalysisService metaAdsAiAnalysisService;
+    private final AmpliaStaffPerformanceService ampliaStaffPerformanceService;
     private final CompanyClientNoteService companyClientNoteService;
     private final CompanyAgentDocumentService companyAgentDocumentService;
     private final TermsOfServiceService termsOfServiceService;
@@ -142,6 +149,13 @@ public class AdminController {
     public ResponseEntity<AdminPerformanceSnapshotResponse> getPerformanceSnapshot(
             @RequestParam(required = false) UUID staffUserId) {
         return ResponseEntity.ok(adminService.getAdminPerformanceSnapshot(staffUserId));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'performance', 'list')")
+    @Operation(summary = "Performance — colaborador interno", description = "Vendas (CRM): leads ganhos, receita estimada, negócios fechados. Consultoria: playbooks publicados, tarefas de metas no playbook.")
+    @GetMapping("/performance/staff/{staffUserId}")
+    public ResponseEntity<AdminAmpliaStaffPerformanceResponse> getAmpliaStaffPerformance(@PathVariable UUID staffUserId) {
+        return ResponseEntity.ok(ampliaStaffPerformanceService.getStaffPerformance(staffUserId));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
@@ -355,6 +369,16 @@ public class AdminController {
     @GetMapping("/meta-ads/companies/{companyId}/campaigns")
     public ResponseEntity<CampaignsListResponse> getMetaAdsCampaigns(@PathVariable UUID companyId) {
         return ResponseEntity.ok(adminService.getAdminMetaAdsCampaigns(companyId));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'metaads', 'read')")
+    @Operation(summary = "Meta Ads — análise com IA", description = "Métricas reais (CRM + campanhas) e texto gerado pelo modelo configurado")
+    @PostMapping("/meta-ads/companies/{companyId}/ai-analysis")
+    public ResponseEntity<MetaAdsAiAnalysisResponse> analyzeMetaAdsAi(
+            @PathVariable UUID companyId,
+            @RequestBody(required = false) MetaAdsAiAnalysisRequest request) {
+        MetaAdsAiAnalysisRequest body = request != null ? request : MetaAdsAiAnalysisRequest.builder().build();
+        return ResponseEntity.ok(metaAdsAiAnalysisService.analyze(companyId, body));
     }
 
     @PreAuthorize("@adminSecurity.hasPermission(authentication, 'metaads', 'read')")
