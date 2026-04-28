@@ -9,7 +9,7 @@ export interface AdminRouteMeta {
 const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
     { pattern: '/admin/agenda', meta: { title: 'Agenda', subtitle: 'Encontros comerciais da semana' } },
     { pattern: '/admin/clientes', meta: { title: 'Clientes', subtitle: 'Acompanhamento estratégico' } },
-    { pattern: '/admin/meta-ads', meta: { title: 'Meta Ads', subtitle: 'Gestão e Otimização IA' } },
+    { pattern: '/admin/meta-ads', meta: { title: 'Meta Ads', subtitle: 'Gestão e Otimização com Claude AI' } },
     { pattern: '/admin/metas', meta: { title: 'Metas e Objetivos', subtitle: 'Planejamento Estratégico' } },
     { pattern: '/admin/alertas', meta: { title: 'Alertas', subtitle: 'Ações prioritárias' } },
     { pattern: '/admin/performance', meta: { title: 'Performance', subtitle: 'Performance do consultor' } },
