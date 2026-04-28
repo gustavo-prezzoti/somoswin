@@ -54,6 +54,9 @@ public final class UserAuthDtoMapper {
             }
         }
 
+        b.appFullAccess(Boolean.TRUE.equals(fullUser.getAppFullAccess()))
+                .appModuleGrants(fullUser.getAppModuleGrants());
+
         return b.build();
     }
 }

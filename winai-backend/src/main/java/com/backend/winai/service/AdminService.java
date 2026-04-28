@@ -7,6 +7,7 @@ import com.backend.winai.dto.request.AdminCreateUserRequest;
 import com.backend.winai.dto.request.AdminEscutaStartRequest;
 import com.backend.winai.dto.request.IntelligentListeningStartRequest;
 import com.backend.winai.dto.request.AdminUpdateUserRequest;
+import com.backend.winai.dto.request.PatchUserAppModulesRequest;
 import com.backend.winai.dto.request.UpdateInstanceConfigRequest;
 import com.backend.winai.dto.marketing.CampaignsListResponse;
 import com.backend.winai.dto.response.AdminClientSummaryResponse;
@@ -48,6 +49,7 @@ import com.backend.winai.repository.AccessInvitationRepository;
 import com.backend.winai.repository.CompanyPaidTrafficTargetRepository;
 import com.backend.winai.repository.ConsultancyCallRequestRepository;
 import com.backend.winai.repository.GoogleAdsConnectionRepository;
+import com.backend.winai.security.CompanyAppModule;
 import com.backend.winai.repository.KnowledgeBaseAgentDocumentRepository;
 import com.backend.winai.repository.KnowledgeBaseConnectionRepository;
 import com.backend.winai.repository.LeadAttributionAnchorRepository;
@@ -1156,6 +1158,32 @@ public class AdminService {
         return mapToAdminUserResponse(savedUser);
     }
 
+    /** Permissões de módulos do app cliente Somoswin (não confundir com papéis do /admin). */
+    @Transactional
+    public AdminUserResponse patchUserAppModules(UUID userId, PatchUserAppModulesRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        boolean full = Boolean.TRUE.equals(request.getFullAccess());
+        user.setAppFullAccess(full);
+        if (full) {
+            user.setAppModuleGrants(null);
+        } else {
+            java.util.Map<String, Boolean> merged = new java.util.LinkedHashMap<>();
+            java.util.Map<String, Boolean> reqModules =
+                    request.getModules() != null ? request.getModules() : java.util.Map.of();
+            for (CompanyAppModule m : CompanyAppModule.values()) {
+                Boolean v = reqModules.get(m.name());
+                merged.put(m.name(), v != null ? v : Boolean.TRUE);
+            }
+            user.setAppModuleGrants(merged);
+        }
+
+        User saved = userRepository.save(user);
+        log.info("Permissões de app cliente atualizadas pelo admin para usuário {}", saved.getEmail());
+        return mapToAdminUserResponse(saved);
+    }
+
     /**
      * Ativa/desativa um usuário
      */
@@ -2028,6 +2056,8 @@ public class AdminService {
                 .companyName(user.getCompany() != null ? user.getCompany().getName() : null)
                 .companyId(user.getCompany() != null ? user.getCompany().getId() : null)
                 .mustChangePassword(user.getMustChangePassword())
+                .appFullAccess(Boolean.TRUE.equals(user.getAppFullAccess()))
+                .appModuleGrants(user.getAppModuleGrants())
                 .totalMessages(0L) // TODO: Implementar contagem por usuário
                 .totalConversations(0L) // TODO: Implementar contagem por usuário
                 .build();

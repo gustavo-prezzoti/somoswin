@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -45,6 +46,10 @@ public class AuthResponse {
         /** Módulos permitidos no /admin (ids AmpliaAdminModule). */
         private List<String> ampliaStaffPermissions;
         private Boolean ampliaStaffFullAccess;
+        /** App cliente Somoswin: ignora mapa de módulos (exceto já liberado por papel). */
+        private Boolean appFullAccess;
+        /** Mapa moduleKey → permitido; null = legado (todos permitidos). */
+        private Map<String, Boolean> appModuleGrants;
     }
 
     @Data

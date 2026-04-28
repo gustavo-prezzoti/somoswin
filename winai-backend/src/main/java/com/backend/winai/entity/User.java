@@ -3,7 +3,9 @@ package com.backend.winai.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -87,6 +89,16 @@ public class User implements UserDetails {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "amplia_staff_role_id")
     private AmpliaStaffRole ampliaStaffRole;
+
+    /** Ignora mapa granular de módulos do app cliente (exceto SUPER_ADMIN / papel empresa ADMIN já liberados). */
+    @Column(name = "app_full_access")
+    @Builder.Default
+    private Boolean appFullAccess = false;
+
+    /** Chaves alinhadas a CompanyAppModule; null = legado (todos os módulos permitidos). */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "app_module_grants", columnDefinition = "jsonb")
+    private Map<String, Boolean> appModuleGrants;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

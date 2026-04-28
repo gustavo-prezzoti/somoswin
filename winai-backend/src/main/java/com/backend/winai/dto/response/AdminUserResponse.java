@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.ZonedDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -30,4 +31,7 @@ public class AdminUserResponse {
     private Long totalConversations;
     private String companyName;
     private UUID companyId;
+
+    private Boolean appFullAccess;
+    private Map<String, Boolean> appModuleGrants;
 }

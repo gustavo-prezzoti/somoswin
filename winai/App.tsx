@@ -68,6 +68,8 @@ import AdminGestaoEquipe from './components/Admin/AdminGestaoEquipe';
 import AdminGestaoPapeis from './components/Admin/AdminGestaoPapeis';
 import AdminGlobalNotifications from './components/Admin/AdminGlobalNotifications';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
+import type { UserDTO } from './services/types';
+import { canAccessCompanyAppModule, type CompanyAppModuleKey } from './utils/appModuleAccess';
 import { userService } from './services/api/user.service';
 import { notificationService } from './services/api/notification.service';
 import { termsService } from './services/api/terms.service';
@@ -75,6 +77,20 @@ import { authService } from './services/api/auth.service';
 import { subscriptionService } from './services/api/subscription.service';
 import { useWebSocket } from './hooks/useWebSocket';
 import logoLight from './logo_light.png';
+
+const RequireAppModule = ({ module, children }: { module: CompanyAppModuleKey; children?: React.ReactNode }) => {
+  let u: UserDTO | null = null;
+  try {
+    const userStr = localStorage.getItem('win_user');
+    u = userStr ? JSON.parse(userStr) : null;
+  } catch {
+    u = null;
+  }
+  if (!canAccessCompanyAppModule(u, module)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+};
 
 const SidebarItem = ({ to, icon: Icon, label, isActive, isCollapsed }: { to: string, icon: any, label: string, isActive: boolean, isCollapsed: boolean }) => (
   <Link
@@ -163,6 +179,11 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
     try {
       const userData = await userService.getProfile();
       setUser(userData);
+      try {
+        localStorage.setItem('win_user', JSON.stringify(userData));
+      } catch {
+        /* ignore */
+      }
     } catch (error) {
       console.error('Failed to load user', error);
       const savedUser = localStorage.getItem('win_user');
@@ -210,18 +231,34 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 
           <SidebarSection title="Operação Vendas" isCollapsed={!isSidebarOpen} />
           <nav className="space-y-1">
-            <SidebarItem to="/crm" icon={Users} label="CRM & Leads" isActive={location.pathname === '/crm'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/whatsapp" icon={MessageCircle} label="Atendimento" isActive={location.pathname === '/whatsapp'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/video-chamada" icon={Mic} label="Escuta Inteligente" isActive={location.pathname === '/video-chamada'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/calendario" icon={Calendar} label="Agenda Comercial" isActive={location.pathname === '/calendario'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/metas" icon={Target} label="Metas e Objetivos" isActive={location.pathname === '/metas'} isCollapsed={!isSidebarOpen} />
+            {canAccessCompanyAppModule(user, 'CRM') && (
+              <SidebarItem to="/crm" icon={Users} label="CRM & Leads" isActive={location.pathname === '/crm'} isCollapsed={!isSidebarOpen} />
+            )}
+            {canAccessCompanyAppModule(user, 'WHATSAPP') && (
+              <SidebarItem to="/whatsapp" icon={MessageCircle} label="Atendimento" isActive={location.pathname === '/whatsapp'} isCollapsed={!isSidebarOpen} />
+            )}
+            {canAccessCompanyAppModule(user, 'INTELLIGENT_LISTENING') && (
+              <SidebarItem to="/video-chamada" icon={Mic} label="Escuta Inteligente" isActive={location.pathname === '/video-chamada'} isCollapsed={!isSidebarOpen} />
+            )}
+            {canAccessCompanyAppModule(user, 'CALENDAR') && (
+              <SidebarItem to="/calendario" icon={Calendar} label="Agenda Comercial" isActive={location.pathname === '/calendario'} isCollapsed={!isSidebarOpen} />
+            )}
+            {canAccessCompanyAppModule(user, 'GOALS') && (
+              <SidebarItem to="/metas" icon={Target} label="Metas e Objetivos" isActive={location.pathname === '/metas'} isCollapsed={!isSidebarOpen} />
+            )}
           </nav>
 
           <SidebarSection title="Growth & Escala" isCollapsed={!isSidebarOpen} />
           <nav className="space-y-1">
-            <SidebarItem to="/campanhas" icon={TrendingUp} label="Tráfego Pago" isActive={location.pathname === '/campanhas'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/base-ativa" icon={Layers} label="Base Ativa" isActive={location.pathname === '/base-ativa'} isCollapsed={!isSidebarOpen} />
-            <SidebarItem to="/mentoria" icon={Target} label="Consultoria Estratégica" isActive={location.pathname === '/mentoria'} isCollapsed={!isSidebarOpen} />
+            {canAccessCompanyAppModule(user, 'MARKETING') && (
+              <SidebarItem to="/campanhas" icon={TrendingUp} label="Tráfego Pago" isActive={location.pathname === '/campanhas'} isCollapsed={!isSidebarOpen} />
+            )}
+            {canAccessCompanyAppModule(user, 'ACTIVE_BASE') && (
+              <SidebarItem to="/base-ativa" icon={Layers} label="Base Ativa" isActive={location.pathname === '/base-ativa'} isCollapsed={!isSidebarOpen} />
+            )}
+            {canAccessCompanyAppModule(user, 'CONSULTANCY') && (
+              <SidebarItem to="/mentoria" icon={Target} label="Consultoria Estratégica" isActive={location.pathname === '/mentoria'} isCollapsed={!isSidebarOpen} />
+            )}
           </nav>
         </div>
 
@@ -638,14 +675,14 @@ const App: React.FC = () => {
         <Route path="/termos" element={<Terms />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/notificacoes" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-        <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
-        <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
-        <Route path="/whatsapp" element={<ProtectedRoute><WhatsApp /></ProtectedRoute>} />
-        <Route path="/video-chamada" element={<ProtectedRoute><VideoMeeting /></ProtectedRoute>} />
-        <Route path="/base-ativa" element={<ProtectedRoute><ActiveBase /></ProtectedRoute>} />
-        <Route path="/mentoria" element={<ProtectedRoute><Consultancy /></ProtectedRoute>} />
-        <Route path="/campanhas" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
-        <Route path="/calendario" element={<ProtectedRoute><MeetingCalendar /></ProtectedRoute>} />
+        <Route path="/metas" element={<ProtectedRoute><RequireAppModule module="GOALS"><Goals /></RequireAppModule></ProtectedRoute>} />
+        <Route path="/crm" element={<ProtectedRoute><RequireAppModule module="CRM"><CRM /></RequireAppModule></ProtectedRoute>} />
+        <Route path="/whatsapp" element={<ProtectedRoute><RequireAppModule module="WHATSAPP"><WhatsApp /></RequireAppModule></ProtectedRoute>} />
+        <Route path="/video-chamada" element={<ProtectedRoute><RequireAppModule module="INTELLIGENT_LISTENING"><VideoMeeting /></RequireAppModule></ProtectedRoute>} />
+        <Route path="/base-ativa" element={<ProtectedRoute><RequireAppModule module="ACTIVE_BASE"><ActiveBase /></RequireAppModule></ProtectedRoute>} />
+        <Route path="/mentoria" element={<ProtectedRoute><RequireAppModule module="CONSULTANCY"><Consultancy /></RequireAppModule></ProtectedRoute>} />
+        <Route path="/campanhas" element={<ProtectedRoute><RequireAppModule module="MARKETING"><Campaigns /></RequireAppModule></ProtectedRoute>} />
+        <Route path="/calendario" element={<ProtectedRoute><RequireAppModule module="CALENDAR"><MeetingCalendar /></RequireAppModule></ProtectedRoute>} />
         <Route path="/configuracoes" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/oauth-complete" element={<OAuthComplete />} />
 

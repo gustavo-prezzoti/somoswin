@@ -44,6 +44,10 @@ export interface UserDTO {
     ampliaStaffRoleName?: string | null;
     ampliaStaffPermissions?: string[];
     ampliaStaffFullAccess?: boolean;
+    /** App cliente Somoswin — ignora mapa granular quando true (papéis ADMIN empresa já liberam no backend). */
+    appFullAccess?: boolean;
+    /** Chaves = CRM, WHATSAPP, …; omitidas tratadas como permitidas legado. */
+    appModuleGrants?: Record<string, boolean>;
 }
 
 export interface CompanyDTO {

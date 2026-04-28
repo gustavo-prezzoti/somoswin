@@ -489,6 +489,13 @@ export interface AdminUser {
     totalConversations: number;
     mustChangePassword?: boolean;
     tempPassword?: string;
+    appFullAccess?: boolean;
+    appModuleGrants?: Record<string, boolean>;
+}
+
+export interface PatchUserAppModulesRequest {
+    fullAccess: boolean;
+    modules: Record<string, boolean>;
 }
 
 export interface AdminInstance {
@@ -816,6 +823,10 @@ const adminService = {
 
     updateUser: async (userId: string, data: UpdateUserRequest): Promise<AdminUser> => {
         return await httpClient.put<AdminUser>(`/admin/users/${userId}`, data);
+    },
+
+    patchUserAppModules: async (userId: string, data: PatchUserAppModulesRequest): Promise<AdminUser> => {
+        return await httpClient.patch<AdminUser>(`/admin/users/${userId}/app-modules`, data);
     },
 
     toggleUserStatus: async (userId: string): Promise<void> => {

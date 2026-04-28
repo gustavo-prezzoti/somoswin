@@ -9,6 +9,7 @@ import com.backend.winai.dto.request.AdminCreateUserRequest;
 import com.backend.winai.dto.request.AdminEscutaStartRequest;
 import com.backend.winai.dto.request.AdminLeadStatusPatchRequest;
 import com.backend.winai.dto.request.AdminUpdateUserRequest;
+import com.backend.winai.dto.request.PatchUserAppModulesRequest;
 import com.backend.winai.dto.request.UpdateInstanceConfigRequest;
 import com.backend.winai.dto.request.ClonePlanRequest;
 import com.backend.winai.dto.request.CreatePlanRequest;
@@ -465,6 +466,17 @@ public class AdminController {
             @Parameter(description = "ID do usuário") @PathVariable UUID userId,
             @RequestBody AdminUpdateUserRequest request) {
         return ResponseEntity.ok(adminService.updateUser(userId, request));
+    }
+
+    @PreAuthorize("@adminSecurity.hasPermission(authentication, 'usuarios', 'update')")
+    @Operation(
+            summary = "Permissões do app cliente (Somoswin)",
+            description = "Define módulos visíveis no app da empresa (CRM, Atendimento, etc.). Separado do painel /admin.")
+    @PatchMapping("/users/{userId}/app-modules")
+    public ResponseEntity<AdminUserResponse> patchUserAppModules(
+            @Parameter(description = "ID do usuário") @PathVariable UUID userId,
+            @Valid @RequestBody PatchUserAppModulesRequest request) {
+        return ResponseEntity.ok(adminService.patchUserAppModules(userId, request));
     }
 
     @PreAuthorize("@adminSecurity.hasPermission(authentication, 'usuarios', 'update')")

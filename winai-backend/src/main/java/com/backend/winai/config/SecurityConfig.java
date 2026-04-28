@@ -1,5 +1,6 @@
 package com.backend.winai.config;
 
+import com.backend.winai.security.CompanyAppModuleAuthorizationFilter;
 import com.backend.winai.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -27,6 +28,7 @@ import java.util.List;
 public class SecurityConfig {
 
         private final JwtAuthenticationFilter jwtAuthFilter;
+        private final CompanyAppModuleAuthorizationFilter companyAppModuleAuthorizationFilter;
         private final AuthenticationProvider authenticationProvider;
 
         @Bean
@@ -64,6 +66,7 @@ public class SecurityConfig {
                                                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                                 .authenticationProvider(authenticationProvider)
                                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                                .addFilterAfter(companyAppModuleAuthorizationFilter, JwtAuthenticationFilter.class)
                                 .exceptionHandling(exceptions -> exceptions
                                                 .authenticationEntryPoint((request, response, authException) -> {
                                                         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

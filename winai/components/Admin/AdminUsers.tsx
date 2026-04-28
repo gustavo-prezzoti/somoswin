@@ -17,12 +17,17 @@ import {
     Check,
     ChevronLeft,
     ChevronRight,
+    ListChecks,
 } from 'lucide-react';
 import adminService, { AdminUser, CreateUserRequest, UpdateUserRequest, Company } from '../../services/adminService';
 import type { UserDTO } from '../../services/types';
 import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useModal } from './ModalContext';
 import { canUseAmpliaAdminScreen, hasAmpliaPermission } from './adminPermissions';
+import {
+    COMPANY_APP_MODULE_KEYS,
+    COMPANY_APP_MODULE_LABELS,
+} from '../../utils/appModuleAccess';
 
 function roleLabel(role: string): string {
     if (role === 'SUPER_ADMIN') return 'Super admin';
@@ -50,6 +55,9 @@ const AdminUsers: React.FC = () => {
     const [totalPages, setTotalPages] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+    const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+    const [permDraft, setPermDraft] = useState<{ full: boolean; modules: Record<string, boolean> } | null>(null);
+    const [savingPermUserId, setSavingPermUserId] = useState<string | null>(null);
 
     const meUser = useMemo((): UserDTO | null => {
         if (isAuthenticated !== true) return null;
@@ -69,6 +77,57 @@ const AdminUsers: React.FC = () => {
     const canCreateUser = hasAmpliaPermission(meUser, 'usuarios', 'create');
     const canUpdateUser = hasAmpliaPermission(meUser, 'usuarios', 'update');
     const canDeleteUser = hasAmpliaPermission(meUser, 'usuarios', 'delete');
+
+    const usersByCompany = useMemo(() => {
+        const map = new Map<string, AdminUser[]>();
+        for (const u of users) {
+            const label = u.companyName?.trim() || 'Sem empresa';
+            if (!map.has(label)) map.set(label, []);
+            map.get(label)!.push(u);
+        }
+        return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt'));
+    }, [users]);
+
+    const initPermDraft = useCallback((u: AdminUser) => {
+        if (u.role === 'ADMIN' && u.companyId) return null;
+        if (u.role === 'SUPER_ADMIN') return null;
+        const full = !!u.appFullAccess;
+        const modules: Record<string, boolean> = {};
+        for (const k of COMPANY_APP_MODULE_KEYS) {
+            modules[k] = full ? true : u.appModuleGrants?.[k] !== false;
+        }
+        return { full, modules };
+    }, []);
+
+    const handleTogglePermissions = (u: AdminUser) => {
+        if (!canUpdateUser) return;
+        if (expandedUserId === u.id) {
+            setExpandedUserId(null);
+            setPermDraft(null);
+            return;
+        }
+        setExpandedUserId(u.id);
+        setPermDraft(initPermDraft(u));
+    };
+
+    const handleSavePermissions = async (u: AdminUser) => {
+        if (!permDraft) return;
+        try {
+            setSavingPermUserId(u.id);
+            await adminService.patchUserAppModules(u.id, {
+                fullAccess: permDraft.full,
+                modules: permDraft.modules,
+            });
+            showToast('Permissões do app atualizadas.');
+            setExpandedUserId(null);
+            setPermDraft(null);
+            await loadUsers();
+        } catch (err: any) {
+            showToast(getErrorMessage(err, 'Não foi possível salvar as permissões.'), 'error');
+        } finally {
+            setSavingPermUserId(null);
+        }
+    };
 
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
@@ -487,104 +546,233 @@ const AdminUsers: React.FC = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                users.map((user) => (
-                                    <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
-                                        <td className="px-5 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="relative shrink-0">
-                                                    <img
-                                                        src={
-                                                            user.avatarUrl ||
-                                                            `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
-                                                        }
-                                                        alt={user.name}
-                                                        className="w-11 h-11 rounded-xl object-cover border border-black/5"
-                                                    />
-                                                    <div
-                                                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
-                                                            user.active ? 'bg-emerald-600' : 'bg-rose-500'
+                                usersByCompany.flatMap(([companyLabel, groupUsers]) => [
+                                    <tr key={`g-${companyLabel}`} className="bg-gray-50/90">
+                                        <td colSpan={5} className="px-5 py-2.5 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                            <span className="inline-flex items-center gap-2 text-[#141414]/70">
+                                                <Building2 size={12} className="text-emerald-600" />
+                                                {companyLabel}
+                                            </span>
+                                        </td>
+                                    </tr>,
+                                    ...groupUsers.flatMap((user) => {
+                                        const rows: React.ReactNode[] = [
+                                            <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
+                                                <td className="px-5 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="relative shrink-0">
+                                                            <img
+                                                                src={
+                                                                    user.avatarUrl ||
+                                                                    `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
+                                                                }
+                                                                alt={user.name}
+                                                                className="w-11 h-11 rounded-xl object-cover border border-black/5"
+                                                            />
+                                                            <div
+                                                                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
+                                                                    user.active ? 'bg-emerald-600' : 'bg-rose-500'
+                                                                }`}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-[#141414] text-sm leading-tight">{user.name}</p>
+                                                            <p className="text-[10px] text-gray-500 mt-0.5">{user.email}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-5 py-4">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${roleBadgeClass(
+                                                            user.role
+                                                        )}`}
+                                                    >
+                                                        <Shield size={10} />
+                                                        {roleLabel(user.role)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-4">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <Building2 size={12} className="text-gray-600 shrink-0" />
+                                                        <span className="text-xs text-gray-600 truncate max-w-[180px]">
+                                                            {user.companyName || '—'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-5 py-4">
+                                                    <span
+                                                        className={`text-[10px] font-black uppercase tracking-widest ${
+                                                            user.active ? 'text-emerald-600' : 'text-rose-400'
                                                         }`}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-[#141414] text-sm leading-tight">{user.name}</p>
-                                                    <p className="text-[10px] text-gray-500 mt-0.5">{user.email}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-4">
-                                            <span
-                                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${roleBadgeClass(
-                                                    user.role
-                                                )}`}
-                                            >
-                                                <Shield size={10} />
-                                                {roleLabel(user.role)}
-                                            </span>
-                                        </td>
-                                        <td className="px-5 py-4">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <Building2 size={12} className="text-gray-600 shrink-0" />
-                                                <span className="text-xs text-gray-600 truncate max-w-[180px]">
-                                                    {user.companyName || '—'}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-4">
-                                            <span
-                                                className={`text-[10px] font-black uppercase tracking-widest ${
-                                                    user.active ? 'text-emerald-600' : 'text-rose-400'
-                                                }`}
-                                            >
-                                                {user.active ? 'Ativo' : 'Desativado'}
-                                            </span>
-                                        </td>
-                                        <td className="px-5 py-4 text-right">
-                                            <div className="flex gap-1 justify-end opacity-70 group-hover:opacity-100 transition-opacity">
-                                                {canUpdateUser && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openUserModal(user)}
-                                                        className="p-2.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                        title="Editar"
                                                     >
-                                                        <Pencil size={16} />
-                                                    </button>
-                                                )}
-                                                {canUpdateUser && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleToggleStatus(user.id)}
-                                                        className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                        title={user.active ? 'Bloquear' : 'Desbloquear'}
-                                                    >
-                                                        {user.active ? <Lock size={16} /> : <Unlock size={16} />}
-                                                    </button>
-                                                )}
-                                                {canDeleteUser && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDelete(user.id, true)}
-                                                        className="p-2.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                        title="Excluir"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                )}
-                                                {canUpdateUser && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleResetPassword(user.id, user.name, user.email)}
-                                                        className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
-                                                        title="Resetar senha"
-                                                    >
-                                                        <Key size={16} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                                        {user.active ? 'Ativo' : 'Desativado'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-4 text-right">
+                                                    <div className="flex gap-1 justify-end opacity-70 group-hover:opacity-100 transition-opacity flex-wrap">
+                                                        {canUpdateUser && user.companyId && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleTogglePermissions(user)}
+                                                                className={`p-2.5 rounded-lg border border-transparent hover:bg-gray-50 hover:border-black/5 ${
+                                                                    expandedUserId === user.id
+                                                                        ? 'text-emerald-600 bg-emerald-500/10'
+                                                                        : 'text-gray-400 hover:text-emerald-600'
+                                                                }`}
+                                                                title="Permissões do app"
+                                                            >
+                                                                <ListChecks size={16} />
+                                                            </button>
+                                                        )}
+                                                        {canUpdateUser && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openUserModal(user)}
+                                                                className="p-2.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-gray-50 border border-transparent hover:border-black/5"
+                                                                title="Editar"
+                                                            >
+                                                                <Pencil size={16} />
+                                                            </button>
+                                                        )}
+                                                        {canUpdateUser && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleToggleStatus(user.id)}
+                                                                className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
+                                                                title={user.active ? 'Bloquear' : 'Desbloquear'}
+                                                            >
+                                                                {user.active ? <Lock size={16} /> : <Unlock size={16} />}
+                                                            </button>
+                                                        )}
+                                                        {canDeleteUser && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDelete(user.id, true)}
+                                                                className="p-2.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
+                                                                title="Excluir"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        )}
+                                                        {canUpdateUser && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleResetPassword(user.id, user.name, user.email)}
+                                                                className="p-2.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-gray-50 border border-transparent hover:border-black/5"
+                                                                title="Resetar senha"
+                                                            >
+                                                                <Key size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>,
+                                        ];
+                                        if (expandedUserId === user.id) {
+                                            rows.push(
+                                                <tr key={`${user.id}-perm`} className="bg-emerald-500/[0.06]">
+                                                    <td colSpan={5} className="px-5 py-4 border-t border-emerald-500/15 align-top">
+                                                        {user.role === 'SUPER_ADMIN' && (
+                                                            <p className="text-xs text-gray-600">
+                                                                Super administrador tem acesso irrestrito; permissões de módulos do app não se aplicam.
+                                                            </p>
+                                                        )}
+                                                        {user.role === 'ADMIN' && user.companyId && (
+                                                            <p className="text-xs text-gray-600">
+                                                                Administrador da empresa tem acesso total aos módulos do aplicativo Somoswin.
+                                                            </p>
+                                                        )}
+                                                        {permDraft &&
+                                                            user.role !== 'SUPER_ADMIN' &&
+                                                            !(user.role === 'ADMIN' && user.companyId) && (
+                                                                <div className="space-y-4">
+                                                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                                                            checked={permDraft.full}
+                                                                            onChange={(e) => {
+                                                                                const v = e.target.checked;
+                                                                                setPermDraft((d) => {
+                                                                                    if (!d) return d;
+                                                                                    const modules = { ...d.modules };
+                                                                                    COMPANY_APP_MODULE_KEYS.forEach((k) => {
+                                                                                        modules[k] = true;
+                                                                                    });
+                                                                                    return { full: v, modules };
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                        <span className="text-xs font-bold text-[#141414]">
+                                                                            Acesso total ao app Somoswin
+                                                                        </span>
+                                                                    </label>
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                        {COMPANY_APP_MODULE_KEYS.map((key) => (
+                                                                            <label
+                                                                                key={key}
+                                                                                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${
+                                                                                    permDraft.full
+                                                                                        ? 'border-gray-100 bg-gray-50 text-gray-400'
+                                                                                        : 'border-black/5 bg-white cursor-pointer'
+                                                                                }`}
+                                                                            >
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    className="rounded border-gray-300 text-emerald-600 shrink-0"
+                                                                                    disabled={permDraft.full}
+                                                                                    checked={permDraft.modules[key] !== false}
+                                                                                    onChange={(e) => {
+                                                                                        const checked = e.target.checked;
+                                                                                        setPermDraft((d) =>
+                                                                                            d
+                                                                                                ? {
+                                                                                                      ...d,
+                                                                                                      full: false,
+                                                                                                      modules: {
+                                                                                                          ...d.modules,
+                                                                                                          [key]: checked,
+                                                                                                      },
+                                                                                                  }
+                                                                                                : d,
+                                                                                        );
+                                                                                    }}
+                                                                                />
+                                                                                <span className="font-semibold text-[#141414]">
+                                                                                    {COMPANY_APP_MODULE_LABELS[key]}
+                                                                                </span>
+                                                                            </label>
+                                                                        ))}
+                                                                    </div>
+                                                                    <div className="flex justify-end gap-2 pt-1">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setExpandedUserId(null);
+                                                                                setPermDraft(null);
+                                                                            }}
+                                                                            className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-black/10 text-gray-600 hover:bg-gray-50"
+                                                                        >
+                                                                            Cancelar
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={savingPermUserId === user.id}
+                                                                            onClick={() => handleSavePermissions(user)}
+                                                                            className="px-5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest hover:brightness-110 disabled:opacity-50"
+                                                                        >
+                                                                            {savingPermUserId === user.id ? 'Salvando…' : 'Salvar'}
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                    </td>
+                                                </tr>,
+                                            );
+                                        }
+                                        return rows;
+                                    }),
+                                ])
                             )}
                         </tbody>
                     </table>
@@ -593,59 +781,176 @@ const AdminUsers: React.FC = () => {
                         {users.length === 0 && !loading && (
                             <p className="text-center text-gray-500 text-sm py-8 col-span-full">Nenhum usuário encontrado.</p>
                         )}
-                        {users.map((user) => (
-                            <div key={user.id} className="rounded-xl border border-black/5 bg-gray-50 p-4 space-y-3">
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <img
-                                            src={
-                                                user.avatarUrl ||
-                                                `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
-                                            }
-                                            alt={user.name}
-                                            className="w-12 h-12 rounded-xl object-cover border border-black/5 shrink-0"
-                                        />
-                                        <div className="min-w-0">
-                                            <p className="font-bold text-[#141414] text-sm truncate">{user.name}</p>
-                                            <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
+                        {usersByCompany.map(([companyLabel, groupUsers]) => (
+                            <div key={`m-${companyLabel}`} className="space-y-3">
+                                <div className="flex items-center gap-2 px-1 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                    <Building2 size={12} className="text-emerald-600" />
+                                    {companyLabel}
+                                </div>
+                                {groupUsers.map((user) => (
+                                    <div key={user.id} className="rounded-xl border border-black/5 bg-gray-50 p-4 space-y-3">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <img
+                                                    src={
+                                                        user.avatarUrl ||
+                                                        `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00ff00&color=000&bold=true`
+                                                    }
+                                                    alt={user.name}
+                                                    className="w-12 h-12 rounded-xl object-cover border border-black/5 shrink-0"
+                                                />
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-[#141414] text-sm truncate">{user.name}</p>
+                                                    <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
+                                                </div>
+                                            </div>
+                                            <span
+                                                className={`shrink-0 px-2 py-1 rounded-md text-[8px] font-black uppercase ${roleBadgeClass(
+                                                    user.role
+                                                )}`}
+                                            >
+                                                {user.role}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-400 flex items-center gap-1">
+                                            <Building2 size={12} /> {user.companyName || '—'}
+                                        </p>
+                                        {expandedUserId === user.id && (
+                                            <div className="rounded-lg border border-emerald-500/20 bg-white p-3 text-xs space-y-3">
+                                                {user.role === 'SUPER_ADMIN' && (
+                                                    <p className="text-gray-600">
+                                                        Super administrador tem acesso irrestrito ao app.
+                                                    </p>
+                                                )}
+                                                {user.role === 'ADMIN' && user.companyId && (
+                                                    <p className="text-gray-600">
+                                                        Administrador da empresa tem acesso total aos módulos do app.
+                                                    </p>
+                                                )}
+                                                {permDraft &&
+                                                    user.role !== 'SUPER_ADMIN' &&
+                                                    !(user.role === 'ADMIN' && user.companyId) && (
+                                                        <>
+                                                            <label className="flex items-center gap-2">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="rounded border-gray-300 text-emerald-600"
+                                                                    checked={permDraft.full}
+                                                                    onChange={(e) => {
+                                                                        const v = e.target.checked;
+                                                                        setPermDraft((d) => {
+                                                                            if (!d) return d;
+                                                                            const modules = { ...d.modules };
+                                                                            COMPANY_APP_MODULE_KEYS.forEach((k) => {
+                                                                                modules[k] = true;
+                                                                            });
+                                                                            return { full: v, modules };
+                                                                        });
+                                                                    }}
+                                                                />
+                                                                <span className="font-bold text-[#141414]">Acesso total ao app</span>
+                                                            </label>
+                                                            <div className="grid grid-cols-1 gap-2">
+                                                                {COMPANY_APP_MODULE_KEYS.map((key) => (
+                                                                    <label
+                                                                        key={key}
+                                                                        className={`flex items-center gap-2 ${
+                                                                            permDraft.full ? 'text-gray-400' : ''
+                                                                        }`}
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            className="rounded border-gray-300 text-emerald-600"
+                                                                            disabled={permDraft.full}
+                                                                            checked={permDraft.modules[key] !== false}
+                                                                            onChange={(e) => {
+                                                                                const checked = e.target.checked;
+                                                                                setPermDraft((d) =>
+                                                                                    d
+                                                                                        ? {
+                                                                                              ...d,
+                                                                                              full: false,
+                                                                                              modules: {
+                                                                                                  ...d.modules,
+                                                                                                  [key]: checked,
+                                                                                              },
+                                                                                          }
+                                                                                        : d
+                                                                                );
+                                                                            }}
+                                                                        />
+                                                                        {COMPANY_APP_MODULE_LABELS[key]}
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                            <div className="flex gap-2 justify-end pt-1">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setExpandedUserId(null);
+                                                                        setPermDraft(null);
+                                                                    }}
+                                                                    className="px-3 py-2 rounded-lg border border-black/10 text-[10px] font-black uppercase"
+                                                                >
+                                                                    Cancelar
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={savingPermUserId === user.id}
+                                                                    onClick={() => handleSavePermissions(user)}
+                                                                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-[10px] font-black uppercase disabled:opacity-50"
+                                                                >
+                                                                    {savingPermUserId === user.id ? 'Salvando…' : 'Salvar'}
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                            </div>
+                                        )}
+                                        <div className="flex gap-2 flex-wrap">
+                                            {canUpdateUser && user.companyId && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleTogglePermissions(user)}
+                                                    className={`flex-1 py-2 rounded-lg text-xs font-black uppercase border border-black/5 ${
+                                                        expandedUserId === user.id
+                                                            ? 'bg-emerald-500/15 text-emerald-700'
+                                                            : 'bg-gray-50 text-gray-700'
+                                                    }`}
+                                                >
+                                                    Permissões
+                                                </button>
+                                            )}
+                                            {canUpdateUser && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openUserModal(user)}
+                                                    className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-gray-700 border border-black/5"
+                                                >
+                                                    Editar
+                                                </button>
+                                            )}
+                                            {canUpdateUser && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleToggleStatus(user.id)}
+                                                    className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-amber-400 border border-black/5"
+                                                >
+                                                    {user.active ? 'Bloquear' : 'Ativar'}
+                                                </button>
+                                            )}
+                                            {canDeleteUser && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDelete(user.id, true)}
+                                                    className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
-                                    <span className={`shrink-0 px-2 py-1 rounded-md text-[8px] font-black uppercase ${roleBadgeClass(user.role)}`}>
-                                        {user.role}
-                                    </span>
-                                </div>
-                                <p className="text-xs text-gray-400 flex items-center gap-1">
-                                    <Building2 size={12} /> {user.companyName || '—'}
-                                </p>
-                                <div className="flex gap-2 flex-wrap">
-                                    {canUpdateUser && (
-                                        <button
-                                            type="button"
-                                            onClick={() => openUserModal(user)}
-                                            className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-gray-700 border border-black/5"
-                                        >
-                                            Editar
-                                        </button>
-                                    )}
-                                    {canUpdateUser && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleToggleStatus(user.id)}
-                                            className="flex-1 py-2 rounded-lg bg-gray-50 text-xs font-black uppercase text-amber-400 border border-black/5"
-                                        >
-                                            {user.active ? 'Bloquear' : 'Ativar'}
-                                        </button>
-                                    )}
-                                    {canDeleteUser && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleDelete(user.id, true)}
-                                            className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    )}
-                                </div>
+                                ))}
                             </div>
                         ))}
                     </div>
