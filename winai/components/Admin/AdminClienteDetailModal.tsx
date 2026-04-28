@@ -20,6 +20,7 @@ import adminService, {
     type DashboardGoalDTO,
 } from '../../services/adminService';
 import { getErrorMessage } from '../../services/utils/errorHelper';
+import { ADMIN_Z_PAGE_MODAL } from './adminModalStack';
 
 type TabId = 'tasks' | 'kpis' | 'meetings' | 'notes';
 
@@ -813,7 +814,10 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+        <div
+            className="fixed inset-0 flex items-center justify-center p-4 md:p-8"
+            style={{ zIndex: ADMIN_Z_PAGE_MODAL }}
+        >
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

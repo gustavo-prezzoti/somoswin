@@ -5,7 +5,31 @@ import type { AdminDashboardAlert } from '../../../services/adminService';
 
 const PAGE_SIZE = 12;
 
-/** Paridade visual com amplia-painel/src/components/PriorityAlerts.tsx (dados reais). */
+/** Prazo para ordenação / status (usa {@link AdminDashboardAlert.dueDate} das tarefas de Metas). */
+function parseAlertDeadline(a: AdminDashboardAlert): Date {
+    if (a.dueDate) {
+        const [y, m, d] = a.dueDate.split('-').map(Number);
+        if (y && m && d) return new Date(y, m - 1, d);
+    }
+    const raw = a.createdAt;
+    return new Date(raw);
+}
+
+function formatDeadlineFooter(iso: string | undefined | null): string {
+    if (!iso) return '—';
+    const part = iso.slice(0, 10);
+    const [y, m, d] = part.split('-');
+    if (!y || !m || !d) return iso;
+    return `${d}/${m}/${y}`;
+}
+
+function goalTaskTypeLabel(type: string | undefined): string {
+    if (type === 'GOAL_TASK_OVERDUE') return 'Atrasada';
+    if (type === 'GOAL_TASK_DUE_SOON') return 'Prazo próximo';
+    return type || 'Alerta';
+}
+
+/** Alertas = tarefas pendentes de Metas e Objetivos com prazo (API admin/dashboard). */
 const DashboardPriorityAlerts: React.FC<{
     alerts: AdminDashboardAlert[];
 }> = ({ alerts }) => {
@@ -13,7 +37,10 @@ const DashboardPriorityAlerts: React.FC<{
     today.setHours(0, 0, 0, 0);
 
     const sorted = useMemo(
-        () => [...alerts].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+        () =>
+            [...alerts].sort(
+                (a, b) => parseAlertDeadline(a).getTime() - parseAlertDeadline(b).getTime()
+            ),
         [alerts]
     );
 
@@ -32,6 +59,15 @@ const DashboardPriorityAlerts: React.FC<{
 
     const pageItems = useMemo(() => sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE), [sorted, page]);
 
+    const overdueCount = useMemo(
+        () => sorted.filter((a) => a.type === 'GOAL_TASK_OVERDUE').length,
+        [sorted]
+    );
+    const dueSoonCount = useMemo(
+        () => sorted.filter((a) => a.type === 'GOAL_TASK_DUE_SOON').length,
+        [sorted]
+    );
+
     const showPagination = total > PAGE_SIZE;
     const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
     const to = Math.min((page + 1) * PAGE_SIZE, total);
@@ -41,9 +77,24 @@ const DashboardPriorityAlerts: React.FC<{
             <div className="flex items-center justify-between mb-8 gap-3 flex-wrap shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
                     <div className="w-2 h-6 bg-red-500 rounded-full shrink-0" />
-                    <h2 className="text-xl font-black italic tracking-tighter uppercase text-[#141414]">Alertas Prioritários</h2>
+                    <div>
+                        <h2 className="text-xl font-black italic tracking-tighter uppercase text-[#141414]">
+                            Alertas Prioritários
+                        </h2>
+                        <p className="text-[11px] text-gray-400 font-medium mt-1 max-w-xl">
+                            Metas e Objetivos: tarefas <span className="text-red-600 font-semibold">atrasadas</span> e com{' '}
+                            <span className="text-orange-600 font-semibold">prazo nos próximos 7 dias</span> (pendentes).
+                        </p>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap justify-end">
+                <div className="flex flex-col items-end gap-2 flex-wrap justify-end">
+                    {total > 0 && (
+                        <span className="text-[10px] font-bold text-gray-500 tabular-nums">
+                            {overdueCount} atrasada{overdueCount !== 1 ? 's' : ''}
+                            {' · '}
+                            {dueSoonCount} prazo próximo
+                        </span>
+                    )}
                     <span className="text-[10px] font-black bg-red-50 text-red-500 px-2 py-1 rounded uppercase tracking-widest">
                         {total} Pendente{total !== 1 ? 's' : ''}
                     </span>
@@ -56,14 +107,16 @@ const DashboardPriorityAlerts: React.FC<{
             </div>
 
             {total === 0 ? (
-                <p className="text-sm text-gray-400 font-medium text-center py-12">Nenhum alerta prioritário no momento.</p>
+                <p className="text-sm text-gray-400 font-medium text-center py-12">
+                    Nenhuma tarefa de meta atrasada nem com prazo nos próximos 7 dias.
+                </p>
             ) : (
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 min-h-0">
                         {pageItems.map((activity, index) => {
-                            const dueDate = new Date(activity.createdAt);
-                            const isDelayed = dueDate < today;
-                            const typeIsClient = activity.type?.toLowerCase().includes('client');
+                            const due = parseAlertDeadline(activity);
+                            const isDelayed = due < today;
+                            const isGoalTask = activity.type?.startsWith('GOAL_TASK');
 
                             return (
                                 <motion.div
@@ -77,13 +130,13 @@ const DashboardPriorityAlerts: React.FC<{
                                         <div className="flex items-center gap-2 min-w-0">
                                             <span
                                                 className={`text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest shrink-0 ${
-                                                    typeIsClient ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
+                                                    isGoalTask ? 'bg-violet-100 text-violet-700' : 'bg-emerald-100 text-emerald-600'
                                                 }`}
                                             >
-                                                {typeIsClient ? 'Cliente' : 'Sistema'}
+                                                {isGoalTask ? 'Metas' : 'Sistema'}
                                             </span>
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-[120px]">
-                                                {activity.type || 'Alerta'}
+                                                {goalTaskTypeLabel(activity.type)}
                                             </span>
                                         </div>
                                         <div
@@ -106,7 +159,7 @@ const DashboardPriorityAlerts: React.FC<{
                                     <div className="flex items-center justify-between pt-3 border-t border-black/5">
                                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                                             <Calendar size={12} />
-                                            {activity.createdAt}
+                                            Prazo {formatDeadlineFooter(activity.dueDate ?? activity.createdAt)}
                                         </div>
                                         <ArrowRight size={14} className="text-gray-300 group-hover:translate-x-1 transition-transform" />
                                     </div>

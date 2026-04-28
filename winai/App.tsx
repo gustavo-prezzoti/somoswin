@@ -43,6 +43,7 @@ import NotificationsPage from './components/NotificationsPage';
 import AdminLayout from './components/Admin/AdminLayout';
 import AdminLogin from './components/Admin/AdminLogin';
 import AdminDashboard from './components/Admin/AdminDashboard';
+import AdminAgenda from './components/Admin/AdminAgenda';
 import ChangePassword from './components/ChangePassword';
 import AdminUsers from './components/Admin/AdminUsers';
 import AdminInstances from './components/Admin/AdminInstances';
@@ -656,6 +657,7 @@ const App: React.FC = () => {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
+          <Route path="agenda" element={<AdminAgenda />} />
           <Route path="em-breve" element={<Navigate to="/admin" replace />} />
           <Route path="gestao-equipe" element={<AdminGestaoEquipe />} />
           <Route path="gestao-equipe/papeis" element={<AdminGestaoPapeis />} />

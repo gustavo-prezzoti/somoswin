@@ -7,6 +7,7 @@ export interface AdminRouteMeta {
 
 /** Títulos/subtítulos alinhados a amplia-painel/src/App.tsx (getTabTitle / getTabSubtitle). */
 const ROUTES: { pattern: string; end?: boolean; meta: AdminRouteMeta }[] = [
+    { pattern: '/admin/agenda', meta: { title: 'Agenda', subtitle: 'Encontros comerciais da semana' } },
     { pattern: '/admin/clientes', meta: { title: 'Clientes', subtitle: 'Acompanhamento estratégico' } },
     { pattern: '/admin/meta-ads', meta: { title: 'Meta Ads', subtitle: 'Gestão e Otimização IA' } },
     { pattern: '/admin/metas', meta: { title: 'Metas e Objetivos', subtitle: 'Planejamento Estratégico' } },

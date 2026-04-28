@@ -61,6 +61,7 @@ import com.backend.winai.repository.SocialGrowthChatRepository;
 import com.backend.winai.repository.MetaConnectionRepository;
 import com.backend.winai.repository.GoogleDriveConnectionRepository;
 import com.backend.winai.repository.GoalRepository;
+import com.backend.winai.repository.GoalTaskRepository;
 import com.backend.winai.repository.NotificationRepository;
 import com.backend.winai.repository.RefreshTokenRepository;
 import com.backend.winai.repository.AIInsightRepository;
@@ -83,6 +84,7 @@ import com.backend.winai.repository.WhatsAppBroadcastDispatchRepository;
 import com.backend.winai.repository.WhatsAppBroadcastRecipientRepository;
 import com.backend.winai.entity.Lead;
 import com.backend.winai.entity.LeadStatus;
+import com.backend.winai.entity.GoalTask;
 import com.backend.winai.entity.GoalStatus;
 import com.backend.winai.entity.MetaConnection;
 import com.backend.winai.entity.Meeting;
@@ -173,6 +175,7 @@ public class AdminService {
     private final MetaConnectionRepository metaConnectionRepository;
     private final GoogleDriveConnectionRepository googleDriveConnectionRepository;
     private final GoalRepository goalRepository;
+    private final GoalTaskRepository goalTaskRepository;
     private final NotificationRepository notificationRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AIInsightRepository aiInsightRepository;
@@ -309,17 +312,7 @@ public class AdminService {
                         .build())
                 .collect(Collectors.toList());
 
-        List<Notification> notifs = notificationRepository.findTop12ByOrderByCreatedAtDesc();
-        List<AdminDashboardResponse.AlertRow> alerts = notifs.stream()
-                .map(n -> AdminDashboardResponse.AlertRow.builder()
-                        .id(n.getId().toString())
-                        .title(n.getTitle())
-                        .message(n.getMessage() != null ? n.getMessage() : "")
-                        .type(n.getType() != null ? n.getType() : "INFO")
-                        .createdAt(n.getCreatedAt() != null ? n.getCreatedAt().toString() : "")
-                        .read(Boolean.TRUE.equals(n.getRead()))
-                        .build())
-                .collect(Collectors.toList());
+        List<AdminDashboardResponse.AlertRow> alerts = buildPriorityAlertsFromGoalTasks(today, null);
 
         return AdminDashboardResponse.builder()
                 .kpis(kpis)
@@ -388,24 +381,53 @@ public class AdminService {
                         .build())
                 .collect(Collectors.toList());
 
-        Pageable alertsPage = PageRequest.of(0, 12);
-        List<Notification> notifs = notificationRepository.findByUser_IdOrderByCreatedAtDesc(staffUserId, alertsPage);
-        List<AdminDashboardResponse.AlertRow> alerts = notifs.stream()
-                .map(n -> AdminDashboardResponse.AlertRow.builder()
-                        .id(n.getId().toString())
-                        .title(n.getTitle())
-                        .message(n.getMessage() != null ? n.getMessage() : "")
-                        .type(n.getType() != null ? n.getType() : "INFO")
-                        .createdAt(n.getCreatedAt() != null ? n.getCreatedAt().toString() : "")
-                        .read(Boolean.TRUE.equals(n.getRead()))
-                        .build())
-                .collect(Collectors.toList());
+        List<AdminDashboardResponse.AlertRow> alerts = buildPriorityAlertsFromGoalTasks(today, staffUserId);
 
         return AdminDashboardResponse.builder()
                 .kpis(kpis)
                 .upcomingMeetings(meetingRows)
                 .priorityAlerts(alerts)
                 .build();
+    }
+
+    /**
+     * Alertas prioritários: tarefas de Metas pendentes com prazo. Inclui atrasadas (deadline antes de hoje) e
+     * prazo próximo (deadline de hoje até hoje+N dias). Query: {@code deadline <= hoje+N}. Não usa {@link Notification}.
+     */
+    private static final int ADMIN_PRIORITY_ALERT_DEADLINE_HORIZON_DAYS = 7;
+
+    private List<AdminDashboardResponse.AlertRow> buildPriorityAlertsFromGoalTasks(LocalDate today, UUID staffUserIdOrNull) {
+        LocalDate until = today.plusDays(ADMIN_PRIORITY_ALERT_DEADLINE_HORIZON_DAYS);
+        ZoneId zone = ZoneId.systemDefault();
+        List<GoalTask> tasks;
+        if (staffUserIdOrNull != null) {
+            Set<UUID> companyIds = new HashSet<>(leadRepository.findDistinctCompanyIdsByOwnerUserId(staffUserIdOrNull));
+            if (companyIds.isEmpty()) {
+                tasks = List.of();
+            } else {
+                tasks = goalTaskRepository.findPendingWithDeadlineUntilForCompanies(GoalStatus.ACTIVE, until, companyIds);
+            }
+        } else {
+            tasks = goalTaskRepository.findPendingWithDeadlineUntil(GoalStatus.ACTIVE, until);
+        }
+        return tasks.stream()
+                .limit(12)
+                .map(gt -> {
+                    LocalDate d = gt.getDeadline();
+                    boolean overdue = d.isBefore(today);
+                    Company co = gt.getGoal().getCompany();
+                    String companyName = co != null ? co.getName() : "—";
+                    return AdminDashboardResponse.AlertRow.builder()
+                            .id("goal-task-" + gt.getId())
+                            .title(gt.getTitle())
+                            .message(gt.getGoal().getTitle() + " · " + companyName)
+                            .type(overdue ? "GOAL_TASK_OVERDUE" : "GOAL_TASK_DUE_SOON")
+                            .createdAt(d.atStartOfDay(zone).toString())
+                            .read(false)
+                            .dueDate(d.toString())
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 
     // ========== ALERTAS (NOTIFICAÇÕES) ==========

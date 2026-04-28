@@ -19,6 +19,7 @@ import {
     Flag,
     Layers,
     FileText,
+    Calendar,
 } from 'lucide-react';
 import {
     ADMIN_NAV_SECTIONS,
@@ -30,6 +31,7 @@ import type { UserDTO } from '../../services/types';
 
 const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
     dashboard: Home,
+    agenda: Calendar,
     clientes: Users,
     usuarios: User,
     metaads: Target,
@@ -73,7 +75,9 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
         }
         return ADMIN_NAV_SECTIONS.map((section) => ({
             ...section,
-            items: section.items.filter((item) => canAccessAdminModule(navUser, item.id)),
+            items: section.items.filter((item) =>
+                canAccessAdminModule(navUser, item.permissionModule ?? item.id)
+            ),
         })).filter((s) => s.items.length > 0);
     }, [navUser]);
 

@@ -53,5 +53,7 @@ public class AdminDashboardResponse {
         private String type;
         private String createdAt;
         private boolean read;
+        /** Prazo da tarefa de meta (yyyy-MM-dd); quando preenchido, alerta vem de Metas e Objetivos, não de notificação. */
+        private String dueDate;
     }
 }

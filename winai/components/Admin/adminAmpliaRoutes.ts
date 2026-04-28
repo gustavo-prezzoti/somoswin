@@ -4,6 +4,7 @@
  * | Item / id           | Rota Somoswin              | Notas                              |
  * |---------------------|----------------------------|------------------------------------|
  * | dashboard           | /admin                     | Dashboard                          |
+ * | agenda              | /admin/agenda              | Agenda (mesma permissão dashboard) |
  * | clientes            | /admin/clientes            | Companies / acompanhamento         |
  * | usuarios            | /admin/users               | Usuários                           |
  * | metaads             | /admin/meta-ads            | Meta Ads                           |
@@ -28,6 +29,8 @@ export interface AdminNavItem {
     implemented?: boolean;
     /** Contador opcional no item (ex.: notificações) */
     badge?: number;
+    /** Se definido, permissão Amplia usa este módulo em vez de {@link id} (ex.: Agenda → dashboard). */
+    permissionModule?: string;
 }
 
 export interface AdminNavSection {
@@ -44,6 +47,13 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         accentClass: 'text-emerald-500',
         items: [
             { id: 'dashboard', label: 'Dashboard', to: '/admin', implemented: true },
+            {
+                id: 'agenda',
+                label: 'Agenda',
+                to: '/admin/agenda',
+                implemented: true,
+                permissionModule: 'dashboard',
+            },
             { id: 'clientes', label: 'Clientes', to: '/admin/clientes', implemented: true },
             { id: 'usuarios', label: 'Usuários', to: '/admin/users', implemented: true },
             { id: 'metaads', label: 'Meta Ads', to: '/admin/meta-ads', implemented: true },

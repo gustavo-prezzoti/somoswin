@@ -33,6 +33,8 @@ export interface AdminDashboardAlert {
     type: string;
     createdAt: string;
     read: boolean;
+    /** Prazo da tarefa de meta (yyyy-MM-dd); alertas prioritários vêm de Metas e Objetivos. */
+    dueDate?: string | null;
 }
 
 export interface AdminDashboard {
