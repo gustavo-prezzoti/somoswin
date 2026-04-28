@@ -421,30 +421,7 @@ const AdminGestaoEquipe: React.FC = () => {
         return members.filter((m) => m.id === headerStaffId);
     }, [members, headerStaffId]);
 
-    if (auth === false) {
-        return <Navigate to="/admin" replace />;
-    }
-
-    if (auth === null) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
-                <Loader2 className="animate-spin text-emerald-500" size={40} />
-            </div>
-        );
-    }
-
-    const filteredMembers = scopeMembers.filter((m) => {
-        const q = searchTerm.toLowerCase();
-        const matchSearch =
-            m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
-        const matchRole = filterRole === 'all' || (m.ampliaStaffType ?? '') === filterRole;
-        return matchSearch && matchRole;
-    });
-
-    const vendedores = scopeMembers.filter((m) => m.ampliaStaffType === 'VENDEDOR').length;
-    const consultores = scopeMembers.filter((m) => m.ampliaStaffType === 'CONSULTOR' || m.ampliaStaffType === 'GESTOR').length;
-    const onlineish = scopeMembers.filter((m) => m.active).length;
-
+    /** Deve ficar antes de qualquer return: mesma ordem de hooks em todo render (evita React #310). */
     const openPortfolioModal = useCallback(async (member: InternalStaffMember) => {
         setPortfolioMember(member);
         setPortfolioSearch('');
@@ -487,6 +464,30 @@ const AdminGestaoEquipe: React.FC = () => {
             setPortfolioSaving(false);
         }
     }, [portfolioMember, portfolioSelected, load, showToast]);
+
+    if (auth === false) {
+        return <Navigate to="/admin" replace />;
+    }
+
+    if (auth === null) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+                <Loader2 className="animate-spin text-emerald-500" size={40} />
+            </div>
+        );
+    }
+
+    const filteredMembers = scopeMembers.filter((m) => {
+        const q = searchTerm.toLowerCase();
+        const matchSearch =
+            m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
+        const matchRole = filterRole === 'all' || (m.ampliaStaffType ?? '') === filterRole;
+        return matchSearch && matchRole;
+    });
+
+    const vendedores = scopeMembers.filter((m) => m.ampliaStaffType === 'VENDEDOR').length;
+    const consultores = scopeMembers.filter((m) => m.ampliaStaffType === 'CONSULTOR' || m.ampliaStaffType === 'GESTOR').length;
+    const onlineish = scopeMembers.filter((m) => m.active).length;
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
