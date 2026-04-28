@@ -596,38 +596,48 @@ const AdminGestaoEquipe: React.FC = () => {
                                         <>
                                             <div className="text-center">
                                                 <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Leads</p>
-                                                <p className="text-lg font-black italic uppercase text-[#141414]">{member.leadsTotal}</p>
+                                                <p className="text-lg font-black italic uppercase text-[#141414]">
+                                                    {member.leadsTotal ?? '—'}
+                                                </p>
                                             </div>
                                             <div className="text-center border-l border-black/5">
                                                 <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Ganhos</p>
-                                                <p className="text-lg font-black italic uppercase text-[#141414]">{member.leadsWon}</p>
+                                                <p className="text-lg font-black italic uppercase text-[#141414]">
+                                                    {member.leadsWon ?? '—'}
+                                                </p>
                                             </div>
                                             <div className="text-center border-l border-black/5">
                                                 <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Conv.</p>
-                                                <p className="text-lg font-black italic uppercase text-emerald-600">{member.conversionPercent}%</p>
+                                                <p className="text-lg font-black italic uppercase text-emerald-600">
+                                                    {member.conversionPercent != null ? `${member.conversionPercent}%` : '—'}
+                                                </p>
                                             </div>
                                             <div className="text-center border-l border-black/5">
                                                 <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Reuniões</p>
-                                                <p className="text-lg font-black italic uppercase text-[#141414]">{member.meetingsThisWeek}</p>
+                                                <p className="text-lg font-black italic uppercase text-[#141414]">
+                                                    {member.meetingsThisWeek ?? '—'}
+                                                </p>
                                             </div>
                                         </>
                                     ) : (
                                         <>
                                             <div className="text-center">
                                                 <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Leads</p>
-                                                <p className="text-lg font-black italic uppercase">{member.leadsTotal}</p>
+                                                <p className="text-lg font-black italic uppercase">{member.leadsTotal ?? '—'}</p>
                                             </div>
                                             <div className="text-center border-l border-black/5">
                                                 <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Ganhos</p>
-                                                <p className="text-lg font-black italic uppercase">{member.leadsWon}</p>
+                                                <p className="text-lg font-black italic uppercase">{member.leadsWon ?? '—'}</p>
                                             </div>
                                             <div className="text-center border-l border-black/5">
                                                 <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Conv.</p>
-                                                <p className="text-lg font-black italic uppercase text-emerald-600">{member.conversionPercent}%</p>
+                                                <p className="text-lg font-black italic uppercase text-emerald-600">
+                                                    {member.conversionPercent != null ? `${member.conversionPercent}%` : '—'}
+                                                </p>
                                             </div>
                                             <div className="text-center border-l border-black/5">
                                                 <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-1">Reuniões</p>
-                                                <p className="text-lg font-black italic uppercase">{member.meetingsThisWeek}</p>
+                                                <p className="text-lg font-black italic uppercase">{member.meetingsThisWeek ?? '—'}</p>
                                             </div>
                                         </>
                                     )}

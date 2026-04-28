@@ -17,6 +17,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import adminService, { AdminAmpliaStaffPerformance, InternalStaffMember } from '../../../services/adminService';
 import { getErrorMessage } from '../../../services/utils/errorHelper';
+import { formatAmpliaStaffPermissionSummary } from '../adminAmpliaModuleOptions';
 import { useAdminStaffView } from '../AdminStaffViewContext';
 
 function formatMoney(n: number | null | undefined): string {
@@ -34,7 +35,7 @@ function formatShortDate(iso: string | null | undefined): string {
     }
 }
 
-/** Ex.: VENDEDOR → Vendedor */
+/** Seed ou rótulo livre (sessão admin): mostrar papel legível */
 function staffTypeLabel(seedType: string | null | undefined): string {
     const u = String(seedType ?? '')
         .trim()
@@ -42,7 +43,14 @@ function staffTypeLabel(seedType: string | null | undefined): string {
     if (u === 'VENDEDOR') return 'Vendedor';
     if (u === 'CONSULTOR') return 'Consultor';
     if (u === 'GESTOR') return 'Gestor';
-    return seedType?.trim() || 'Colaborador';
+    return seedType?.trim() || '';
+}
+
+function staffSubtitle(member: InternalStaffMember): string {
+    const role = member.ampliaStaffRoleName?.trim();
+    const seed = staffTypeLabel(member.ampliaStaffType);
+    if (role && seed) return `${role} · ${seed}`;
+    return role || seed || 'Colaborador interno';
 }
 
 export interface ConsultantMetricsViewProps {
@@ -179,47 +187,66 @@ const ConsultantMetricsView: React.FC<ConsultantMetricsViewProps> = ({
                                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-black/5 p-2 z-50"
+                                    className="absolute right-0 mt-2 w-[min(calc(100vw-2rem),26rem)] bg-white rounded-2xl shadow-2xl border border-black/5 p-2 z-50"
                                 >
                                     <div className="p-3 mb-2">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                                            Selecionar membro da equipe
+                                            Equipe interna — papel e permissões Amplia
                                         </span>
                                     </div>
-                                    <div className="space-y-1 max-h-[min(70vh,420px)] overflow-y-auto">
-                                        {staffList.map((member) => (
-                                            <button
-                                                key={member.id}
-                                                type="button"
-                                                onClick={() => handlePickMember(member.id)}
-                                                className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
-                                                    effectiveStaffId === member.id
-                                                        ? 'bg-gray-900 text-white'
-                                                        : 'hover:bg-gray-50 text-gray-600'
-                                                }`}
-                                            >
-                                                <div className="flex items-center gap-3">
+                                    <div className="space-y-1 max-h-[min(70vh,480px)] overflow-y-auto">
+                                        {staffList.map((member) => {
+                                            const permLine = formatAmpliaStaffPermissionSummary(
+                                                member.ampliaStaffPermissions,
+                                                member.ampliaStaffFullAccess ?? undefined,
+                                                member.ampliaStaffRoleName,
+                                            );
+                                            const selected = effectiveStaffId === member.id;
+                                            return (
+                                                <button
+                                                    key={member.id}
+                                                    type="button"
+                                                    onClick={() => handlePickMember(member.id)}
+                                                    className={`w-full text-left flex gap-3 p-3 rounded-xl transition-all ${
+                                                        selected ? 'bg-gray-900 text-white' : 'hover:bg-gray-50 text-gray-600'
+                                                    }`}
+                                                >
                                                     <div
-                                                        className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                                            effectiveStaffId === member.id ? 'bg-white/10' : 'bg-gray-100'
+                                                        className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center ${
+                                                            selected ? 'bg-white/10' : 'bg-gray-100'
                                                         }`}
                                                     >
                                                         <User size={14} />
                                                     </div>
-                                                    <div className="text-left">
-                                                        <p className="text-xs font-black uppercase tracking-tight leading-none mb-1">
-                                                            {member.name}
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <p className="text-xs font-black uppercase tracking-tight leading-snug break-words">
+                                                                {member.name}
+                                                            </p>
+                                                            {selected && (
+                                                                <div className="w-2 h-2 mt-1 shrink-0 bg-[#00FF00] rounded-full shadow-[0_0_10px_#00FF00]" />
+                                                            )}
+                                                        </div>
+                                                        <p
+                                                            className={`text-[9px] font-bold uppercase tracking-wide mt-1 ${selected ? 'text-gray-300' : 'text-gray-500'}`}
+                                                        >
+                                                            {staffSubtitle(member)}
                                                         </p>
-                                                        <p className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
-                                                            {staffTypeLabel(member.ampliaStaffType)}
+                                                        <p
+                                                            className={`text-[9px] leading-snug mt-1.5 break-words ${selected ? 'text-gray-400' : 'text-gray-500'}`}
+                                                        >
+                                                            {permLine}
+                                                        </p>
+                                                        <p
+                                                            className={`text-[9px] truncate mt-1 ${selected ? 'text-gray-500' : 'text-gray-400'}`}
+                                                            title={member.email}
+                                                        >
+                                                            {member.email}
                                                         </p>
                                                     </div>
-                                                </div>
-                                                {effectiveStaffId === member.id && (
-                                                    <div className="w-2 h-2 bg-[#00FF00] rounded-full shadow-[0_0_10px_#00FF00]" />
-                                                )}
-                                            </button>
-                                        ))}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </motion.div>
                             )}

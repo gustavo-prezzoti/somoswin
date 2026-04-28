@@ -52,6 +52,7 @@ function staffTypeLabelForSessionUser(user: UserDTO): string {
     return r || 'Conta';
 }
 
+/** Entrada só com dados da sessão — sem métricas CRM inventadas (lista /internal-staff traz números reais). */
 function sessionUserAsStaffMember(user: UserDTO): InternalStaffMember {
     return {
         id: user.id,
@@ -61,13 +62,9 @@ function sessionUserAsStaffMember(user: UserDTO): InternalStaffMember {
         ampliaStaffRoleId: user.ampliaStaffRoleId ?? null,
         ampliaStaffRoleName: user.ampliaStaffRoleName ?? null,
         ampliaStaffPermissions: user.ampliaStaffPermissions,
-        ampliaStaffFullAccess: user.ampliaStaffFullAccess,
+        ampliaStaffFullAccess: user.ampliaStaffFullAccess ?? undefined,
         active: true,
         lastLogin: null,
-        leadsTotal: 0,
-        leadsWon: 0,
-        meetingsThisWeek: 0,
-        conversionPercent: 0,
     };
 }
 

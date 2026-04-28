@@ -90,3 +90,46 @@ export function emptyGranularPermissions(): Record<string, boolean> {
     }
     return out;
 }
+
+const MODULE_LABEL_BY_ID: Record<string, string> = Object.fromEntries(
+    AMPLIA_ADMIN_MODULE_OPTIONS.map((o) => [o.id, o.label]),
+);
+
+/**
+ * Texto único para UI (lista de equipe, tooltips): permissões Amplia legíveis.
+ */
+export function formatAmpliaStaffPermissionSummary(
+    permissions: string[] | null | undefined,
+    fullAccess: boolean | null | undefined,
+    roleName?: string | null,
+): string {
+    if (fullAccess === true) {
+        return roleName?.trim()
+            ? `Acesso total ao admin (papel: ${roleName.trim()})`
+            : 'Acesso total aos módulos administrativos';
+    }
+    if (!permissions?.length) {
+        return 'Sem chaves granulares — uso do papel ou apenas JWT legado';
+    }
+    const lines: string[] = [];
+    const max = 14;
+    for (let i = 0; i < Math.min(permissions.length, max); i++) {
+        const key = permissions[i];
+        const colon = key.indexOf(':');
+        if (colon <= 0) {
+            const modLabel = MODULE_LABEL_BY_ID[key] ?? key;
+            lines.push(`${modLabel} (módulo)`);
+            continue;
+        }
+        const modId = key.slice(0, colon);
+        const actionRaw = key.slice(colon + 1);
+        const modLabel = MODULE_LABEL_BY_ID[modId] ?? modId;
+        const actLabel =
+            actionRaw in AMPLIA_ADMIN_ACTION_LABELS
+                ? AMPLIA_ADMIN_ACTION_LABELS[actionRaw as AmpliaAdminAction]
+                : actionRaw;
+        lines.push(`${modLabel}: ${actLabel}`);
+    }
+    const suffix = permissions.length > max ? ` · +${permissions.length - max} outras` : '';
+    return lines.join(' · ') + suffix;
+}

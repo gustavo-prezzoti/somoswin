@@ -127,13 +127,14 @@ export interface InternalStaffMember {
     ampliaStaffRoleId?: string | null;
     ampliaStaffRoleName?: string | null;
     ampliaStaffPermissions?: string[];
-    ampliaStaffFullAccess?: boolean;
+    ampliaStaffFullAccess?: boolean | null;
     active: boolean;
     lastLogin: string | null;
-    leadsTotal: number;
-    leadsWon: number;
-    meetingsThisWeek: number;
-    conversionPercent: number;
+    /** Ausente quando o usuário não veio da lista /admin/internal-staff (ex.: só JWT na sessão). */
+    leadsTotal?: number;
+    leadsWon?: number;
+    meetingsThisWeek?: number;
+    conversionPercent?: number;
 }
 
 export interface AmpliaStaffRoleRow {

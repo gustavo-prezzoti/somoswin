@@ -42,7 +42,6 @@ const AdminPerformance: React.FC = () => {
         );
     }
 
-    /** Mesmo papel que ADMIN/GESTOR no painel demo — selector de equipe. */
     const canSelectMember = isAmpliaFullAdmin(user) || canViewGestaoAmpliaEquipe(user);
 
     return (
