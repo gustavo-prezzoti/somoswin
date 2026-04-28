@@ -10,18 +10,6 @@ export type CompanyAppModuleKey =
     | 'ACTIVE_BASE'
     | 'CONSULTANCY';
 
-/** Cabeçalhos da matriz em /admin/users (mesma ordem que COMPANY_APP_MODULE_KEYS). */
-export const COMPANY_APP_MODULE_TABLE_HEADERS: Record<CompanyAppModuleKey, string> = {
-    CRM: 'CRM E LEADS',
-    WHATSAPP: 'ATENDIMENTO',
-    INTELLIGENT_LISTENING: 'ESCUTA INTELIGENTE',
-    CALENDAR: 'AGENDA COMERCIAL',
-    GOALS: 'METAS E OBJETIVOS',
-    MARKETING: 'TRÁFEGO PAGO',
-    ACTIVE_BASE: 'BASE ATIVA',
-    CONSULTANCY: 'CONSULTORIA ESTRATÉGICA',
-};
-
 export const COMPANY_APP_MODULE_KEYS: CompanyAppModuleKey[] = [
     'CRM',
     'WHATSAPP',
