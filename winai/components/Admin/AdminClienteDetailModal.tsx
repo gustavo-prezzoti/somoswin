@@ -10,7 +10,6 @@ import {
     Plus,
     Building2,
     ExternalLink,
-    Activity,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import adminService, {
@@ -417,7 +416,7 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
                     ? new Date(client.subscriptionEndDate + 'T12:00:00').toLocaleDateString('pt-BR')
                     : '—';
                 return (
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         {(goalsError || tabError) && (
                             <div className="space-y-2">
                                 {goalsError && (
@@ -433,76 +432,46 @@ const AdminClienteDetailModal: React.FC<AdminClienteDetailModalProps> = ({
                             </div>
                         )}
                         <h3 className="text-sm font-black italic tracking-tight uppercase">Indicadores do cliente</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="p-5 rounded-2xl border border-black/5 bg-gray-50/80 flex flex-col gap-3">
-                                <div className="flex items-start justify-between">
-                                    <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                                        <Activity size={20} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-right">
-                                        Checkpoint e status
-                                    </span>
+                        <div className="space-y-3">
+                            <div className="p-3 bg-gray-50 rounded-xl border border-black/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase">Checkpoint e status</span>
+                                <div className="sm:text-right">
+                                    <p className="text-xs font-bold text-[#141414]">{client.checkpointStatus}</p>
+                                    <p className="text-[10px] text-gray-500">
+                                        Cliente: {client.clientStatus} · Plano até {endPlan}
+                                    </p>
                                 </div>
-                                <p className="text-2xl font-black italic tracking-tighter text-[#141414]">
-                                    {client.checkpointStatus}
-                                </p>
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
-                                    Cliente: {client.clientStatus} · Plano até {endPlan}
-                                </p>
                             </div>
-                            <div className="p-5 rounded-2xl border border-black/5 bg-gray-50/80 flex flex-col gap-3">
-                                <div className="flex items-start justify-between">
-                                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-                                        <Clock size={20} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-right">
-                                        Último acesso
-                                    </span>
+                            <div className="p-3 bg-gray-50 rounded-xl border border-black/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase">Último acesso</span>
+                                <div className="sm:text-right">
+                                    <p className="text-xs font-bold text-[#141414]">{formatClientLastAccess(client.lastAccess)}</p>
+                                    <p className="text-[10px] text-gray-500">Consultor: {client.consultantName}</p>
                                 </div>
-                                <p className="text-2xl font-black italic tracking-tighter text-[#141414]">
-                                    {formatClientLastAccess(client.lastAccess)}
-                                </p>
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
-                                    Consultor: {client.consultantName}
-                                </p>
                             </div>
-                            <div className="p-5 rounded-2xl border border-black/5 bg-gray-50/80 flex flex-col gap-3">
-                                <div className="flex items-start justify-between">
-                                    <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center">
-                                        <Target size={20} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-right">
-                                        Metas ativas
-                                    </span>
+                            <div className="p-3 bg-gray-50 rounded-xl border border-black/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase">Metas ativas</span>
+                                <div className="sm:text-right">
+                                    <p className="text-xs font-bold text-[#141414]">{goalsError ? '—' : kpiGoalStats.activeCount}</p>
+                                    <p className="text-[10px] text-gray-500">
+                                        {goalsError
+                                            ? 'Metas indisponíveis'
+                                            : kpiGoalStats.activeCount === 0
+                                              ? 'Nenhuma meta ativa no ciclo'
+                                              : `Média ${kpiGoalStats.avgProgress ?? 0}% · Atrasadas ${kpiGoalStats.overdue}`}
+                                    </p>
                                 </div>
-                                <p className="text-2xl font-black italic tracking-tighter text-[#141414]">
-                                    {goalsError ? '—' : kpiGoalStats.activeCount}
-                                </p>
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
-                                    {goalsError
-                                        ? 'Metas indisponíveis'
-                                        : kpiGoalStats.activeCount === 0
-                                          ? 'Nenhuma meta ativa no ciclo'
-                                          : `Média ${kpiGoalStats.avgProgress ?? 0}% · Atrasadas ${kpiGoalStats.overdue}`}
-                                </p>
                             </div>
-                            <div className="p-5 rounded-2xl border border-black/5 bg-gray-50/80 flex flex-col gap-3">
-                                <div className="flex items-start justify-between">
-                                    <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                                        <Calendar size={20} />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase text-right">
-                                        Encontros (período)
-                                    </span>
+                            <div className="p-3 bg-gray-50 rounded-xl border border-black/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase">Encontros (período)</span>
+                                <div className="sm:text-right">
+                                    <p className="text-xs font-bold text-[#141414]">{tabError ? '—' : kpiMeetingStats.total}</p>
+                                    <p className="text-[10px] text-gray-500">
+                                        {tabError
+                                            ? 'Agenda indisponível'
+                                            : `Realizados ${kpiMeetingStats.completed} · Próximos ${kpiMeetingStats.upcoming}`}
+                                    </p>
                                 </div>
-                                <p className="text-2xl font-black italic tracking-tighter text-[#141414]">
-                                    {tabError ? '—' : kpiMeetingStats.total}
-                                </p>
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">
-                                    {tabError
-                                        ? 'Agenda indisponível'
-                                        : `Realizados ${kpiMeetingStats.completed} · Próximos ${kpiMeetingStats.upcoming}`}
-                                </p>
                             </div>
                         </div>
                     </div>

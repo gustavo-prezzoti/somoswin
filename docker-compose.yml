@@ -55,6 +55,7 @@ services:
 
       # JDBC Supabase (jdbc:postgresql://…pooler…:6543) ou fallback DATABASE_URL estilo Python (postgresql://…)
       - SPRING_DATASOURCE_URL=${DATABASE_POOLER_URL:-${SPRING_DATASOURCE_URL:-${DATABASE_URL}}}
+      # Pool Supabase :6543 → usuário postgres.SEU_PROJECT_REF (Dashboard Connect). Só "postgres" → Tenant or user not found
       - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - DATABASE_USERNAME=${DATABASE_USERNAME}

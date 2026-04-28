@@ -30,9 +30,33 @@ public class DataSourcePoolerConfig {
             public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
                 if (bean instanceof HikariDataSource ds) {
                     normalizeLibpqUrl(ds);
+                    warnSupabasePoolerUsername(ds);
                     appendPoolerPrepareThreshold(ds);
                 }
                 return bean;
+            }
+
+            /**
+             * Pooler Supabase (transaction, :6543) exige usuário {@code postgres.PROJECT_REF}.
+             * Só {@code postgres} → PgBouncer: {@code FATAL: Tenant or user not found}.
+             */
+            private void warnSupabasePoolerUsername(HikariDataSource ds) {
+                String url = ds.getJdbcUrl();
+                if (url == null || !url.contains("pooler.supabase.com")) {
+                    return;
+                }
+                String user = ds.getUsername();
+                if (user == null || user.isBlank()) {
+                    return;
+                }
+                if ("postgres".equalsIgnoreCase(user.trim())) {
+                    log.warn(
+                            "Supabase pooler: usuário \"postgres\" costuma falhar com \"Tenant or user not found\". "
+                                    + "Use o usuário do Dashboard → Connect → Transaction pooling (formato postgres.SEU_PROJECT_REF), "
+                                    + "em SPRING_DATASOURCE_USERNAME ou DATABASE_USERNAME. "
+                                    + "Se a senha está só na DATABASE_URL, não defina usuário separado como \"postgres\"."
+                    );
+                }
             }
 
             /** Aceita DATABASE_URL estilo libpq (postgresql://) igual ao Flask/Python. */
