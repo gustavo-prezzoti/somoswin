@@ -33,17 +33,17 @@ public class UserWhatsAppConnection {
     @Column(name = "instance_name", nullable = false)
     private String instanceName;
 
-    @Column(name = "instance_token")
+    @Column(name = "instance_token", columnDefinition = "text")
     private String instanceToken;
 
-    @Column(name = "instance_base_url")
+    @Column(name = "instance_base_url", columnDefinition = "text")
     private String instanceBaseUrl;
 
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "text")
     private String description;
 
     @CreationTimestamp

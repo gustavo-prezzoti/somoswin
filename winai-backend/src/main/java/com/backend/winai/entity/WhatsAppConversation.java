@@ -32,17 +32,17 @@ public class WhatsAppConversation {
     @Column(name = "phone_number", nullable = false)
     private String phoneNumber; // Número formatado (ex: 5549991679923)
 
-    @Column(name = "wa_chatid")
+    @Column(name = "wa_chatid", columnDefinition = "text")
     private String waChatId; // ID do chat no WhatsApp
 
-    @Column(name = "contact_name")
+    @Column(name = "contact_name", columnDefinition = "text")
     private String contactName;
 
     @Column(name = "unread_count")
     @Builder.Default
     private Integer unreadCount = 0;
 
-    @Column(name = "last_message_text")
+    @Column(name = "last_message_text", columnDefinition = "text")
     private String lastMessageText;
 
     @Column(name = "last_message_timestamp")
@@ -59,13 +59,13 @@ public class WhatsAppConversation {
     @Column(name = "uazap_instance")
     private String uazapInstance; // Nome da instância no Uazap
 
-    @Column(name = "uazap_token")
+    @Column(name = "uazap_token", columnDefinition = "text")
     private String uazapToken; // Token da instância
 
-    @Column(name = "uazap_base_url")
+    @Column(name = "uazap_base_url", columnDefinition = "text")
     private String uazapBaseUrl; // Base URL da API (ex: https://somoswin.uazapi.com)
 
-    @Column(name = "profile_picture_url")
+    @Column(name = "profile_picture_url", columnDefinition = "text")
     private String profilePictureUrl;
 
     @Column(name = "support_mode")
