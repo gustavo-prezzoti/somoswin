@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Zap, AlertCircle, ArrowLeft, Loader2, ShieldCheck, Mail, Lock } from 'lucide-react';
 import { authService } from '../../services/api/auth.service';
+import { storageService } from '../../services/storage';
 import { adminFlowLog } from '../../utils/adminAuthDebug';
 import logoBlack from '../../logo_black.png';
 
@@ -47,21 +48,18 @@ const AdminLogin: React.FC = () => {
             if (!allowedFullAdmin && !internalOk) {
                 adminFlowLog('login.denied', { reason: 'not_admin_or_internal_staff_with_perms' });
                 setError('NEGADO: CREDENCIAIS SEM NÍVEL DE ACESSO ADMINISTRATIVO.');
-                localStorage.removeItem('win_user');
-                localStorage.removeItem('win_access_token');
-                localStorage.removeItem('win_refresh_token');
+                storageService.clear();
                 setLoading(false);
                 return;
             }
 
-            localStorage.setItem('win_user', JSON.stringify(response.user));
-            localStorage.setItem('win_access_token', response.accessToken);
-            if (response.refreshToken) {
-                localStorage.setItem('win_refresh_token', response.refreshToken);
-            }
+            // authService.login já gravou tokens + UserDTO completo via storageService.
+            // Mantemos uma 2ª gravação só dos tokens por idempotência (caso storage clear() rode entre passos).
+            storageService.setTokens(response.accessToken, response.refreshToken ?? null);
+            storageService.setUser(response.user);
 
             adminFlowLog('login.navigate', { to: '/admin', tokenStored: true });
-            navigate('/admin');
+            navigate('/admin', { replace: true });
             setLoading(false);
         } catch (err: any) {
             adminFlowLog('login.error', { message: err?.message ?? String(err) });

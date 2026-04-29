@@ -86,22 +86,19 @@ export const storageService = {
     },
 
     /**
-     * Salva o usuário no localStorage
+     * Salva o usuário no localStorage com TODOS os campos do {@link UserDTO},
+     * mais `isLoggedIn` e o nome amigável do plano. Importante para o painel
+     * Amplia: vários componentes leem `win_user` direto e checam permissões;
+     * persistir só um subconjunto causava redirect para `/admin/login` mesmo
+     * com sessão válida (parecia "F5" no formulário).
      */
     setUser(user: UserDTO): void {
-        const storedUser: StoredUser = {
-            email: user.email,
-            name: user.name,
-            role: user.role,
+        const stored: StoredUser = {
+            ...user,
             plan: getPlanDisplayName(user.plan as PlanType | 'INTERNAL_STAFF'),
             isLoggedIn: true,
-            company: user.company,
-            mustChangePassword: user.mustChangePassword,
-            ampliaInternalStaff: user.ampliaInternalStaff,
-            ampliaStaffPermissions: user.ampliaStaffPermissions,
-            ampliaStaffFullAccess: user.ampliaStaffFullAccess,
         };
-        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(storedUser));
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(stored));
     },
 
     /**

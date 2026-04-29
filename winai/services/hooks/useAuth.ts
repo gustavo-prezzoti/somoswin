@@ -9,6 +9,16 @@ import { userService } from '../api/user.service';
 import { storageService } from '../storage';
 import { LoginRequest, RegisterRequest, StoredUser, UserDTO } from '../types';
 
+/** Mantém todos os campos do `UserDTO` (incl. `ampliaStaffPermissions`) e
+ *  acrescenta `isLoggedIn` + nome amigável de plano usados no estado/storage. */
+function toStoredUser(user: UserDTO): StoredUser {
+    return {
+        ...user,
+        plan: getPlanDisplayName(user.plan),
+        isLoggedIn: true,
+    };
+}
+
 interface AuthState {
     user: StoredUser | null;
     isAuthenticated: boolean;
@@ -49,15 +59,7 @@ export function useAuth(): UseAuthReturn {
         try {
             const response = await authService.login(request);
             setState({
-                user: {
-                    email: response.user.email,
-                    name: response.user.name,
-                    role: response.user.role,
-                    plan: getPlanDisplayName(response.user.plan),
-                    isLoggedIn: true,
-                    company: response.user.company,
-                    ampliaInternalStaff: response.user.ampliaInternalStaff,
-                },
+                user: toStoredUser(response.user),
                 isAuthenticated: true,
                 isLoading: false,
             });
@@ -73,15 +75,7 @@ export function useAuth(): UseAuthReturn {
         try {
             const response = await authService.register(request);
             setState({
-                user: {
-                    email: response.user.email,
-                    name: response.user.name,
-                    role: response.user.role,
-                    plan: getPlanDisplayName(response.user.plan),
-                    isLoggedIn: true,
-                    company: response.user.company,
-                    ampliaInternalStaff: response.user.ampliaInternalStaff,
-                },
+                user: toStoredUser(response.user),
                 isAuthenticated: true,
                 isLoading: false,
             });
@@ -110,15 +104,7 @@ export function useAuth(): UseAuthReturn {
             const user = await userService.getProfile();
             setState((prev) => ({
                 ...prev,
-                user: {
-                    email: user.email,
-                    name: user.name,
-                    role: user.role,
-                    plan: getPlanDisplayName(user.plan),
-                    isLoggedIn: true,
-                    company: user.company,
-                    ampliaInternalStaff: user.ampliaInternalStaff,
-                },
+                user: toStoredUser(user),
             }));
         } catch {
             // Ignora erros - usuário será deslogado se token expirou

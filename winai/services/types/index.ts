@@ -180,18 +180,17 @@ export interface ApiErrorResponse {
 // User Storage Types (para localStorage)
 // ============================================
 
-export interface StoredUser {
-    email: string;
-    name: string;
-    role: UserRole;
-    plan: string; // Nome amigável do plano
+/**
+ * Forma persistida em `localStorage:win_user`. Mantemos o {@link UserDTO} completo
+ * (todos os campos do `/auth/login` e `/user/me`) para que os componentes do
+ * painel Amplia que leem direto do storage tenham todos os dados de permissão.
+ *
+ * Mantemos `plan` como `string` aqui porque escrevemos um nome amigável
+ * (ex.: "Plano Profissional"). Em UserDTO, `plan` é o enum bruto.
+ */
+export interface StoredUser extends Omit<UserDTO, 'plan'> {
+    plan: string;
     isLoggedIn: boolean;
-    company: CompanyDTO | null;
-    mustChangePassword?: boolean;
-    ampliaInternalStaff?: boolean;
-    /** Necessários para o painel Amplia quando o layout usa dados do storage (fallback). */
-    ampliaStaffPermissions?: string[];
-    ampliaStaffFullAccess?: boolean;
 }
 
 // ============================================
