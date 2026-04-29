@@ -195,7 +195,13 @@ class HttpClient {
                 } else {
                     // Refresh failed, logout and redirect
                     storageService.clear();
-                    window.location.href = '/login?expired=true';
+                    const path = typeof window !== 'undefined' ? window.location.pathname || '' : '';
+                    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '') || '';
+                    const adminLogin = `${base}/admin/login?expired=true`.replace(/\/+/g, '/');
+                    window.location.href =
+                        path.startsWith(`${base}/admin`) || path.startsWith('/admin')
+                            ? adminLogin
+                            : `${base}/login?expired=true`.replace(/\/+/g, '/');
                     throw new ApiError('Sessão expirada', 401);
                 }
             } else {

@@ -189,6 +189,9 @@ export interface StoredUser {
     company: CompanyDTO | null;
     mustChangePassword?: boolean;
     ampliaInternalStaff?: boolean;
+    /** Necessários para o painel Amplia quando o layout usa dados do storage (fallback). */
+    ampliaStaffPermissions?: string[];
+    ampliaStaffFullAccess?: boolean;
 }
 
 // ============================================

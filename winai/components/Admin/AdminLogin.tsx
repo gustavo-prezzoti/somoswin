@@ -18,6 +18,12 @@ const AdminLogin: React.FC = () => {
 
         try {
             const response = await authService.login({ email, password });
+            const next = (response.nextAction ?? 'SUCCESS').trim().toUpperCase();
+            if (next === 'MUST_CHANGE_PASSWORD') {
+                const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '') || '';
+                window.location.replace(`${base}/change-password`.replace(/\/+/g, '/'));
+                return;
+            }
 
             const u = response.user;
             const role = u.role;

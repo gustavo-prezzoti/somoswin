@@ -94,6 +94,8 @@ export const storageService = {
             company: user.company,
             mustChangePassword: user.mustChangePassword,
             ampliaInternalStaff: user.ampliaInternalStaff,
+            ampliaStaffPermissions: user.ampliaStaffPermissions,
+            ampliaStaffFullAccess: user.ampliaStaffFullAccess,
         };
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(storedUser));
     },
