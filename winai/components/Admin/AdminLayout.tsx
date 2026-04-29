@@ -14,6 +14,7 @@ import {
 } from './adminPermissions';
 import { userService } from '../../services/api/user.service';
 import type { UserDTO } from '../../services/types';
+import type { AdminOutletContext } from './adminOutletContext';
 import { adminFlowLog } from '../../utils/adminAuthDebug';
 import './AdminLayout.css';
 
@@ -163,7 +164,7 @@ const AdminLayout: React.FC = () => {
                         <AdminHeader user={user} onMenuClick={toggleSidebar} />
                         <div className="admin-content">
                             <div className="admin-content-inner">
-                                <Outlet />
+                                <Outlet context={{ adminUser: user as UserDTO } satisfies AdminOutletContext} />
                             </div>
                         </div>
                     </div>

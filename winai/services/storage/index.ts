@@ -50,9 +50,13 @@ export const storageService = {
     /**
      * Salva os tokens de autenticação
      */
-    setTokens(accessToken: string, refreshToken: string): void {
+    setTokens(accessToken: string, refreshToken?: string | null): void {
         localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+        if (refreshToken != null && refreshToken !== '') {
+            localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+        } else {
+            localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+        }
     },
 
     /**

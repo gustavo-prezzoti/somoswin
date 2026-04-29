@@ -95,7 +95,7 @@ class HttpClient {
             if (!response.ok) return false;
 
             const data: AuthResponse = await response.json();
-            storageService.setTokens(data.accessToken, data.refreshToken);
+            storageService.setTokens(data.accessToken, data.refreshToken ?? null);
             storageService.setUser(data.user);
             return true;
         } catch {
@@ -175,8 +175,8 @@ class HttpClient {
         // Log response (DEBUG)
         console.log(`✅ API Response [${response.status}]:`, endpoint);
 
-        // Handle 401 (Unauthorized) or 403 (Forbidden) - Tenta refresh ou logout
-        if ((response.status === 401 || response.status === 403) && !skipAuth) {
+        // 401: sessão inválida/expirada → tentar refresh. 403: proibido ao recurso — não limpar sessão nem dar reload.
+        if (response.status === 401 && !skipAuth) {
             if (!this.isRefreshing) {
                 this.isRefreshing = true;
                 const refreshed = await this.refreshToken();

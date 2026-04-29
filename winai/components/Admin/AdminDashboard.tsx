@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useOutletContext } from 'react-router-dom';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import adminService, { AdminDashboard as AdminDashboardData } from '../../services/adminService';
@@ -7,10 +7,11 @@ import { getErrorMessage } from '../../services/utils/errorHelper';
 import { useAdminStaffView } from './AdminStaffViewContext';
 import DashboardSummaryCards from './amplia/DashboardSummaryCards';
 import DashboardPriorityAlerts from './amplia/DashboardPriorityAlerts';
-import type { UserDTO } from '../../services/types';
+import type { AdminOutletContext } from './adminOutletContext';
 import { canUseAmpliaAdminScreen } from './adminPermissions';
 
 const AdminDashboard: React.FC = () => {
+    const { adminUser } = useOutletContext<AdminOutletContext>();
     const navigate = useNavigate();
     const staffView = useAdminStaffView();
     const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
@@ -35,6 +36,7 @@ const AdminDashboard: React.FC = () => {
             if (e.status === 401 || e.status === 403) {
                 localStorage.removeItem('win_access_token');
                 localStorage.removeItem('win_user');
+                localStorage.removeItem('win_refresh_token');
                 navigate('/admin/login');
                 return;
             }
@@ -46,24 +48,17 @@ const AdminDashboard: React.FC = () => {
 
     useEffect(() => {
         const token = localStorage.getItem('win_access_token');
-        const userStr = localStorage.getItem('win_user');
-
-        if (!token || !userStr) {
+        if (!token) {
             setIsAuthenticated(false);
             return;
         }
-
-        try {
-            const user = JSON.parse(userStr) as UserDTO;
-            if (!canUseAmpliaAdminScreen(user, 'dashboard')) {
-                setIsAuthenticated(false);
-                return;
-            }
-            setIsAuthenticated(true);
-        } catch {
+        // Perfil vem do AdminLayout (GET /user/me) — não depender só do win_user no storage (race após login).
+        if (!canUseAmpliaAdminScreen(adminUser, 'dashboard')) {
             setIsAuthenticated(false);
+            return;
         }
-    }, []);
+        setIsAuthenticated(true);
+    }, [adminUser]);
 
     useEffect(() => {
         if (isAuthenticated !== true) return;
