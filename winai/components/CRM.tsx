@@ -829,7 +829,7 @@ const CRM: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     type="button"
-                    onClick={() => navigate('/whatsapp', { state: { lead: selectedLead } })}
+                    onClick={() => navigate(`/whatsapp?leadId=${encodeURIComponent(selectedLead.id)}`)}
                     className="flex flex-col items-center gap-2 p-4 rounded-3xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all"
                   >
                     <MessageCircle size={20} />

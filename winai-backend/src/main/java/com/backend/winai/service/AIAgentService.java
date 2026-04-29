@@ -37,6 +37,7 @@ import com.backend.winai.repository.NotificationRepository;
 import com.backend.winai.dto.request.SendMediaMessageRequest;
 import com.backend.winai.dto.request.SendWhatsAppMessageRequest;
 import com.backend.winai.util.AgentDocumentAttachParser;
+import com.backend.winai.util.WhatsAppConversationDisplayName;
 import com.backend.winai.dto.response.WhatsAppConversationResponse;
 import com.backend.winai.dto.response.WhatsAppMessageResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -778,8 +779,11 @@ public class AIAgentService {
         if (conversation.getCompany() != null) {
             List<User> companyUsers = userRepository.findByCompanyId(conversation.getCompany().getId());
             String title = "Atendimento Humano Solicitado";
-            String message = "O contato " + (conversation.getContactName() != null ? conversation.getContactName()
-                    : conversation.getPhoneNumber()) + " solicitou um atendente.";
+            String contactDisplay = WhatsAppConversationDisplayName.resolve(conversation);
+            String message = "O contato "
+                    + (contactDisplay != null && !contactDisplay.isBlank() ? contactDisplay
+                            : conversation.getPhoneNumber())
+                    + " solicitou um atendente.";
 
             for (User user : companyUsers) {
                 Notification notification = Notification.builder()
@@ -829,7 +833,10 @@ public class AIAgentService {
                 return;
             }
 
-            String leadName = conversation.getContactName() != null ? conversation.getContactName() : "Lead";
+            String leadName = WhatsAppConversationDisplayName.resolve(conversation);
+            if (leadName == null || leadName.isBlank()) {
+                leadName = "Lead";
+            }
             String leadPhone = conversation.getPhoneNumber() != null ? conversation.getPhoneNumber() : "N/A";
 
             String notificationMessage;
@@ -912,7 +919,7 @@ public class AIAgentService {
                 .companyId(conversation.getCompany() != null ? conversation.getCompany().getId() : null)
                 .leadId(conversation.getLead() != null ? conversation.getLead().getId() : null)
                 .phoneNumber(conversation.getPhoneNumber()).waChatId(conversation.getWaChatId())
-                .contactName(conversation.getContactName()).profilePictureUrl(conversation.getProfilePictureUrl())
+                .contactName(WhatsAppConversationDisplayName.resolve(conversation)).profilePictureUrl(conversation.getProfilePictureUrl())
                 .unreadCount(conversation.getUnreadCount()).lastMessageText(conversation.getLastMessageText())
                 .lastMessageTimestamp(conversation.getLastMessageTimestamp()).isArchived(conversation.getIsArchived())
                 .isBlocked(conversation.getIsBlocked()).uazapInstance(conversation.getUazapInstance())

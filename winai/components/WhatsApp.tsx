@@ -30,6 +30,7 @@ const WhatsApp: React.FC = () => {
   const [companyDefaultSupportMode, setCompanyDefaultSupportMode] = useState<'IA' | 'HUMAN' | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const chatId = searchParams.get('chatId');
+  const leadIdParam = searchParams.get('leadId');
 
   // Novos estados para Emoji e Áudio
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -148,13 +149,22 @@ const WhatsApp: React.FC = () => {
 
       let selectedConv: WhatsAppConversation | null = null;
 
-      // Se houver um chatId na URL, prioridade para ele
+      const explicitChatOrLead = !!(chatId || leadIdParam);
+
+      // Prioridade: chatId na URL > leadId (vindo do CRM) > primeira conversa (sem alvo explícito)
       if (chatId) {
         selectedConv = data.find(c => String(c.id) === String(chatId)) || null;
       }
+      if (!selectedConv && leadIdParam) {
+        selectedConv =
+          data.find(c => c.leadId != null && String(c.leadId) === String(leadIdParam)) || null;
+      }
 
-      // Se não encontrou pelo chatId ou não tinha chatId, pega a primeira se não tiver ativa
-      if (!selectedConv && data.length > 0 && !activeConversationRef.current && !silent) {
+      if (leadIdParam && selectedConv?.leadId != null && String(selectedConv.leadId) === String(leadIdParam)) {
+        setSearchParams({ chatId: selectedConv.id }, { replace: true });
+      }
+
+      if (!selectedConv && data.length > 0 && !activeConversationRef.current && !silent && !explicitChatOrLead) {
         selectedConv = data[0];
       }
 
@@ -176,7 +186,7 @@ const WhatsApp: React.FC = () => {
     } finally {
       if (!silent) setIsLoading(false);
     }
-  }, [user, chatId]);
+  }, [user, chatId, leadIdParam, setSearchParams]);
 
   useEffect(() => {
     activeConversationRef.current = activeConversation;

@@ -14,6 +14,8 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.backend.winai.util.WhatsAppConversationDisplayName;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -130,7 +132,7 @@ public class WhatsAppNotifyService {
                 .leadId(conversation.getLead() != null ? conversation.getLead().getId() : null)
                 .phoneNumber(conversation.getPhoneNumber())
                 .waChatId(conversation.getWaChatId())
-                .contactName(conversation.getContactName())
+                .contactName(WhatsAppConversationDisplayName.resolve(conversation))
                 .profilePictureUrl(conversation.getProfilePictureUrl())
                 .unreadCount(conversation.getUnreadCount())
                 .lastMessageText(conversation.getLastMessageText())

@@ -2,11 +2,14 @@ package com.backend.winai.service;
 
 import com.backend.winai.dto.webhook.UazapWebhookPayload;
 import com.backend.winai.entity.Company;
+import com.backend.winai.entity.Lead;
 import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.entity.WhatsAppMessage;
 import com.backend.winai.repository.CompanyRepository;
+import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
+import com.backend.winai.util.WhatsAppConversationDisplayName;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,6 +19,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +29,7 @@ public class UazapWebhookService {
 
     private final WhatsAppConversationRepository conversationRepository;
     private final WhatsAppMessageRepository messageRepository;
+    private final LeadRepository leadRepository;
     private final CompanyRepository companyRepository;
 
     /**
@@ -42,6 +47,7 @@ public class UazapWebhookService {
      * }
      */
     @SuppressWarnings("unchecked")
+    @Transactional(readOnly = false)
     public void processRawWebhook(Map<String, Object> raw) {
         try {
             // LOG COMPLETO do payload para debug
@@ -122,6 +128,12 @@ public class UazapWebhookService {
             // Nome do contato: chat.name ou chat.wa_name
             String contactName = getStr(chatData, "name", getStr(chatData, "wa_name",
                     getStr(src, "senderName", getStr(src, "PushName", null))));
+
+            // Mensagens enviadas pela instância (fromMe) costumam trazer o nome do perfil da empresa
+            // ou push incorreto — não usar isso como nome do cliente (evita todos com o mesmo nome).
+            if (Boolean.TRUE.equals(isFromMe)) {
+                contactName = null;
+            }
 
             // MessageIDs pode ser array (formato messages_update)
             if (messageId == null) {
@@ -221,6 +233,10 @@ public class UazapWebhookService {
             conversation.setLastMessageTimestamp(messageTimestamp);
             conversationRepository.saveAndFlush(conversation);
 
+            if (!Boolean.TRUE.equals(isFromMe)) {
+                syncLeadNameFromInboundCustomerPush(conversation.getId(), contactName);
+            }
+
             log.info("[WEBHOOK] ✅ Mensagem salva. Phone: {}, FromMe: {}, Type: {}, Content: {}",
                     phoneNumber, isFromMe, msgType,
                     content.length() > 50 ? content.substring(0, 50) + "..." : content);
@@ -272,12 +288,15 @@ public class UazapWebhookService {
                 }
             }
 
+            boolean legacyFromMe = Boolean.TRUE.equals(messageData.getFromMe());
+            String contactNameForLegacyConv = legacyFromMe ? null : messageData.getSenderName();
+
             // Buscar ou criar conversa
             WhatsAppConversation conversation = findOrCreateConversation(
                     phoneNumber,
                     company,
                     payload.getInstance(),
-                    messageData.getSenderName(),
+                    contactNameForLegacyConv,
                     messageData.getId());
 
             // Verificar se mensagem já existe
@@ -311,6 +330,10 @@ public class UazapWebhookService {
             conversation.setLastMessageText(message.getContent());
             conversation.setLastMessageTimestamp(messageData.getMessageTimestamp());
             conversationRepository.save(conversation);
+
+            if (!legacyFromMe && messageData.getSenderName() != null && !messageData.getSenderName().isBlank()) {
+                syncLeadNameFromInboundCustomerPush(conversation.getId(), messageData.getSenderName());
+            }
 
             log.info("Mensagem recebida e salva. From: {}, Type: {}, Content: {}",
                     phoneNumber, message.getMessageType(),
@@ -501,6 +524,33 @@ public class UazapWebhookService {
         }
 
         return null;
+    }
+
+    /**
+     * Primeira resposta do cliente: atualiza o nome do lead no CRM se ainda for só placeholder.
+     */
+    private void syncLeadNameFromInboundCustomerPush(UUID conversationId, String customerPushName) {
+        if (customerPushName == null || customerPushName.isBlank()) {
+            return;
+        }
+        String push = customerPushName.trim();
+        if ("Unknown".equalsIgnoreCase(push)) {
+            return;
+        }
+        WhatsAppConversation conv = conversationRepository.findById(conversationId).orElse(null);
+        if (conv == null || conv.getLead() == null) {
+            return;
+        }
+        Lead lead = leadRepository.findById(conv.getLead().getId()).orElse(null);
+        if (lead == null) {
+            return;
+        }
+        String cur = lead.getName();
+        if (cur != null && !cur.isBlank() && !WhatsAppConversationDisplayName.isPlaceholderLeadName(cur)) {
+            return;
+        }
+        lead.setName(push);
+        leadRepository.save(lead);
     }
 
     // === HELPERS para extração segura de Map ===

@@ -11,6 +11,7 @@ import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
 import com.backend.winai.util.UtmParseUtil;
+import com.backend.winai.util.WhatsAppConversationDisplayName;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.UserWhatsAppConnectionRepository;
 import com.backend.winai.entity.UserWhatsAppConnection;
@@ -75,7 +76,11 @@ public class WhatsAppWebhookService {
             String phoneNumber = extractPhoneNumber(webhook);
             String messageText = extractMessageText(webhook);
             String messageId = extractMessageId(webhook);
-            String contactName = extractContactName(webhook);
+            String rawContactName = extractContactName(webhook);
+            boolean isFromMe = webhook.getMessage() != null
+                    && Boolean.TRUE.equals(webhook.getMessage().getFromMe());
+            // Mensagens enviadas pela instância não devem gravar push/nome da empresa como nome do cliente.
+            String contactNameForConversation = isFromMe ? null : rawContactName;
             Long timestamp = extractTimestamp(webhook);
             String messageType = extractMessageType(webhook);
 
@@ -95,7 +100,7 @@ public class WhatsAppWebhookService {
             boolean[] wasNewConversation = new boolean[1];
             WhatsAppConversation conversation = findOrCreateConversation(
                     phoneNumber,
-                    contactName,
+                    contactNameForConversation,
                     webhook,
                     company,
                     wasNewConversation);
@@ -107,10 +112,8 @@ public class WhatsAppWebhookService {
                 return;
             }
 
-            boolean isFromMe = Boolean.TRUE.equals(webhook.getMessage().getFromMe());
-
-            // Buscar ou criar lead
-            Lead lead = findOrCreateLead(phoneNumber, contactName, company, messageText,
+            // Buscar ou criar lead (nome só a partir de dados do cliente, não fromMe)
+            Lead lead = findOrCreateLead(phoneNumber, isFromMe ? null : rawContactName, company, messageText,
                     extractTrackSource(webhook), extractTrackId(webhook), isFromMe);
 
             // Sincronizar foto de perfil da conversa com o lead
@@ -219,11 +222,9 @@ public class WhatsAppWebhookService {
             }
 
             // Obter nome do lead para contexto
-            String leadName = "Usuário";
-            if (conversation.getLead() != null && conversation.getLead().getName() != null) {
-                leadName = conversation.getLead().getName();
-            } else if (conversation.getContactName() != null) {
-                leadName = conversation.getContactName();
+            String leadName = WhatsAppConversationDisplayName.resolve(conversation);
+            if (leadName == null || leadName.isBlank()) {
+                leadName = "Usuário";
             }
 
             log.info("Enfileirando processamento de IA para conversa: {}", conversation.getId());
@@ -268,10 +269,10 @@ public class WhatsAppWebhookService {
         if (existingLead.isPresent()) {
             Lead lead = existingLead.get();
             boolean save = false;
-            if (contactName != null && !contactName.isEmpty()) {
-                if (lead.getName() == null || lead.getName().isEmpty() ||
-                        contactName.length() > lead.getName().length()) {
-                    lead.setName(contactName);
+            if (contactName != null && !contactName.isEmpty() && !messageFromMe) {
+                String cur = lead.getName();
+                if (cur == null || cur.isBlank() || WhatsAppConversationDisplayName.isPlaceholderLeadName(cur)) {
+                    lead.setName(contactName.trim());
                     save = true;
                 }
             }
@@ -838,7 +839,7 @@ public class WhatsAppWebhookService {
                 .leadId(conversation.getLead() != null ? conversation.getLead().getId() : null)
                 .phoneNumber(conversation.getPhoneNumber())
                 .waChatId(conversation.getWaChatId())
-                .contactName(conversation.getContactName())
+                .contactName(WhatsAppConversationDisplayName.resolve(conversation))
                 .profilePictureUrl(conversation.getProfilePictureUrl())
                 .unreadCount(conversation.getUnreadCount())
                 .lastMessageText(conversation.getLastMessageText())

@@ -40,6 +40,9 @@ public interface WhatsAppConversationRepository extends JpaRepository<WhatsAppCo
 
         List<WhatsAppConversation> findByCompanyOrderByLastMessageTimestampDesc(Company company);
 
+        @Query("SELECT c FROM WhatsAppConversation c LEFT JOIN FETCH c.lead WHERE c.company = :company ORDER BY COALESCE(c.lastMessageTimestamp, 0) DESC")
+        List<WhatsAppConversation> findByCompanyOrderByLastMessageTimestampDescWithLead(@Param("company") Company company);
+
         Page<WhatsAppConversation> findByCompanyOrderByLastMessageTimestampDesc(Company company, Pageable pageable);
 
         List<WhatsAppConversation> findByCompanyAndIsArchivedOrderByLastMessageTimestampDesc(Company company,

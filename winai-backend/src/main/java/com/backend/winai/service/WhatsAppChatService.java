@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.backend.winai.util.WhatsAppConversationDisplayName;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -51,7 +53,7 @@ public class WhatsAppChatService {
                                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
                 List<WhatsAppConversation> conversations = conversationRepository
-                                .findByCompanyOrderByLastMessageTimestampDesc(company);
+                                .findByCompanyOrderByLastMessageTimestampDescWithLead(company);
 
                 return conversations.stream()
                                 .map(conv -> mapToConversationResponse(conv, includeMessages))
@@ -73,7 +75,7 @@ public class WhatsAppChatService {
 
                 // Busca todas as conversas da empresa (já ordenadas)
                 List<WhatsAppConversation> allConversations = conversationRepository
-                                .findByCompanyOrderByLastMessageTimestampDesc(company);
+                                .findByCompanyOrderByLastMessageTimestampDescWithLead(company);
 
                 // Sem conexão cadastrada (ex.: QR antes do fix), não filtrar — evita lista vazia indevida
                 if (companyInstanceNames.isEmpty()) {
@@ -185,7 +187,7 @@ public class WhatsAppChatService {
                         // 0. Buscar instância existente para este número
                         String uazapInstance = null;
                         List<WhatsAppConversation> existingConversations = conversationRepository
-                                        .findByCompanyOrderByLastMessageTimestampDesc(company);
+                                        .findByCompanyOrderByLastMessageTimestampDescWithLead(company);
 
                         // Procurar por conversa com o mesmo telefone
                         for (WhatsAppConversation conv : existingConversations) {
@@ -390,7 +392,7 @@ public class WhatsAppChatService {
                                 .leadId(conversation.getLead() != null ? conversation.getLead().getId() : null)
                                 .phoneNumber(conversation.getPhoneNumber())
                                 .waChatId(conversation.getWaChatId())
-                                .contactName(conversation.getContactName())
+                                .contactName(WhatsAppConversationDisplayName.resolve(conversation))
                                 .profilePictureUrl(conversation.getProfilePictureUrl())
                                 .unreadCount(conversation.getUnreadCount())
                                 .lastMessageText(conversation.getLastMessageText())
@@ -434,7 +436,7 @@ public class WhatsAppChatService {
                                 .conversationId(message.getConversation().getId())
                                 .leadId(message.getLead() != null ? message.getLead().getId() : null)
                                 .phoneNumber(message.getConversation().getPhoneNumber())
-                                .contactName(message.getConversation().getContactName())
+                                .contactName(WhatsAppConversationDisplayName.resolve(message.getConversation()))
                                 .build();
         }
 }
