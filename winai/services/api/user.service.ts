@@ -6,13 +6,20 @@
 import { httpClient } from './http-client';
 import { storageService } from '../storage';
 import { UserDTO } from '../types';
+import { adminFlowLog } from '../../utils/adminAuthDebug';
 
 export const userService = {
     /**
      * Obtém os dados do usuário autenticado
      */
     async getProfile(): Promise<UserDTO> {
+        adminFlowLog('user.me.fetch.start');
         const user = await httpClient.get<UserDTO>('/user/me');
+        adminFlowLog('user.me.fetch.done', {
+            role: user.role,
+            ampliaInternalStaff: user.ampliaInternalStaff,
+            staffPermCount: user.ampliaStaffPermissions?.length ?? 0,
+        });
 
         // Atualiza o usuário no storage
         storageService.setUser(user);

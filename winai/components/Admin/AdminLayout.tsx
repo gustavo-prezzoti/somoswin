@@ -14,6 +14,7 @@ import {
 } from './adminPermissions';
 import { userService } from '../../services/api/user.service';
 import type { UserDTO } from '../../services/types';
+import { adminFlowLog } from '../../utils/adminAuthDebug';
 import './AdminLayout.css';
 
 function parseStoredUser(): any | null {
@@ -41,14 +42,28 @@ const AdminLayout: React.FC = () => {
 
     useEffect(() => {
         let cancelled = false;
+        adminFlowLog('layout.mount', { path: window.location.pathname });
         (async () => {
             try {
+                adminFlowLog('layout.getProfile.start');
                 const me = await userService.getProfile();
-                if (cancelled) return;
+                if (cancelled) {
+                    adminFlowLog('layout.getProfile.cancelled');
+                    return;
+                }
+                adminFlowLog('layout.getProfile.ok', {
+                    role: me.role,
+                    ampliaInternalStaff: me.ampliaInternalStaff,
+                    staffPermCount: me.ampliaStaffPermissions?.length ?? 0,
+                    canAmpliaAdmin: canAccessAmpliaAdmin(me),
+                });
                 setSessionUser(me);
                 setSessionError(false);
-            } catch {
+            } catch (err) {
                 if (cancelled) return;
+                adminFlowLog('layout.getProfile.error', {
+                    message: err instanceof Error ? err.message : String(err),
+                });
                 setSessionError(true);
             } finally {
                 if (!cancelled) setSessionReady(true);
@@ -63,6 +78,7 @@ const AdminLayout: React.FC = () => {
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
     if (!token) {
+        adminFlowLog('layout.redirect', { reason: 'no_access_token', to: '/admin/login' });
         return <Navigate to="/admin/login" state={{ from: location }} replace />;
     }
 
@@ -78,14 +94,28 @@ const AdminLayout: React.FC = () => {
     }
 
     if (sessionError) {
+        adminFlowLog('layout.redirect', { reason: 'session_error_get_profile_failed', to: '/admin/login' });
         localStorage.removeItem('win_access_token');
         localStorage.removeItem('win_user');
         localStorage.removeItem('win_refresh_token');
         return <Navigate to="/admin/login" state={{ from: location }} replace />;
     }
 
-    const user = sessionUser ?? parseStoredUser();
+    const storedUser = parseStoredUser();
+    const user = sessionUser ?? storedUser;
+    const userSource = sessionUser ? 'api' : storedUser ? 'localStorage_fallback' : 'none';
+    adminFlowLog('layout.session.check', {
+        path: location.pathname,
+        userSource,
+        role: user?.role,
+        staffPermCount: Array.isArray(user?.ampliaStaffPermissions) ? user.ampliaStaffPermissions.length : 0,
+        canAmpliaAdmin: user ? canAccessAmpliaAdmin(user) : false,
+    });
     if (!user?.role || !canAccessAmpliaAdmin(user)) {
+        adminFlowLog('layout.redirect', {
+            reason: !user?.role ? 'missing_role' : 'canAccessAmpliaAdmin_false',
+            to: '/admin/login',
+        });
         localStorage.removeItem('win_access_token');
         localStorage.removeItem('win_user');
         localStorage.removeItem('win_refresh_token');
@@ -93,13 +123,22 @@ const AdminLayout: React.FC = () => {
     }
 
     if (isFullAdminOnlyAdminPath(location.pathname) && !isAmpliaFullAdmin(user)) {
+        adminFlowLog('layout.redirect', { reason: 'full_admin_only_path', to: '/admin/gestao-equipe' });
         return <Navigate to="/admin/gestao-equipe" replace />;
     }
 
     const routeModule = adminRouteToModule(location.pathname);
     if (routeModule && !canAccessAdminModule(user, routeModule)) {
+        adminFlowLog('layout.redirect', {
+            reason: 'module_forbidden',
+            routeModule,
+            pathname: location.pathname,
+            to: '/admin',
+        });
         return <Navigate to="/admin" replace />;
     }
+
+    adminFlowLog('layout.render.panel', { path: location.pathname });
 
     return (
         <ModalProvider>

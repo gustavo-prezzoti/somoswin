@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Zap, AlertCircle, ArrowLeft, Loader2, ShieldCheck, Mail, Lock } from 'lucide-react';
 import { authService } from '../../services/api/auth.service';
+import { adminFlowLog } from '../../utils/adminAuthDebug';
 import logoBlack from '../../logo_black.png';
 
 const AdminLogin: React.FC = () => {
@@ -17,9 +18,18 @@ const AdminLogin: React.FC = () => {
         setLoading(true);
 
         try {
+            adminFlowLog('login.submit', { emailHint: email.includes('@') ? `${email.slice(0, 3)}…@${email.split('@')[1]}` : '(omitido)' });
             const response = await authService.login({ email, password });
             const next = (response.nextAction ?? 'SUCCESS').trim().toUpperCase();
+            adminFlowLog('login.api.ok', {
+                nextAction: next,
+                role: response.user?.role,
+                ampliaInternalStaff: response.user?.ampliaInternalStaff,
+                staffPermCount: response.user?.ampliaStaffPermissions?.length ?? 0,
+                ampliaStaffFullAccess: response.user?.ampliaStaffFullAccess,
+            });
             if (next === 'MUST_CHANGE_PASSWORD') {
+                adminFlowLog('login.redirect', { to: 'change-password' });
                 const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '') || '';
                 window.location.replace(`${base}/change-password`.replace(/\/+/g, '/'));
                 return;
@@ -33,7 +43,9 @@ const AdminLogin: React.FC = () => {
                 u.ampliaInternalStaff &&
                 (u.ampliaStaffFullAccess ||
                     (Array.isArray(u.ampliaStaffPermissions) && u.ampliaStaffPermissions.length > 0));
+            adminFlowLog('login.gate', { allowedFullAdmin, internalOk, role });
             if (!allowedFullAdmin && !internalOk) {
+                adminFlowLog('login.denied', { reason: 'not_admin_or_internal_staff_with_perms' });
                 setError('NEGADO: CREDENCIAIS SEM NÍVEL DE ACESSO ADMINISTRATIVO.');
                 localStorage.removeItem('win_user');
                 localStorage.removeItem('win_access_token');
@@ -48,8 +60,11 @@ const AdminLogin: React.FC = () => {
                 localStorage.setItem('win_refresh_token', response.refreshToken);
             }
 
+            adminFlowLog('login.navigate', { to: '/admin', tokenStored: true });
             navigate('/admin');
+            setLoading(false);
         } catch (err: any) {
+            adminFlowLog('login.error', { message: err?.message ?? String(err) });
             setError(err.message || 'FALHA NA AUTENTICAÇÃO: VERIFIQUE EMAIL E SENHA.');
             setLoading(false);
         }

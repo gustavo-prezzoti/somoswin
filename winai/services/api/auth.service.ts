@@ -5,6 +5,7 @@
 
 import { httpClient } from './http-client';
 import { storageService } from '../storage';
+import { adminFlowLog } from '../../utils/adminAuthDebug';
 import {
     AuthResponse,
     LoginRequest,
@@ -46,6 +47,12 @@ export const authService = {
 
         storageService.setTokens(raw.accessToken, raw.refreshToken);
         if (user) storageService.setUser(user);
+
+        adminFlowLog('auth.login.persisted', {
+            nextAction,
+            role: raw.user?.role,
+            staffPermCount: raw.user?.ampliaStaffPermissions?.length ?? 0,
+        });
 
         return {
             accessToken: raw.accessToken,
