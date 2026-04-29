@@ -12,7 +12,9 @@ import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.RefreshTokenRepository;
 import com.backend.winai.repository.UserRepository;
 import com.backend.winai.security.JwtService;
+import com.backend.winai.util.AuthAuditHelper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -30,6 +32,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -97,6 +100,9 @@ public class AuthService {
                             request.getEmail(),
                             request.getPassword()));
         } catch (BadCredentialsException e) {
+            log.warn("{} auth.login.failed email={} reason=bad_credentials",
+                    AuthAuditHelper.FLOW_PREFIX,
+                    AuthAuditHelper.maskEmail(request.getEmail()));
             throw new RuntimeException("E-mail ou senha inválidos");
         }
 
@@ -111,6 +117,7 @@ public class AuthService {
 
         AuthResponse res = generateAuthResponse(user);
         res.setNextAction(computeNextAction(user));
+        logAuthOutcome("auth.login.success", res.getUser(), res.getNextAction());
         return res;
     }
 
@@ -135,7 +142,29 @@ public class AuthService {
 
         AuthResponse res = generateAuthResponse(user);
         res.setNextAction(computeNextAction(user));
+        logAuthOutcome("auth.refresh.success", res.getUser(), res.getNextAction());
         return res;
+    }
+
+    private void logAuthOutcome(String step, AuthResponse.UserDTO dto, String nextAction) {
+        if (dto == null) {
+            log.info("{} {} nextAction={} user=dto_null",
+                    AuthAuditHelper.FLOW_PREFIX, step, nextAction);
+            return;
+        }
+        int staffPermCount =
+                dto.getAmpliaStaffPermissions() != null ? dto.getAmpliaStaffPermissions().size() : 0;
+        log.info("{} {} email={} userId={} role={} ampliaInternalStaff={} ampliaStaffFullAccess={} "
+                        + "staffPermCount={} nextAction={}",
+                AuthAuditHelper.FLOW_PREFIX,
+                step,
+                AuthAuditHelper.maskEmail(dto.getEmail()),
+                dto.getId(),
+                dto.getRole(),
+                dto.getAmpliaInternalStaff(),
+                dto.getAmpliaStaffFullAccess(),
+                staffPermCount,
+                nextAction);
     }
 
     @Transactional

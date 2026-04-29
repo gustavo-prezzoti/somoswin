@@ -5,7 +5,9 @@ import com.backend.winai.dto.request.UpdateProfileRequest;
 import com.backend.winai.dto.response.AuthResponse;
 import com.backend.winai.entity.User;
 import com.backend.winai.repository.UserRepository;
+import com.backend.winai.util.AuthAuditHelper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,6 +17,7 @@ import java.io.IOException;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class UserService {
 
     private final UserRepository userRepository;
@@ -28,7 +31,19 @@ public class UserService {
         User fullUser = userRepository.findByEmailWithCompany(user.getEmail())
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
-        return UserAuthDtoMapper.toDto(fullUser);
+        AuthResponse.UserDTO dto = UserAuthDtoMapper.toDto(fullUser);
+        int staffPermCount =
+                dto.getAmpliaStaffPermissions() != null ? dto.getAmpliaStaffPermissions().size() : 0;
+        log.info("{} user.me.ok email={} userId={} role={} ampliaInternalStaff={} ampliaStaffFullAccess={} "
+                        + "staffPermCount={}",
+                AuthAuditHelper.FLOW_PREFIX,
+                AuthAuditHelper.maskEmail(fullUser.getEmail()),
+                dto.getId(),
+                dto.getRole(),
+                dto.getAmpliaInternalStaff(),
+                dto.getAmpliaStaffFullAccess(),
+                staffPermCount);
+        return dto;
     }
 
     /**
