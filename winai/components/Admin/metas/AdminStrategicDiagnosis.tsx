@@ -26,7 +26,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import adminService, { PlaybookActivityRow } from '../../../services/adminService';
 import { getErrorMessage } from '../../../services/utils/errorHelper';
-import { DIAGNOSIS_BLOCKS } from './diagnosisQuestions';
+import { DIAGNOSIS_BLOCKS, diagIncludesAny } from './diagnosisQuestions';
 import { activityOverlapsPlaybookMonth } from '../../../utils/playbookActivity';
 import { formatStrategicCanalLabel } from '../../../utils/strategicCanalLabel';
 
@@ -330,7 +330,7 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
                          a['demanda.tipo'] === 'desejo' ? 'geracao_percepcao' : 'hibrida';
 
     if (tipo_demanda === 'captura_intencao') metrics.google += 3;
-    if (a['negocio.modelo_principal'] === 'b2c_local') metrics.google += 2;
+    if (diagIncludesAny(a as Record<string, any>, 'negocio.modelo_principal', ['b2c_local'])) metrics.google += 2;
     if (a['vendas.modelo_fechamento'] === 'ligacao') metrics.google += 1;
     if (a['vendas.modelo_fechamento'] === 'whatsapp') metrics.google += 1;
 
@@ -338,8 +338,9 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
     if (a['demanda.apelo_visual_importa'] === 'muito') metrics.meta += 2;
     if (a['vendas.modelo_fechamento'] === 'whatsapp') metrics.meta += 2;
 
-    const modelo = a['negocio.modelo_principal'];
-    if (modelo === 'b2b' || modelo === 'b2b2c') metrics.sales_first += 3;
+    if (diagIncludesAny(a as Record<string, any>, 'negocio.modelo_principal', ['b2b', 'b2b2c'])) {
+      metrics.sales_first += 3;
+    }
     const ticket = a['negocio.ticket_medio'];
     if (ticket === '2001_10000' || ticket === 'acima_10000') metrics.sales_first += 2;
     if (a['vendas.modelo_fechamento'] === 'reuniao_call') metrics.sales_first += 2;
@@ -970,13 +971,18 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
               {q.type === 'multi_select' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {q.options?.map(opt => {
-                    const currentValues = answers[q.variable] || [];
+                    const raw = answers[q.variable];
+                    const currentValues: string[] = Array.isArray(raw)
+                      ? (raw as unknown[]).filter((v): v is string => typeof v === 'string')
+                      : raw != null && raw !== ''
+                        ? [String(raw)]
+                        : [];
                     const isSelected = currentValues.includes(opt.value);
                     return (
                       <button
                         key={opt.value}
                         onClick={() => {
-                          const next = isSelected 
+                          const next = isSelected
                             ? currentValues.filter((v: string) => v !== opt.value)
                             : [...currentValues, opt.value];
                           handleAnswer(q.variable, next);

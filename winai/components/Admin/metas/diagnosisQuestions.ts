@@ -1,6 +1,21 @@
 
 export type QuestionType = 'single_select' | 'multi_select' | 'text_short' | 'text_long' | 'boolean' | 'number';
 
+export function diagAnswerList(answers: Record<string, any>, key: string): string[] {
+  const v = answers[key];
+  if (Array.isArray(v)) {
+    return v.filter((x): x is string => typeof x === 'string');
+  }
+  if (v != null && v !== '') {
+    return [String(v)];
+  }
+  return [];
+}
+
+export function diagIncludesAny(answers: Record<string, any>, key: string, values: string[]): boolean {
+  return diagAnswerList(answers, key).some((x) => values.includes(x));
+}
+
 export interface Question {
   id: string;
   variable: string;
@@ -27,8 +42,9 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
       {
         id: 'B1_01',
         variable: 'negocio.modelo_principal',
-        type: 'single_select',
-        question: 'Qual opção melhor descreve o negócio hoje?',
+        type: 'multi_select',
+        question:
+          'Quais opções descrevem o negócio hoje? (pode marcar mais de um, ex.: B2B + B2C)',
         impacts: ['tipo_operacao', 'google_impact', 'meta_impact', 'sales_first_impact'],
         options: [
           { label: 'B2C Local', value: 'b2c_local' },
@@ -79,8 +95,8 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
       {
         id: 'B1_05',
         variable: 'negocio.objetivo_90_dias',
-        type: 'single_select',
-        question: 'Qual é o principal objetivo dos próximos 90 dias?',
+        type: 'multi_select',
+        question: 'Quais são os principais objetivos dos próximos 90 dias?',
         impacts: ['canal_prioritario', 'gargalo_principal'],
         options: [
           { label: 'Gerar mais leads', value: 'gerar_mais_leads' },
@@ -96,7 +112,7 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
         id: 'B1_06',
         variable: 'negocio.gargalo_percebido',
         type: 'multi_select',
-        question: 'Onde está o maior travamento hoje?',
+        question: 'Onde estão os maiores travamentos hoje? (pode marcar mais de um)',
         impacts: ['gargalo_principal', 'setup_foundation_impact'],
         options: [
           { label: 'Oferta', value: 'oferta' },
@@ -115,7 +131,7 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
         variable: 'negocio.venda_envolve_varios_decisores',
         type: 'boolean',
         question: 'A venda envolve mais de um decisor?',
-        showIf: (answers) => ['b2b', 'b2b2c'].includes(answers['negocio.modelo_principal']),
+        showIf: (answers) => diagIncludesAny(answers, 'negocio.modelo_principal', ['b2b', 'b2b2c']),
         impacts: ['complexidade_comercial', 'sales_first_impact']
       },
       {
@@ -123,7 +139,8 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
         variable: 'negocio.ciclo_venda_medio_dias',
         type: 'number',
         question: 'Qual é o ciclo médio de venda em dias?',
-        showIf: (answers) => ['b2b', 'b2b2c', 'servico_premium'].includes(answers['negocio.modelo_principal']),
+        showIf: (answers) =>
+          diagIncludesAny(answers, 'negocio.modelo_principal', ['b2b', 'b2b2c', 'servico_premium']),
         impacts: ['complexidade_comercial', 'sales_first_impact']
       },
       {
@@ -131,7 +148,7 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
         variable: 'negocio.ticket_medio_b2b',
         type: 'single_select',
         question: 'Qual é o ticket médio das vendas B2B?',
-        showIf: (answers) => ['b2b', 'b2b2c'].includes(answers['negocio.modelo_principal']),
+        showIf: (answers) => diagIncludesAny(answers, 'negocio.modelo_principal', ['b2b', 'b2b2c']),
         impacts: ['complexidade_comercial', 'sales_first_impact'],
         options: [
           { label: 'Até R$ 2.000', value: 'ate_2000' },
@@ -144,7 +161,7 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
         variable: 'negocio.tem_unidade_fisica',
         type: 'boolean',
         question: 'O negócio tem unidade física?',
-        showIf: (answers) => answers['negocio.modelo_principal'] === 'b2c_local',
+        showIf: (answers) => diagIncludesAny(answers, 'negocio.modelo_principal', ['b2c_local']),
         impacts: ['tipo_operacao', 'google_impact']
       },
       {
@@ -152,7 +169,7 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
         variable: 'negocio.raio_atendimento_km',
         type: 'number',
         question: 'Qual é o raio de atendimento em km?',
-        showIf: (answers) => answers['negocio.modelo_principal'] === 'b2c_local',
+        showIf: (answers) => diagIncludesAny(answers, 'negocio.modelo_principal', ['b2c_local']),
         impacts: ['google_impact', 'canal_prioritario']
       },
       {
@@ -160,7 +177,7 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
         variable: 'negocio.google_meu_negocio_status',
         type: 'single_select',
         question: 'O Google Meu Negócio está ativo?',
-        showIf: (answers) => answers['negocio.modelo_principal'] === 'b2c_local',
+        showIf: (answers) => diagIncludesAny(answers, 'negocio.modelo_principal', ['b2c_local']),
         impacts: ['google_impact', 'setup_foundation_impact'],
         options: [
           { label: 'Não tem', value: 'nao_tem' },
@@ -242,20 +259,55 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
           { label: 'R$ 101 - R$ 500', value: '101_500' },
           { label: 'R$ 501 - R$ 2.000', value: '501_2000' },
           { label: 'R$ 2.001 - R$ 10.000', value: '2001_10000' },
-          { label: 'Acima de R$ 10.000', value: 'acima_10000' },
+          { label: 'R$ 10.001 - R$ 30.000', value: '10001_30000' },
+          { label: 'R$ 30.001 - R$ 100.000', value: '30001_100000' },
+          { label: 'R$ 100.001 - R$ 500.000', value: '100001_500000' },
+          { label: 'Acima de R$ 500.000', value: 'acima_500000' },
         ]
       },
       {
         id: 'B2_05',
         variable: 'oferta.margem_percebida',
         type: 'single_select',
-        question: 'A margem da principal oferta é baixa, média ou alta?',
+        question:
+          'Qual a faixa da margem de contribuição da principal oferta? (% sobre a receita, após custos variáveis diretos)',
         impacts: ['maturidade_oferta', 'gargalo_principal'],
         options: [
-          { label: 'Baixa', value: 'baixa' },
-          { label: 'Média', value: 'media' },
-          { label: 'Alta', value: 'alta' },
+          { label: 'Menos de 15%', value: 'mc_ate_15pct' },
+          { label: '15% a 20%', value: 'mc_15_20pct' },
+          { label: '20% a 30%', value: 'mc_20_30pct' },
+          { label: '30% a 40%', value: 'mc_30_40pct' },
+          { label: '40% a 60%', value: 'mc_40_60pct' },
+          { label: '60% ou mais', value: 'mc_60_mais' },
           { label: 'Não sei', value: 'nao_sei' },
+        ]
+      },
+      {
+        id: 'B2_05A',
+        variable: 'oferta.modelo_receita_principal',
+        type: 'single_select',
+        question: 'A principal oferta é recorrente, pagamento único ou híbrida?',
+        impacts: ['potencial_ltv', 'maturidade_oferta', 'gargalo_principal'],
+        options: [
+          { label: 'Recorrente (assinatura, mensalidade, renovação)', value: 'recorrente' },
+          { label: 'Pagamento único', value: 'pagamento_unico' },
+          { label: 'Híbrido (ex.: entrada + recorrência ou upsell)', value: 'hibrido' },
+        ]
+      },
+      {
+        id: 'B2_05B',
+        variable: 'oferta.tempo_retorno_compra',
+        type: 'single_select',
+        question: 'Em quanto tempo, em média, o cliente costuma voltar a comprar? (LTV / recompra)',
+        impacts: ['potencial_ltv', 'retention_impact', 'gargalo_principal'],
+        options: [
+          { label: 'Sem recompra típica (compra pontual)', value: 'sem_recompra_tipica' },
+          { label: 'Até 30 dias', value: 'ate_30_dias' },
+          { label: '1 a 3 meses', value: '1_3_meses' },
+          { label: '3 a 6 meses', value: '3_6_meses' },
+          { label: '6 a 12 meses', value: '6_12_meses' },
+          { label: 'Mais de 12 meses', value: 'acima_12_meses' },
+          { label: 'Varia muito / não sei', value: 'varia_nao_sei' },
         ]
       },
       {

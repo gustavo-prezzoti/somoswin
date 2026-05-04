@@ -11,6 +11,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class StrategicDiagnosisMetricsCalculatorTest {
 
     @Test
+    void multiModelo_appliesBothB2cLocalAndB2bBoosts() {
+        Map<String, Object> answers = new HashMap<>();
+        answers.put("negocio.modelo_principal", List.of("b2b", "b2c_local"));
+        answers.put("demanda.tipo", "necessidade");
+
+        StrategicDiagnosisMetricsCalculator.Metrics m = StrategicDiagnosisMetricsCalculator.calculateMetrics(answers);
+        assertEquals(5, m.google());
+        assertEquals(3, m.salesFirst());
+    }
+
+    @Test
     void mockQuickDiagnosis_salesFirstCanal() {
         Map<String, Object> answers = new HashMap<>();
         answers.put("negocio.modelo_principal", "b2b");

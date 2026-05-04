@@ -33,7 +33,7 @@ public final class StrategicDiagnosisMetricsCalculator {
         if ("captura_intencao".equals(tipoDemanda)) {
             google += 3;
         }
-        if ("b2c_local".equals(str(answers, "negocio.modelo_principal"))) {
+        if (hasModeloTag(answers, "b2c_local")) {
             google += 2;
         }
         if ("ligacao".equals(str(answers, "vendas.modelo_fechamento"))) {
@@ -53,8 +53,7 @@ public final class StrategicDiagnosisMetricsCalculator {
             meta += 2;
         }
 
-        String modelo = str(answers, "negocio.modelo_principal");
-        if ("b2b".equals(modelo) || "b2b2c".equals(modelo)) {
+        if (hasAnyModeloTag(answers, "b2b", "b2b2c")) {
             salesFirst += 3;
         }
         String ticket = str(answers, "negocio.ticket_medio");
@@ -132,6 +131,28 @@ public final class StrategicDiagnosisMetricsCalculator {
     private static String str(Map<String, Object> answers, String key) {
         Object v = answers.get(key);
         return v == null ? null : String.valueOf(v);
+    }
+
+    private static boolean hasModeloTag(Map<String, Object> answers, String tag) {
+        Object v = answers.get("negocio.modelo_principal");
+        if (v instanceof List<?> list) {
+            for (Object x : list) {
+                if (tag.equals(String.valueOf(x))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return tag.equals(str(answers, "negocio.modelo_principal"));
+    }
+
+    private static boolean hasAnyModeloTag(Map<String, Object> answers, String... tags) {
+        for (String t : tags) {
+            if (hasModeloTag(answers, t)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean truthy(Map<String, Object> answers, String key) {
