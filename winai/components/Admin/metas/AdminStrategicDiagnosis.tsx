@@ -50,7 +50,13 @@ const LAST_DIAG_VARIABLE = 'prioridade.kpi_principal';
 
 function draftLooksLikeCompletedDiagnosis(answers: Record<string, unknown>): boolean {
   const v = answers[LAST_DIAG_VARIABLE];
-  return v != null && v !== '' && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean');
+  if (v == null || v === '') {
+    return false;
+  }
+  if (Array.isArray(v)) {
+    return v.length > 0;
+  }
+  return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
 }
 
 function logStrategicDiagnosis(message: string, detail?: Record<string, unknown>) {
@@ -440,6 +446,12 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
             <p className="text-gray-400">
               Canal prioritário:{' '}
               <span className="text-emerald-500 font-bold">{formatStrategicCanalLabel(canalPrioritario)}</span>.
+            </p>
+            <p className="text-sm text-gray-500 font-medium max-w-3xl leading-relaxed">
+              O modelo já sugere entregas nos três meses (fundação, operação e escala). O mês 3 inclui consolidação,
+              revisão de resultados e planejamento do próximo ciclo. Use o botão Nova atividade ou Adicionar atividade
+              sempre que precisar de novas entregas. Na operação, o time costuma detalhar e priorizar o calendário com
+              vocês mês a mês; o playbook é ponto de partida e não impede incluir tarefas novas.
             </p>
           </div>
           <div className="flex gap-3">
@@ -949,6 +961,11 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
                 {q.question}
                 {q.impacts && <Sparkles size={14} className="text-emerald-500" />}
               </label>
+              {q.type === 'multi_select' && q.multiSelectMax != null && (
+                <p className="text-[11px] font-bold text-gray-400 -mt-2">
+                  Selecione até {q.multiSelectMax} opções.
+                </p>
+              )}
 
               {q.type === 'single_select' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -978,19 +995,28 @@ const AdminStrategicDiagnosis: React.FC<AdminStrategicDiagnosisProps> = ({ compa
                         ? [String(raw)]
                         : [];
                     const isSelected = currentValues.includes(opt.value);
+                    const maxSel = q.multiSelectMax;
+                    const atMax = maxSel != null && !isSelected && currentValues.length >= maxSel;
                     return (
                       <button
                         key={opt.value}
+                        type="button"
+                        title={atMax ? `Máximo de ${maxSel} opções` : undefined}
                         onClick={() => {
+                          if (!isSelected && maxSel != null && currentValues.length >= maxSel) {
+                            return;
+                          }
                           const next = isSelected
                             ? currentValues.filter((v: string) => v !== opt.value)
                             : [...currentValues, opt.value];
                           handleAnswer(q.variable, next);
                         }}
                         className={`p-4 rounded-2xl text-left text-xs font-bold uppercase tracking-widest transition-all border-2 ${
-                          isSelected 
-                            ? 'bg-[#141414] text-white border-[#141414]' 
-                            : 'bg-white text-gray-500 border-black/5 hover:border-black/10'
+                          isSelected
+                            ? 'bg-[#141414] text-white border-[#141414]'
+                            : atMax
+                              ? 'bg-gray-100 text-gray-300 border-black/5 cursor-not-allowed'
+                              : 'bg-white text-gray-500 border-black/5 hover:border-black/10'
                         }`}
                       >
                         {opt.label}

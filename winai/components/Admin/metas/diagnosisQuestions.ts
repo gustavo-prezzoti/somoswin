@@ -24,6 +24,8 @@ export interface Question {
   showIf?: (answers: Record<string, any>) => boolean;
   impacts?: string[];
   options?: { label: string; value: string }[];
+  /** Em multi_select: número máximo de opções que podem ser marcadas. */
+  multiSelectMax?: number;
 }
 
 export interface DiagnosisBlock {
@@ -488,8 +490,7 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
         question: 'Quais ativos já existem hoje?',
         impacts: ['prontidao_trafego', 'setup_foundation_impact'],
         options: [
-          { label: 'Landing Page', value: 'landing_page' },
-          { label: 'Página de Vendas', value: 'pagina_vendas' },
+          { label: 'Página de vendas', value: 'pagina_vendas' },
           { label: 'WhatsApp Business', value: 'whatsapp_business' },
           { label: 'CRM', value: 'crm' },
           { label: 'Pixel/Tag', value: 'pixel_tag' },
@@ -552,12 +553,13 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
         id: 'B6_01',
         variable: 'dados.site_status',
         type: 'single_select',
-        question: 'O negócio tem site, landing page, ambos ou nenhum?',
+        question:
+          'O negócio tem hoje site institucional, apenas página de vendas, página de vendas e site institucional, ou nenhum?',
         impacts: ['prontidao_trafego', 'setup_foundation_score'],
         options: [
-          { label: 'Site Completo', value: 'site_completo' },
-          { label: 'Landing Page', value: 'landing_page' },
-          { label: 'Ambos', value: 'ambos' },
+          { label: 'Site institucional', value: 'site_completo' },
+          { label: 'Página de vendas', value: 'landing_page' },
+          { label: 'Página de vendas e site institucional', value: 'ambos' },
           { label: 'Nenhum', value: 'nenhum' },
         ]
       },
@@ -630,8 +632,9 @@ export const DIAGNOSIS_BLOCKS: DiagnosisBlock[] = [
       {
         id: 'B8_01',
         variable: 'prioridade.kpi_principal',
-        type: 'single_select',
-        question: 'Qual KPI mais importa nos próximos 90 dias?',
+        type: 'multi_select',
+        question: 'Quais KPIs mais importam nos próximos 90 dias?',
+        multiSelectMax: 4,
         impacts: ['canal_prioritario', 'gargalo_principal'],
         options: [
           { label: 'Leads', value: 'leads' },
