@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Navigate, useNavigate, useOutletContext } from 'react-router-dom';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -14,11 +14,15 @@ const AdminDashboard: React.FC = () => {
     const { adminUser } = useOutletContext<AdminOutletContext>();
     const navigate = useNavigate();
     const staffView = useAdminStaffView();
-    const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
-    const staffName =
-        staffFilterId && staffView?.staffList?.length
-            ? staffView.staffList.find((s) => s.id === staffFilterId)?.name ?? null
-            : null;
+    const staffFilterId = staffView?.dashboardStaffUserId ?? null;
+    const staffName = useMemo(() => {
+        if (!staffFilterId) return null;
+        const fromList =
+            staffView?.staffList?.length && staffView.staffList.find((s) => s.id === staffFilterId)?.name;
+        if (fromList) return fromList;
+        if (adminUser?.id === staffFilterId) return adminUser.name ?? null;
+        return null;
+    }, [staffFilterId, staffView?.staffList, adminUser?.id, adminUser?.name]);
     const [data, setData] = useState<AdminDashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

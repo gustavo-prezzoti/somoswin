@@ -28,6 +28,7 @@ import {
   GoalDTO,
   CreateGoalRequest,
   GoalTaskDTO,
+  StrategicPlaybookActivityDTO,
   StrategicPlaybookClientDTO,
 } from '../services/api/dashboard.service';
 import { BodyPortal } from './ui';
@@ -84,6 +85,8 @@ interface ViewTask {
   completedAt: string | null;
   deadline: string;
   evidenciaObrigatoria: boolean;
+  /** Metadado opcional (tarefas só do playbook consultoria). */
+  playbookRawStatus?: string | null;
 }
 
 interface ViewGoal {
@@ -158,11 +161,164 @@ function mapApiTaskToView(
     completedAt: t.completedAt || null,
     deadline: dl,
     evidenciaObrigatoria: !!t.evidenciaObrigatoria,
+    playbookRawStatus: null,
   };
 }
 
 function parseLocalDate(s: string): Date {
   return new Date(s.includes('T') ? s : `${s}T12:00:00`);
+}
+
+/** projectStartDate da API: ISO ou [y,m,d] (Jackson). */
+function normalizeIsoDateFromApi(raw: unknown): string | null {
+  if (raw == null) return null;
+  if (typeof raw === 'string') return raw.split('T')[0];
+  if (Array.isArray(raw) && raw.length >= 3) {
+    const [y, m, d] = raw as number[];
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  return null;
+}
+
+/** Atividade do playbook (dia 1 = projectStart) intercepta o mês civil do recorte? */
+function playbookActivityOverlapsCalendarMonth(
+  projectStartRaw: unknown,
+  activityStart: number,
+  activityDuration: number,
+  year: number,
+  month0: number
+): boolean {
+  const iso = normalizeIsoDateFromApi(projectStartRaw);
+  if (!iso) return false;
+  const base = parseLocalDate(iso);
+  if (Number.isNaN(base.getTime())) return false;
+  const dur = activityDuration > 0 ? activityDuration : 1;
+  const actStart = new Date(base);
+  actStart.setDate(actStart.getDate() + (activityStart - 1));
+  const actEnd = new Date(actStart);
+  actEnd.setDate(actEnd.getDate() + dur - 1);
+  const mStart = new Date(year, month0, 1);
+  const mEnd = new Date(year, month0 + 1, 0, 23, 59, 59, 999);
+  return actStart.getTime() <= mEnd.getTime() && actEnd.getTime() >= mStart.getTime();
+}
+
+function playbookActivityDisplayWeekInMonth(
+  projectStartRaw: unknown,
+  activityStart: number,
+  activityDuration: number,
+  year: number,
+  month0: number
+): 1 | 2 | 3 | 4 {
+  const iso = normalizeIsoDateFromApi(projectStartRaw);
+  if (!iso) return 1;
+  const base = parseLocalDate(iso);
+  const dur = activityDuration > 0 ? activityDuration : 1;
+  const actStart = new Date(base);
+  actStart.setDate(actStart.getDate() + (activityStart - 1));
+  const actEnd = new Date(actStart);
+  actEnd.setDate(actEnd.getDate() + dur - 1);
+  const mStart = new Date(year, month0, 1);
+  const clipStart = actStart.getTime() < mStart.getTime() ? mStart : actStart;
+  const dom = clipStart.getDate();
+  return Math.min(4, Math.max(1, Math.ceil(dom / 7))) as 1 | 2 | 3 | 4;
+}
+
+function playbookStatusToLevel(status: string | undefined): TaskLevel {
+  const s = (status || '').toLowerCase();
+  if (s === 'completed') return 'rapida';
+  if (s === 'in_progress') return 'media';
+  return 'estrategica';
+}
+
+function playbookStatusToCompleted(status: string | undefined): boolean {
+  return (status || '').toLowerCase() === 'completed';
+}
+
+function playbookRowStatusShortLabel(status: string | undefined, completed: boolean): string {
+  if (completed) return 'Concluído';
+  const s = (status || '').toLowerCase();
+  if (s === 'in_progress') return 'Em andamento';
+  return 'Pendente';
+}
+
+function taskDetailStatusLabel(task: ViewTask): string {
+  if (task.completed) return 'Concluído';
+  if (task.playbookRawStatus?.toLowerCase() === 'in_progress') return 'Em andamento';
+  return 'Pendente';
+}
+
+function playbookActivityToViewTask(
+  a: StrategicPlaybookActivityDTO,
+  projectStartRaw: unknown,
+  year: number,
+  quarter: Quarter,
+  monthInQuarter: number,
+  month0: number
+): ViewTask {
+  const week = playbookActivityDisplayWeekInMonth(projectStartRaw, a.start, a.duration, year, month0);
+  const level = playbookStatusToLevel(a.status);
+  const completed = playbookStatusToCompleted(a.status);
+  const dl = computeSyntheticTaskDeadline(year, quarter, monthInQuarter, week);
+  return {
+    id: `pb-${a.id}`,
+    backendTaskId: 0,
+    title: a.title,
+    description: a.description || '',
+    week,
+    level,
+    weight: 1,
+    completed,
+    completedAt: null,
+    deadline: dl,
+    evidenciaObrigatoria: false,
+    playbookRawStatus: a.status ?? null,
+  };
+}
+
+/** Interseção da atividade com o grid [1..daysInMonth] do Gantt. */
+function getPlaybookGanttBarRangeInMonth(
+  projectStartRaw: unknown,
+  activityStart: number,
+  activityDuration: number,
+  year: number,
+  month0: number,
+  daysInMonth: number
+): { start: number; end: number } | null {
+  const iso = normalizeIsoDateFromApi(projectStartRaw);
+  if (!iso) return null;
+  const base = parseLocalDate(iso);
+  if (Number.isNaN(base.getTime())) return null;
+  const dur = activityDuration > 0 ? activityDuration : 1;
+  const actStart = new Date(base);
+  actStart.setDate(actStart.getDate() + (activityStart - 1));
+  const actEnd = new Date(actStart);
+  actEnd.setDate(actEnd.getDate() + dur - 1);
+  const mStart = new Date(year, month0, 1);
+  const mEnd = new Date(year, month0 + 1, 0);
+  if (actEnd < mStart || actStart > mEnd) return null;
+  const clipStart = actStart < mStart ? mStart : actStart;
+  const clipEnd = actEnd > mEnd ? mEnd : actEnd;
+  return {
+    start: clipStart.getDate(),
+    end: Math.min(daysInMonth, clipEnd.getDate()),
+  };
+}
+
+function playbookActivityEndDateDisplay(
+  projectStartRaw: unknown,
+  activityStart: number,
+  activityDuration: number
+): string {
+  const iso = normalizeIsoDateFromApi(projectStartRaw);
+  if (!iso) return '--/--/----';
+  const base = parseLocalDate(iso);
+  if (Number.isNaN(base.getTime())) return '--/--/----';
+  const dur = activityDuration > 0 ? activityDuration : 1;
+  const actStart = new Date(base);
+  actStart.setDate(actStart.getDate() + (activityStart - 1));
+  const actEnd = new Date(actStart);
+  actEnd.setDate(actEnd.getDate() + dur - 1);
+  return actEnd.toLocaleDateString('pt-BR');
 }
 
 /**
@@ -397,6 +553,24 @@ const Goals: React.FC = () => {
     );
   }, [filteredGoals, activeMonth, selectedYear, activeQuarter]);
 
+  const playbookRowsForRecorte = useMemo((): StrategicPlaybookActivityDTO[] => {
+    if (!strategicPlaybook?.published || !strategicPlaybook.activities?.length) {
+      return [];
+    }
+    const month0 = planningContext.month0;
+    return strategicPlaybook.activities
+      .filter((a) =>
+        playbookActivityOverlapsCalendarMonth(
+          strategicPlaybook.projectStartDate,
+          a.start,
+          a.duration,
+          selectedYear,
+          month0
+        )
+      )
+      .sort((a, b) => a.start - b.start);
+  }, [strategicPlaybook, planningContext.month0, selectedYear]);
+
   const quarterlyStats = useMemo(() => {
     let totalTasks = 0;
     let completedTasks = 0;
@@ -455,6 +629,7 @@ const Goals: React.FC = () => {
   }, [viewMetas]);
 
   const toggleTask = async (goalBackendId: number, task: ViewTask) => {
+    if (task.backendTaskId <= 0) return;
     try {
       await dashboardService.updateGoalTask(goalBackendId, task.backendTaskId, {
         completed: !task.completed,
@@ -780,15 +955,16 @@ const Goals: React.FC = () => {
           <span className="font-black text-emerald-700">{planningContext.expectedPct}%</span>.
         </p>
         <p className="mt-2 text-xs text-gray-500 leading-relaxed">
-          As <strong>tarefas</strong> são as mesmas em todos os meses do trimestre; o que muda ao trocar o mês é a{' '}
-          <strong>referência de “no prazo”</strong> (cards e status) e o <strong>calendário do Gantt</strong> (dias reais
-          de <span className="capitalize">{planningContext.shortMonth}</span>). Na tabela, a lista continua igual de
-          propósito — é o mesmo plano operacional.
+          As <strong>tarefas das metas</strong> são as mesmas em todos os meses do trimestre; o que muda ao trocar o
+          mês é a <strong>referência de “no prazo”</strong> (cards e status) e o <strong>calendário do Gantt</strong>{' '}
+          (dias reais de <span className="capitalize">{planningContext.shortMonth}</span>). Quando existir{' '}
+          <strong>playbook de consultoria</strong> publicado, as entregas que cruzam este mês civil aparecem também na
+          tabela e no Gantt logo abaixo (com rótulo “Playbook 90 dias”).
         </p>
       </div>
 
       <div className="space-y-10">
-        {filteredGoals.length === 0 ? (
+        {filteredGoals.length === 0 && playbookRowsForRecorte.length === 0 ? (
           <div className="py-20 text-center bg-gray-50 rounded-[40px] border-2 border-dashed border-gray-200">
             <Target className="mx-auto text-gray-300 mb-4" size={48} />
             <p className="text-gray-400 font-black uppercase tracking-widest text-xs mb-4">Nenhuma meta neste trimestre</p>
@@ -815,7 +991,7 @@ const Goals: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {currentMonthPlan?.metas.flatMap((goal) =>
+                {(currentMonthPlan?.metas ?? []).flatMap((goal) =>
                   goal.tasks.map((task) => (
                     <tr
                       key={task.id}
@@ -858,6 +1034,67 @@ const Goals: React.FC = () => {
                     </tr>
                   ))
                 )}
+                {strategicPlaybook?.published &&
+                  playbookRowsForRecorte.map((a) => {
+                    const vt = playbookActivityToViewTask(
+                      a,
+                      strategicPlaybook.projectStartDate,
+                      selectedYear,
+                      activeQuarter,
+                      activeMonth,
+                      planningContext.month0
+                    );
+                    const done = playbookStatusToCompleted(a.status);
+                    const rowStatus = playbookRowStatusShortLabel(a.status, done);
+                    const dotClass = done
+                      ? 'bg-emerald-500'
+                      : a.status?.toLowerCase() === 'in_progress'
+                        ? 'bg-orange-500'
+                        : 'bg-amber-500';
+                    return (
+                      <tr
+                        key={`pb-row-${a.id}`}
+                        onClick={() => openTaskDetail(vt, `Playbook 90 dias · ${a.category || 'Consultoria'}`)}
+                        className="hover:bg-emerald-50/50 transition-colors group cursor-pointer bg-emerald-50/20"
+                      >
+                        <td className="px-8 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <div>
+                              <p className="text-xs font-bold text-gray-800 leading-tight">{a.title}</p>
+                              <p className="text-[9px] text-emerald-600 font-medium uppercase tracking-wider">
+                                Playbook 90 dias · {a.category}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-8 py-4 text-center">
+                          <span className="text-[10px] font-black text-gray-600">S{vt.week}</span>
+                        </td>
+                        <td className="px-8 py-4 text-center">
+                          <span
+                            className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${
+                              vt.level === 'estrategica'
+                                ? 'bg-rose-100 text-rose-600'
+                                : vt.level === 'media'
+                                  ? 'bg-blue-100 text-blue-600'
+                                  : 'bg-emerald-100 text-emerald-600'
+                            }`}
+                          >
+                            {vt.level}
+                          </span>
+                        </td>
+                        <td className="px-8 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${dotClass}`} />
+                            <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">
+                              {rowStatus}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
@@ -923,7 +1160,7 @@ const Goals: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {currentMonthPlan?.metas.map((goal) => (
+                    {(currentMonthPlan?.metas ?? []).map((goal) => (
                       <React.Fragment key={goal.id}>
                         <tr className="bg-gray-50/30">
                           <td
@@ -978,6 +1215,81 @@ const Goals: React.FC = () => {
                         })}
                       </React.Fragment>
                     ))}
+                    {strategicPlaybook?.published && playbookRowsForRecorte.length > 0 && (
+                      <>
+                        <tr className="bg-emerald-50/40">
+                          <td
+                            colSpan={3}
+                            className="px-4 py-3 text-[10px] font-black text-emerald-800 uppercase tracking-widest border-b border-gray-100"
+                          >
+                            Playbook 90 dias
+                          </td>
+                        </tr>
+                        {playbookRowsForRecorte.map((a) => {
+                          const range = getPlaybookGanttBarRangeInMonth(
+                            strategicPlaybook.projectStartDate,
+                            a.start,
+                            a.duration,
+                            selectedYear,
+                            planningContext.month0,
+                            planningContext.daysInMonth
+                          );
+                          const vt = playbookActivityToViewTask(
+                            a,
+                            strategicPlaybook.projectStartDate,
+                            selectedYear,
+                            activeQuarter,
+                            activeMonth,
+                            planningContext.month0
+                          );
+                          const st = (a.status || '').toLowerCase();
+                          let barColor = 'bg-gray-400';
+                          if (st === 'completed') barColor = 'bg-emerald-400';
+                          else if (st === 'in_progress') barColor = 'bg-orange-400';
+                          const startDay = range?.start ?? 1;
+                          const endDay = range?.end ?? planningContext.daysInMonth;
+                          return (
+                            <tr
+                              key={`pb-gantt-${a.id}`}
+                              role="presentation"
+                              onClick={() => openTaskDetail(vt, `Playbook 90 dias · ${a.category || 'Consultoria'}`)}
+                              className="group hover:bg-emerald-50/30 transition-colors cursor-pointer"
+                            >
+                              <td className="px-4 py-3 text-[10px] font-bold text-emerald-900 border-b border-r border-gray-100 truncate max-w-[300px]">
+                                {a.title}
+                              </td>
+                              <td className="px-4 py-3 text-center text-[9px] font-black text-gray-500 border-b border-r border-gray-100">
+                                {playbookActivityEndDateDisplay(
+                                  strategicPlaybook.projectStartDate,
+                                  a.start,
+                                  a.duration
+                                )}
+                              </td>
+                              <td className="p-0 border-b border-gray-100 relative">
+                                <div
+                                  className="grid h-12"
+                                  style={{
+                                    gridTemplateColumns: `repeat(${planningContext.daysInMonth}, minmax(0, 1fr))`,
+                                  }}
+                                >
+                                  {Array.from({ length: planningContext.daysInMonth }).map((_, i) => {
+                                    const day = i + 1;
+                                    const isActive = range != null && day >= startDay && day <= endDay;
+                                    return (
+                                      <div key={i} className="border-r border-gray-50 h-full flex items-center justify-center p-0.5">
+                                        {isActive && (
+                                          <div className={`w-full h-full rounded-sm transition-all duration-500 ${barColor}`} />
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1006,10 +1318,14 @@ const Goals: React.FC = () => {
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status do Mês</p>
                   <div className="flex items-center gap-2 mt-1">
                     <div
-                      className={`w-2 h-2 rounded-full ${currentMonthPlan?.metas.length ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`}
+                      className={`w-2 h-2 rounded-full ${
+                        currentMonthPlan?.metas.length || playbookRowsForRecorte.length
+                          ? 'bg-emerald-500 animate-pulse'
+                          : 'bg-gray-300'
+                      }`}
                     />
                     <span className="text-xs font-black text-gray-800 uppercase italic">
-                      {currentMonthPlan?.metas.length ? 'Ativo' : 'Não Iniciado'}
+                      {currentMonthPlan?.metas.length || playbookRowsForRecorte.length ? 'Ativo' : 'Não Iniciado'}
                     </span>
                   </div>
                 </div>
@@ -1223,7 +1539,53 @@ const Goals: React.FC = () => {
                 </div>
               ))}
 
-              {(!currentMonthPlan || currentMonthPlan.metas.length === 0) && (
+              {strategicPlaybook?.published && playbookRowsForRecorte.length > 0 && (
+                <div className="bg-white rounded-[40px] border border-emerald-100 shadow-sm overflow-hidden">
+                  <div className="p-8 border-b border-emerald-50 bg-emerald-50/30">
+                    <h3 className="text-xl font-black text-emerald-900 uppercase italic tracking-tight">Playbook 90 dias</h3>
+                    <p className="mt-2 text-xs text-emerald-800/80 font-medium">
+                      Entregas da consultoria que cruzam este mês civil (visualização; status vem do material publicado).
+                    </p>
+                  </div>
+                  <div className="p-8 space-y-3">
+                    {playbookRowsForRecorte.map((a) => {
+                      const vt = playbookActivityToViewTask(
+                        a,
+                        strategicPlaybook.projectStartDate,
+                        selectedYear,
+                        activeQuarter,
+                        activeMonth,
+                        planningContext.month0
+                      );
+                      const done = playbookStatusToCompleted(a.status);
+                      const label = playbookRowStatusShortLabel(a.status, done);
+                      const dotClass = done
+                        ? 'bg-emerald-500'
+                        : a.status?.toLowerCase() === 'in_progress'
+                          ? 'bg-orange-500'
+                          : 'bg-amber-500';
+                      return (
+                        <button
+                          type="button"
+                          key={`pb-card-${a.id}`}
+                          onClick={() => openTaskDetail(vt, `Playbook 90 dias · ${a.category || 'Consultoria'}`)}
+                          className="w-full text-left flex items-start gap-4 p-4 rounded-2xl border border-emerald-100 bg-emerald-50/15 hover:bg-emerald-50/40 transition-colors"
+                        >
+                          <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-gray-900 leading-tight">{a.title}</p>
+                            <p className="text-[9px] text-emerald-700 font-black uppercase tracking-widest mt-1">
+                              {a.category} · S{vt.week} · {label}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(!currentMonthPlan || currentMonthPlan.metas.length === 0) && playbookRowsForRecorte.length === 0 && (
                 <div className="py-20 text-center bg-gray-50 rounded-[40px] border-2 border-dashed border-gray-200">
                   <Target className="mx-auto text-gray-300 mb-4" size={48} />
                   <p className="text-gray-400 font-black uppercase tracking-widest text-xs">Nenhuma meta definida para este mês</p>
@@ -1277,9 +1639,17 @@ const Goals: React.FC = () => {
               </div>
               <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
                 <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${selectedTaskForView.completed ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  <div
+                    className={`w-3 h-3 rounded-full ${
+                      selectedTaskForView.completed
+                        ? 'bg-emerald-500'
+                        : selectedTaskForView.playbookRawStatus?.toLowerCase() === 'in_progress'
+                          ? 'bg-orange-500'
+                          : 'bg-amber-500'
+                    }`}
+                  />
                   <span className="text-xs font-black text-emerald-900 uppercase tracking-widest">
-                    Status: {selectedTaskForView.completed ? 'Concluído' : 'Pendente'}
+                    Status: {taskDetailStatusLabel(selectedTaskForView)}
                   </span>
                 </div>
                 {selectedTaskForView.completedAt && (

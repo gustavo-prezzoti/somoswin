@@ -34,6 +34,12 @@ export type AdminStaffViewContextValue = {
     staffLoading: boolean;
     /** ADMIN ou SUPER_ADMIN — exibe seletor de equipe interna */
     canUseStaffTeam: boolean;
+    /**
+     * ID para ?staffUserId nas APIs do painel Amplia (dashboard, agenda, clientes, finanças…).
+     * - Com seletor de equipe: igual a {@link selectedStaffUserId} (null = visão de toda a operação).
+     * - Consultor/vendedor interno: sempre o próprio usuário — nunca a visão global por omissão.
+     */
+    dashboardStaffUserId: string | null;
     /** @deprecated use canUseStaffTeam */
     isSuperAdmin: boolean;
 };
@@ -149,6 +155,16 @@ export const AdminStaffViewProvider: React.FC<{
         if (!ok) setSelectedStaffUserId(null);
     }, [canUseStaffTeam, selectedStaffUserId, staffList, setSelectedStaffUserId]);
 
+    const dashboardStaffUserId = useMemo(() => {
+        if (canUseStaffTeam) {
+            return selectedStaffUserId;
+        }
+        if (currentUser?.id && currentUser.ampliaInternalStaff === true) {
+            return currentUser.id;
+        }
+        return null;
+    }, [canUseStaffTeam, selectedStaffUserId, currentUser?.id, currentUser?.ampliaInternalStaff]);
+
     const value = useMemo<AdminStaffViewContextValue>(
         () => ({
             selectedStaffUserId,
@@ -156,9 +172,18 @@ export const AdminStaffViewProvider: React.FC<{
             staffList,
             staffLoading,
             canUseStaffTeam,
+            dashboardStaffUserId,
             isSuperAdmin: canUseStaffTeamView(userRole) && isSuperAdminRole(userRole),
         }),
-        [selectedStaffUserId, setSelectedStaffUserId, staffList, staffLoading, canUseStaffTeam, userRole]
+        [
+            selectedStaffUserId,
+            setSelectedStaffUserId,
+            staffList,
+            staffLoading,
+            canUseStaffTeam,
+            dashboardStaffUserId,
+            userRole,
+        ]
     );
 
     return <AdminStaffViewContext.Provider value={value}>{children}</AdminStaffViewContext.Provider>;

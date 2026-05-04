@@ -13,7 +13,7 @@ const LIST_YEAR = new Date().getFullYear();
 /** Mesmo layout e classes que `painel-admin/src/components/GoalsObjectivesView.tsx`. */
 const AdminMetasObjetivos: React.FC = () => {
     const staffView = useAdminStaffView();
-    const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
+    const staffFilterId = staffView?.dashboardStaffUserId ?? null;
     const staffName =
         staffFilterId && staffView?.staffList?.length
             ? staffView.staffList.find((s) => s.id === staffFilterId)?.name ?? null

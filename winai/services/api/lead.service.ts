@@ -18,6 +18,11 @@ export type LeadStatusType =
     | 'WON'
     | 'LOST';
 
+export interface LeadTagData {
+    id: string;
+    name: string;
+}
+
 export interface LeadData {
     id: string;
     name: string;
@@ -39,6 +44,8 @@ export interface LeadData {
     fbclid?: string | null;
     estimatedValue?: number | null;
     leadScore?: number | null;
+    /** Etiquetas CRM da empresa (segmentos, carteiras, produtos…). */
+    tags?: LeadTagData[];
     createdAt: string;
     updatedAt: string;
 }
@@ -62,6 +69,8 @@ export interface LeadRequest {
     fbclid?: string;
     estimatedValue?: number | null;
     leadScore?: number | null;
+    /** Nomes das etiquetas CRM. Enviar lista vazia remove todas; omitir em atualizações parciais se o backend aceitar. */
+    tags?: string[];
 }
 
 export interface PagedResponse<T> {
@@ -119,18 +128,34 @@ export const KANBAN_COLUMN_COLORS: Record<LeadStatusType, string> = {
     LOST: 'bg-rose-500',
 };
 
+function normalizeLeadTags(raw: unknown): LeadTagData[] | undefined {
+    if (raw == null) return undefined;
+    const arr = Array.isArray(raw) ? raw : (raw as { tags?: unknown }).tags;
+    if (!Array.isArray(arr)) return [];
+    const out: LeadTagData[] = [];
+    for (const item of arr) {
+        if (item == null || typeof item !== 'object') continue;
+        const o = item as Record<string, unknown>;
+        const id = o.id != null ? String(o.id) : '';
+        const name = o.name != null ? String(o.name).trim() : '';
+        if (name) out.push({ id, name });
+    }
+    return out;
+}
+
 /** Garante número em estimatedValue (API pode enviar string ou snake_case em alguns ambientes). */
 export function normalizeLeadData(raw: LeadData): LeadData {
-    const r = raw as LeadData & { estimated_value?: unknown };
+    const r = raw as LeadData & { estimated_value?: unknown; tags?: unknown };
     const candidate = r.estimatedValue ?? r.estimated_value;
+    const tags = normalizeLeadTags(r.tags);
+    let estimatedValue: number | null | undefined = raw.estimatedValue ?? null;
     if (candidate === undefined || candidate === null || candidate === '') {
-        return { ...raw, estimatedValue: raw.estimatedValue ?? null };
+        estimatedValue = raw.estimatedValue ?? null;
+    } else {
+        const n = typeof candidate === 'number' ? candidate : Number(candidate);
+        estimatedValue = Number.isNaN(n) ? raw.estimatedValue ?? null : n;
     }
-    const n = typeof candidate === 'number' ? candidate : Number(candidate);
-    if (Number.isNaN(n)) {
-        return { ...raw, estimatedValue: raw.estimatedValue ?? null };
-    }
-    return { ...raw, estimatedValue: n };
+    return { ...raw, estimatedValue, tags: tags ?? undefined };
 }
 
 // ============================================
@@ -162,6 +187,11 @@ export const leadService = {
             titles,
         });
         return normalizeKanbanTitlesPayload(r.titles);
+    },
+
+    async getCrmTags(): Promise<LeadTagData[]> {
+        const data = await httpClient.get<LeadTagData[]>('/leads/tags');
+        return (data || []).map((t) => ({ id: String(t.id), name: String(t.name || '').trim() })).filter((t) => t.name);
     },
 
     async getAllLeads(): Promise<LeadData[]> {

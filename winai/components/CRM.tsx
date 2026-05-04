@@ -24,12 +24,15 @@ import {
   Mic,
   Loader2,
   Trash2,
+  Tag,
+  Tags,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { leadAttributionFieldsFromSearch } from '../utils/attribution';
+import { formatLeadRefBracketTag, leadTrackingRefDetailTitle } from '../utils/leadTrackingRef';
 import {
   leadService,
   LeadData,
@@ -97,6 +100,124 @@ const AgingBadge = memo(function AgingBadge({ days }: { days: number }) {
   );
 });
 
+function hashHue(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+const CRM_TAG_PALETTE = [
+  'bg-violet-50 text-violet-800 border-violet-100',
+  'bg-sky-50 text-sky-800 border-sky-100',
+  'bg-amber-50 text-amber-800 border-amber-100',
+  'bg-teal-50 text-teal-800 border-teal-100',
+  'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-100',
+  'bg-orange-50 text-orange-800 border-orange-100',
+];
+
+function crmTagStyle(name: string): string {
+  return CRM_TAG_PALETTE[hashHue(name) % CRM_TAG_PALETTE.length];
+}
+
+function leadCrmTagNames(lead: LeadData): string[] {
+  const t = lead.tags;
+  if (!t?.length) return [];
+  return t.map((x) => x.name).filter(Boolean);
+}
+
+type CrmLeadTagPickerProps = {
+  value: string[];
+  suggestions: string[];
+  disabled?: boolean;
+  hint?: string;
+  onChange: (next: string[]) => void;
+};
+
+const CrmLeadTagPicker = memo(function CrmLeadTagPicker({
+  value,
+  suggestions,
+  disabled,
+  hint,
+  onChange,
+}: CrmLeadTagPickerProps) {
+  const listId = React.useId();
+  const [draft, setDraft] = useState('');
+  const lower = useMemo(() => new Set(value.map((t) => t.toLowerCase())), [value]);
+  const addTag = (raw: string) => {
+    const t = raw.trim().replace(/\s+/g, ' ');
+    if (!t || disabled) return;
+    if (lower.has(t.toLowerCase())) return;
+    onChange([...value, t]);
+    setDraft('');
+  };
+
+  const datalistOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const x of suggestions) {
+      const v = x.trim();
+      if (v) s.add(v);
+    }
+    for (const v of value) s.add(v);
+    return [...s].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [suggestions, value]);
+
+  return (
+    <div className="space-y-3">
+      {hint ? (
+        <p className="text-[10px] text-gray-500 font-medium px-1 leading-relaxed">{hint}</p>
+      ) : null}
+      <div className="flex flex-wrap gap-2 min-h-[2rem]">
+        {value.map((name) => (
+          <span
+            key={name}
+            className={`inline-flex items-center gap-1 pl-3 pr-1 py-1 rounded-full text-[10px] font-bold border max-w-full ${crmTagStyle(name)}`}
+          >
+            <span className="truncate">{name}</span>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(value.filter((x) => x !== name))}
+              className="p-1 rounded-full hover:bg-black/5 transition-colors disabled:opacity-50 shrink-0"
+              aria-label={`Remover etiqueta ${name}`}
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          list={listId}
+          disabled={disabled}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addTag(draft);
+            }
+          }}
+          placeholder="Nova etiqueta — Enter para adicionar"
+          className="flex-1 px-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+        />
+        <datalist id={listId}>
+          {datalistOptions.map((o) => (
+            <option key={o} value={o} />
+          ))}
+        </datalist>
+        <button
+          type="button"
+          disabled={disabled || !draft.trim()}
+          onClick={() => addTag(draft)}
+          className="px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-gray-900 text-white hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:pointer-events-none shrink-0"
+        >
+          Adicionar
+        </button>
+      </div>
+    </div>
+  );
+});
+
 type KanbanColumnDescriptor = { id: LeadStatusType; label: string; color: string };
 
 interface LeadCardProps {
@@ -124,6 +245,7 @@ const LeadCard = memo(function LeadCard({
   const aging = daysSince(lead.createdAt);
   const value = formatMoney(lead.estimatedValue != null ? Number(lead.estimatedValue) : null);
   const dateLabel = new Date(lead.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  const crmTags = leadCrmTagNames(lead);
 
   return (
     <Draggable draggableId={lead.id} index={index}>
@@ -217,6 +339,21 @@ const LeadCard = memo(function LeadCard({
             </div>
           </div>
           <div className="space-y-3 pt-4 border-t border-gray-50">
+            {crmTags.length > 0 ? (
+              <div className="flex flex-wrap gap-1 items-center">
+                {crmTags.slice(0, 3).map((name) => (
+                  <span
+                    key={`${lead.id}-${name}`}
+                    className={`px-2 py-0.5 rounded-lg text-[8px] font-bold border truncate max-w-[6.5rem] ${crmTagStyle(name)}`}
+                  >
+                    {name}
+                  </span>
+                ))}
+                {crmTags.length > 3 ? (
+                  <span className="text-[8px] font-black text-gray-400 px-0.5">+{crmTags.length - 3}</span>
+                ) : null}
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-emerald-600 font-black text-xs truncate">
                 <DollarSign size={12} className="shrink-0" />
@@ -254,6 +391,7 @@ function toRequestFromLead(lead: LeadData): LeadRequest {
     fbclid: lead.fbclid ?? undefined,
     estimatedValue: lead.estimatedValue ?? undefined,
     leadScore: lead.leadScore ?? undefined,
+    tags: [...new Set(leadCrmTagNames(lead))],
   };
 }
 
@@ -269,7 +407,18 @@ const CRM: React.FC = () => {
   const [selectedLead, setSelectedLead] = useState<LeadData | null>(null);
   const [showNewLeadModal, setShowNewLeadModal] = useState(false);
   const [preSelectedStatus, setPreSelectedStatus] = useState<LeadStatusType | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [filtersPanelOpen, setFiltersPanelOpen] = useState(false);
+  /** Opcional: valor estimado &gt; 5k ou score &gt; 70 */
+  const [filterHotLeads, setFilterHotLeads] = useState(false);
+  const [utmFilters, setUtmFilters] = useState({
+    canal: '',
+    campanha: '',
+    conjunto: '',
+    anuncio: '',
+  });
+  /** Etiquetas CRM: lead passa se tiver qualquer uma das selecionadas (OU). */
+  const [filterCrmTags, setFilterCrmTags] = useState<string[]>([]);
+  const [crmTagCatalog, setCrmTagCatalog] = useState<Array<{ id: string; name: string }>>([]);
   const [showMoveMenu, setShowMoveMenu] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; leadId: string | null; leadName: string }>({
@@ -307,18 +456,21 @@ const CRM: React.FC = () => {
     notes: '',
     estimatedValue: undefined,
     leadScore: undefined,
+    tags: [],
   });
 
   const loadLeads = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [data, titles] = await Promise.all([
+      const [data, titles, cat] = await Promise.all([
         leadService.getAllLeads(),
         leadService.getKanbanColumnTitles().catch(() => ({} as Partial<Record<LeadStatusType, string>>)),
+        leadService.getCrmTags().catch(() => []),
       ]);
       setLeads(data);
       setColumnTitles(titles);
+      setCrmTagCatalog(cat);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar leads');
     } finally {
@@ -343,6 +495,64 @@ const CRM: React.FC = () => {
     loadLeads();
   }, [loadLeads]);
 
+  const mergeCrmTagSuggestions = useMemo(() => {
+    const byLower = new Map<string, string>();
+    for (const t of crmTagCatalog) {
+      const n = (t.name || '').trim();
+      if (!n) continue;
+      const k = n.toLowerCase();
+      if (!byLower.has(k)) byLower.set(k, n);
+    }
+    for (const l of leads) {
+      for (const t of l.tags ?? []) {
+        const n = (t.name || '').trim();
+        if (!n) continue;
+        const k = n.toLowerCase();
+        if (!byLower.has(k)) byLower.set(k, n);
+      }
+    }
+    return [...byLower.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [crmTagCatalog, leads]);
+
+  const toggleFilterCrmTag = useCallback((name: string) => {
+    const k = name.toLowerCase();
+    setFilterCrmTags((prev) => {
+      const has = prev.some((t) => t.toLowerCase() === k);
+      if (has) return prev.filter((t) => t.toLowerCase() !== k);
+      return [...prev, name];
+    });
+  }, []);
+
+  const utmFilterOptions = useMemo(() => {
+    const canais = new Set<string>();
+    const campanhas = new Set<string>();
+    const conjuntos = new Set<string>();
+    const anuncios = new Set<string>();
+    for (const l of leads) {
+      if (l.utmSource?.trim()) canais.add(l.utmSource.trim());
+      if (l.utmCampaign?.trim()) campanhas.add(l.utmCampaign.trim());
+      if (l.utmTerm?.trim()) conjuntos.add(l.utmTerm.trim());
+      if (l.utmContent?.trim()) anuncios.add(l.utmContent.trim());
+    }
+    return {
+      canais: [...canais].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      campanhas: [...campanhas].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      conjuntos: [...conjuntos].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      anuncios: [...anuncios].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    };
+  }, [leads]);
+
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (filterHotLeads) n++;
+    if (filterCrmTags.length > 0) n++;
+    if (utmFilters.canal.trim()) n++;
+    if (utmFilters.campanha.trim()) n++;
+    if (utmFilters.conjunto.trim()) n++;
+    if (utmFilters.anuncio.trim()) n++;
+    return n;
+  }, [filterHotLeads, filterCrmTags.length, utmFilters]);
+
   const filteredLeads = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     let result = leads;
@@ -351,16 +561,40 @@ const CRM: React.FC = () => {
         (l) =>
           l.name.toLowerCase().includes(q) ||
           l.email.toLowerCase().includes(q) ||
-          (l.phone && l.phone.includes(q))
+          (l.phone && l.phone.includes(q)) ||
+          leadCrmTagNames(l).some((t) => t.toLowerCase().includes(q))
       );
     }
-    if (showFilters) {
+    if (filterHotLeads) {
       result = result.filter(
         (l) => (Number(l.estimatedValue) || 0) > 5000 || (l.leadScore ?? 0) > 70
       );
     }
+    const canalNeedle = utmFilters.canal.trim().toLowerCase();
+    if (canalNeedle) {
+      result = result.filter((l) => (l.utmSource || '').toLowerCase().includes(canalNeedle));
+    }
+    const campNeedle = utmFilters.campanha.trim().toLowerCase();
+    if (campNeedle) {
+      result = result.filter((l) => (l.utmCampaign || '').toLowerCase().includes(campNeedle));
+    }
+    const conjNeedle = utmFilters.conjunto.trim().toLowerCase();
+    if (conjNeedle) {
+      result = result.filter((l) => (l.utmTerm || '').toLowerCase().includes(conjNeedle));
+    }
+    const adNeedle = utmFilters.anuncio.trim().toLowerCase();
+    if (adNeedle) {
+      result = result.filter((l) => (l.utmContent || '').toLowerCase().includes(adNeedle));
+    }
+    if (filterCrmTags.length > 0) {
+      const needle = new Set(filterCrmTags.map((t) => t.toLowerCase()));
+      result = result.filter((l) => {
+        const names = leadCrmTagNames(l).map((t) => t.toLowerCase());
+        return names.some((n) => needle.has(n));
+      });
+    }
     return result;
-  }, [leads, searchTerm, showFilters]);
+  }, [leads, searchTerm, filterHotLeads, utmFilters, filterCrmTags]);
 
   /** Pre-agrupa leads por coluna em uma única passada (evita N×M filter por render). */
   const leadsByStatus = useMemo(() => {
@@ -430,6 +664,7 @@ const CRM: React.FC = () => {
       const updated = await leadService.updateLead(editingLead.id, toRequestFromLead(editingLead));
       setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       setEditingLead(null);
+      void leadService.getCrmTags().then(setCrmTagCatalog).catch(() => {});
     } catch (err: unknown) {
       alert('Erro ao salvar: ' + (err instanceof Error ? err.message : ''));
     } finally {
@@ -452,6 +687,7 @@ const CRM: React.FC = () => {
       setLeads((prev) => [created, ...prev]);
       setShowNewLeadModal(false);
       setPreSelectedStatus(null);
+      void leadService.getCrmTags().then(setCrmTagCatalog).catch(() => {});
       setNewLeadForm({
         name: '',
         email: '',
@@ -461,6 +697,7 @@ const CRM: React.FC = () => {
         notes: '',
         estimatedValue: undefined,
         leadScore: undefined,
+        tags: [],
       });
     } catch (err: unknown) {
       alert('Erro ao criar: ' + (err instanceof Error ? err.message : ''));
@@ -572,6 +809,7 @@ const CRM: React.FC = () => {
                 notes: '',
                 estimatedValue: undefined,
                 leadScore: undefined,
+                tags: [],
               });
               setShowNewLeadModal(true);
             }}
@@ -606,7 +844,7 @@ const CRM: React.FC = () => {
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
             type="text"
-            placeholder="Buscar por nome, email ou telefone..."
+            placeholder="Buscar por nome, e-mail, telefone ou etiqueta..."
             className="w-full pl-14 pr-6 py-4 bg-gray-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none transition-all font-medium text-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -614,17 +852,186 @@ const CRM: React.FC = () => {
         </div>
         <button
           type="button"
-          onClick={() => setShowFilters(!showFilters)}
-          className={`px-8 py-4 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-3 ${
-            showFilters
+          onClick={() => setFiltersPanelOpen(!filtersPanelOpen)}
+          className={`px-8 py-4 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-3 shrink-0 ${
+            filtersPanelOpen || activeFilterCount > 0
               ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
               : 'bg-gray-50 border-transparent hover:border-gray-200 text-gray-600'
           }`}
         >
           <Filter size={18} />
-          {showFilters ? 'Filtros Ativos' : 'Filtros Avançados'}
+          {filtersPanelOpen ? 'Ocultar filtros' : 'Filtros'}
+          {activeFilterCount > 0 ? (
+            <span className="min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-[9px] font-black flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          ) : null}
         </button>
       </div>
+
+      {filtersPanelOpen && (
+        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              Refinar por rastreio (UTM) e prioridade
+            </p>
+            {activeFilterCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterHotLeads(false);
+                  setFilterCrmTags([]);
+                  setUtmFilters({ canal: '', campanha: '', conjunto: '', anuncio: '' });
+                }}
+                className="text-[10px] font-black uppercase tracking-widest text-rose-600 hover:text-rose-700"
+              >
+                Limpar filtros
+              </button>
+            ) : null}
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={filterHotLeads}
+              onChange={(e) => setFilterHotLeads(e.target.checked)}
+              className="mt-1 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+            />
+            <span className="text-sm font-bold text-gray-700 group-hover:text-gray-900">
+              Somente leads em destaque{' '}
+              <span className="text-xs font-medium text-gray-500">
+                (valor estimado acima de R$ 5.000 ou score acima de 70)
+              </span>
+            </span>
+          </label>
+
+          <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-5 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Tags size={14} className="text-emerald-600 shrink-0" />
+                Etiquetas da carteira
+              </label>
+              {filterCrmTags.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setFilterCrmTags([])}
+                  className="text-[10px] font-black text-slate-500 hover:text-rose-600 uppercase tracking-widest text-left sm:text-right"
+                >
+                  Limpar etiquetas
+                </button>
+              ) : null}
+            </div>
+            <p className="text-xs text-slate-600 font-medium leading-relaxed">
+              Personalize como quiser (ex.: Representantes, Clientes B2B, Clientes B2C). O lead entra na lista se tiver{' '}
+              <span className="font-black text-slate-800">pelo menos uma</span> das etiquetas selecionadas.
+            </p>
+            {mergeCrmTagSuggestions.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">
+                Nenhuma etiqueta ainda — adicione ao criar ou editar um lead; elas ficam salvas para a sua empresa.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {mergeCrmTagSuggestions.map((name) => {
+                  const active = filterCrmTags.some((t) => t.toLowerCase() === name.toLowerCase());
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => toggleFilterCrmTag(name)}
+                      className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${
+                        active
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/15'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-200 hover:text-emerald-800'
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                Canal <span className="font-normal normal-case text-gray-400">(utm_source)</span>
+              </label>
+              <input
+                type="text"
+                value={utmFilters.canal}
+                onChange={(e) => setUtmFilters((f) => ({ ...f, canal: e.target.value }))}
+                list="crm-filter-utm-canais"
+                placeholder="Ex.: facebook, instagram, google…"
+                className="w-full px-4 py-3 bg-gray-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none text-sm font-medium"
+              />
+              <datalist id="crm-filter-utm-canais">
+                {utmFilterOptions.canais.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                Campanha <span className="font-normal normal-case text-gray-400">(utm_campaign)</span>
+              </label>
+              <input
+                type="text"
+                value={utmFilters.campanha}
+                onChange={(e) => setUtmFilters((f) => ({ ...f, campanha: e.target.value }))}
+                list="crm-filter-utm-campanhas"
+                placeholder="Contém…"
+                className="w-full px-4 py-3 bg-gray-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none text-sm font-medium"
+              />
+              <datalist id="crm-filter-utm-campanhas">
+                {utmFilterOptions.campanhas.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                Conjunto de anúncio <span className="font-normal normal-case text-gray-400">(utm_term)</span>
+              </label>
+              <input
+                type="text"
+                value={utmFilters.conjunto}
+                onChange={(e) => setUtmFilters((f) => ({ ...f, conjunto: e.target.value }))}
+                list="crm-filter-utm-conjuntos"
+                placeholder="Contém…"
+                className="w-full px-4 py-3 bg-gray-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none text-sm font-medium"
+              />
+              <datalist id="crm-filter-utm-conjuntos">
+                {utmFilterOptions.conjuntos.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                Anúncio <span className="font-normal normal-case text-gray-400">(utm_content)</span>
+              </label>
+              <input
+                type="text"
+                value={utmFilters.anuncio}
+                onChange={(e) => setUtmFilters((f) => ({ ...f, anuncio: e.target.value }))}
+                list="crm-filter-utm-anuncios"
+                placeholder="Contém…"
+                className="w-full px-4 py-3 bg-gray-50 rounded-2xl border border-transparent focus:bg-white focus:border-emerald-500 outline-none text-sm font-medium"
+              />
+              <datalist id="crm-filter-utm-anuncios">
+                {utmFilterOptions.anuncios.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-400 leading-relaxed">
+            A busca em cada campo é parcial (não precisa ser o texto inteiro). Combine com a barra de pesquisa por nome,
+            e-mail ou telefone.
+          </p>
+        </div>
+      )}
 
       {viewMode === 'KANBAN' ? (
         <DragDropContext onDragEnd={handleDragEnd}>
@@ -813,6 +1220,15 @@ const CRM: React.FC = () => {
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <StatusBadge status={selectedLead.status} label={labelForStatus(selectedLead.status)} />
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">• {selectedLead.source || '—'}</span>
+                      {formatLeadRefBracketTag(selectedLead) ? (
+                        <span
+                          title={leadTrackingRefDetailTitle(selectedLead)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black font-mono tracking-tight bg-indigo-50 text-indigo-700 border border-indigo-100 max-w-[min(100%,280px)] truncate"
+                        >
+                          <Tag size={10} className="shrink-0 opacity-80" aria-hidden />
+                          {formatLeadRefBracketTag(selectedLead)}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -887,6 +1303,67 @@ const CRM: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                <div className="rounded-[28px] border border-slate-100 bg-gradient-to-br from-slate-50/90 to-white p-6 space-y-4">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <Tags size={12} className="text-emerald-600" />
+                    Etiquetas da carteira
+                  </label>
+                  {leadCrmTagNames(selectedLead).length === 0 ? (
+                    <p className="text-sm text-slate-500 italic leading-relaxed">
+                      Nenhuma etiqueta neste lead. Use &quot;Editar lead&quot; para criar ou vincular segmentos (produtos,
+                      setores, tipos de cliente…).
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {leadCrmTagNames(selectedLead).map((name) => (
+                        <span
+                          key={name}
+                          className={`px-3 py-1.5 rounded-xl text-[10px] font-bold border ${crmTagStyle(name)}`}
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {(formatLeadRefBracketTag(selectedLead) ||
+                  selectedLead.utmSource ||
+                  selectedLead.utmCampaign ||
+                  selectedLead.utmTerm ||
+                  selectedLead.utmContent) && (
+                  <div className="rounded-[28px] border border-indigo-100 bg-indigo-50/40 p-6 space-y-4">
+                    <label className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2">
+                      <Tag size={12} /> TAG / Código de rastreio (UTM)
+                    </label>
+                    {formatLeadRefBracketTag(selectedLead) ? (
+                      <p className="text-sm font-black font-mono text-indigo-900 break-all leading-relaxed">
+                        {formatLeadRefBracketTag(selectedLead)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-indigo-800/80 italic">Montagem do código a partir dos parâmetros abaixo.</p>
+                    )}
+                    <p className="text-[10px] text-indigo-900/85 leading-relaxed font-bold space-y-1">
+                      <span className="block">
+                        Canal <span className="font-normal text-indigo-800/80">(utm_source)</span>:{' '}
+                        {selectedLead.utmSource || '—'}
+                      </span>
+                      <span className="block">
+                        Campanha <span className="font-normal text-indigo-800/80">(utm_campaign)</span>:{' '}
+                        {selectedLead.utmCampaign || '—'}
+                      </span>
+                      <span className="block">
+                        Conjunto de anúncio <span className="font-normal text-indigo-800/80">(utm_term)</span>:{' '}
+                        {selectedLead.utmTerm || '—'}
+                      </span>
+                      <span className="block">
+                        Anúncio <span className="font-normal text-indigo-800/80">(utm_content)</span>:{' '}
+                        {selectedLead.utmContent || '—'}
+                      </span>
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
@@ -1095,6 +1572,22 @@ const CRM: React.FC = () => {
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                      <Tags size={12} className="text-emerald-600 shrink-0" />
+                      Etiquetas da carteira
+                    </label>
+                    <div className="px-1">
+                      <CrmLeadTagPicker
+                        value={newLeadForm.tags ?? []}
+                        suggestions={mergeCrmTagSuggestions}
+                        disabled={isSaving}
+                        hint="Opcional. Mesmas etiquetas podem ser usadas em vários leads; nomes novos são criados automaticamente."
+                        onChange={(names) => setNewLeadForm({ ...newLeadForm, tags: names })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Notas</label>
                     <textarea
                       className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all font-medium text-sm h-28 resize-none"
@@ -1237,6 +1730,32 @@ const CRM: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                    <Tags size={12} className="text-emerald-600 shrink-0" />
+                    Etiquetas da carteira
+                  </label>
+                  <div className="px-1">
+                    <CrmLeadTagPicker
+                      value={leadCrmTagNames(editingLead)}
+                      suggestions={mergeCrmTagSuggestions}
+                      disabled={isSaving}
+                      hint="Personalizável: produtos, setores, tipo de cliente, fonte interna… Digite, Enter para adicionar, ou escolha na lista. Ao salvar, grava na empresa e neste lead."
+                      onChange={(names) =>
+                        setEditingLead({
+                          ...editingLead,
+                          tags: names.map((name) => {
+                            const prev = editingLead.tags?.find(
+                              (t) => t.name.toLowerCase() === name.toLowerCase()
+                            );
+                            return prev ?? { id: '', name };
+                          }),
+                        })
+                      }
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">

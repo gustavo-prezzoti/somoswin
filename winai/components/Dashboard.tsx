@@ -465,7 +465,7 @@ const WeeklyTasksWidget = ({
   onOpenMetas,
 }: {
   tasks: DashboardWeeklyTask[];
-  onToggle: (id: number) => void;
+  onToggle: (task: DashboardWeeklyTask) => void;
   disabled?: boolean;
   onOpenMetas?: () => void;
 }) => (
@@ -479,54 +479,76 @@ const WeeklyTasksWidget = ({
         {tasks.filter((t) => t.completed).length}/{tasks.length || 1} Concluídas
       </span>
     </div>
+    <p className="text-[10px] text-gray-500 font-medium leading-relaxed -mt-2">
+      Quando há playbook publicado, mostramos as entregas cujo prazo cruza <span className="font-black text-gray-700">esta semana</span>{' '}
+      (segunda a domingo), alinhadas à data de início do projeto. O status reflete o que está salvo no playbook (Metas).
+    </p>
     <div className="space-y-3">
-      {tasks.map((task) => (
-        <div
-          key={task.id}
-          onClick={() => !disabled && onToggle(task.id)}
-          className={`p-4 rounded-2xl border transition-all flex items-center justify-between group ${
-            task.completed
-              ? 'bg-emerald-50 border-emerald-200'
-              : 'bg-white border-gray-100 hover:border-emerald-200 hover:shadow-md'
-          } ${disabled ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}
-        >
-          <div className="flex items-center gap-4">
-            <div
-              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                task.completed
-                  ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                  : 'border-gray-200 group-hover:border-emerald-400'
-              }`}
-            >
-              {task.completed && <CheckCircle2 size={14} />}
-            </div>
-            <div>
-              <p
-                className={`text-xs font-black transition-all ${
-                  task.completed ? 'text-emerald-600 line-through decoration-emerald-600 decoration-2' : 'text-gray-800'
+      {tasks.map((task) => {
+        const fromPlaybook = task.taskSource === 'playbook';
+        const rowKey = fromPlaybook && task.playbookActivityId ? `pb-${task.playbookActivityId}` : `dash-${task.id}`;
+        return (
+          <div
+            key={rowKey}
+            onClick={() => {
+              if (disabled || fromPlaybook) return;
+              onToggle(task);
+            }}
+            className={`p-4 rounded-2xl border transition-all flex items-center justify-between group ${
+              task.completed
+                ? 'bg-emerald-50 border-emerald-200'
+                : 'bg-white border-gray-100 hover:border-emerald-200 hover:shadow-md'
+            } ${
+              disabled
+                ? 'opacity-60 pointer-events-none'
+                : fromPlaybook
+                  ? 'cursor-default'
+                  : 'cursor-pointer'
+            }`}
+          >
+            <div className="flex items-center gap-4 min-w-0">
+              <div
+                className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${
+                  task.completed
+                    ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                    : fromPlaybook
+                      ? 'border-violet-200 bg-violet-50/80 group-hover:border-violet-300'
+                      : 'border-gray-200 group-hover:border-emerald-400'
                 }`}
               >
-                {task.title}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <span
-                  className={`text-[9px] font-black uppercase tracking-widest ${
-                    task.completed ? 'text-emerald-400' : 'text-gray-400'
+                {task.completed && <CheckCircle2 size={14} />}
+              </div>
+              <div className="min-w-0">
+                <p
+                  className={`text-xs font-black transition-all ${
+                    task.completed ? 'text-emerald-600 line-through decoration-emerald-600 decoration-2' : 'text-gray-800'
                   }`}
                 >
-                  {task.category}
-                </span>
-                {task.priority === 'high' && !task.completed && (
-                  <span className="flex items-center gap-0.5 text-[8px] font-black uppercase tracking-widest text-rose-500">
-                    <AlertCircle size={8} /> Prioridade Alta
+                  {task.title}
+                </p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span
+                    className={`text-[9px] font-black uppercase tracking-widest ${
+                      task.completed ? 'text-emerald-400' : 'text-gray-400'
+                    }`}
+                  >
+                    {fromPlaybook ? `${task.category} · Playbook` : task.category}
                   </span>
-                )}
+                  {task.priority === 'high' && !task.completed && (
+                    <span className="flex items-center gap-0.5 text-[8px] font-black uppercase tracking-widest text-rose-500">
+                      <AlertCircle size={8} /> Prioridade Alta
+                    </span>
+                  )}
+                  {fromPlaybook ? (
+                    <span className="text-[8px] font-bold text-violet-600 uppercase tracking-wider">Atualize em Metas</span>
+                  ) : null}
+                </div>
               </div>
             </div>
+            <ChevronRight size={14} className="text-gray-300 shrink-0 group-hover:text-emerald-500 transition-colors" />
           </div>
-          <ChevronRight size={14} className="text-gray-300 group-hover:text-emerald-500 transition-colors" />
-        </div>
-      ))}
+        );
+      })}
     </div>
     <button
       type="button"
@@ -732,10 +754,14 @@ const Dashboard: React.FC = () => {
     setEfficiencyPage((p) => Math.min(Math.max(1, p), total));
   }, [efficiencyTableRows.length]);
 
-  const loadDashboard = useCallback(async () => {
-    setLoading(true);
+  const loadDashboard = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setError(null);
-    setPaidEfficiencyRows(null);
+    if (!opts?.silent) {
+      setPaidEfficiencyRows(null);
+    }
     try {
       const { year, month } = parseYm(selectedYearMonth);
       const { startDate, endDate } = dateRangeForYearMonth(year, month);
@@ -789,12 +815,24 @@ const Dashboard: React.FC = () => {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar dashboard';
       setError(msg);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
     }
   }, [selectedYearMonth]);
 
   useEffect(() => {
-    loadDashboard();
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        void loadDashboard({ silent: true });
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, [loadDashboard]);
 
   const goalsOverview = data?.goalsOverview ?? data?.goals ?? [];
@@ -804,12 +842,13 @@ const Dashboard: React.FC = () => {
   const revenueTarget = Math.max(revenue?.targetValue ?? 1, 1);
   const progressPct = Math.min(100, Math.round((currentRevenue / revenueTarget) * 100));
 
-  const toggleTask = async (id: number) => {
+  const toggleTask = async (task: DashboardWeeklyTask) => {
     if (taskBusy) return;
+    if (task.taskSource === 'playbook' || task.id < 0) return;
     setTaskBusy(true);
     try {
-      const updated = await dashboardService.toggleWeeklyTask(id);
-      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      const updated = await dashboardService.toggleWeeklyTask(task.id);
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
     } catch (e) {
       console.error(e);
     } finally {
@@ -1272,7 +1311,7 @@ const Dashboard: React.FC = () => {
         <div className="lg:col-span-1">
           <WeeklyTasksWidget
             tasks={tasks}
-            onToggle={(id) => void toggleTask(id)}
+            onToggle={(t) => void toggleTask(t)}
             disabled={taskBusy}
             onOpenMetas={() => navigate('/metas')}
           />

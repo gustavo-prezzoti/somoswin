@@ -53,4 +53,60 @@ public final class WhatsAppConversationDisplayName {
         }
         return false;
     }
+
+    /**
+     * Remove nomes que não são do contato: igual à instância UaZap, ao owner, ou ao nome da empresa —
+     * cenário comum quando o payload preenche {@code chat.name} com o nome comercial da conexão.
+     */
+    public static String sanitizeInboundContactDisplayName(
+            String name,
+            String instanceName,
+            String owner,
+            String companyName,
+            String companyContratante) {
+        if (name == null) {
+            return null;
+        }
+        String t = name.trim();
+        if (t.isEmpty() || "unknown".equalsIgnoreCase(t)) {
+            return null;
+        }
+        if (instanceName != null && !instanceName.isBlank() && t.equalsIgnoreCase(instanceName.trim())) {
+            return null;
+        }
+        if (owner != null && !owner.isBlank()) {
+            String ow = owner.trim();
+            if (t.equalsIgnoreCase(ow)) {
+                return null;
+            }
+            String digitsOwner = ow.replaceAll("\\D", "");
+            String digitsName = t.replaceAll("\\D", "");
+            if (!digitsOwner.isEmpty() && !digitsName.isEmpty() && digitsOwner.equals(digitsName)) {
+                return null;
+            }
+        }
+        if (companyName != null && !companyName.isBlank() && t.equalsIgnoreCase(companyName.trim())) {
+            return null;
+        }
+        if (companyContratante != null && !companyContratante.isBlank() && t.equalsIgnoreCase(companyContratante.trim())) {
+            return null;
+        }
+        return t;
+    }
+
+    /** Nome atual do lead parece genérico ou é o mesmo da instância/empresa — pode ser substituído por um push válido. */
+    public static boolean isLikelyNonCustomerLeadName(
+            String name,
+            String instanceName,
+            String owner,
+            String companyName,
+            String companyContratante) {
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        if (isPlaceholderLeadName(name)) {
+            return true;
+        }
+        return sanitizeInboundContactDisplayName(name, instanceName, owner, companyName, companyContratante) == null;
+    }
 }

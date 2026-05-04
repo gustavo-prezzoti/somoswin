@@ -4,6 +4,7 @@ import com.backend.winai.dto.request.CrmKanbanColumnTitlesRequest;
 import com.backend.winai.dto.request.LeadRequest;
 import com.backend.winai.dto.response.CrmKanbanColumnTitlesResponse;
 import com.backend.winai.dto.response.LeadResponse;
+import com.backend.winai.dto.response.LeadTagResponse;
 import com.backend.winai.dto.response.MessageResponse;
 import com.backend.winai.entity.User;
 import com.backend.winai.repository.UserRepository;
@@ -106,6 +107,19 @@ public class LeadController {
         }
         Page<LeadResponse> leads = leadService.searchLeads(userWithCompany.getCompany(), q, page, size);
         return ResponseEntity.ok(leads);
+    }
+
+    /**
+     * GET /api/v1/leads/tags
+     * Catálogo de tags CRM da empresa (para sugestões e filtros).
+     */
+    @GetMapping("/tags")
+    public ResponseEntity<List<LeadTagResponse>> listCrmTags(@AuthenticationPrincipal User user) {
+        User userWithCompany = getUserWithCompany(user);
+        if (userWithCompany.getCompany() == null) {
+            return ResponseEntity.ok(List.of());
+        }
+        return ResponseEntity.ok(leadService.listCrmTagsForCompany(userWithCompany.getCompany()));
     }
 
     /**

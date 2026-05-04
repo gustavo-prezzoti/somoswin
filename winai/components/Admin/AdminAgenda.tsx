@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { Navigate, useNavigate, useOutletContext } from 'react-router-dom';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import adminService, { type AdminDashboardMeeting } from '../../services/adminService';
@@ -8,15 +8,21 @@ import { useAdminStaffView } from './AdminStaffViewContext';
 import DashboardAgendaSection from './amplia/DashboardAgendaSection';
 import type { UserDTO } from '../../services/types';
 import { canUseAmpliaAdminScreen } from './adminPermissions';
+import type { AdminOutletContext } from './adminOutletContext';
 
 const AdminAgenda: React.FC = () => {
     const navigate = useNavigate();
+    const { adminUser } = useOutletContext<AdminOutletContext>();
     const staffView = useAdminStaffView();
-    const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
-    const staffName =
-        staffFilterId && staffView?.staffList?.length
-            ? staffView.staffList.find((s) => s.id === staffFilterId)?.name ?? null
-            : null;
+    const staffFilterId = staffView?.dashboardStaffUserId ?? null;
+    const staffName = useMemo(() => {
+        if (!staffFilterId) return null;
+        const fromList =
+            staffView?.staffList?.length && staffView.staffList.find((s) => s.id === staffFilterId)?.name;
+        if (fromList) return fromList;
+        if (adminUser?.id === staffFilterId) return adminUser.name ?? null;
+        return null;
+    }, [staffFilterId, staffView?.staffList, adminUser?.id, adminUser?.name]);
     const [meetings, setMeetings] = useState<AdminDashboardMeeting[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

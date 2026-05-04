@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -103,6 +105,15 @@ public class Lead {
 
     @Column(name = "profile_picture_url")
     private String profilePictureUrl;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "lead_crm_tag_links",
+            schema = "winai",
+            joinColumns = @JoinColumn(name = "lead_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id"))
+    @Builder.Default
+    private Set<CrmLeadTag> crmTags = new HashSet<>();
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

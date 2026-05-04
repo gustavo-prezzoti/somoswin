@@ -26,6 +26,12 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     List<Lead> findByCompanyOrderByCreatedAtDesc(Company company);
 
+    @Query("SELECT DISTINCT l FROM Lead l LEFT JOIN FETCH l.crmTags WHERE l.company.id = :companyId ORDER BY l.createdAt DESC")
+    List<Lead> findAllByCompanyIdOrderByCreatedAtDescWithTags(@Param("companyId") UUID companyId);
+
+    @Query("SELECT l FROM Lead l LEFT JOIN FETCH l.crmTags WHERE l.id = :id AND l.company.id = :companyId")
+    Optional<Lead> findByIdAndCompanyWithTags(@Param("id") UUID id, @Param("companyId") UUID companyId);
+
     List<Lead> findByCompanyAndStatusOrderByCreatedAtDesc(Company company, LeadStatus status);
 
     Optional<Lead> findByIdAndCompany(UUID id, Company company);

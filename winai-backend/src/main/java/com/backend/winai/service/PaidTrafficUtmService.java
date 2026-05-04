@@ -102,6 +102,9 @@ public class PaidTrafficUtmService {
             if (agg.trackRef == null && lead.getTrackSource() != null && !lead.getTrackSource().isBlank()) {
                 agg.trackRef = lead.getTrackSource().trim();
             }
+            if (agg.sampleSource == null && lead.getUtmSource() != null && !lead.getUtmSource().isBlank()) {
+                agg.sampleSource = lead.getUtmSource().trim();
+            }
         }
 
         if (byKey.isEmpty()) {
@@ -173,12 +176,85 @@ public class PaidTrafficUtmService {
         return null;
     }
 
-    /** Só quando há texto de referência (track); não exibe [utm_campaign=id]. */
+    /** Preferir track_source; senão montar [ref=canal-campanha-conjunto-anúncio] a partir dos UTMs. */
     private static String buildRefLabel(Agg agg) {
         if (agg.trackRef != null && !agg.trackRef.isBlank()) {
-            return "[ref=" + agg.trackRef.trim() + "]";
+            return normalizeRefBracketForm(agg.trackRef.trim());
+        }
+        String synthetic = buildSyntheticRefBody(agg.sampleSource, agg.sampleCampaign, agg.sampleTerm, agg.sampleCreative);
+        if (synthetic != null && !synthetic.isBlank()) {
+            return "[ref=" + synthetic + "]";
         }
         return "";
+    }
+
+    private static String normalizeRefBracketForm(String raw) {
+        String t = raw.trim();
+        if (t.toLowerCase().startsWith("[ref=") && t.endsWith("]")) {
+            return t;
+        }
+        String inner = t;
+        if (inner.toLowerCase().startsWith("[ref=")) {
+            inner = inner.substring(5);
+        }
+        if (inner.endsWith("]")) {
+            inner = inner.substring(0, inner.length() - 1);
+        }
+        inner = inner.trim();
+        return inner.isEmpty() ? "" : "[ref=" + inner + "]";
+    }
+
+    private static String shortCanal(String utmSource) {
+        if (utmSource == null || utmSource.isBlank()) {
+            return "";
+        }
+        String s = utmSource.trim().toLowerCase();
+        if (s.contains("google")) {
+            return "GG";
+        }
+        if (s.contains("instagram")) {
+            return "IG";
+        }
+        if (s.contains("facebook") || "fb".equals(s) || s.startsWith("fb_") || s.contains("meta")) {
+            return "FB";
+        }
+        String tr = utmSource.trim();
+        if (tr.length() <= 4) {
+            return tr.toUpperCase();
+        }
+        return tr.substring(0, Math.min(3, tr.length())).toUpperCase();
+    }
+
+    /**
+     * Ordem: canal (utm_source) — campanha — conjunto (utm_term) — anúncio (utm_content),
+     * igual ao gerador de links em UtmAdTrackingModal.
+     */
+    private static String buildSyntheticRefBody(String utmSource, String utmCampaign, String utmTerm, String utmContent) {
+        String canal = shortCanal(utmSource);
+        String camp = utmCampaign != null ? utmCampaign.trim() : "";
+        String conj = utmTerm != null ? utmTerm.trim() : "";
+        String ad = utmContent != null ? utmContent.trim() : "";
+        StringBuilder sb = new StringBuilder();
+        if (!canal.isEmpty()) {
+            sebAppendPart(sb, canal);
+        }
+        if (!camp.isEmpty()) {
+            sebAppendPart(sb, camp);
+        }
+        if (!conj.isEmpty()) {
+            sebAppendPart(sb, conj);
+        }
+        if (!ad.isEmpty()) {
+            sebAppendPart(sb, ad);
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    private static void sebAppendPart(StringBuilder sb, String part) {
+        if (sb.length() > 0) {
+            sb.append('-');
+        }
+        sb.append(part);
     }
 
     private String buildResolvedSubtitle(Company company, String groupKey, Agg agg) {
@@ -299,5 +375,6 @@ public class PaidTrafficUtmService {
         String sampleCreative;
         String sampleTerm;
         String trackRef;
+        String sampleSource;
     }
 }

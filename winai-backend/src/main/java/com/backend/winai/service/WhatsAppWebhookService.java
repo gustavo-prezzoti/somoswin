@@ -72,15 +72,12 @@ public class WhatsAppWebhookService {
                 return;
             }
 
-            // Extrair dados do webhook
+            // Extrair dados do webhook (nome do contato só depois da empresa — para filtrar nome da instância/empresa)
             String phoneNumber = extractPhoneNumber(webhook);
             String messageText = extractMessageText(webhook);
             String messageId = extractMessageId(webhook);
-            String rawContactName = extractContactName(webhook);
             boolean isFromMe = webhook.getMessage() != null
                     && Boolean.TRUE.equals(webhook.getMessage().getFromMe());
-            // Mensagens enviadas pela instância não devem gravar push/nome da empresa como nome do cliente.
-            String contactNameForConversation = isFromMe ? null : rawContactName;
             Long timestamp = extractTimestamp(webhook);
             String messageType = extractMessageType(webhook);
 
@@ -95,6 +92,10 @@ public class WhatsAppWebhookService {
                 log.warn("Empresa não encontrada para webhook");
                 return;
             }
+
+            String rawContactName = extractContactName(webhook, isFromMe, company);
+            // Mensagens enviadas pela instância não devem gravar push/nome da empresa como nome do cliente.
+            String contactNameForConversation = isFromMe ? null : rawContactName;
 
             // Buscar ou criar conversa
             boolean[] wasNewConversation = new boolean[1];
@@ -113,8 +114,16 @@ public class WhatsAppWebhookService {
             }
 
             // Buscar ou criar lead (nome só a partir de dados do cliente, não fromMe)
-            Lead lead = findOrCreateLead(phoneNumber, isFromMe ? null : rawContactName, company, messageText,
-                    extractTrackSource(webhook), extractTrackId(webhook), isFromMe);
+            Lead lead = findOrCreateLead(
+                    phoneNumber,
+                    isFromMe ? null : rawContactName,
+                    company,
+                    messageText,
+                    extractTrackSource(webhook),
+                    extractTrackId(webhook),
+                    isFromMe,
+                    webhook.getInstanceName(),
+                    webhook.getOwner());
 
             // Sincronizar foto de perfil da conversa com o lead
             if (conversation.getProfilePictureUrl() != null &&
@@ -258,20 +267,34 @@ public class WhatsAppWebhookService {
     /**
      * Busca ou cria um lead baseado no telefone; preenche track/UTM quando disponíveis (primeira mensagem / webhook).
      */
-    private Lead findOrCreateLead(String phoneNumber, String contactName, Company company, String messageText,
-            String trackSource, String trackId, boolean messageFromMe) {
+    private Lead findOrCreateLead(
+            String phoneNumber,
+            String contactName,
+            Company company,
+            String messageText,
+            String trackSource,
+            String trackId,
+            boolean messageFromMe,
+            String instanceName,
+            String owner) {
         Optional<Lead> existingLead = leadRepository.findByCompanyOrderByCreatedAtDesc(company).stream()
                 .filter(lead -> lead.getPhone() != null && phonesMatchForLead(phoneNumber, lead.getPhone()))
                 .findFirst();
 
         Optional<UtmParseUtil.UtmSnapshot> utmFromText = UtmParseUtil.parseFromText(messageText);
+        String companyName = company.getName();
+        String contratante = company.getContratante();
 
         if (existingLead.isPresent()) {
             Lead lead = existingLead.get();
             boolean save = false;
             if (contactName != null && !contactName.isEmpty() && !messageFromMe) {
                 String cur = lead.getName();
-                if (cur == null || cur.isBlank() || WhatsAppConversationDisplayName.isPlaceholderLeadName(cur)) {
+                if (cur == null
+                        || cur.isBlank()
+                        || WhatsAppConversationDisplayName.isPlaceholderLeadName(cur)
+                        || WhatsAppConversationDisplayName.isLikelyNonCustomerLeadName(
+                                cur, instanceName, owner, companyName, contratante)) {
                     lead.setName(contactName.trim());
                     save = true;
                 }
@@ -716,22 +739,51 @@ public class WhatsAppWebhookService {
         return null;
     }
 
-    private String extractContactName(UazapWebhookRequest webhook) {
+    /**
+     * Prioriza push do remetente ({@code senderName}); {@code chat.name} costuma repetir o nome da
+     * instância/empresa para todos os chats em alguns payloads.
+     */
+    private String extractContactName(UazapWebhookRequest webhook, boolean messageFromMe, Company company) {
+        if (messageFromMe) {
+            return null;
+        }
+        String instanceName = webhook.getInstanceName();
+        String owner = webhook.getOwner();
+        String companyName = company != null ? company.getName() : null;
+        String contratante = company != null ? company.getContratante() : null;
+
+        if (webhook.getMessage() != null && webhook.getMessage().getSenderName() != null) {
+            String s = WhatsAppConversationDisplayName.sanitizeInboundContactDisplayName(
+                    webhook.getMessage().getSenderName(), instanceName, owner, companyName, contratante);
+            if (s != null) {
+                return s;
+            }
+        }
         if (webhook.getChat() != null) {
             String name = webhook.getChat().getLead_fullName();
-            if (name != null && !name.isEmpty())
-                return name;
-
+            if (name != null && !name.isEmpty()) {
+                String s = WhatsAppConversationDisplayName.sanitizeInboundContactDisplayName(
+                        name, instanceName, owner, companyName, contratante);
+                if (s != null) {
+                    return s;
+                }
+            }
             name = webhook.getChat().getWa_name();
-            if (name != null && !name.isEmpty())
-                return name;
-
+            if (name != null && !name.isEmpty()) {
+                String s = WhatsAppConversationDisplayName.sanitizeInboundContactDisplayName(
+                        name, instanceName, owner, companyName, contratante);
+                if (s != null) {
+                    return s;
+                }
+            }
             name = webhook.getChat().getName();
-            if (name != null && !name.isEmpty())
-                return name;
-        }
-        if (webhook.getMessage() != null && webhook.getMessage().getSenderName() != null) {
-            return webhook.getMessage().getSenderName();
+            if (name != null && !name.isEmpty()) {
+                String s = WhatsAppConversationDisplayName.sanitizeInboundContactDisplayName(
+                        name, instanceName, owner, companyName, contratante);
+                if (s != null) {
+                    return s;
+                }
+            }
         }
         return null;
     }

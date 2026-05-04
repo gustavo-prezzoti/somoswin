@@ -125,15 +125,7 @@ public class UazapWebhookService {
             // chat.wa_chatid pode ser o owner se o webhook vem de outra instância
             String contactChatId = getStr(src, "chatid", getStr(chatData, "wa_chatid", getStr(src, "Chat", null)));
 
-            // Nome do contato: chat.name ou chat.wa_name
-            String contactName = getStr(chatData, "name", getStr(chatData, "wa_name",
-                    getStr(src, "senderName", getStr(src, "PushName", null))));
-
-            // Mensagens enviadas pela instância (fromMe) costumam trazer o nome do perfil da empresa
-            // ou push incorreto — não usar isso como nome do cliente (evita todos com o mesmo nome).
-            if (Boolean.TRUE.equals(isFromMe)) {
-                contactName = null;
-            }
+            // contactName resolvido após carregar Company — ver resolveInboundContactNameFromRaw
 
             // MessageIDs pode ser array (formato messages_update)
             if (messageId == null) {
@@ -151,11 +143,6 @@ public class UazapWebhookService {
 
             // Determinar tipo de mensagem
             String msgType = type != null ? normalizeMessageType(type) : "text";
-
-            log.info("[WEBHOOK] Parsed: fromMe={}, contactChatId={}, contactName={}, text={}, msgId={}, type={}, wasSentByApi={}",
-                    isFromMe, contactChatId, contactName,
-                    text != null ? text.substring(0, Math.min(50, text.length())) : null,
-                    messageId, msgType, wasSentByApi);
 
             // Ignorar mensagens enviadas por API (evitar loops)
             if (Boolean.TRUE.equals(wasSentByApi)) {
@@ -180,6 +167,13 @@ public class UazapWebhookService {
                     return;
                 }
             }
+
+            String contactName = resolveInboundContactNameFromRaw(isFromMe, chatData, src, instanceName, owner, company);
+
+            log.info("[WEBHOOK] Parsed: fromMe={}, contactChatId={}, contactName={}, text={}, msgId={}, type={}, wasSentByApi={}",
+                    isFromMe, contactChatId, contactName,
+                    text != null ? text.substring(0, Math.min(50, text.length())) : null,
+                    messageId, msgType, wasSentByApi);
 
             // Buscar ou criar conversa
             WhatsAppConversation conversation = findOrCreateConversation(
@@ -290,6 +284,14 @@ public class UazapWebhookService {
 
             boolean legacyFromMe = Boolean.TRUE.equals(messageData.getFromMe());
             String contactNameForLegacyConv = legacyFromMe ? null : messageData.getSenderName();
+            if (contactNameForLegacyConv != null && !contactNameForLegacyConv.isBlank()) {
+                contactNameForLegacyConv = WhatsAppConversationDisplayName.sanitizeInboundContactDisplayName(
+                        contactNameForLegacyConv,
+                        payload.getInstance(),
+                        null,
+                        company.getName(),
+                        company.getContratante());
+            }
 
             // Buscar ou criar conversa
             WhatsAppConversation conversation = findOrCreateConversation(
@@ -527,18 +529,60 @@ public class UazapWebhookService {
     }
 
     /**
-     * Primeira resposta do cliente: atualiza o nome do lead no CRM se ainda for só placeholder.
+     * Ordem: push do remetente primeiro; {@code chat.name} por último (às vezes repete o nome da instância/empresa).
+     */
+    private String resolveInboundContactNameFromRaw(
+            Boolean isFromMe,
+            Map<String, Object> chatData,
+            Map<String, Object> src,
+            String instanceName,
+            String owner,
+            Company company) {
+        if (Boolean.TRUE.equals(isFromMe)) {
+            return null;
+        }
+        String companyName = company != null ? company.getName() : null;
+        String contratante = company != null ? company.getContratante() : null;
+
+        String senderName = src != null ? getStr(src, "senderName", getStr(src, "PushName", null)) : null;
+        String leadFull = chatData != null ? getStr(chatData, "lead_fullName", null) : null;
+        String waName = chatData != null ? getStr(chatData, "wa_name", null) : null;
+        String chatName = chatData != null ? getStr(chatData, "name", null) : null;
+
+        for (String raw : java.util.List.of(senderName, leadFull, waName, chatName)) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String s = WhatsAppConversationDisplayName.sanitizeInboundContactDisplayName(
+                    raw, instanceName, owner, companyName, contratante);
+            if (s != null) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Atualiza o nome do lead no CRM quando chega um push útil do cliente.
      */
     private void syncLeadNameFromInboundCustomerPush(UUID conversationId, String customerPushName) {
         if (customerPushName == null || customerPushName.isBlank()) {
             return;
         }
-        String push = customerPushName.trim();
-        if ("Unknown".equalsIgnoreCase(push)) {
-            return;
-        }
         WhatsAppConversation conv = conversationRepository.findById(conversationId).orElse(null);
         if (conv == null || conv.getLead() == null) {
+            return;
+        }
+        Company company = conv.getCompany();
+        String companyName = company != null ? company.getName() : null;
+        String contratante = company != null ? company.getContratante() : null;
+        String safe = WhatsAppConversationDisplayName.sanitizeInboundContactDisplayName(
+                customerPushName,
+                conv.getUazapInstance(),
+                null,
+                companyName,
+                contratante);
+        if (safe == null) {
             return;
         }
         Lead lead = leadRepository.findById(conv.getLead().getId()).orElse(null);
@@ -546,10 +590,14 @@ public class UazapWebhookService {
             return;
         }
         String cur = lead.getName();
-        if (cur != null && !cur.isBlank() && !WhatsAppConversationDisplayName.isPlaceholderLeadName(cur)) {
+        if (cur != null
+                && !cur.isBlank()
+                && !WhatsAppConversationDisplayName.isPlaceholderLeadName(cur)
+                && !WhatsAppConversationDisplayName.isLikelyNonCustomerLeadName(
+                        cur, conv.getUazapInstance(), null, companyName, contratante)) {
             return;
         }
-        lead.setName(push);
+        lead.setName(safe);
         leadRepository.save(lead);
     }
 

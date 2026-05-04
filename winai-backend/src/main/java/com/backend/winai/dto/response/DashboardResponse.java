@@ -187,6 +187,12 @@ public class DashboardResponse {
         private String priority;
         private Boolean completed;
         private Integer sortOrder;
+        /**
+         * {@code dashboard} = checklist legada ({@code dashboard_tasks}); {@code playbook} = atividade do diagnóstico / playbook 90 dias.
+         */
+        private String taskSource;
+        /** Quando {@code taskSource == playbook}, o id estável da atividade no JSON publicado. */
+        private String playbookActivityId;
     }
 
     @Data

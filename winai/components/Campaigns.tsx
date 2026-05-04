@@ -855,7 +855,7 @@ const Campaigns: React.FC = () => {
                 <table className="w-full text-left border-collapse min-w-[720px]">
                   <thead>
                     <tr className="bg-gray-50/50">
-                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Anuncio Referência </th>
+                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">TAG / Referência [ref=...]</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Leads</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">CPL</th>
                       <th className="px-4 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">ROAS</th>

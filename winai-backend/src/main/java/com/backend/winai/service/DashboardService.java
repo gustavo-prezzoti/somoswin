@@ -16,11 +16,16 @@ import com.backend.winai.dto.request.CreateGoalCheckpointRequest;
 import com.backend.winai.dto.request.CreateGoalTaskRequest;
 import com.backend.winai.dto.request.UpdateGoalTaskRequest;
 
+import com.backend.winai.dto.response.StrategicPlaybookResponse;
+
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +50,7 @@ public class DashboardService {
         private final DashboardTaskRepository dashboardTaskRepository;
         private final GoalTaskRepository goalTaskRepository;
         private final GoalCheckpointRepository goalCheckpointRepository;
+        private final StrategicDiagnosisService strategicDiagnosisService;
 
         private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM");
 
@@ -160,8 +166,8 @@ public class DashboardService {
                 List<Goal> allYearGoals = goalRepository.findByCompanyAndYearCycleAndStatusOrderByCreatedAtDesc(
                                 company, LocalDate.now().getYear(), GoalStatus.ACTIVE);
 
-                ensureDefaultDashboardTasks(company);
-                List<DashboardResponse.DashboardTaskDTO> taskDtos = buildDashboardTaskDTOs(company);
+                LocalDate todayBr = LocalDate.now(ZoneId.of("America/Sao_Paulo"));
+                List<DashboardResponse.DashboardTaskDTO> taskDtos = buildWeeklyTasksCombined(company, todayBr);
 
                 // Monta response
                 DashboardResponse response = DashboardResponse.builder()
@@ -238,8 +244,115 @@ public class DashboardService {
                                                 .priority(t.getPriority())
                                                 .completed(t.getCompleted())
                                                 .sortOrder(t.getSortOrder())
+                                                .taskSource("dashboard")
+                                                .playbookActivityId(null)
                                                 .build())
                                 .collect(Collectors.toList());
+        }
+
+        /**
+         * Tarefas da semana: prioriza atividades do playbook 90 dias publicado que cruzam a semana civil
+         * (seg–dom) com base em {@code projectStartDate + start + duration}; senão mantém a checklist legada
+         * {@link DashboardTask}.
+         */
+        private List<DashboardResponse.DashboardTaskDTO> buildWeeklyTasksCombined(Company company,
+                        LocalDate today) {
+                if (company == null) {
+                        return List.of();
+                }
+                StrategicPlaybookResponse pb = strategicDiagnosisService.getPublishedForCompany(company);
+                List<DashboardResponse.DashboardTaskDTO> fromPlaybook = buildPlaybookWeeklyTasks(company, today, pb);
+                if (!fromPlaybook.isEmpty()) {
+                        return fromPlaybook;
+                }
+                ensureDefaultDashboardTasks(company);
+                return buildDashboardTaskDTOs(company);
+        }
+
+        /**
+         * Atividades publicadas cujo intervalo [início, fim] intercepta a semana de {@code today}.
+         */
+        private List<DashboardResponse.DashboardTaskDTO> buildPlaybookWeeklyTasks(Company company, LocalDate today,
+                        StrategicPlaybookResponse pb) {
+                if (company == null || pb == null || !pb.isPublished() || pb.getProjectStartDate() == null) {
+                        return List.of();
+                }
+                Object raw = pb.getActivities();
+                if (!(raw instanceof List<?> list) || list.isEmpty()) {
+                        return List.of();
+                }
+                LocalDate projectStart = pb.getProjectStartDate();
+                LocalDate weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+                LocalDate weekEnd = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+                List<DashboardResponse.DashboardTaskDTO> out = new ArrayList<>();
+                int sort = 0;
+                for (Object el : list) {
+                        if (!(el instanceof Map<?, ?> m)) {
+                                continue;
+                        }
+                        String actId = m.get("id") != null ? String.valueOf(m.get("id")) : null;
+                        String title = m.get("title") != null ? String.valueOf(m.get("title")) : "";
+                        if (title.isBlank()) {
+                                continue;
+                        }
+                        String category = m.get("category") != null ? String.valueOf(m.get("category")) : "Playbook";
+                        int start = parsePlaybookInt(m.get("start"), 1);
+                        int duration = parsePlaybookInt(m.get("duration"), 1);
+                        if (duration < 1) {
+                                duration = 1;
+                        }
+                        String status = m.get("status") != null ? String.valueOf(m.get("status")) : "planned";
+
+                        LocalDate actStart = projectStart.plusDays((long) start - 1L);
+                        LocalDate actEnd = actStart.plusDays((long) duration - 1L);
+                        if (actEnd.isBefore(weekStart) || actStart.isAfter(weekEnd)) {
+                                continue;
+                        }
+
+                        boolean completed = "completed".equalsIgnoreCase(status);
+                        String priority = "in_progress".equalsIgnoreCase(status) ? "high"
+                                        : ("completed".equalsIgnoreCase(status) ? "low" : "medium");
+                        long syntheticId = playbookSyntheticId(actId);
+
+                        out.add(DashboardResponse.DashboardTaskDTO.builder()
+                                        .id(syntheticId)
+                                        .title(title)
+                                        .category(category)
+                                        .priority(priority)
+                                        .completed(completed)
+                                        .sortOrder(sort++)
+                                        .taskSource("playbook")
+                                        .playbookActivityId(actId)
+                                        .build());
+                }
+                if (!out.isEmpty()) {
+                        log.debug("[Dashboard] weeklyTasks: {} playbook activities for company {} (week {}–{})",
+                                        out.size(), company.getId(), weekStart, weekEnd);
+                }
+                return out;
+        }
+
+        private static int parsePlaybookInt(Object raw, int defaultVal) {
+                if (raw == null) {
+                        return defaultVal;
+                }
+                if (raw instanceof Number n) {
+                        return n.intValue();
+                }
+                try {
+                        return Integer.parseInt(String.valueOf(raw).trim());
+                } catch (NumberFormatException e) {
+                        return defaultVal;
+                }
+        }
+
+        /** ID sintético negativo para não colidir com {@code dashboard_tasks.id}. */
+        private static long playbookSyntheticId(String activityId) {
+                if (activityId == null || activityId.isBlank()) {
+                        return -1L;
+                }
+                long h = Math.abs(activityId.hashCode());
+                return h == 0 ? -2L : -(h + 1L);
         }
 
         @Transactional
@@ -247,6 +360,10 @@ public class DashboardService {
                 Company company = user.getCompany();
                 if (company == null) {
                         throw new RuntimeException("Usuário não possui empresa associada");
+                }
+                if (taskId == null || taskId < 0) {
+                        throw new RuntimeException(
+                                        "Esta tarefa vem do playbook de consultoria; acompanhe e atualize o status em Metas.");
                 }
                 DashboardTask task = dashboardTaskRepository.findById(taskId)
                                 .orElseThrow(() -> new RuntimeException("Tarefa não encontrada"));
@@ -262,6 +379,8 @@ public class DashboardService {
                                 .priority(task.getPriority())
                                 .completed(task.getCompleted())
                                 .sortOrder(task.getSortOrder())
+                                .taskSource("dashboard")
+                                .playbookActivityId(null)
                                 .build();
         }
 

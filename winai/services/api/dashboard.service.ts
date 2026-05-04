@@ -33,6 +33,9 @@ export interface DashboardWeeklyTask {
     priority: string;
     completed: boolean;
     sortOrder: number;
+    /** dashboard = checklist legada; playbook = diagnóstico 90 dias */
+    taskSource?: 'dashboard' | 'playbook' | string;
+    playbookActivityId?: string | null;
 }
 
 export interface StrategicPlaybookActivityDTO {
@@ -217,6 +220,21 @@ export interface InsightDTO {
     isRead: boolean;
 }
 
+function normalizeWeeklyTaskRow(t: DashboardWeeklyTask): DashboardWeeklyTask {
+    const r = t as DashboardWeeklyTask & { task_source?: string; playbook_activity_id?: string | null };
+    return {
+        ...t,
+        taskSource: r.taskSource ?? r.task_source,
+        playbookActivityId: r.playbookActivityId ?? r.playbook_activity_id ?? null,
+    };
+}
+
+function normalizeDashboardWeeklyTasks(data: DashboardData): DashboardData {
+    const wt = data.weeklyTasks;
+    if (!wt?.length) return data;
+    return { ...data, weeklyTasks: wt.map(normalizeWeeklyTaskRow) };
+}
+
 // ============================================
 // Service
 // ============================================
@@ -241,14 +259,16 @@ export const dashboardService = {
             }
         }
         const q = params.toString();
-        return httpClient.get<DashboardData>(q ? `/dashboard?${q}` : '/dashboard');
+        const raw = await httpClient.get<DashboardData>(q ? `/dashboard?${q}` : '/dashboard');
+        return normalizeDashboardWeeklyTasks(raw);
     },
 
     /**
      * Gera dados de demonstração
      */
     async generateDemoData(): Promise<DashboardData> {
-        return httpClient.post<DashboardData>('/dashboard/generate-demo');
+        const raw = await httpClient.post<DashboardData>('/dashboard/generate-demo');
+        return normalizeDashboardWeeklyTasks(raw);
     },
 
     /**
@@ -354,7 +374,8 @@ export const dashboardService = {
      * Alterna tarefa semanal do dashboard (persistida no banco por empresa).
      */
     async toggleWeeklyTask(taskId: number): Promise<DashboardWeeklyTask> {
-        return httpClient.patch<DashboardWeeklyTask>(`/dashboard/tasks/${taskId}/toggle`, {});
+        const row = await httpClient.patch<DashboardWeeklyTask>(`/dashboard/tasks/${taskId}/toggle`, {});
+        return normalizeWeeklyTaskRow(row);
     },
 
     /**

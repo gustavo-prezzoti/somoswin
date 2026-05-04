@@ -15,7 +15,7 @@ type ModalTab = 'tasks' | 'kpis' | 'meetings' | 'notes';
 
 const AdminClientes: React.FC = () => {
     const staffView = useAdminStaffView();
-    const staffFilterId = staffView?.canUseStaffTeam ? staffView.selectedStaffUserId : null;
+    const staffFilterId = staffView?.dashboardStaffUserId ?? null;
     const { showConfirm, showToast } = useModal();
 
     const [sessionProfile, setSessionProfile] = useState<UserDTO | null>(null);

@@ -2,11 +2,14 @@ package com.backend.winai.service;
 
 import com.backend.winai.dto.request.LeadRequest;
 import com.backend.winai.dto.response.LeadResponse;
+import com.backend.winai.dto.response.LeadTagResponse;
 import com.backend.winai.entity.Company;
+import com.backend.winai.entity.CrmLeadTag;
 import com.backend.winai.entity.Lead;
 import com.backend.winai.entity.LeadStatus;
 import com.backend.winai.entity.WhatsAppConversation;
 import com.backend.winai.repository.CompanyRepository;
+import com.backend.winai.repository.CrmLeadTagRepository;
 import com.backend.winai.repository.LeadRepository;
 import com.backend.winai.repository.WhatsAppMessageRepository;
 import com.backend.winai.repository.WhatsAppConversationRepository;
@@ -28,6 +31,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -43,6 +47,7 @@ public class LeadService {
 
     private final LeadRepository leadRepository;
     private final CompanyRepository companyRepository;
+    private final CrmLeadTagRepository crmLeadTagRepository;
     private final ObjectMapper objectMapper;
     private final WhatsAppMessageRepository messageRepository;
     private final WhatsAppConversationRepository conversationRepository;
@@ -72,9 +77,19 @@ public class LeadService {
      */
     @Transactional(readOnly = true)
     public List<LeadResponse> getAllLeads(Company company) {
-        return leadRepository.findByCompanyOrderByCreatedAtDesc(company)
+        return leadRepository.findAllByCompanyIdOrderByCreatedAtDescWithTags(company.getId())
                 .stream()
                 .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Tags cadastradas para a empresa (catálogo do CRM — sugestões + filtros).
+     */
+    @Transactional(readOnly = true)
+    public List<LeadTagResponse> listCrmTagsForCompany(Company company) {
+        return crmLeadTagRepository.findByCompany_IdOrderByNameAsc(company.getId()).stream()
+                .map(t -> LeadTagResponse.builder().id(t.getId()).name(t.getName()).build())
                 .collect(Collectors.toList());
     }
 
@@ -190,7 +205,7 @@ public class LeadService {
      */
     @Transactional(readOnly = true)
     public LeadResponse getLeadById(Company company, UUID id) {
-        Lead lead = leadRepository.findByIdAndCompany(id, company)
+        Lead lead = leadRepository.findByIdAndCompanyWithTags(id, company.getId())
                 .orElseThrow(() -> new RuntimeException("Lead não encontrado"));
         return toResponse(lead);
     }
@@ -223,7 +238,14 @@ public class LeadService {
                 .build();
 
         lead = leadRepository.save(lead);
-        return toResponse(lead);
+        if (request.getTags() != null) {
+            syncLeadTags(company, lead, request.getTags());
+            lead = leadRepository.save(lead);
+        }
+
+        Lead reloaded = leadRepository.findByIdAndCompanyWithTags(lead.getId(), company.getId())
+                .orElse(lead);
+        return toResponse(reloaded);
     }
 
     /**
@@ -281,8 +303,40 @@ public class LeadService {
             lead.setFbclid(request.getFbclid().trim());
         }
 
+        if (request.getTags() != null) {
+            syncLeadTags(company, lead, request.getTags());
+        }
+
         lead = leadRepository.save(lead);
-        return toResponse(lead);
+        Lead reloaded = leadRepository.findByIdAndCompanyWithTags(lead.getId(), company.getId())
+                .orElse(lead);
+        return toResponse(reloaded);
+    }
+
+    private void syncLeadTags(Company company, Lead lead, List<String> rawLabels) {
+        LinkedHashMap<String, String> byLower = new LinkedHashMap<>();
+        for (String raw : rawLabels) {
+            if (raw == null) {
+                continue;
+            }
+            String tr = raw.trim();
+            if (tr.isEmpty()) {
+                continue;
+            }
+            byLower.putIfAbsent(tr.toLowerCase(Locale.ROOT), tr);
+        }
+        Set<CrmLeadTag> resolved = new LinkedHashSet<>();
+        for (String label : byLower.values()) {
+            CrmLeadTag tag = crmLeadTagRepository
+                    .findByCompanyIdAndNameNormalized(company.getId(), label)
+                    .orElseGet(() -> crmLeadTagRepository.save(CrmLeadTag.builder()
+                            .company(company)
+                            .name(label)
+                            .build()));
+            resolved.add(tag);
+        }
+        lead.getCrmTags().clear();
+        lead.getCrmTags().addAll(resolved);
     }
 
     /**
@@ -348,6 +402,14 @@ public class LeadService {
      * Converte entidade para DTO
      */
     private LeadResponse toResponse(Lead lead) {
+        List<LeadTagResponse> tagDtos = lead.getCrmTags() == null ? List.of() : lead.getCrmTags().stream()
+                .map(t -> LeadTagResponse.builder()
+                        .id(t.getId())
+                        .name(t.getName())
+                        .build())
+                .sorted(java.util.Comparator.comparing(LeadTagResponse::getName, String.CASE_INSENSITIVE_ORDER))
+                .collect(Collectors.toList());
+
         return LeadResponse.builder()
                 .id(lead.getId())
                 .name(lead.getName())
@@ -372,6 +434,7 @@ public class LeadService {
                 .profilePictureUrl(lead.getProfilePictureUrl())
                 .createdAt(lead.getCreatedAt())
                 .updatedAt(lead.getUpdatedAt())
+                .tags(tagDtos)
                 .build();
     }
 }
