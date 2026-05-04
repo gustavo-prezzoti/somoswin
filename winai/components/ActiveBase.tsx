@@ -28,6 +28,8 @@ import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
 import { BodyPortal } from './ui/BodyPortal';
 
+const BROADCAST_SCHEDULE_TIMEZONE = 'America/Sao_Paulo';
+
 const nf = new Intl.NumberFormat('pt-BR');
 
 function formatInt(n: number | undefined | null): string {
@@ -254,7 +256,7 @@ const ActiveBase: React.FC = () => {
         name: campaignName.trim(),
         messageText: messageText.trim(),
         companyPrompt: companyPrompt.trim() || null,
-        scheduleTimezone: 'America/Sao_Paulo',
+        scheduleTimezone: BROADCAST_SCHEDULE_TIMEZONE,
         connectionId,
         phoneParts,
         phonesRaw: contactMethod === 'paste' ? manualContacts : undefined,
@@ -292,7 +294,10 @@ const ActiveBase: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">Base Ativa</h2>
-          <p className="text-gray-500 font-medium">Remarketing e disparos com envio gradual (WhatsApp)</p>
+          <p className="text-gray-500 font-medium">
+            Remarketing e disparos com envio gradual (WhatsApp). Agenda em{' '}
+            <span className="text-gray-700">horário de Brasília</span>.
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -495,7 +500,9 @@ const ActiveBase: React.FC = () => {
                     <h3 className="text-xl font-black text-slate-800 tracking-tight">
                       Relatório: {reportDetail?.name ?? '…'}
                     </h3>
-                    <p className="text-sm text-gray-500 font-medium">Detalhamento de envios e status</p>
+                    <p className="text-sm text-gray-500 font-medium">
+                      Detalhamento de envios e status · horários em horário de Brasília
+                    </p>
                   </div>
                 </div>
                 <button
@@ -560,7 +567,7 @@ const ActiveBase: React.FC = () => {
                               Status
                             </th>
                             <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                              Horário
+                              Horário (Brasília)
                             </th>
                           </tr>
                         </thead>
@@ -583,7 +590,11 @@ const ActiveBase: React.FC = () => {
                                 </span>
                               </td>
                               <td className="px-6 py-4 text-gray-400 text-xs">
-                                {row.timestamp ? new Date(row.timestamp).toLocaleString('pt-BR') : '—'}
+                                {row.timestamp
+                                  ? new Date(row.timestamp).toLocaleString('pt-BR', {
+                                      timeZone: BROADCAST_SCHEDULE_TIMEZONE,
+                                    })
+                                  : '—'}
                               </td>
                             </tr>
                           ))}
@@ -614,7 +625,9 @@ const ActiveBase: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-xl font-black text-slate-800 tracking-tight">Nova Campanha</h3>
-                    <p className="text-sm text-gray-500 font-medium">Passo {step} de 3</p>
+                    <p className="text-sm text-gray-500 font-medium">
+                      Passo {step} de 3 · horário de Brasília
+                    </p>
                   </div>
                 </div>
                 <button

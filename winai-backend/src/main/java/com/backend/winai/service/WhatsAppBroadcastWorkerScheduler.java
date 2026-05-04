@@ -6,10 +6,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-/**
- * Processa envios de remarketing agendados. Ativo apenas quando {@code winai.broadcast.worker.enabled=true}
- * (tipicamente container dedicado no Docker).
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j

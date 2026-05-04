@@ -31,11 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
-/**
- * Remarketing (Base Ativa): sequências agendadas via UaZap. Respeite opt-in e políticas da Meta.
- */
 @Service
 @Slf4j
 public class WhatsAppBroadcastService {
@@ -48,7 +44,6 @@ public class WhatsAppBroadcastService {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final WhatsAppService whatsAppService;
-    private final WhatsAppBroadcastSequenceGenerator sequenceGenerator;
 
     private WhatsAppBroadcastService self;
 
@@ -58,23 +53,23 @@ public class WhatsAppBroadcastService {
     @Value("${winai.broadcast.delay-between-messages-ms:1500}")
     private long delayBetweenMessagesMs;
 
-    @Value("${winai.broadcast.daily-min-contacts:3}")
-    private int dailyMinContacts;
-
-    @Value("${winai.broadcast.daily-max-contacts:7}")
-    private int dailyMaxContacts;
-
     @Value("${winai.broadcast.window-start-hour:9}")
     private int windowStartHour;
 
     @Value("${winai.broadcast.window-end-hour:18}")
     private int windowEndHour;
 
-    @Value("${winai.broadcast.sequence-min:5}")
-    private int sequenceMin;
+    @Value("${winai.broadcast.lunch-start-hour:12}")
+    private int lunchStartHour;
 
-    @Value("${winai.broadcast.sequence-max:10}")
-    private int sequenceMax;
+    @Value("${winai.broadcast.lunch-end-hour:14}")
+    private int lunchEndHour;
+
+    @Value("${winai.broadcast.min-gap-seconds:30}")
+    private int minGapSeconds;
+
+    @Value("${winai.broadcast.max-gap-seconds:180}")
+    private int maxGapSeconds;
 
     public WhatsAppBroadcastService(
             WhatsAppBroadcastCampaignRepository campaignRepository,
@@ -84,8 +79,7 @@ public class WhatsAppBroadcastService {
             LeadRepository leadRepository,
             CompanyRepository companyRepository,
             UserRepository userRepository,
-            WhatsAppService whatsAppService,
-            WhatsAppBroadcastSequenceGenerator sequenceGenerator) {
+            WhatsAppService whatsAppService) {
         this.campaignRepository = campaignRepository;
         this.recipientRepository = recipientRepository;
         this.dispatchRepository = dispatchRepository;
@@ -94,7 +88,6 @@ public class WhatsAppBroadcastService {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.whatsAppService = whatsAppService;
-        this.sequenceGenerator = sequenceGenerator;
     }
 
     @Autowired
@@ -102,9 +95,6 @@ public class WhatsAppBroadcastService {
         this.self = self;
     }
 
-    /**
-     * Chamado pelo {@link WhatsAppBroadcastWorkerScheduler} quando o worker está habilitado.
-     */
     public void processDueDispatchesBatch() {
         List<UUID> ids = dispatchRepository.findDueIdsForSending(
                 WhatsAppBroadcastDispatch.Status.PENDING,
@@ -382,7 +372,6 @@ public class WhatsAppBroadcastService {
         return BroadcastPhoneParser.parseLinesDedupe(lines);
     }
 
-    /** Parse de arquivo no servidor (validação única). */
     public List<String> parseContactsFile(byte[] bytes, String originalFilename) {
         return BroadcastContactFileParser.parseToE164Lines(bytes, originalFilename);
     }
@@ -414,6 +403,10 @@ public class WhatsAppBroadcastService {
             campaignRepository.save(c);
             throw new IllegalStateException("Sem destinatários");
         }
+        String body = c.getMessageText() != null ? c.getMessageText().trim() : "";
+        if (body.isEmpty()) {
+            throw new IllegalStateException("Mensagem da campanha não pode ser vazia");
+        }
 
         List<WhatsAppBroadcastRecipient> recipients =
                 recipientRepository.findByCampaign_IdOrderByCreatedAtAsc(c.getId());
@@ -423,33 +416,19 @@ public class WhatsAppBroadcastService {
             throw new IllegalStateException("Sem destinatários");
         }
 
-        int n = c.getSequenceSize() != null ? c.getSequenceSize() : ThreadLocalRandom.current()
-                .nextInt(Math.min(sequenceMin, sequenceMax), Math.max(sequenceMin, sequenceMax) + 1);
-        if (n < sequenceMin) {
-            n = sequenceMin;
-        }
-        if (n > sequenceMax) {
-            n = sequenceMax;
-        }
-        c.setSequenceSize(n);
-
-        List<String> texts = sequenceGenerator.generateSequence(n, c.getCompanyPrompt(), c.getMessageText());
+        c.setSequenceSize(1);
 
         Map<UUID, List<WhatsAppBroadcastDispatch>> byRecipient = new HashMap<>();
         List<WhatsAppBroadcastDispatch> allDispatches = new ArrayList<>();
         for (WhatsAppBroadcastRecipient r : recipients) {
-            List<WhatsAppBroadcastDispatch> forR = new ArrayList<>();
-            for (int i = 0; i < texts.size(); i++) {
-                WhatsAppBroadcastDispatch d = WhatsAppBroadcastDispatch.builder()
-                        .recipient(r)
-                        .sequenceIndex(i + 1)
-                        .bodyText(texts.get(i))
-                        .status(WhatsAppBroadcastDispatch.Status.PENDING)
-                        .build();
-                forR.add(d);
-                allDispatches.add(d);
-            }
-            byRecipient.put(r.getId(), forR);
+            WhatsAppBroadcastDispatch d = WhatsAppBroadcastDispatch.builder()
+                    .recipient(r)
+                    .sequenceIndex(1)
+                    .bodyText(body)
+                    .status(WhatsAppBroadcastDispatch.Status.PENDING)
+                    .build();
+            byRecipient.put(r.getId(), new ArrayList<>(List.of(d)));
+            allDispatches.add(d);
         }
 
         ZoneId zone = ZoneId.of(c.getScheduleTimezone() != null ? c.getScheduleTimezone() : "America/Sao_Paulo");
@@ -460,14 +439,16 @@ public class WhatsAppBroadcastService {
         c.setFailedCount(0);
         campaignRepository.save(c);
 
-        WhatsAppBroadcastDispatchSchedulePlanner.assignScheduledTimes(
+        WhatsAppBroadcastDispatchSchedulePlanner.assignSequentialSendTimes(
                 recipients,
                 byRecipient,
                 startedAt,
-                Math.min(dailyMinContacts, dailyMaxContacts),
-                Math.max(dailyMinContacts, dailyMaxContacts),
                 windowStartHour,
-                windowEndHour);
+                windowEndHour,
+                lunchStartHour,
+                lunchEndHour,
+                minGapSeconds,
+                maxGapSeconds);
 
         dispatchRepository.saveAll(allDispatches);
     }
