@@ -511,10 +511,27 @@ public class WhatsAppWebhookService {
         boolean conversationExisted = existing.isPresent();
         if (conversationExisted) {
             conversation = existing.get();
-            // Atualizar nome do contato se necessário
-            if (contactName != null && !contactName.isEmpty() &&
-                    (conversation.getContactName() == null || conversation.getContactName().isEmpty())) {
-                conversation.setContactName(contactName);
+            if (contactName != null && !contactName.isEmpty()) {
+                String current = conversation.getContactName();
+                String currentDigits = current == null ? "" : current.replaceAll("\\D", "");
+                String phoneDigits = phoneNumber == null ? "" : phoneNumber.replaceAll("\\D", "");
+                boolean currentIsPhone = !currentDigits.isEmpty()
+                        && !phoneDigits.isEmpty()
+                        && currentDigits.equals(phoneDigits);
+                boolean currentInvalid = current == null
+                        || current.isBlank()
+                        || currentIsPhone
+                        || WhatsAppConversationDisplayName.isLikelyNonCustomerLeadName(
+                                current,
+                                instanceName,
+                                webhook.getOwner(),
+                                company.getName(),
+                                company.getContratante());
+                if (currentInvalid && !contactName.equals(current)) {
+                    log.info("Atualizando contactName da conversa {}: '{}' -> '{}'",
+                            conversation.getId(), current, contactName);
+                    conversation.setContactName(contactName);
+                }
             }
             if (waChatId != null && conversation.getWaChatId() == null) {
                 conversation.setWaChatId(waChatId);
@@ -649,18 +666,40 @@ public class WhatsAppWebhookService {
         }
     }
 
-    /**
-     * Métodos auxiliares para extrair dados do webhook
-     */
     private String extractPhoneNumber(UazapWebhookRequest webhook) {
+        boolean isFromMe = webhook.getMessage() != null
+                && Boolean.TRUE.equals(webhook.getMessage().getFromMe());
+
+        if (isFromMe) {
+            if (webhook.getMessage() != null && webhook.getMessage().getChatid() != null
+                    && !webhook.getMessage().getChatid().isEmpty()) {
+                return cleanJid(webhook.getMessage().getChatid());
+            }
+            if (webhook.getChat() != null) {
+                if (webhook.getChat().getWa_chatid() != null && !webhook.getChat().getWa_chatid().isEmpty()) {
+                    return cleanJid(webhook.getChat().getWa_chatid());
+                }
+                if (webhook.getChat().getPhone() != null && !webhook.getChat().getPhone().isEmpty()) {
+                    return webhook.getChat().getPhone().replaceAll("[^0-9]", "");
+                }
+            }
+            return null;
+        }
+
         if (webhook.getMessage() != null && webhook.getMessage().getSender_pn() != null) {
-            String senderPn = webhook.getMessage().getSender_pn();
-            return senderPn.replace("@s.whatsapp.net", "").replace("@c.us", "");
+            return cleanJid(webhook.getMessage().getSender_pn());
         }
         if (webhook.getChat() != null && webhook.getChat().getPhone() != null) {
             return webhook.getChat().getPhone().replaceAll("[^0-9]", "");
         }
         return null;
+    }
+
+    private static String cleanJid(String jid) {
+        if (jid == null) {
+            return null;
+        }
+        return jid.replaceAll("@.*", "").trim();
     }
 
     private String extractMessageText(UazapWebhookRequest webhook) {
