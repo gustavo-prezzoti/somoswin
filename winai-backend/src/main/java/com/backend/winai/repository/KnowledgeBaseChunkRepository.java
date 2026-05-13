@@ -14,7 +14,9 @@ import java.util.UUID;
 public interface KnowledgeBaseChunkRepository extends JpaRepository<KnowledgeBaseChunk, UUID> {
     void deleteByKnowledgeBase(KnowledgeBase knowledgeBase);
 
+    // `extensions.vector`: pgvector mora no schema `extensions` no Supabase; sem qualificar,
+    // o search_path da sessão (currentSchema=winai) não acha o tipo e o cast falha.
     @Modifying
-    @Query(value = "UPDATE winai.knowledge_base_chunks SET embedding = cast(:embedding as vector) WHERE id = :id", nativeQuery = true)
+    @Query(value = "UPDATE winai.knowledge_base_chunks SET embedding = cast(:embedding as extensions.vector) WHERE id = :id", nativeQuery = true)
     void updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
 }

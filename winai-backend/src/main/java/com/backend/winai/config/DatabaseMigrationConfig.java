@@ -52,9 +52,17 @@ public class DatabaseMigrationConfig {
                 }
 
                 try {
-                    jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS vector");
+                    // Supabase: pgvector mora em `extensions`. Garante o schema antes do install.
+                    jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS extensions");
+                    try {
+                        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions");
+                    } catch (Exception primary) {
+                        // Fallback: PG comum sem o schema `extensions` permitido → instala no default (public).
+                        log.warn("pgvector no schema extensions falhou ({}). Tentando schema default.", primary.getMessage());
+                        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS vector");
+                    }
                     jdbcTemplate.execute(
-                            "ALTER TABLE winai.knowledge_base_chunks ADD COLUMN IF NOT EXISTS embedding vector(1536)");
+                            "ALTER TABLE winai.knowledge_base_chunks ADD COLUMN IF NOT EXISTS embedding extensions.vector(1536)");
                     log.info("Extensão vector e coluna embedding verificadas com sucesso.");
                 } catch (Exception e) {
                     log.error(
@@ -177,7 +185,7 @@ public class DatabaseMigrationConfig {
                                 id UUID PRIMARY KEY,
                                 company_id UUID NOT NULL REFERENCES winai.companies(id) ON DELETE CASCADE,
                                 anchor_text TEXT NOT NULL,
-                                embedding vector(1536),
+                                embedding extensions.vector(1536),
                                 utm_source VARCHAR(255),
                                 utm_medium VARCHAR(255),
                                 utm_campaign VARCHAR(255),
@@ -195,7 +203,7 @@ public class DatabaseMigrationConfig {
                             "CREATE INDEX IF NOT EXISTS idx_lead_attr_anchor_company ON winai.lead_attribution_anchors(company_id)");
                     try {
                         jdbcTemplate.execute(
-                                "CREATE INDEX IF NOT EXISTS idx_lead_attr_anchor_embedding ON winai.lead_attribution_anchors USING hnsw (embedding vector_cosine_ops)");
+                                "CREATE INDEX IF NOT EXISTS idx_lead_attr_anchor_embedding ON winai.lead_attribution_anchors USING hnsw (embedding extensions.vector_cosine_ops)");
                     } catch (Exception idxEx) {
                         log.debug("Índice HNSW em lead_attribution_anchors opcional (pgvector): {}", idxEx.getMessage());
                     }

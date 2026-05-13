@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -81,7 +82,12 @@ public class LeadAttributionAnchorService {
 
     /**
      * Melhor âncora por similaridade de cosseno; só retorna se {@code similarity >= minCosineSimilarity}.
+     *
+     * Roda em transação REQUIRES_NEW: se o pgvector falhar (extensão ausente), o erro aborta apenas
+     * esta transação isolada — a transação externa (criação do lead) permanece íntegra. A exceção
+     * é propagada para o caller, que faz o tratamento amplo (catch + log).
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public Optional<UtmParseUtil.UtmSnapshot> findBestMatch(UUID companyId, String inboundMessageText) {
         if (inboundMessageText == null || inboundMessageText.isBlank()) {
             log.debug("[SemanticAttr] findBestMatch ignorado: texto vazio companyId={}", companyId);
@@ -92,69 +98,60 @@ public class LeadAttributionAnchorService {
                 companyId,
                 String.format(Locale.ROOT, "%.2f", minCosineSimilarity),
                 previewForLog(inboundMessageText));
-        try {
-            List<Double> q = openAiService.getEmbedding(inboundMessageText.trim());
-            String qStr = q.toString();
-            List<Object[]> rows = anchorRepository.findTopByCosineSimilarity(companyId, qStr, 2);
-            if (rows.isEmpty()) {
-                log.info(
-                        "[SemanticAttr] nenhum candidato (âncoras ativas sem embedding ou tabela vazia) companyId={}",
-                        companyId);
-                return Optional.empty();
-            }
-            double top1 = toDouble(rows.get(0)[1]);
-            UUID bestId = UUID.fromString((String) rows.get(0)[0]);
-            if (top1 < minCosineSimilarity) {
-                log.info(
-                        "[SemanticAttr] abaixo do corte companyId={} melhorAnchorId={} cosineSim={} minRequerido={}",
-                        companyId,
-                        bestId,
-                        String.format(Locale.ROOT, "%.4f", top1),
-                        String.format(Locale.ROOT, "%.4f", minCosineSimilarity));
-                return Optional.empty();
-            }
-            UUID anchorId = bestId;
-            if (rows.size() > 1) {
-                double top2 = toDouble(rows.get(1)[1]);
-                UUID secondId = UUID.fromString((String) rows.get(1)[0]);
-                if (top2 >= minCosineSimilarity && (top1 - top2) < 0.02) {
-                    log.warn(
-                            "[SemanticAttr] match ambíguo companyId={} anchor1={} sim1={} anchor2={} sim2={}",
-                            companyId,
-                            anchorId,
-                            String.format(Locale.ROOT, "%.4f", top1),
-                            secondId,
-                            String.format(Locale.ROOT, "%.4f", top2));
-                } else {
-                    log.debug(
-                            "[SemanticAttr] segundo lugar companyId={} anchor2={} sim2={}",
-                            companyId,
-                            secondId,
-                            String.format(Locale.ROOT, "%.4f", top2));
-                }
-            }
-            Optional<LeadAttributionAnchor> anchorOpt = anchorRepository.findById(anchorId);
-            if (anchorOpt.isEmpty()) {
-                log.warn("[SemanticAttr] anchorId {} sumiu após ranking companyId={}", anchorId, companyId);
-                return Optional.empty();
-            }
-            LeadAttributionAnchor matched = anchorOpt.get();
+        List<Double> q = openAiService.getEmbedding(inboundMessageText.trim());
+        String qStr = q.toString();
+        List<Object[]> rows = anchorRepository.findTopByCosineSimilarity(companyId, qStr, 2);
+        if (rows.isEmpty()) {
             log.info(
-                    "[SemanticAttr] match OK companyId={} anchorId={} cosineSim={} utm_campaign={} anchorPreview=\"{}\"",
-                    companyId,
-                    anchorId,
-                    String.format(Locale.ROOT, "%.4f", top1),
-                    matched.getUtmCampaign(),
-                    previewForLog(matched.getAnchorText()));
-            return Optional.of(toUtmSnapshot(matched));
-        } catch (Exception e) {
-            log.warn(
-                    "[SemanticAttr] erro embedding/pgvector companyId={}: {}",
-                    companyId,
-                    e.getMessage(),
-                    e);
+                    "[SemanticAttr] nenhum candidato (âncoras ativas sem embedding ou tabela vazia) companyId={}",
+                    companyId);
             return Optional.empty();
         }
+        double top1 = toDouble(rows.get(0)[1]);
+        UUID bestId = UUID.fromString((String) rows.get(0)[0]);
+        if (top1 < minCosineSimilarity) {
+            log.info(
+                    "[SemanticAttr] abaixo do corte companyId={} melhorAnchorId={} cosineSim={} minRequerido={}",
+                    companyId,
+                    bestId,
+                    String.format(Locale.ROOT, "%.4f", top1),
+                    String.format(Locale.ROOT, "%.4f", minCosineSimilarity));
+            return Optional.empty();
+        }
+        UUID anchorId = bestId;
+        if (rows.size() > 1) {
+            double top2 = toDouble(rows.get(1)[1]);
+            UUID secondId = UUID.fromString((String) rows.get(1)[0]);
+            if (top2 >= minCosineSimilarity && (top1 - top2) < 0.02) {
+                log.warn(
+                        "[SemanticAttr] match ambíguo companyId={} anchor1={} sim1={} anchor2={} sim2={}",
+                        companyId,
+                        anchorId,
+                        String.format(Locale.ROOT, "%.4f", top1),
+                        secondId,
+                        String.format(Locale.ROOT, "%.4f", top2));
+            } else {
+                log.debug(
+                        "[SemanticAttr] segundo lugar companyId={} anchor2={} sim2={}",
+                        companyId,
+                        secondId,
+                        String.format(Locale.ROOT, "%.4f", top2));
+            }
+        }
+        Optional<LeadAttributionAnchor> anchorOpt = anchorRepository.findById(anchorId);
+        if (anchorOpt.isEmpty()) {
+            log.warn("[SemanticAttr] anchorId {} sumiu após ranking companyId={}", anchorId, companyId);
+            return Optional.empty();
+        }
+        LeadAttributionAnchor matched = anchorOpt.get();
+        log.info(
+                "[SemanticAttr] match OK companyId={} anchorId={} cosineSim={} utm_campaign={} anchorPreview=\"{}\"",
+                companyId,
+                anchorId,
+                String.format(Locale.ROOT, "%.4f", top1),
+                matched.getUtmCampaign(),
+                previewForLog(matched.getAnchorText()));
+        return Optional.of(toUtmSnapshot(matched));
     }
 
     @Transactional(readOnly = true)
