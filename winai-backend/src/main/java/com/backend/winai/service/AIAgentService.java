@@ -343,78 +343,84 @@ public class AIAgentService {
             return;
         }
 
-        // 3. Renew Typing Indicator
-        // Removed as per user request
+        // 3. "Digitando…" no chat do lead enquanto a IA gera a resposta.
+        // UazAPI mantém a presença por até `delay` ms reenviando a cada 10s; limpamos no finally.
+        sendPresenceForConversation(conv, "composing", 30_000);
 
-        // 4. Intent Classification Phase
-        // Fetch fresh history (Process all accumulated messages)
-        List<OpenAiService.ChatMessage> rawHistory = getRecentConversationHistory(conversationId, 6);
-        List<OpenAiService.ChatMessage> historyForClass = new ArrayList<>();
-        for (OpenAiService.ChatMessage histMsg : rawHistory) {
-            historyForClass.add(new OpenAiService.ChatMessage("user", histMsg.getContent()));
-        }
+        try {
+            // 4. Intent Classification Phase
+            // Fetch fresh history (Process all accumulated messages)
+            List<OpenAiService.ChatMessage> rawHistory = getRecentConversationHistory(conversationId, 6);
+            List<OpenAiService.ChatMessage> historyForClass = new ArrayList<>();
+            for (OpenAiService.ChatMessage histMsg : rawHistory) {
+                historyForClass.add(new OpenAiService.ChatMessage("user", histMsg.getContent()));
+            }
 
-        // Use the very last message for context, but history drives the intent
-        String lastUserMessage = !rawHistory.isEmpty() ? rawHistory.get(rawHistory.size() - 1).getContent() : "";
+            // Use the very last message for context, but history drives the intent
+            String lastUserMessage = !rawHistory.isEmpty() ? rawHistory.get(rawHistory.size() - 1).getContent() : "";
 
-        String intent = openAiService.analyzeIntent(lastUserMessage, historyForClass);
+            String intent = openAiService.analyzeIntent(lastUserMessage, historyForClass);
 
-        if ("HANDOFF".equals(intent)) {
-            log.info("🎯 Intent Classifier detected HANDOFF. Switching to HUMAN.");
-            handleHumanHandoff(conv, true);
-            updateLeadMemory(conv, "HUMAN_HANDOFF_REQUESTED"); // Força update de memória
-            return;
-        }
-
-        // 5. Generate Response
-        // Note: processMessageWithAI will reload history internally for 30 messages
-        // context
-        String aiResponse = processMessageWithAI(conv, lastUserMessage, leadName, imageUrl);
-
-        if (aiResponse != null && !aiResponse.isEmpty()) {
-            // Check for Human Handoff Request from Tool Call inside Loop
-            if ("HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
-                handleHumanHandoff(conv);
-                updateLeadMemory(conv, "HUMAN_HANDOFF_REQUESTED");
+            if ("HANDOFF".equals(intent)) {
+                log.info("🎯 Intent Classifier detected HANDOFF. Switching to HUMAN.");
+                handleHumanHandoff(conv, true);
+                updateLeadMemory(conv, "HUMAN_HANDOFF_REQUESTED"); // Força update de memória
                 return;
             }
 
-            // Detect Summary Tag
-            boolean forceValidation = aiResponse.contains("[SUMMARY]");
-            String working = aiResponse;
-            if (forceValidation) {
-                working = working.replace("[SUMMARY]", "").trim();
-            }
+            // 5. Generate Response
+            // Note: processMessageWithAI will reload history internally for 30 messages
+            // context
+            String aiResponse = processMessageWithAI(conv, lastUserMessage, leadName, imageUrl);
 
-            AgentDocumentAttachParser.Result attachParse = AgentDocumentAttachParser.parse(working);
-            String textToUser = attachParse.visibleText();
-            java.util.Optional<UUID> attachDocId = attachParse.attachDocumentId();
+            if (aiResponse != null && !aiResponse.isEmpty()) {
+                // Check for Human Handoff Request from Tool Call inside Loop
+                if ("HUMAN_HANDOFF_REQUESTED".equals(aiResponse)) {
+                    handleHumanHandoff(conv);
+                    updateLeadMemory(conv, "HUMAN_HANDOFF_REQUESTED");
+                    return;
+                }
 
-            if (textToUser != null && !textToUser.isBlank()) {
-                sendSplitResponse(conv, textToUser);
-            }
+                // Detect Summary Tag
+                boolean forceValidation = aiResponse.contains("[SUMMARY]");
+                String working = aiResponse;
+                if (forceValidation) {
+                    working = working.replace("[SUMMARY]", "").trim();
+                }
 
-            if (attachDocId.isPresent()) {
-                sendKbLinkedAgentDocument(conv, attachDocId.get());
-            }
+                AgentDocumentAttachParser.Result attachParse = AgentDocumentAttachParser.parse(working);
+                String textToUser = attachParse.visibleText();
+                java.util.Optional<UUID> attachDocId = attachParse.attachDocumentId();
 
-            // Update Follow-up
-            try {
-                followUpService.updateLastMessage(conv.getId(), "AI");
-            } catch (Exception e) {
-            }
+                if (textToUser != null && !textToUser.isBlank()) {
+                    sendSplitResponse(conv, textToUser);
+                }
 
-            // Update Memory (sem linha ATTACH_DOC)
-            String memoryText = textToUser != null && !textToUser.isBlank() ? textToUser : "";
-            if (attachDocId.isPresent()) {
-                memoryText = memoryText.isEmpty() ? "📎 Documento enviado" : memoryText + " 📎";
+                if (attachDocId.isPresent()) {
+                    sendKbLinkedAgentDocument(conv, attachDocId.get());
+                }
+
+                // Update Follow-up
+                try {
+                    followUpService.updateLastMessage(conv.getId(), "AI");
+                } catch (Exception e) {
+                }
+
+                // Update Memory (sem linha ATTACH_DOC)
+                String memoryText = textToUser != null && !textToUser.isBlank() ? textToUser : "";
+                if (attachDocId.isPresent()) {
+                    memoryText = memoryText.isEmpty() ? "📎 Documento enviado" : memoryText + " 📎";
+                }
+                if (memoryText.isBlank()) {
+                    memoryText = aiResponse;
+                }
+                updateLeadMemory(conv, forceValidation ? "[SUMMARY]" : memoryText);
+            } else {
+                log.warn("AI returned empty response in scheduled task for {}", conversationId);
             }
-            if (memoryText.isBlank()) {
-                memoryText = aiResponse;
-            }
-            updateLeadMemory(conv, forceValidation ? "[SUMMARY]" : memoryText);
-        } else {
-            log.warn("AI returned empty response in scheduled task for {}", conversationId);
+        } finally {
+            // Encerra "digitando" no chat do lead, independente do resultado.
+            sendPresenceForConversation(conv, "paused", 0);
         }
     }
 
@@ -1125,6 +1131,36 @@ public class AIAgentService {
         } catch (Exception e) {
             log.error("Error finding connection (strict) for conversation: {}", e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Envia presença ("composing"/"recording"/"paused") para o número da conversa.
+     * Resolve baseUrl/token na mesma ordem usada por sendAIResponse (conexão → conversa).
+     * Roda em thread separada para não bloquear o fluxo da IA.
+     */
+    private void sendPresenceForConversation(WhatsAppConversation conversation, String presence, int delayMs) {
+        try {
+            String phone = conversation.getPhoneNumber();
+            if (phone == null || phone.isBlank()) return;
+
+            String baseUrl = null;
+            String token = null;
+            UserWhatsAppConnection conn = findConnectionForConversation(conversation);
+            if (conn != null) {
+                baseUrl = conn.getInstanceBaseUrl();
+                token = conn.getInstanceToken();
+            }
+            if (baseUrl == null) baseUrl = conversation.getUazapBaseUrl();
+            if (token == null) token = conversation.getUazapToken();
+            if (baseUrl == null || token == null) return;
+
+            final String bUrl = baseUrl;
+            final String tk = token;
+            new Thread(() -> uazapService.setPresence(phone, presence, bUrl, tk, delayMs),
+                    "uazapi-presence").start();
+        } catch (Exception e) {
+            log.debug("[presence] erro silencioso ao enviar {}: {}", presence, e.getMessage());
         }
     }
 

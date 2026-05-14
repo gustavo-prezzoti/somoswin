@@ -195,6 +195,20 @@ public class WhatsAppWebhookService {
                 } catch (Exception e) {
                     log.warn("Erro ao atualizar follow-up para conversa {}: {}", conversation.getId(), e.getMessage());
                 }
+
+                // Marca a mensagem como lida no WhatsApp do remetente (✓✓ azul).
+                // Roda em thread separada pra não atrasar a resposta do webhook ao Uazap.
+                try {
+                    String mid = message.getMessageId();
+                    String baseUrl = conversation.getUazapBaseUrl();
+                    String token = conversation.getUazapToken();
+                    if (mid != null && baseUrl != null && token != null) {
+                        new Thread(() -> uazapService.markMessagesRead(List.of(mid), baseUrl, token),
+                                "uazapi-markread").start();
+                    }
+                } catch (Exception e) {
+                    log.debug("Falha ao agendar markread para {}: {}", conversation.getId(), e.getMessage());
+                }
             }
 
             // Processar resposta automática da IA (texto, áudio transcrito ou imagem)

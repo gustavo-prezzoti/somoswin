@@ -456,79 +456,73 @@ public class UazapService {
     }
 
     /**
-     * Define o status de presença (typing, recorded, available, unavailable)
+     * Envia presença para um contato (UazAPI: POST /message/presence).
+     * presence: "composing" (digitando), "recording" (gravando áudio) ou "paused" (limpa).
+     * delayMs: duração da presença em ms (UazAPI reenvia a cada 10s; máx 300000ms / 5min).
+     * Retorna imediatamente: a UazAPI mantém a presença em background.
      */
-    public void setPresence(String phoneNumber, String presence, String baseUrl, String token, String instanceName) {
-        if (baseUrl == null || token == null || phoneNumber == null) {
+    public void setPresence(String phoneNumber, String presence, String baseUrl, String token, int delayMs) {
+        if (baseUrl == null || token == null || phoneNumber == null || presence == null) {
             return;
         }
-
         try {
-            // Ajuste para endpoint correto da Evolution API / Uazap
-            // Versões recentes: /chat/sendPresence/{instance} ou /chat/sendPresence
-
-            String url;
-            if (instanceName != null && !instanceName.isEmpty()) {
-                // Se tem instanceName, usa o padrão mais robusto da Evolution
-                url = baseUrl.replaceAll("/$", "") + "/chat/sendPresence/" + instanceName;
-            } else {
-                // Fallback legado
-                url = baseUrl.replaceAll("/$", "") + "/chat/sendPresence";
-            }
+            String url = baseUrl.replaceAll("/$", "") + "/message/presence";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.set("token", token);
-            headers.set("apikey", adminToken);
 
             Map<String, Object> body = new HashMap<>();
             body.put("number", phoneNumber);
-            body.put("presence", presence); // "composing" para digitando
-            // Adicionar delay opcional se for composing, ajuda a manter o status
-            if ("composing".equals(presence)) {
-                body.put("delay", 10000); // 10s
+            body.put("presence", presence);
+            if (!"paused".equals(presence)) {
+                int clamped = Math.max(1000, Math.min(delayMs, 300_000));
+                body.put("delay", clamped);
             }
 
             HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
             restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
-            log.debug("Presença '{}' enviada para {} (URL: {})", presence, phoneNumber, url);
+            log.debug("[UazAPI presence] {} → {} ({}ms)", presence, phoneNumber, delayMs);
         } catch (Exception e) {
-            // Fallback silencioso para endpoint antigo se o novo falhar (404)
-            try {
-                if (e.getMessage() != null && e.getMessage().contains("404")) {
-                    String fallbackUrl = baseUrl.replaceAll("/$", "") + "/chat/presence";
-                    if (instanceName != null && !instanceName.isEmpty()) {
-                        fallbackUrl += "/" + instanceName;
-                    }
-
-                    HttpHeaders headers = new HttpHeaders();
-                    headers.setContentType(MediaType.APPLICATION_JSON);
-                    headers.set("token", token);
-                    headers.set("apikey", adminToken);
-
-                    Map<String, Object> body = new HashMap<>();
-                    body.put("number", phoneNumber);
-                    body.put("presence", presence);
-
-                    HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-                    restTemplate.exchange(fallbackUrl, HttpMethod.POST, requestEntity, Map.class);
-                    log.debug("Fallback de presença executado com sucesso para {}", phoneNumber);
-                    return;
-                }
-            } catch (Exception ex2) {
-                // Ignorar erro do fallback
-            }
-
-            log.warn("Erro ao definir presença para {}: {}", phoneNumber, e.getMessage());
+            log.warn("[UazAPI presence] erro ao enviar {} para {}: {}", presence, phoneNumber, e.getMessage());
         }
     }
 
-    /**
-     * Fallback for older calls without instanceName (deprecated)
-     */
+    /** Sobrecarga: delay padrão de 30s para composing/recording. */
     public void setPresence(String phoneNumber, String presence, String baseUrl, String token) {
-        setPresence(phoneNumber, presence, baseUrl, token, null);
+        setPresence(phoneNumber, presence, baseUrl, token, 30_000);
+    }
+
+    /** Mantém compatibilidade com chamadas antigas que passavam instanceName (UazAPI ignora). */
+    public void setPresence(String phoneNumber, String presence, String baseUrl, String token, String instanceName) {
+        setPresence(phoneNumber, presence, baseUrl, token, 30_000);
+    }
+
+    /**
+     * Marca uma ou mais mensagens como lidas no WhatsApp (UazAPI: POST /message/markread).
+     * Os IDs são os messageId do WhatsApp (mesmo valor que chega no webhook).
+     * Resultado visível: ticks ✓✓ ficam azuis no lado do remetente.
+     */
+    public void markMessagesRead(List<String> messageIds, String baseUrl, String token) {
+        if (baseUrl == null || token == null || messageIds == null || messageIds.isEmpty()) {
+            return;
+        }
+        try {
+            String url = baseUrl.replaceAll("/$", "") + "/message/markread";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("token", token);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("id", messageIds);
+
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+            restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
+            log.debug("[UazAPI markread] {} mensagem(ns) marcadas como lidas", messageIds.size());
+        } catch (Exception e) {
+            log.warn("[UazAPI markread] erro ao marcar {} mensagens como lidas: {}", messageIds.size(), e.getMessage());
+        }
     }
 
     /**
