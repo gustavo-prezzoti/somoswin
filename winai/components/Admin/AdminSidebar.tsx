@@ -223,20 +223,22 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, narrow, on
                 })}
             </div>
 
-            <div className="p-4 border-t border-black/5">
-                <NavLink
-                    to="/dashboard"
-                    onClick={onClose}
-                    className={({ isActive }) =>
-                        `w-full flex items-center ${narrow ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-xl text-gray-500 hover:bg-gray-100 transition-all group ${
-                            isActive ? 'bg-gray-100 text-[#141414]' : ''
-                        }`
-                    }
-                >
-                    <ChevronRight size={18} className={`${narrow ? '' : 'rotate-180'} text-gray-400 group-hover:text-gray-600`} />
-                    {!narrow && <span className="text-xs font-bold tracking-wide">VOLTAR AO APP</span>}
-                </NavLink>
-            </div>
+            {!navUser?.ampliaInternalStaff && (
+                <div className="p-4 border-t border-black/5">
+                    <NavLink
+                        to="/dashboard"
+                        onClick={onClose}
+                        className={({ isActive }) =>
+                            `w-full flex items-center ${narrow ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-xl text-gray-500 hover:bg-gray-100 transition-all group ${
+                                isActive ? 'bg-gray-100 text-[#141414]' : ''
+                            }`
+                        }
+                    >
+                        <ChevronRight size={18} className={`${narrow ? '' : 'rotate-180'} text-gray-400 group-hover:text-gray-600`} />
+                        {!narrow && <span className="text-xs font-bold tracking-wide">VOLTAR AO APP</span>}
+                    </NavLink>
+                </div>
+            )}
         </aside>
     );
 };

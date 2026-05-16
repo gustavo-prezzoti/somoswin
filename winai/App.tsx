@@ -453,6 +453,10 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
 
   if (!user || !token) return <Navigate to="/login" replace />;
 
+  if (isAmpliaInternalStaff) {
+    return <Navigate to="/admin" replace />;
+  }
+
   if (sessionNextAction === 'MUST_CHANGE_PASSWORD') {
     return <Navigate to="/change-password" replace />;
   }

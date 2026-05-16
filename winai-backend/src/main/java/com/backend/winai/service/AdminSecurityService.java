@@ -1,6 +1,5 @@
 package com.backend.winai.service;
 
-import com.backend.winai.entity.AmpliaAdminAction;
 import com.backend.winai.entity.AmpliaAdminModule;
 import com.backend.winai.entity.AmpliaAdminPermissionCatalog;
 import com.backend.winai.entity.AmpliaStaffRole;
@@ -15,37 +14,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Autorização do painel /admin: administradores plenos ou colaborador interno com permissões por módulo/ação.
- */
 @Service("adminSecurity")
 public class AdminSecurityService {
 
     public boolean canAccess(Authentication authentication, String moduleId) {
-        if (moduleId == null || moduleId.isBlank()) {
-            return false;
-        }
-        String trimmed = moduleId.trim();
-        AmpliaAdminModule mod;
-        try {
-            mod = AmpliaAdminModule.valueOf(trimmed);
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
-        for (AmpliaAdminAction a : AmpliaAdminPermissionCatalog.actionsFor(mod)) {
-            if (hasPermission(authentication, trimmed, a.name())) {
-                return true;
-            }
-        }
-        return false;
+        return hasPermission(authentication, moduleId, null);
     }
 
-    /**
-     * Verifica permissão granular {@code module:action} ou legado {@code module} (= todas as ações).
-     */
-    /**
-     * Knowledge Base: clientes (empresa) não passam por RBAC Amplia; colaborador interno precisa de {@code agentes:acao}.
-     */
     public boolean canUseKnowledgeBase(Authentication authentication, String action) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return false;
@@ -59,7 +34,7 @@ public class AdminSecurityService {
         return hasPermission(authentication, "agentes", action);
     }
 
-    public boolean hasPermission(Authentication authentication, String module, String action) {
+    public boolean hasPermission(Authentication authentication, String module, String ignoredAction) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return false;
         }
@@ -74,21 +49,20 @@ public class AdminSecurityService {
             if (!Boolean.TRUE.equals(user.getAmpliaInternalStaff())) {
                 return true;
             }
-            return internalUserHasPermission(user, module, action);
+            return internalUserHasPermission(user, module);
         }
         if (user.getRole() == UserRole.USER && Boolean.TRUE.equals(user.getAmpliaInternalStaff())) {
-            return internalUserHasPermission(user, module, action);
+            return internalUserHasPermission(user, module);
         }
         return false;
     }
 
-    private boolean internalUserHasPermission(User user, String moduleId, String action) {
-        if (moduleId == null || moduleId.isBlank() || action == null || action.isBlank()) {
+    private boolean internalUserHasPermission(User user, String moduleId) {
+        if (moduleId == null || moduleId.isBlank()) {
             return false;
         }
-        String module = moduleId.trim();
-        String act = action.trim().toLowerCase();
-        if (!AmpliaAdminModule.isValid(module) || !AmpliaAdminAction.isValid(act)) {
+        String module = AmpliaAdminPermissionCatalog.normalizeKey(moduleId);
+        if (module == null || !AmpliaAdminModule.isValid(module)) {
             return false;
         }
         AmpliaStaffRole role = user.getAmpliaStaffRole();
@@ -105,12 +79,17 @@ public class AdminSecurityService {
         if (Boolean.TRUE.equals(perms.get("*"))) {
             return true;
         }
-        String granular = module + ":" + act;
-        if (Boolean.TRUE.equals(perms.get(granular))) {
+        if (Boolean.TRUE.equals(perms.get(module))) {
             return true;
         }
-        // Legado: chave só com nome do módulo concede todas as ações daquele módulo
-        return Boolean.TRUE.equals(perms.get(module));
+        for (Map.Entry<String, Boolean> e : perms.entrySet()) {
+            if (!Boolean.TRUE.equals(e.getValue()) || e.getKey() == null) continue;
+            String normalized = AmpliaAdminPermissionCatalog.normalizeKey(e.getKey());
+            if (module.equals(normalized)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static List<String> effectivePermissionKeys(AmpliaStaffRole role) {
@@ -118,43 +97,26 @@ public class AdminSecurityService {
             return List.of();
         }
         if (Boolean.TRUE.equals(role.getFullAccess())) {
-            return new ArrayList<>(AmpliaAdminPermissionCatalog.allGranularKeys());
+            return new ArrayList<>(AmpliaAdminPermissionCatalog.allModuleKeys());
         }
         Map<String, Boolean> perms = role.getPermissionsJson();
         if (perms == null) {
             return List.of();
         }
         if (Boolean.TRUE.equals(perms.get("*"))) {
-            return new ArrayList<>(AmpliaAdminPermissionCatalog.allGranularKeys());
+            return new ArrayList<>(AmpliaAdminPermissionCatalog.allModuleKeys());
         }
         Set<String> out = new LinkedHashSet<>();
         for (Map.Entry<String, Boolean> e : perms.entrySet()) {
             if (!Boolean.TRUE.equals(e.getValue()) || e.getKey() == null) {
                 continue;
             }
-            String k = e.getKey().trim();
-            if (k.isEmpty()) {
+            String normalized = AmpliaAdminPermissionCatalog.normalizeKey(e.getKey());
+            if (normalized == null || normalized.isEmpty() || "*".equals(normalized)) {
                 continue;
             }
-            if (k.contains(":")) {
-                if (AmpliaAdminPermissionCatalog.isValidGranularKey(k)) {
-                    out.add(k);
-                }
-                continue;
-            }
-            if ("*".equals(k)) {
-                out.addAll(AmpliaAdminPermissionCatalog.allGranularKeys());
-                continue;
-            }
-            if (AmpliaAdminModule.isValid(k) && !k.contains(":")) {
-                try {
-                    AmpliaAdminModule mod = AmpliaAdminModule.valueOf(k);
-                    for (AmpliaAdminAction a : AmpliaAdminPermissionCatalog.actionsFor(mod)) {
-                        out.add(k + ":" + a.name());
-                    }
-                } catch (IllegalArgumentException ignored) {
-                    /* omitido */
-                }
+            if (AmpliaAdminModule.isValid(normalized)) {
+                out.add(normalized);
             }
         }
         return new ArrayList<>(out);

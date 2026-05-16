@@ -33,7 +33,14 @@ const Login: React.FC = () => {
             window.location.replace(`${base}/change-password`.replace(/\/+/g, '/'));
             return;
          }
-         navigate('/dashboard');
+         let isAmpliaStaff = false;
+         try {
+            const stored = localStorage.getItem('win_user');
+            isAmpliaStaff = stored ? JSON.parse(stored).ampliaInternalStaff === true : false;
+         } catch {
+            isAmpliaStaff = false;
+         }
+         navigate(isAmpliaStaff ? '/admin' : '/dashboard');
       } catch (err: unknown) {
          const msg = err instanceof Error ? err.message : 'E-mail ou senha inválidos';
          setError(msg);

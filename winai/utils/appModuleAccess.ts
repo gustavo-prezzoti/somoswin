@@ -37,8 +37,8 @@ export function canAccessCompanyAppModule(
     module: CompanyAppModuleKey,
 ): boolean {
     if (!user) return false;
+    if (user.ampliaInternalStaff) return false;
     if (user.role === 'SUPER_ADMIN') return true;
-    if (user.ampliaInternalStaff) return true;
     if (user.role === 'ADMIN' && user.company) return true;
     if (user.appFullAccess) return true;
     const g = user.appModuleGrants;
