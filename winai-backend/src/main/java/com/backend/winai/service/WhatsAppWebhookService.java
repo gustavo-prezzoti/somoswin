@@ -504,6 +504,17 @@ public class WhatsAppWebhookService {
         String instanceName = webhook.getInstanceName();
         boolean isNew = false;
 
+        if (waChatId != null && !waChatId.isEmpty()) {
+            String derivedFromChat = cleanJid(waChatId);
+            if (derivedFromChat != null && derivedFromChat.matches("\\d+")
+                    && !derivedFromChat.equals(phoneNumber)) {
+                log.warn(
+                        "[PhoneMismatch] phone_number={} difere de wa_chatid={} — usando wa_chatid",
+                        phoneNumber, derivedFromChat);
+                phoneNumber = derivedFromChat;
+            }
+        }
+
         WhatsAppConversation conversation;
         Optional<WhatsAppConversation> existing;
 
@@ -549,6 +560,17 @@ public class WhatsAppWebhookService {
             }
             if (waChatId != null && conversation.getWaChatId() == null) {
                 conversation.setWaChatId(waChatId);
+            }
+            String currentWaChatId = conversation.getWaChatId();
+            if (currentWaChatId != null && !currentWaChatId.isEmpty()) {
+                String derivedFromChat = cleanJid(currentWaChatId);
+                if (derivedFromChat != null && derivedFromChat.matches("\\d+")
+                        && !derivedFromChat.equals(conversation.getPhoneNumber())) {
+                    log.warn(
+                            "[PhoneMismatch] conv {} phone_number={} != wa_chatid={} — corrigindo",
+                            conversation.getId(), conversation.getPhoneNumber(), derivedFromChat);
+                    conversation.setPhoneNumber(derivedFromChat);
+                }
             }
         } else {
             // Criar nova conversa para esta instância
@@ -681,26 +703,18 @@ public class WhatsAppWebhookService {
     }
 
     private String extractPhoneNumber(UazapWebhookRequest webhook) {
-        boolean isFromMe = webhook.getMessage() != null
-                && Boolean.TRUE.equals(webhook.getMessage().getFromMe());
-
-        if (isFromMe) {
-            if (webhook.getMessage() != null && webhook.getMessage().getChatid() != null
-                    && !webhook.getMessage().getChatid().isEmpty()) {
-                return cleanJid(webhook.getMessage().getChatid());
-            }
-            if (webhook.getChat() != null) {
-                if (webhook.getChat().getWa_chatid() != null && !webhook.getChat().getWa_chatid().isEmpty()) {
-                    return cleanJid(webhook.getChat().getWa_chatid());
-                }
-                if (webhook.getChat().getPhone() != null && !webhook.getChat().getPhone().isEmpty()) {
-                    return webhook.getChat().getPhone().replaceAll("[^0-9]", "");
-                }
-            }
-            return null;
+        if (webhook.getChat() != null && webhook.getChat().getWa_chatid() != null
+                && !webhook.getChat().getWa_chatid().isEmpty()) {
+            return cleanJid(webhook.getChat().getWa_chatid());
+        }
+        if (webhook.getMessage() != null && webhook.getMessage().getChatid() != null
+                && !webhook.getMessage().getChatid().isEmpty()) {
+            return cleanJid(webhook.getMessage().getChatid());
         }
 
-        if (webhook.getMessage() != null && webhook.getMessage().getSender_pn() != null) {
+        boolean isFromMe = webhook.getMessage() != null
+                && Boolean.TRUE.equals(webhook.getMessage().getFromMe());
+        if (!isFromMe && webhook.getMessage() != null && webhook.getMessage().getSender_pn() != null) {
             return cleanJid(webhook.getMessage().getSender_pn());
         }
         if (webhook.getChat() != null && webhook.getChat().getPhone() != null) {

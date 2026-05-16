@@ -11,4 +11,5 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PatchLeadAttributionAnchorRequest {
     private Boolean active;
+    private String anchorText;
 }

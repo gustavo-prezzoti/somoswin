@@ -286,6 +286,7 @@ export interface LeadAttributionMessageSuggestResponse {
 
 export interface PatchLeadAttributionAnchorRequest {
     active?: boolean;
+    anchorText?: string;
 }
 
 export interface UtmPerformanceResponse {

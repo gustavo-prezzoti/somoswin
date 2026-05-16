@@ -38,8 +38,9 @@ public class WhatsAppChatController {
     public ResponseEntity<List<WhatsAppConversationResponse>> getUserConversations(
             @Parameter(description = "ID do usuário") @RequestParam UUID userId,
             @Parameter(description = "ID da empresa") @RequestParam UUID companyId,
-            @Parameter(description = "Incluir mensagens recentes") @RequestParam(defaultValue = "false") Boolean includeMessages) {
-        return ResponseEntity.ok(chatService.getConversationsByUserConnections(userId, companyId, includeMessages));
+            @Parameter(description = "Incluir mensagens recentes") @RequestParam(defaultValue = "false") Boolean includeMessages,
+            @Parameter(description = "Nome da instância UaZap para filtrar (opcional)") @RequestParam(required = false) String uazapInstance) {
+        return ResponseEntity.ok(chatService.getConversationsByUserConnections(userId, companyId, includeMessages, uazapInstance));
     }
 
     @Operation(summary = "Obter Conversa", description = "Retorna uma conversa específica por ID")

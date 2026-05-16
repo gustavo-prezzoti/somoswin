@@ -3,11 +3,11 @@ import {
   DollarSign, Eye, MousePointerClick, Minus, Target, Loader2, RefreshCw, CheckCircle2, TrendingUp, TrendingDown, AlertTriangle, FileText, ChevronRight, Zap, ArrowUpRight, ArrowDownRight,
   Calendar, Search, Filter, MoreHorizontal, Copy, Pause, Trash2, Link2,
 } from 'lucide-react';
-import UtmAdTrackingModal from './UtmAdTrackingModal';
-import type { UtmAdTrackingContext } from './UtmAdTrackingModal';
+import UtmAdTrackingModal, { compactId as compactUtmId } from './UtmAdTrackingModal';
+import type { ExistingAnchor, UtmAdTrackingContext } from './UtmAdTrackingModal';
 import { marketingService, type CampaignListItem } from '../services';
 import { storageService } from '../services/storage';
-import type { MetricsDateRange, PaidTrafficOverview, PaidTrafficPlatform, UtmPerformanceResponse } from '../services/api/marketing.service';
+import type { LeadAttributionAnchorResponse, MetricsDateRange, PaidTrafficOverview, PaidTrafficPlatform, UtmPerformanceResponse } from '../services/api/marketing.service';
 import {
   googleAdsService,
   type GoogleAdsAccessibleAccount,
@@ -91,6 +91,7 @@ const Campaigns: React.FC = () => {
   const [drillAdSetLabel, setDrillAdSetLabel] = useState('');
   const [utmAdModalOpen, setUtmAdModalOpen] = useState(false);
   const [utmAdModalCtx, setUtmAdModalCtx] = useState<UtmAdTrackingContext | null>(null);
+  const [anchors, setAnchors] = useState<LeadAttributionAnchorResponse[]>([]);
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
   const [googleAdsCustomerId, setGoogleAdsCustomerId] = useState('');
   const [googleAdsLoginCustomerId, setGoogleAdsLoginCustomerId] = useState('');
@@ -165,6 +166,36 @@ const Campaigns: React.FC = () => {
   useEffect(() => {
     if (isMetaConnected) loadCampaigns();
   }, [isMetaConnected, metricsStartDate, metricsEndDate]);
+
+  const loadAnchors = useCallback(async () => {
+    try {
+      const list = await marketingService.listLeadAttributionAnchors();
+      setAnchors(list || []);
+    } catch (e) {
+      console.error('Failed to load lead attribution anchors', e);
+      setAnchors([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isMetaConnected) void loadAnchors();
+  }, [isMetaConnected, loadAnchors]);
+
+  /** Procura âncora ATIVA por tripla (campanha, conjunto, anúncio) — usa compactId pra bater com o que foi salvo. */
+  const findAnchorForAd = useCallback(
+    (campaignId: string, adSetId: string, adId: string): LeadAttributionAnchorResponse | null => {
+      if (!campaignId || !adSetId || !adId) return null;
+      const camp = compactUtmId(campaignId);
+      const adg = compactUtmId(adSetId);
+      const ad = compactUtmId(adId);
+      return (
+        anchors.find(
+          (a) => a.active && a.utmCampaign === camp && a.utmTerm === adg && a.utmContent === ad
+        ) || null
+      );
+    },
+    [anchors]
+  );
 
   const loadCampaigns = async () => {
     if (!isMetaConnected) return;
@@ -772,27 +803,53 @@ const Campaigns: React.FC = () => {
                                 )}
                                 {paidOverview.tableLevel === 'ADS' && (
                                   <div className="flex items-center justify-end gap-2">
-                                    {String(row.level ?? '').toUpperCase() === 'AD' && (
-                                      <button
-                                        type="button"
-                                        className="p-2 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all"
-                                        title="Gerar UTM para este anúncio (campanha + conjunto + anúncio)"
-                                        onClick={() => {
-                                          setUtmAdModalCtx({
-                                            platform: activePlatform,
-                                            campaignId: drillCampaignId || '',
-                                            campaignName: drillCampaignLabel,
-                                            adSetId: drillAdSetId || '',
-                                            adSetName: drillAdSetLabel,
-                                            adId: String(row.id).trim(),
-                                            adName: row.name || '',
-                                          });
-                                          setUtmAdModalOpen(true);
-                                        }}
-                                      >
-                                        <Link2 size={18} />
-                                      </button>
-                                    )}
+                                    {String(row.level ?? '').toUpperCase() === 'AD' && (() => {
+                                      const existing = findAnchorForAd(
+                                        drillCampaignId || '',
+                                        drillAdSetId || '',
+                                        String(row.id)
+                                      );
+                                      return (
+                                        <>
+                                          {existing && (
+                                            <span
+                                              className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-full"
+                                              title="UTM já configurada para este anúncio"
+                                            >
+                                              <CheckCircle2 size={10} />
+                                              UTM
+                                            </span>
+                                          )}
+                                          <button
+                                            type="button"
+                                            className={`p-2 rounded-lg transition-all ${
+                                              existing
+                                                ? 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
+                                                : 'text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50'
+                                            }`}
+                                            title={
+                                              existing
+                                                ? 'Editar UTM já configurada'
+                                                : 'Gerar UTM para este anúncio (campanha + conjunto + anúncio)'
+                                            }
+                                            onClick={() => {
+                                              setUtmAdModalCtx({
+                                                platform: activePlatform,
+                                                campaignId: drillCampaignId || '',
+                                                campaignName: drillCampaignLabel,
+                                                adSetId: drillAdSetId || '',
+                                                adSetName: drillAdSetLabel,
+                                                adId: String(row.id).trim(),
+                                                adName: row.name || '',
+                                              });
+                                              setUtmAdModalOpen(true);
+                                            }}
+                                          >
+                                            <Link2 size={18} />
+                                          </button>
+                                        </>
+                                      );
+                                    })()}
                                     <button type="button" className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Duplicar">
                                       <Copy size={16} />
                                     </button>
@@ -929,6 +986,18 @@ const Campaigns: React.FC = () => {
         }}
         ctx={utmAdModalCtx}
         companyId={storageService.getUser()?.company?.id ?? null}
+        existingAnchor={
+          utmAdModalCtx
+            ? ((): ExistingAnchor | null => {
+                const a = findAnchorForAd(utmAdModalCtx.campaignId, utmAdModalCtx.adSetId, utmAdModalCtx.adId);
+                return a ? { id: String(a.id), anchorText: a.anchorText } : null;
+              })()
+            : null
+        }
+        onSaved={() => {
+          showToast('UTM registrada para este anúncio', 'success');
+          void loadAnchors();
+        }}
         onCopied={() => showToast('Copiado para a área de transferência', 'success')}
       />
     </>

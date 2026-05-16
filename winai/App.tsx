@@ -68,6 +68,8 @@ import AdminGestaoEquipe from './components/Admin/AdminGestaoEquipe';
 import AdminGestaoPapeis from './components/Admin/AdminGestaoPapeis';
 import AdminGlobalNotifications from './components/Admin/AdminGlobalNotifications';
 import TermsAcceptanceModal from './components/TermsAcceptanceModal';
+import { InstanceProvider } from './contexts/InstanceContext';
+import InstanceSwitcher from './components/ui/InstanceSwitcher';
 import type { UserDTO } from './services/types';
 import { canAccessCompanyAppModule, type CompanyAppModuleKey } from './utils/appModuleAccess';
 import { userService } from './services/api/user.service';
@@ -210,6 +212,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
   };
 
   return (
+    <InstanceProvider enabled={!!user?.company?.id}>
     <div
       className="flex h-screen bg-gray-50 overflow-hidden font-['Inter'] w-full"
       style={{ ['--app-sidebar-width' as string]: isSidebarOpen ? '16rem' : '5rem' }}
@@ -289,9 +292,12 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 z-[200] shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></div>
-            <h2 className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em]">Operação Ativa • Real-Time Core</h2>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></div>
+              <h2 className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em]">Operação Ativa • Real-Time Core</h2>
+            </div>
+            <InstanceSwitcher />
           </div>
           <div className="flex items-center gap-6">
             <div className="relative">
@@ -380,6 +386,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
         </main>
       </div>
     </div>
+    </InstanceProvider>
   );
 };
 

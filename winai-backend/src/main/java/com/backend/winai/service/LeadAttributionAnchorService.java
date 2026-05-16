@@ -205,7 +205,27 @@ public class LeadAttributionAnchorService {
         if (req.getActive() != null) {
             entity.setActive(req.getActive());
         }
+        boolean reembed = false;
+        if (req.getAnchorText() != null) {
+            String t = req.getAnchorText().trim();
+            if (t.length() < 2) {
+                throw new IllegalArgumentException("A mensagem do anúncio deve ter ao menos 2 caracteres.");
+            }
+            if (!t.equals(entity.getAnchorText())) {
+                entity.setAnchorText(t);
+                reembed = true;
+            }
+        }
         entity = anchorRepository.save(entity);
+        if (reembed) {
+            List<Double> vector = openAiService.getEmbedding(entity.getAnchorText());
+            anchorRepository.updateEmbedding(entity.getId(), vector.toString());
+            log.info(
+                    "[SemanticAttr] âncora atualizada id={} companyId={} textoPreview=\"{}\"",
+                    entity.getId(),
+                    company.getId(),
+                    previewForLog(entity.getAnchorText()));
+        }
         return toResponse(entity);
     }
 

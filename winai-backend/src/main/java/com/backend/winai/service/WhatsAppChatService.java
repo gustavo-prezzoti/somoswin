@@ -66,19 +66,29 @@ public class WhatsAppChatService {
          */
         public List<WhatsAppConversationResponse> getConversationsByUserConnections(UUID userId, UUID companyId,
                         Boolean includeMessages) {
+                return getConversationsByUserConnections(userId, companyId, includeMessages, null);
+        }
+
+        public List<WhatsAppConversationResponse> getConversationsByUserConnections(UUID userId, UUID companyId,
+                        Boolean includeMessages, String uazapInstance) {
                 Company company = companyRepository.findById(companyId)
                                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-                // Busca os nomes das instâncias que a empresa tem acesso
                 List<String> companyInstanceNames = userWhatsAppConnectionRepository
                                 .findInstanceNamesByCompanyId(companyId);
 
-                // Busca todas as conversas da empresa (já ordenadas)
                 List<WhatsAppConversation> allConversations = conversationRepository
                                 .findByCompanyOrderByLastMessageTimestampDescWithLead(company);
 
-                // Sem conexão cadastrada (ex.: QR antes do fix), não filtrar — evita lista vazia indevida
-                if (companyInstanceNames.isEmpty()) {
+                String requestedInstance = uazapInstance != null && !uazapInstance.isBlank() ? uazapInstance.trim() : null;
+                if (requestedInstance != null && !companyInstanceNames.isEmpty()
+                                && !companyInstanceNames.contains(requestedInstance)) {
+                        log.warn("Usuário {} pediu inst. {} fora das conexões da empresa {} — devolvendo lista vazia",
+                                        userId, requestedInstance, companyId);
+                        return List.of();
+                }
+
+                if (companyInstanceNames.isEmpty() && requestedInstance == null) {
                         log.debug("Nenhuma UserWhatsAppConnection para empresa {}. Listando todas as conversas da empresa.",
                                         companyId);
                         return allConversations.stream()
@@ -86,10 +96,11 @@ public class WhatsAppChatService {
                                         .collect(Collectors.toList());
                 }
 
-                // Filtra apenas as conversas das instâncias vinculadas à empresa
                 return allConversations.stream()
                                 .filter(conv -> conv.getUazapInstance() != null
-                                                && companyInstanceNames.contains(conv.getUazapInstance()))
+                                                && (requestedInstance != null
+                                                                ? requestedInstance.equals(conv.getUazapInstance())
+                                                                : companyInstanceNames.contains(conv.getUazapInstance())))
                                 .map(conv -> mapToConversationResponse(conv, includeMessages))
                                 .collect(Collectors.toList());
         }

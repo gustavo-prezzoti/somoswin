@@ -67,8 +67,10 @@ export const whatsappService = {
     /**
      * Lista conversas filtradas pelas instâncias do usuário
      */
-    async getConversationsByUser(userId: string, companyId: string): Promise<WhatsAppConversation[]> {
-        return await httpClient.get<WhatsAppConversation[]>(`/whatsapp/chat/conversations/user?userId=${userId}&companyId=${companyId}&includeMessages=false`);
+    async getConversationsByUser(userId: string, companyId: string, uazapInstance?: string | null): Promise<WhatsAppConversation[]> {
+        const params = new URLSearchParams({ userId, companyId, includeMessages: 'false' });
+        if (uazapInstance) params.set('uazapInstance', uazapInstance);
+        return await httpClient.get<WhatsAppConversation[]>(`/whatsapp/chat/conversations/user?${params.toString()}`);
     },
 
     /**

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Copy, Loader2 } from 'lucide-react';
+import { CheckCircle2, Copy, Loader2 } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { marketingService } from '../services';
 
@@ -15,7 +15,12 @@ export interface UtmAdTrackingContext {
   adName: string;
 }
 
-function compactId(raw: string): string {
+export interface ExistingAnchor {
+  id: string;
+  anchorText: string;
+}
+
+export function compactId(raw: string): string {
   const s = raw.trim();
   if (!s) return '';
   const i = s.lastIndexOf('/');
@@ -29,6 +34,10 @@ interface UtmAdTrackingModalProps {
   onCopied: () => void;
   /** UUID da empresa — obrigatório para o link /w/ (WhatsApp vem do backend por cliente). */
   companyId?: string | null;
+  /** Âncora já registrada para esse anúncio (modo update). Quando presente, pré-preenche e faz PATCH. */
+  existingAnchor?: ExistingAnchor | null;
+  /** Chamado depois de registrar/atualizar a âncora — parent recarrega a lista para refletir status. */
+  onSaved?: () => void;
 }
 
 function CopyRow({
@@ -69,7 +78,15 @@ function CopyRow({
   );
 }
 
-const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, ctx, onCopied, companyId }) => {
+const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({
+  open,
+  onClose,
+  ctx,
+  onCopied,
+  companyId,
+  existingAnchor,
+  onSaved,
+}) => {
   const [anchorDraft, setAnchorDraft] = useState('');
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
@@ -79,11 +96,17 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
   const [registeredPrefillForLinks, setRegisteredPrefillForLinks] = useState<string | null>(null);
 
   useEffect(() => {
-    setAnchorDraft('');
     setAnchorError(null);
-    setRegisterOk(false);
-    setRegisteredPrefillForLinks(null);
-  }, [open, ctx?.platform, ctx?.adId]);
+    if (existingAnchor) {
+      setAnchorDraft(existingAnchor.anchorText);
+      setRegisterOk(true);
+      setRegisteredPrefillForLinks(existingAnchor.anchorText);
+    } else {
+      setAnchorDraft('');
+      setRegisterOk(false);
+      setRegisteredPrefillForLinks(null);
+    }
+  }, [open, ctx?.platform, ctx?.adId, existingAnchor?.id, existingAnchor?.anchorText]);
 
   if (!ctx) return null;
 
@@ -164,25 +187,28 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
     }
     setRegisterLoading(true);
     setAnchorError(null);
-    setRegisterOk(false);
-    setRegisteredPrefillForLinks(null);
     try {
-      const baseBody = {
-        anchorText: text,
-        utmCampaign: camp,
-        utmContent: ad,
-        utmTerm: adg,
-      };
-      const body =
-        ctx.platform === 'META'
-          ? { ...baseBody, utmSource: 'facebook', utmMedium: 'paid_social' }
-          : { ...baseBody, utmSource: 'google', utmMedium: 'cpc' };
-      await marketingService.createLeadAttributionAnchor(body);
+      if (existingAnchor) {
+        await marketingService.patchLeadAttributionAnchor(existingAnchor.id, { anchorText: text });
+      } else {
+        const baseBody = {
+          anchorText: text,
+          utmCampaign: camp,
+          utmContent: ad,
+          utmTerm: adg,
+        };
+        const body =
+          ctx.platform === 'META'
+            ? { ...baseBody, utmSource: 'facebook', utmMedium: 'paid_social' }
+            : { ...baseBody, utmSource: 'google', utmMedium: 'cpc' };
+        await marketingService.createLeadAttributionAnchor(body);
+      }
       setRegisterOk(true);
       setRegisteredPrefillForLinks(text);
-      onCopied();
-    } catch {
-      setAnchorError('Não foi possível registrar a âncora. Verifique a sessão e tente de novo.');
+      onSaved?.();
+    } catch (e) {
+      const msg = (e as { message?: string } | null)?.message;
+      setAnchorError(msg || 'Não foi possível registrar a âncora. Verifique a sessão e tente de novo.');
     } finally {
       setRegisterLoading(false);
     }
@@ -193,9 +219,18 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
       <p className="text-xs font-bold text-violet-900 uppercase tracking-wide">
         Mensagem para anúncio Click-to-WhatsApp
       </p>
-      <p className="text-xs text-violet-800/90">
-        <strong>Registre</strong> a mensagem abaixo; em seguida você copia o <strong>link do WhatsApp</strong> para usar no anúncio.
-      </p>
+      {existingAnchor ? (
+        <div className="flex items-start gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+          <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-600" />
+          <span>
+            <strong>Este anúncio já tem UTM configurada.</strong> Edite a mensagem abaixo e clique em <strong>Atualizar mensagem e UTM</strong> para sobrescrever.
+          </span>
+        </div>
+      ) : (
+        <p className="text-xs text-violet-800/90">
+          <strong>Registre</strong> a mensagem abaixo; em seguida você copia o <strong>link do WhatsApp</strong> para usar no anúncio.
+        </p>
+      )}
       <div className="flex flex-col sm:flex-row gap-2">
         <button
           type="button"
@@ -222,7 +257,7 @@ const UtmAdTrackingModal: React.FC<UtmAdTrackingModalProps> = ({ open, onClose, 
         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50 hover:bg-slate-900 transition-colors"
       >
         {registerLoading ? <Loader2 className="animate-spin" size={16} /> : null}
-        Registrar mensagem e UTM
+        {existingAnchor ? 'Atualizar mensagem e UTM' : 'Registrar mensagem e UTM'}
       </button>
       {anchorError ? <p className="text-xs text-red-600 font-medium">{anchorError}</p> : null}
     </div>

@@ -251,6 +251,16 @@ public class AIAgentService {
             }
 
             String phoneNumber = conversation.getPhoneNumber();
+            String waChatId = conversation.getWaChatId();
+            if (waChatId != null && !waChatId.isBlank()) {
+                String derived = waChatId.replaceAll("@.*", "").trim();
+                if (!derived.isEmpty() && derived.matches("\\d+") && !derived.equals(phoneNumber)) {
+                    log.warn(
+                            "[PhoneMismatch] conv {} phone_number={} != wa_chatid={} — usando wa_chatid como destino",
+                            conversation.getId(), phoneNumber, derived);
+                    phoneNumber = derived;
+                }
+            }
             String baseUrl = null;
             String token = null;
             String instanceName = conversation.getUazapInstance();

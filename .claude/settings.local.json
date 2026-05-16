@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(xargs grep -l \"RequestMapping.*uazap\\\\|RequestMapping.*api/v1/uazap\")",
+      "Bash(./mvnw -q -DskipTests compile)",
+      "Bash(xargs grep -l \"WhatsAppConversation\\\\|getConversations\")",
+      "Bash(xargs grep -l \"storageService\\\\|localStorage\")",
+      "Bash(xargs grep -l \"Context\\\\|useContext\\\\|Provider\")"
+    ]
+  }
+}

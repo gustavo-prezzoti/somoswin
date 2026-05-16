@@ -9,6 +9,7 @@ import AudioPlayer from './ui/AudioPlayer';
 import { useToast } from '../hooks/useToast';
 import ToastComponent from './ui/Toast';
 import { BodyPortal } from './ui/BodyPortal';
+import { useInstance } from '../contexts/InstanceContext';
 
 const WhatsApp: React.FC = () => {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
@@ -44,6 +45,7 @@ const WhatsApp: React.FC = () => {
   const [isDeletingLead, setIsDeletingLead] = useState(false);
 
   const { toasts, showToast, removeToast } = useToast();
+  const { selectedInstance } = useInstance();
 
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -87,9 +89,12 @@ const WhatsApp: React.FC = () => {
 
   useEffect(() => {
     if (user) {
+      setActiveConversation(null);
+      activeConversationRef.current = null;
+      setMessages([]);
       loadConversations();
     }
-  }, [user]);
+  }, [user, selectedInstance]);
 
   useEffect(() => {
     if (activeConversation?.id) {
@@ -131,7 +136,7 @@ const WhatsApp: React.FC = () => {
 
       // Se o usuário está logado e tem company, buscar conversas filtradas
       if (user?.id && user?.company?.id) {
-        data = await whatsappService.getConversationsByUser(user.id, user.company.id);
+        data = await whatsappService.getConversationsByUser(user.id, user.company.id, selectedInstance);
       } else {
         // Fallback para buscar todas
         data = await whatsappService.getConversations();
@@ -186,7 +191,7 @@ const WhatsApp: React.FC = () => {
     } finally {
       if (!silent) setIsLoading(false);
     }
-  }, [user, chatId, leadIdParam, setSearchParams]);
+  }, [user, chatId, leadIdParam, setSearchParams, selectedInstance]);
 
   useEffect(() => {
     activeConversationRef.current = activeConversation;
