@@ -400,14 +400,14 @@ public class AIAgentService {
 
                 AgentDocumentAttachParser.Result attachParse = AgentDocumentAttachParser.parse(working);
                 String textToUser = attachParse.visibleText();
-                java.util.Optional<UUID> attachDocId = attachParse.attachDocumentId();
+                java.util.List<UUID> attachDocIds = attachParse.attachDocumentIds();
 
                 if (textToUser != null && !textToUser.isBlank()) {
                     sendSplitResponse(conv, textToUser);
                 }
 
-                if (attachDocId.isPresent()) {
-                    sendKbLinkedAgentDocument(conv, attachDocId.get());
+                for (UUID attachDocId : attachDocIds) {
+                    sendKbLinkedAgentDocument(conv, attachDocId);
                 }
 
                 // Update Follow-up
@@ -418,7 +418,7 @@ public class AIAgentService {
 
                 // Update Memory (sem linha ATTACH_DOC)
                 String memoryText = textToUser != null && !textToUser.isBlank() ? textToUser : "";
-                if (attachDocId.isPresent()) {
+                if (!attachDocIds.isEmpty()) {
                     memoryText = memoryText.isEmpty() ? "📎 Documento enviado" : memoryText + " 📎";
                 }
                 if (memoryText.isBlank()) {
