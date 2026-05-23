@@ -66,6 +66,7 @@ public class AIAgentService {
     /** Proxy para self-invocation e garantir REQUIRES_NEW em persistAndNotifyByConversationId */
     private final AIAgentService self;
     private final AiResponseGuardService aiResponseGuardService;
+    private final com.backend.winai.ai.pipeline.handoff.HandoffReversionClassifier handoffReversionClassifier;
 
     private static final int MAX_AGENT_DOC_SEND_BYTES = 25 * 1024 * 1024;
 
@@ -95,6 +96,7 @@ public class AIAgentService {
             CompanyAgentDocumentRepository companyAgentDocumentRepository,
             RestTemplate restTemplate,
             AiResponseGuardService aiResponseGuardService,
+            com.backend.winai.ai.pipeline.handoff.HandoffReversionClassifier handoffReversionClassifier,
             @org.springframework.context.annotation.Lazy AIAgentService self) {
         this.openAiService = openAiService;
         this.connectionRepository = connectionRepository;
@@ -113,6 +115,7 @@ public class AIAgentService {
         this.companyAgentDocumentRepository = companyAgentDocumentRepository;
         this.restTemplate = restTemplate;
         this.aiResponseGuardService = aiResponseGuardService;
+        this.handoffReversionClassifier = handoffReversionClassifier;
         this.self = self;
     }
 
@@ -396,10 +399,15 @@ public class AIAgentService {
             return;
         }
 
-        // 2. Check Human Mode again (maybe switched during the wait)
+        // 2. Check Human Mode — antes de abortar, dá uma chance do classificador
+        //    de reversão decidir se o lead mudou de assunto (e a IA pode voltar).
         if ("HUMAN".equalsIgnoreCase(conv.getSupportMode())) {
-            log.info("Conversation {} switched to HUMAN mode during wait. Aborting AI.", conversationId);
-            return;
+            if (tryRevertFromHumanIfLeadChangedTopic(conv)) {
+                log.info("Conversation {}: HandoffReversion decidiu REVERT — IA volta a responder", conversationId);
+            } else {
+                log.info("Conversation {} em HUMAN mode. Abortando IA.", conversationId);
+                return;
+            }
         }
 
         // 3. "Digitando…" no chat do lead enquanto a IA gera a resposta.
@@ -495,6 +503,93 @@ public class AIAgentService {
         } finally {
             // Encerra "digitando" no chat do lead, independente do resultado.
             sendPresenceForConversation(conv, "paused", 0);
+        }
+    }
+
+    private boolean tryRevertFromHumanIfLeadChangedTopic(WhatsAppConversation conv) {
+        try {
+            List<WhatsAppMessage> recent = messageRepository
+                    .findByConversationIdOrderByMessageTimestampDesc(conv.getId())
+                    .stream()
+                    .limit(20)
+                    .collect(Collectors.toList());
+
+            if (recent.isEmpty()) {
+                return false;
+            }
+
+            WhatsAppMessage latest = recent.get(0);
+            if (Boolean.TRUE.equals(latest.getFromMe()) || latest.getContent() == null) {
+                return false;
+            }
+
+            boolean humanRepliedAfterHandoff = false;
+            for (WhatsAppMessage m : recent) {
+                if (!Boolean.TRUE.equals(m.getFromMe())) continue;
+                if (m.getContent() == null) continue;
+                String c = m.getContent().trim();
+                if (c.startsWith("Entendi! Vou chamar nossa especialista humana")
+                        || c.startsWith("Vou conectar você com um especialista")
+                        || isCustomHandoffMessage(conv, c)) {
+                    break;
+                }
+                humanRepliedAfterHandoff = true;
+                break;
+            }
+            if (humanRepliedAfterHandoff) {
+                return false;
+            }
+
+            List<OpenAiService.ChatMessage> history = new ArrayList<>();
+            for (int i = recent.size() - 1; i >= 0; i--) {
+                WhatsAppMessage m = recent.get(i);
+                if (m == null || m.getContent() == null) continue;
+                String role = Boolean.TRUE.equals(m.getFromMe()) ? "assistant" : "user";
+                history.add(new OpenAiService.ChatMessage(role, m.getContent()));
+            }
+
+            var decision = handoffReversionClassifier.classify(history, latest.getContent());
+            if (decision != com.backend.winai.ai.pipeline.handoff.HandoffReversionClassifier.Decision.REVERT) {
+                return false;
+            }
+
+            conv.setSupportMode("IA");
+            conversationRepository.save(conv);
+
+            try {
+                UUID companyId = conv.getCompany() != null ? conv.getCompany().getId() : null;
+                if (companyId != null) {
+                    com.backend.winai.dto.response.WebSocketMessage modeChange = com.backend.winai.dto.response.WebSocketMessage
+                            .builder().type("SUPPORT_MODE_CHANGED").conversationId(conv.getId().toString())
+                            .mode("IA").companyId(companyId).build();
+                    messagingTemplate.convertAndSend("/topic/whatsapp/" + companyId, modeChange);
+                    messagingTemplate.convertAndSend("/topic/whatsapp/conversations/" + companyId, modeChange);
+                }
+            } catch (Exception e) {
+                log.debug("Broadcast SUPPORT_MODE_CHANGED falhou: {}", e.getMessage());
+            }
+
+            try {
+                followUpService.resumeFollowUp(conv.getId());
+            } catch (Exception ignored) {
+            }
+            return true;
+        } catch (Exception e) {
+            log.warn("tryRevertFromHumanIfLeadChangedTopic erro conv {}: {}", conv.getId(), e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean isCustomHandoffMessage(WhatsAppConversation conv, String content) {
+        try {
+            if (conv.getCompany() == null) return false;
+            var globalConfig = globalNotificationService.getConfig(conv.getCompany().getId());
+            if (globalConfig == null) return false;
+            String custom = globalConfig.getHumanHandoffClientMessage();
+            if (custom == null || custom.isBlank()) return false;
+            return content.trim().equals(custom.trim());
+        } catch (Exception e) {
+            return false;
         }
     }
 
