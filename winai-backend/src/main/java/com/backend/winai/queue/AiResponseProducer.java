@@ -1,53 +1,51 @@
 package com.backend.winai.queue;
 
+import com.backend.winai.ai.pipeline.AiPipelineService;
+import com.backend.winai.ai.pipeline.model.AiPayload;
 import com.backend.winai.dto.queue.AiQueueMessage;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Fina camada de adaptação entre o webhook (que constrói {@link AiQueueMessage})
+ * e o novo {@link AiPipelineService}. As regras de fila/agregação/dedupe
+ * agora vivem no pipeline modular.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
 public class AiResponseProducer {
 
-    private final RedisTemplate<String, Object> redisTemplate;
-    private static final String QUEUE_NAME = "ai_response_queue";
+    private final AiPipelineService pipeline;
 
+    /**
+     * @return true se a mensagem foi aceita (enfileirada ou bufferizada).
+     */
     public boolean sendMessage(AiQueueMessage message) {
+        if (message == null) return false;
         try {
-            String convId = message.getConversationId();
-            String bufferKey = "ai_buffer:" + convId;
-            String metaKey = "ai_metadata:" + convId;
-            String silenceKey = "ai_silence_timer:" + convId;
-
-            // 1. Acumula o texto da mensagem na lista do Redis
-            redisTemplate.opsForList().rightPush(bufferKey, message.getUserMessage());
-
-            // 2. Salva metadados (sobrescreve com os mais recentes mas preserva imagem)
-            if (message.getImageUrl() == null) {
-                Object existingObj = redisTemplate.opsForValue().get(metaKey);
-                if (existingObj instanceof AiQueueMessage) {
-                    AiQueueMessage existing = (AiQueueMessage) existingObj;
-                    if (existing != null && existing.getImageUrl() != null) {
-                        message.setImageUrl(existing.getImageUrl());
-                    }
-                }
+            AiPayload payload = new AiPayload();
+            payload.setConversationId(message.getConversationId());
+            payload.setCompanyId(message.getCompanyId());
+            payload.setLeadName(message.getLeadName());
+            payload.setMessageText(message.getUserMessage());
+            payload.setMediaUrl(message.getImageUrl());
+            payload.setWaMessageId(message.getWaMessageId());
+            String mt = message.getMediaType();
+            if ((mt == null || mt.isBlank()) && message.getImageUrl() != null && !message.getImageUrl().isBlank()) {
+                mt = "image";
             }
-            redisTemplate.opsForValue().set(metaKey, message);
-
-            // 3. Atualiza o timer de silêncio para AGORA
-            redisTemplate.opsForValue().set(silenceKey, System.currentTimeMillis());
-
-            // 4. Adiciona a conversa na lista de "Vigilância" (Set para evitar duplicados)
-            redisTemplate.opsForSet().add("ai_active_debounces", convId);
-
-            log.info("Mensagem acumulada para buffer da IA: {}. Lead: {}", convId, message.getLeadName());
-            return true;
+            payload.setMediaType(mt);
+            payload.setWhatsAppTimestamp(
+                    message.getWhatsAppTimestamp() != null ? message.getWhatsAppTimestamp() : message.getTimestamp());
+            return pipeline.enqueueIncoming(payload);
         } catch (Exception e) {
-            log.error("Erro ao acumular mensagem para IA: {}", e.getMessage());
+            log.error("Erro ao entregar mensagem ao pipeline IA: {}", e.getMessage(), e);
             return false;
         }
     }

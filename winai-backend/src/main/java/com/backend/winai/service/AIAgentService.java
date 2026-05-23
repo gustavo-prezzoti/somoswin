@@ -359,13 +359,36 @@ public class AIAgentService {
         }
 
         try {
-            executeScheduledAIProcessingLocked(conversationId, leadName, imageUrl);
+            executeScheduledAIProcessingLocked(conversationId, leadName, imageUrl, null);
         } finally {
             aiResponseGuardService.releaseProcessingLock(conversationId);
         }
     }
 
-    private void executeScheduledAIProcessingLocked(UUID conversationId, String leadName, String imageUrl) {
+    /**
+     * Entrada do novo pipeline (com aggregator + decisor + Redis inflight/buffer).
+     * Equivalente a {@link #executeScheduledAIProcessing} mas com hook entre a
+     * geração do GPT e o envio — usado pelo CoalesceInterruptMerger para
+     * reconciliar mensagens novas que chegaram durante a geração.
+     *
+     * Se {@code coalesceHook} retornar null, o envio é abortado (sinal de regenerar).
+     */
+    @Transactional
+    public void runFromPipeline(UUID conversationId, String leadName, String imageUrl,
+                                java.util.function.Function<String, String> coalesceHook) {
+        log.info(">>> [PIPELINE] Iniciando execução para conversa {}", conversationId);
+        if (!aiResponseGuardService.tryAcquireProcessingLock(conversationId)) {
+            return;
+        }
+        try {
+            executeScheduledAIProcessingLocked(conversationId, leadName, imageUrl, coalesceHook);
+        } finally {
+            aiResponseGuardService.releaseProcessingLock(conversationId);
+        }
+    }
+
+    private void executeScheduledAIProcessingLocked(UUID conversationId, String leadName, String imageUrl,
+            java.util.function.Function<String, String> coalesceHook) {
         // 1. Re-fetch conversation to ensure attached session and latest data
         WhatsAppConversation conv = conversationRepository.findByIdWithCompany(conversationId).orElse(null);
         if (conv == null) {
@@ -427,6 +450,21 @@ public class AIAgentService {
                 AgentDocumentAttachParser.Result attachParse = AgentDocumentAttachParser.parse(working);
                 String textToUser = attachParse.visibleText();
                 java.util.List<UUID> attachDocIds = attachParse.attachDocumentIds();
+
+                // Coalesce-interrupt: mescla mensagens novas que chegaram durante a geração.
+                if (coalesceHook != null && textToUser != null && !textToUser.isBlank()) {
+                    try {
+                        String merged = coalesceHook.apply(textToUser);
+                        if (merged == null) {
+                            log.info("Coalesce hook sinalizou regenerar — abortando envio para {}", conversationId);
+                            return;
+                        }
+                        textToUser = merged;
+                    } catch (Exception e) {
+                        log.warn("Coalesce hook lançou exceção para {}: {} — usando draft original",
+                                conversationId, e.getMessage());
+                    }
+                }
 
                 if (textToUser != null && !textToUser.isBlank()) {
                     sendSplitResponse(conv, textToUser);
@@ -862,6 +900,12 @@ public class AIAgentService {
             messagingTemplate.convertAndSend("/topic/whatsapp/" + conversation.getCompany().getId(), notificationEvent);
 
             sendHumanHandoffWhatsAppNotification(conversation);
+        }
+
+        try {
+            updateLeadMemory(conversation, "HUMAN_HANDOFF_REQUESTED");
+        } catch (Exception e) {
+            log.warn("Falha ao atualizar memória do lead no handoff: {}", e.getMessage());
         }
     }
 

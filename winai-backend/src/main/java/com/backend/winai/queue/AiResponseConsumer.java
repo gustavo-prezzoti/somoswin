@@ -1,139 +1,51 @@
 package com.backend.winai.queue;
 
-import com.backend.winai.dto.queue.AiQueueMessage;
-import com.backend.winai.entity.Company;
-import com.backend.winai.entity.WhatsAppConversation;
-import com.backend.winai.repository.CompanyRepository;
-import com.backend.winai.repository.WhatsAppConversationRepository;
-import com.backend.winai.service.AIAgentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
-
+/**
+ * COMPAT/CLEANUP:
+ * O consumer original (debouncer baseado em Set+ZSET no Redis) foi substituído
+ * pelo {@link com.backend.winai.ai.pipeline.AiPipelineService} — aggregator
+ * agora vive no processo, com timer reset + hard cap descritos nas REGRAS DE
+ * NEGÓCIO. Mantemos esta classe apenas para drenar/expirar chaves legadas em
+ * ambientes que ainda tinham buffers ativos no Redis no momento do deploy.
+ *
+ * Pode ser removida após uma janela de migração.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional(readOnly = true)
 @Profile("!followup-worker & !broadcast-worker")
-@ConditionalOnProperty(name = "META_SYNC_ENABLED", havingValue = "false", matchIfMissing = true)
+@ConditionalOnProperty(name = "ai.pipeline.legacy-cleanup", havingValue = "true", matchIfMissing = false)
 public class AiResponseConsumer {
 
     private final RedisTemplate<String, Object> redisTemplate;
-    private final AIAgentService aiAgentService;
-    private final WhatsAppConversationRepository conversationRepository;
-    private final CompanyRepository companyRepository;
-    private final java.util.concurrent.ExecutorService executorService = java.util.concurrent.Executors
-            .newCachedThreadPool();
 
-    private static final String QUEUE_NAME = "ai_response_queue";
-    private static final long DEBOUNCE_DELAY_MS = 3000; // Aguardar 3 segundos de silêncio
-
-    @Scheduled(fixedDelayString = "${ai.queue.consumer-interval-ms:2000}") // Verifica a cada 2s (evita sobrecarga)
-    public void processQueue() {
+    @Scheduled(fixedDelayString = "${ai.queue.legacy-cleanup-interval-ms:60000}")
+    public void cleanupLegacyKeys() {
         try {
-            // Busca todas as conversas que estão aguardando silêncio
-            java.util.Set<Object> activeConvIds = redisTemplate.opsForSet().members("ai_active_debounces");
-            if (activeConvIds == null || activeConvIds.isEmpty()) {
-                return;
+            java.util.Set<Object> active = redisTemplate.opsForSet().members("ai_active_debounces");
+            if (active == null || active.isEmpty()) return;
+            for (Object o : active) {
+                String convId = String.valueOf(o);
+                redisTemplate.delete("ai_buffer:" + convId);
+                redisTemplate.delete("ai_metadata:" + convId);
+                redisTemplate.delete("ai_silence_timer:" + convId);
+                redisTemplate.opsForSet().remove("ai_active_debounces", convId);
+                log.info("Legacy cleanup: removidas chaves ai_*:{}", convId);
             }
-
-            long now = System.currentTimeMillis();
-
-            for (Object objId : activeConvIds) {
-                String convId = (String) objId;
-                String silenceKey = "ai_silence_timer:" + convId;
-
-                Object lastTimestampObj = redisTemplate.opsForValue().get(silenceKey);
-                if (lastTimestampObj == null)
-                    continue;
-
-                long lastTimestamp = Long.parseLong(lastTimestampObj.toString());
-
-                // Se houveram 3 segundos de silêncio (DEBOUNCE_DELAY_MS), processamos
-                if (now - lastTimestamp >= DEBOUNCE_DELAY_MS) {
-                    // ATOMICIDADE: Remove do set imediatamente para evitar que outra thread pegue
-                    Long removed = redisTemplate.opsForSet().remove("ai_active_debounces", convId);
-
-                    if (removed != null && removed > 0) {
-                        processMergedMessages(convId);
-                    }
-                }
-            }
-        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
-            log.warn("Redis connection failed in Consumer: {}", e.getMessage());
+        } catch (RedisConnectionFailureException e) {
+            log.debug("Legacy cleanup: Redis off ({}).", e.getMessage());
         } catch (Exception e) {
-            log.error("Error processing AI queue", e);
+            log.warn("Legacy cleanup falhou: {}", e.getMessage());
         }
-    }
-
-    private void processMergedMessages(String convId) {
-        executorService.submit(() -> {
-            try {
-                // 1. Removido daqui para evitar race condition
-                // redisTemplate.opsForSet().remove("ai_active_debounces", convId);
-
-                String bufferKey = "ai_buffer:" + convId;
-                String metaKey = "ai_metadata:" + convId;
-                String silenceKey = "ai_silence_timer:" + convId;
-
-                // 2. Coleta mensagens acumuladas e metadados
-                java.util.List<Object> messages = redisTemplate.opsForList().range(bufferKey, 0, -1);
-                Object metaObj = redisTemplate.opsForValue().get(metaKey);
-
-                if (messages == null || messages.isEmpty() || !(metaObj instanceof AiQueueMessage)) {
-                    // Limpeza de segurança se não houver o que processar
-                    redisTemplate.delete(bufferKey);
-                    redisTemplate.delete(metaKey);
-                    redisTemplate.delete(silenceKey);
-                    return;
-                }
-
-                AiQueueMessage metadata = (AiQueueMessage) metaObj;
-
-                // 3. Junta as mensagens em um único texto contextual
-                StringBuilder mergedText = new StringBuilder();
-                for (Object msg : messages) {
-                    String text = msg.toString();
-                    if (mergedText.length() > 0)
-                        mergedText.append(" ");
-                    mergedText.append(text);
-                    if (!text.endsWith(".") && !text.endsWith("!") && !text.endsWith("?")) {
-                        mergedText.append(".");
-                    }
-                }
-
-                log.info("Processando {} mensagens agrupadas para conversa: {} | Texto: {}",
-                        messages.size(), convId, mergedText);
-
-                // 4. Limpa o Redis ANTES de chamar a IA (evita rastro se falhar)
-                redisTemplate.delete(bufferKey);
-                redisTemplate.delete(metaKey);
-                redisTemplate.delete(silenceKey);
-
-                // 5. Busca as entidades e processa!
-                UUID conversationId = UUID.fromString(metadata.getConversationId());
-                UUID companyId = UUID.fromString(metadata.getCompanyId());
-
-                WhatsAppConversation conversation = conversationRepository.findById(conversationId).orElse(null);
-                Company company = companyRepository.findById(companyId).orElse(null);
-
-                if (conversation != null && company != null) {
-                    aiAgentService.processAndRespond(conversation, mergedText.toString(), metadata.getLeadName(),
-                            metadata.getImageUrl());
-                } else {
-                    log.warn("Conversation or Company not found for accumulated message: {}", metadata);
-                }
-
-            } catch (Exception e) {
-                log.error("Erro ao processar mensagens acumuladas para: " + convId, e);
-            }
-        });
     }
 }

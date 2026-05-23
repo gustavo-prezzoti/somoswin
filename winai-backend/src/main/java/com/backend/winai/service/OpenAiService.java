@@ -1574,7 +1574,6 @@ public class OpenAiService {
         return tool;
     }
 
-    // Inner DTO to replace external library dependency
     public String summarizeConversationContext(String currentSummary, List<ChatMessage> recentMessages) {
         if (!isChatEnabled() || recentMessages == null || recentMessages.isEmpty()) {
             return currentSummary;
@@ -1582,38 +1581,33 @@ public class OpenAiService {
 
         try {
             StringBuilder prompt = new StringBuilder();
-            prompt.append("Você é um especialista em sumarização de contexto para assistentes de IA.\n");
-            prompt.append("Seu objetivo é criar ou atualizar um RESUMO CONCISO mas RICO sobre o usuário (Lead).\n\n");
+            prompt.append("Você atualiza um resumo de longo prazo sobre um lead (cliente WhatsApp).\n");
+            prompt.append("Foco: NOME, INTENÇÃO ATUAL, ESTÁGIO DO FUNIL, OBJEÇÕES, PRÓXIMOS PASSOS.\n");
+            prompt.append("Saída em pt-BR, texto corrido, sem cabeçalho, máximo 600 caracteres.\n");
+            prompt.append("Descarte saudações, agradecimentos e ruído. Não invente informação.\n\n");
 
             if (currentSummary != null && !currentSummary.isEmpty()) {
                 prompt.append("=== RESUMO EXISTENTE ===\n");
                 prompt.append(currentSummary).append("\n");
                 prompt.append("========================\n\n");
-            } else {
-                prompt.append("=== NENHUM RESUMO EXISTENTE ===\n\n");
             }
 
             prompt.append("=== MENSAGENS RECENTES ===\n");
             for (ChatMessage msg : recentMessages) {
                 prompt.append(msg.getRole()).append(": ").append(msg.getContent()).append("\n");
             }
-            prompt.append("==========================\n\n");
+            prompt.append("==========================\n");
 
-            prompt.append("INSTRUÇÕES:\n");
-            prompt.append("1. Atualize o resumo com informações novas das mensagens recentes.\n");
-            prompt.append(
-                    "2. Mantenha informações cruciais: Nome do usuário, preferências, intenção atual, status, detalhes pessoais.\n");
-            prompt.append("3. Se o nome do usuário foi mencionado, DESTAQUE isso claramente.\n");
-            prompt.append("4. Remova detalhes triviais ou conversas antigas irrelevantes.\n");
-            prompt.append(
-                    "5. O resumo deve ser em texto corrido ou tópicos, pronto para ser injetado no System Prompt numa próxima conversa.\n");
-            prompt.append(
-                    "6. Se o usuário mudou de assunto, atualize o contexto para o novo tópico mantendo dados perfil.\n");
-            prompt.append("7. MÁXIMO de 1000 caracteres.\n");
-
-            String updatedSummary = generateResponse(prompt.toString(),
-                    "Atualize o resumo com base nas mensagens acima.");
-            return updatedSummary != null ? updatedSummary : currentSummary;
+            String updatedSummary = generateResponseWithModel("gpt-4o-mini", prompt.toString(),
+                    "Atualize ou crie o resumo do lead conforme as regras.");
+            if (updatedSummary == null || updatedSummary.isBlank()) {
+                return currentSummary;
+            }
+            String trimmed = updatedSummary.trim();
+            if (trimmed.length() > 600) {
+                trimmed = trimmed.substring(0, 600);
+            }
+            return trimmed;
 
         } catch (Exception e) {
             log.error("Erro ao gerar resumo de conversa: {}", e.getMessage());

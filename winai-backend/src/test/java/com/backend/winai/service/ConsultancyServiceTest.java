@@ -3,6 +3,7 @@ package com.backend.winai.service;
 import com.backend.winai.entity.*;
 import com.backend.winai.repository.CompanyRepository;
 import com.backend.winai.repository.ConsultancyCallRequestRepository;
+import com.backend.winai.repository.ConsultancyGlobalSettingsRepository;
 import com.backend.winai.repository.MeetingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,8 @@ class ConsultancyServiceTest {
     @Mock
     private ConsultancyCallRequestRepository consultancyCallRequestRepository;
     @Mock
+    private ConsultancyGlobalSettingsRepository consultancyGlobalSettingsRepository;
+    @Mock
     private SupabaseStorageService supabaseStorageService;
     @Mock
     private OpenAiService openAiService;
@@ -57,6 +60,10 @@ class ConsultancyServiceTest {
     @Test
     void getDashboard_buildsHistoryFromRepository() {
         when(companyRepository.findById(companyId)).thenReturn(Optional.of(company));
+        when(consultancyGlobalSettingsRepository.findById(ConsultancyGlobalSettings.SINGLETON_ID))
+                .thenReturn(Optional.of(ConsultancyGlobalSettings.builder()
+                        .id(ConsultancyGlobalSettings.SINGLETON_ID)
+                        .build()));
 
         Meeting past = Meeting.builder()
                 .id(UUID.randomUUID())

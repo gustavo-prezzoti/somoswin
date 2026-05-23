@@ -230,9 +230,10 @@ public class WhatsAppWebhookService {
             boolean isImage = typeLowerCheck.contains("image");
 
             if (!Boolean.TRUE.equals(message.getFromMe()) && (isText || isAudio || isImage)) {
-                // Usar o conteúdo da mensagem (que pode ter sido atualizado com a transcrição)
                 String imageUrl = isImage ? message.getMediaUrl() : null;
-                processAIResponse(conversation, message.getContent(), company, imageUrl);
+                String mediaTypeForPipeline = isImage ? "image" : "text";
+                processAIResponse(conversation, message.getContent(), company, imageUrl,
+                        message.getMessageId(), mediaTypeForPipeline, message.getMessageTimestamp());
             } else {
                 log.info("IA ignorada: fromMe={} (esperado false), type={} (esperado text, audio transcrito ou imagem)",
                         message.getFromMe(), messageType);
@@ -244,10 +245,10 @@ public class WhatsAppWebhookService {
     }
 
     /**
-     * Envia solicitação de resposta da IA para a fila (Redis)
+     * Envia solicitação de resposta da IA para o pipeline (Redis-coordenado).
      */
     private void processAIResponse(WhatsAppConversation conversation, String userMessage, Company company,
-            String imageUrl) {
+            String imageUrl, String waMessageId, String mediaType, Long whatsAppTimestamp) {
         try {
             if (!aiAgentService.isAIEnabledForConversation(conversation)) {
                 // Motivo específico já logado em AIAgentService.isAIEnabledForConversation (modo humano, OpenAI, base, etc.)
@@ -260,9 +261,9 @@ public class WhatsAppWebhookService {
                 leadName = "Usuário";
             }
 
-            log.info("Enfileirando processamento de IA para conversa: {}", conversation.getId());
+            log.info("Enfileirando processamento de IA para conversa: {} (wa_id={})",
+                    conversation.getId(), waMessageId);
 
-            // Enviar para fila
             com.backend.winai.dto.queue.AiQueueMessage queueMessage = com.backend.winai.dto.queue.AiQueueMessage
                     .builder()
                     .conversationId(conversation.getId().toString())
@@ -270,7 +271,10 @@ public class WhatsAppWebhookService {
                     .userMessage(userMessage)
                     .leadName(leadName)
                     .imageUrl(imageUrl)
+                    .waMessageId(waMessageId)
+                    .mediaType(mediaType)
                     .timestamp(System.currentTimeMillis())
+                    .whatsAppTimestamp(whatsAppTimestamp)
                     .build();
 
             boolean queued = aiResponseProducer.sendMessage(queueMessage);

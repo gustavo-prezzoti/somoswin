@@ -1,0 +1,352 @@
+================================================================================
+REGRAS DE NEGÓCIO — RESPOSTA DE MENSAGENS DA IA AOS LEADS
+================================================================================
+Pipeline: WhatsApp (entrada) -> RabbitMQ (fila ai) -> AI Worker -> RabbitMQ
+(fila outgoing) -> WhatsApp (saída).
+
+Documento descreve a lógica de quando a IA responde, quando ela espera, como
+ela agrega várias mensagens em uma única resposta, e os limites que impedem
+respostas duplicadas / rajada de mensagens.
+
+================================================================================
+1. PROBLEMA QUE ESSAS REGRAS RESOLVEM
+================================================================================
+Leads no WhatsApp tipicamente enviam pensamentos em VÁRIAS mensagens curtas
+seguidas (ex.: "oi" / "tudo bem?" / "tô interessado no produto X" / "quanto
+custa?"). Se a IA respondesse cada mensagem isoladamente, o resultado seria:
+
+  - Múltiplas respostas para uma única intenção (poluição do chat).
+  - Respostas fora de contexto (responder "oi" sem ver "quanto custa?").
+  - Race condition: IA gerando resposta enquanto novas mensagens chegam.
+  - Repetição de cumprimentos e perguntas já respondidas.
+
+A solução é um conjunto coordenado de mecanismos: um "Decisor" de espera por
+GPT, um Aggregator em memória, um par Inflight/Buffer no Redis, e um agente
+de Merge que recompõe a resposta quando o lead interrompe a IA enquanto ela
+gera o texto.
+
+================================================================================
+2. REGRA CENTRAL — DECISOR DE ESPERA (Wait/Respond Decisor)
+================================================================================
+Arquivos:
+  - application-ai-worker/internal/service/ai_worker.go (decideWaitSeconds)
+  - shared/prompts/sections.go (WaitOrRespondDecisorSystemPrompt)
+
+Para cada mensagem de texto recebida (sem mídia), um modelo gpt-4o-mini
+classifica a probabilidade de o lead ter TERMINADO de expressar o pensamento.
+
+  - Saída do modelo: número decimal entre 0.0 e 1.0
+  - 0.0 = quase certamente vai mandar mais mensagens
+  - 1.0 = certamente terminou de escrever tudo que queria
+
+O modelo NÃO se baseia em palavras-chave; analisa quatro dimensões semânticas:
+
+  a) COMPLETENESS — o texto é um pensamento autocontido ou parece truncado?
+  b) CONVERSATIONAL MOMENTUM — começo de turno (manda mais) vs fim de turno?
+  c) BEHAVIORAL PATTERN — o histórico mostra que esse lead costuma mandar
+     mensagens curtas em sequência ou uma única mensagem longa?
+  d) URGENCY / EMOTION — urgência ou frustração esperam resposta rápida
+     mesmo se a mensagem é curta.
+
+Fórmula de conversão score -> tempo de espera (segundos):
+
+    seconds = MAX_WAIT - score * (MAX_WAIT - MIN_WAIT)
+
+Limites configuráveis por env, com tetos físicos no código:
+
+  - DECISOR_MIN_WAIT_SEC: default 5,  permitido 5..12
+  - DECISOR_MAX_WAIT_SEC: default 12, permitido 5..12
+  - AGGREGATOR_FLOOR_WAIT_SEC: piso mínimo aplicado sempre (default 5, 5..12)
+  - AGGREGATOR_HARD_CAP_SEC: teto absoluto da janela (default 2*MAX_WAIT,
+    permitido até 20)
+  - DECISOR_HISTORY_COUNT: quantas mensagens do histórico vão para o decisor
+    (default 10)
+  - DECISOR_MODEL: default "gpt-4o-mini"
+
+Casos especiais:
+  - Mensagem com mídia (áudio/imagem/documento) ou texto vazio: NÃO chama o
+    decisor, processa imediatamente (waitSeconds = 0).
+  - Erro/timeout no decisor: cai para waitSeconds = 0 (responde já).
+  - Se waitSeconds < AGGREGATOR_FLOOR_WAIT_SEC, é elevado para o piso.
+
+================================================================================
+3. AGGREGATOR — JANELA DE AGREGAÇÃO POR CONTATO
+================================================================================
+Arquivo: application-ai-worker/internal/service/lead_debouncer.go
+         (LeadReplyAggregator)
+
+Chave do agregador: (contact_id, sector_id). Cada lead em cada setor tem sua
+própria janela de espera independente.
+
+Comportamento ao receber uma mensagem N com waitSeconds > 0:
+
+  a) Se NÃO existe pendente para essa chave:
+     - Cria entrada com timer = waitSeconds.
+     - Loga: "waiting Xs for more messages (first: ...)".
+
+  b) Se JÁ existe pendente:
+     - Adiciona a mensagem N ao buffer interno.
+     - PARA o timer antigo e REINICIA com o novo waitSeconds.
+       (Cada mensagem nova "reseta o relógio" da janela.)
+     - Loga: "aggregated N messages, reset timer (new: ...)".
+
+  c) HARD CAP: se o tempo total desde a primeira mensagem do burst já passou
+     do AGGREGATOR_HARD_CAP_SEC, faz FLUSH imediato — mesmo que o lead
+     continue digitando. Isso evita janela infinita ("teto absoluto" da
+     espera).
+
+  d) Quando waitSeconds == 0 mas EXISTE pendente: a mensagem entra como
+     "última" e dispara flush imediato (mescla com o que estava esperando).
+
+FLUSH (disparo do timer ou hard cap):
+  - Junta TODAS as mensagens em uma única AIPayload via MergeAIPayloads:
+      MessageText = junção dos textos com "\n" entre eles.
+      MessageID   = ID da PRIMEIRA mensagem (preservado p/ dedupe).
+      Timestamp   = timestamp da MAIS RECENTE.
+      EnqueuedAt  = data de enfileiramento mais ANTIGA do grupo.
+  - Chama o processador real (processMessage) UMA única vez.
+
+================================================================================
+4. INFLIGHT + BUFFER (REDIS) — COALESCE ENTRE RÉPLICAS / EM TEMPO DE GPT
+================================================================================
+Arquivos:
+  - application-whatsapp/internal/cache/redis_service.go
+  - application-ai-worker/internal/redisx/ai_inflight.go
+
+Chaves Redis:
+  - mendes:ai:inflight:v1:{sector}:{contact}  (TTL 25 min)
+  - mendes:ai:buffer:v1:{sector}:{contact}    (lista RPUSH, FIFO)
+
+Regra: existe NO MÁXIMO UM job de IA "em voo" por (sector, contact) a
+qualquer momento.
+
+Fluxo do publisher (application-whatsapp):
+  1. SETNX em mendes:ai:inflight:... com TTL.
+  2. Se SETNX retornou OK -> publica na fila RabbitMQ "ai".
+  3. Se SETNX retornou que já existe -> NÃO publica; faz RPUSH do payload
+     em mendes:ai:buffer:... para ser consumido depois.
+  4. Sem Redis ou erro de rede: fail-open (publica mesmo assim).
+
+Fluxo do consumer (application-ai-worker), em processMessage:
+  - Loop:
+    a) Executa processMessageBody (gera + envia resposta da IA).
+    b) Faz ReleaseAIInflightAndDrainBuffer: apaga inflight E retorna todos
+       payloads acumulados no buffer durante o processamento.
+    c) Se nada no buffer -> termina.
+    d) Se houver -> faz MergeAIPayloads dos buffered e processa de novo
+       como uma única mensagem (loop).
+
+Resultado: enquanto a IA estava ocupada respondendo, qualquer nova mensagem
+do mesmo lead ficou armazenada e gera UMA segunda resposta unificada (não N).
+
+================================================================================
+5. COALESCE INTERRUPT MERGE — LEAD INTERROMPE DURANTE GERAÇÃO DO GPT
+================================================================================
+Arquivos:
+  - application-ai-worker/internal/service/ai_worker.go
+      (coalesceBufferedUserTurnsDuringGPT, mergeCoalescedInterruptReply)
+  - shared/prompts/sections.go (CoalesceInterruptMergeSystemPrompt)
+
+Cenário: o agente principal já gerou o "draft" da resposta, mas ANTES de
+publicar na fila outgoing chegam mais mensagens do lead no buffer Redis.
+
+Constantes:
+  - coalesceInterruptMaxIters    = 24   (iterações máximas do merge)
+  - coalesceInterruptTailWaits   = 6    (espera curta no fim p/ pegar
+                                         última mensagem em trânsito)
+  - coalesceInterruptTailSleep   = 120ms
+  - coalesceInterruptMergeTokens = 650  (limite de tokens do merge)
+
+Lógica:
+  - Em vez de descartar o draft, faz POP de TODAS as mensagens novas do
+    buffer e fundi via "merge agent" (gpt-4o-mini), passando para o modelo:
+      1) Histórico recente compactado (até 18 msgs, 220 runes por msg).
+      2) DRAFT da resposta que ainda não foi enviada.
+      3) Linhas novas do lead em ordem cronológica.
+    O merge produz UMA mensagem final que cobre tudo de forma natural.
+  - Se a mensagem nova precisa "regenerar do zero" (tem mídia: image/audio/
+    document/video/sticker, ou MediaURL), faz nova chamada completa ao
+    modelo principal em vez de só mesclar texto.
+  - Após cada iteração, espera tailSleep e refaz pop até buffer esvaziar
+    ou estourar maxIters.
+
+Trava de transferência: se em ALGUMA iteração anterior o modelo principal
+emitiu o marcador [TRANSFER_TO_HUMAN], esse sinal é PRESERVADO mesmo que o
+merge agent não o re-emita (o lead não "desfaz" pedido de handoff mandando
+mensagens extras enquanto a IA processava).
+
+Estilo exigido do merge agent:
+  - Mesmo idioma do lead.
+  - Curto, estilo WhatsApp; sem reapresentação.
+  - Sem listas — integra ideias naturalmente.
+  - Saída APENAS o texto final (sem labels, sem JSON, sem
+    [TRANSFER_TO_HUMAN]).
+
+================================================================================
+6. PER-CONTACT COOLDOWN — ANTIRRAJADA DE 5s
+================================================================================
+Arquivo: application-ai-worker/internal/service/ai_worker.go
+         (lastAIReplyAt, aiReplyCooldown)
+
+Antes de publicar a resposta na fila outgoing:
+  - Se a última resposta da IA para esse contact_id foi há menos de 5
+    segundos, a nova resposta é DESCARTADA com log "RATE-LIMITED".
+  - Esse cooldown é em memória do worker (mapa) e é limpo por GC de cache
+    a cada 5 minutos (entradas com mais de 10 min são removidas).
+
+Constante: aiReplyCooldown = 5 * time.Second
+
+================================================================================
+7. CORTE DE MENSAGENS ANTIGAS (STALE)
+================================================================================
+Tanto o publisher quanto o consumer descartam mensagens muito antigas:
+
+  - application-whatsapp/.../message_worker.go:
+      aiMaxMessageAgeForEnqueue = 5 * time.Minute
+      Se a mensagem tem data_envio (timestamp do WhatsApp) > 5 min,
+      NÃO publica para a IA.
+
+  - application-ai-worker/.../ai_worker.go:
+      aiStaleTaskMaxAge = 5 * time.Minute
+      Se a fila/pipeline atrasou e a mensagem chega ao worker com mais de
+      5 min (por enqueued_at OU pelo timestamp do WhatsApp), descarta.
+
+Motivo: evita responder lead que mandou mensagem há horas/dias (quando a
+fila/sistema fica atrasado e processa entregas antigas).
+
+================================================================================
+8. DEDUPLICAÇÃO POR wa_message_id
+================================================================================
+Várias camadas, em ordem:
+
+  a) processedMessages (memória local, TTL 10 min): se o mesmo
+     wa_message_id já passou por handleMessage, ignora.
+
+  b) tryClaimAIConsumeCombined (DB + Redis): faz claim atômico no Postgres
+     E em mendes:ai:processed_wa:v1:{sector}:{wa_msg_id} (TTL 48h).
+     Garante que entre múltiplas réplicas do AI Worker apenas uma processa
+     cada wa_msg_id.
+
+  c) Echo duplicado do usuário (skipDuplicateUserEcho):
+     - duplicateUserEchoMinRunes = 24 runes mínimo
+     - duplicateUserEchoMaxAge   = 4 min
+     Se o texto do lead for IDÊNTICO ao último turno do lead no histórico,
+     com pelo menos 24 caracteres E há menos de 4 min, descarta. (Caso
+     típico: app duplicando webhook.) Não vale para image/audio.
+
+================================================================================
+9. RE-CHECAGEM DE AI ATIVA ANTES DE ENVIAR
+================================================================================
+Mesmo após gerar a resposta, antes de publicar na fila outgoing o worker
+RE-CONSULTA o contato no banco:
+  - Se o status do contato é "Finalizado" (final): não envia.
+  - Se contact.AIActive != 1: não envia (alguém colocou em modo humano
+    durante a geração).
+  - Se o contato sumiu do banco (merge, exclusão): apenas descarta.
+
+Há também a regra inversa: para o caminho "transferir para humano", a IA
+PRIMEIRO envia a mensagem de transferência ("vou te transferir para um
+atendente...") e SÓ DEPOIS desativa a IA. Isso garante que o lead recebe
+a mensagem de despedida antes do silêncio.
+
+================================================================================
+10. QUEBRA DE UMA RESPOSTA EM MÚLTIPLAS MENSAGENS
+================================================================================
+Arquivo: shared/prompts/sections.go (UniversalRules)
+
+O modelo é instruído a colocar o token literal |||SPLIT||| em uma linha
+sozinha entre partes claramente separadas da resposta (ex.: explicação +
+pergunta de follow-up, ou preço + processo + opções). O downstream divide
+nesse token e envia cada bloco como mensagem separada no WhatsApp.
+
+Alternativa: parágrafos separados por linha em branco também podem ser
+quebrados quando o token não é usado. Se a resposta cabe em uma única
+mensagem coesa, o modelo deve omitir o token.
+
+================================================================================
+11. ENCERRAMENTO POR INATIVIDADE
+================================================================================
+Arquivo: application-ai-worker/internal/service/ai_worker.go
+         (runInactivityJob, processInactivityClosure)
+
+Job em goroutine roda a cada 1 hora. Para cada setor com timeout
+configurado (separadamente para IA Receptiva e IA Broadcast/Campanha):
+  - Lista contatos cuja última interação ultrapassou o timeout.
+  - Avalia regras de CRM com trigger on_inactivity_close (move coluna).
+  - Gera summary do atendimento (se ainda não existe) usando a IA.
+  - Marca contact.status = "Finalizado".
+
+================================================================================
+12. RESUMO DOS PARÂMETROS — ORDEM E PRIORIDADE
+================================================================================
+Em ordem de aplicação para UMA mensagem entrante:
+
+  (1)  Publisher descarta se mensagem é mais antiga que 5 min (WhatsApp ts).
+  (2)  Publisher SETNX em ai:inflight; se já existe, RPUSH em ai:buffer e
+       NÃO publica.
+  (3)  Consumer descarta se enqueued_at > 5 min OU wa ts > 5 min.
+  (4)  Dedupe local + DB + Redis por wa_message_id.
+  (5)  Decisor de espera devolve 0.0..1.0 -> calcula waitSeconds em
+       [MIN_WAIT..MAX_WAIT], com piso AGGREGATOR_FLOOR_WAIT_SEC.
+  (6)  Aggregator agenda timer com reset a cada nova mensagem do mesmo
+       (contact, sector); HARD_CAP fecha a janela à força.
+  (7)  Flush -> MergeAIPayloads -> processMessageBody.
+  (8)  Skip duplicate user echo (>=24 runes idênticos < 4 min).
+  (9)  GPT gera draft.
+  (10) coalesceBufferedUserTurnsDuringGPT: enquanto buffer Redis tiver
+       mensagens novas, mescla via merge agent (ou regenera, se mídia) até
+       buffer esvaziar ou atingir 24 iterações.
+  (11) Sanitiza outbound (remove blocos CRM internos).
+  (12) Re-checa AIActive e status do contato; cooldown de 5s por contato.
+  (13) Publica na fila outgoing.
+  (14) Loop volta a drenar buffer (caso tenha chegado algo após o publish).
+
+================================================================================
+13. CONSTANTES E ARQUIVOS-CHAVE (REFERÊNCIA RÁPIDA)
+================================================================================
+Regras de negócio compiladas a partir de:
+
+  application-ai-worker/internal/service/ai_worker.go
+    - decideWaitSeconds        (chama o decisor)
+    - processMessage           (loop drenagem buffer)
+    - processMessageBody       (pipeline completo)
+    - coalesceBufferedUserTurnsDuringGPT
+    - mergeCoalescedInterruptReply
+    - skipDuplicateUserEcho
+    - aiStaleTaskMaxAge        = 5 min
+    - aiReplyCooldown          = 5 s
+    - duplicateUserEchoMinRunes = 24
+    - duplicateUserEchoMaxAge   = 4 min
+    - coalesceInterruptMaxIters = 24
+    - coalesceInterruptMergeTokens = 650
+
+  application-ai-worker/internal/service/lead_debouncer.go
+    - LeadReplyAggregator      (timer por contato com reset)
+    - MergeAIPayloads          (junta texto/timestamps)
+
+  application-ai-worker/internal/config/config.go
+    - DECISOR_MIN_WAIT_SEC          (5..12, default 5)
+    - DECISOR_MAX_WAIT_SEC          (5..12, default 12)
+    - AGGREGATOR_FLOOR_WAIT_SEC     (5..12, default 5)
+    - AGGREGATOR_HARD_CAP_SEC       (até 20, default 2*MAX_WAIT)
+    - DECISOR_HISTORY_COUNT         (default 10)
+    - DECISOR_MODEL                 (default gpt-4o-mini)
+
+  application-ai-worker/internal/redisx/ai_inflight.go
+  application-whatsapp/internal/cache/redis_service.go
+    - mendes:ai:inflight:v1:{sector}:{contact}   TTL 25 min
+    - mendes:ai:buffer:v1:{sector}:{contact}     lista FIFO
+    - mendes:ai:processed_wa:v1:{sector}:{wa_id} TTL 48 h
+    - mendes:ai:enqueue_wa:v1:{sector}:{wa_id}   TTL 72 h
+    - mendes:ai:outgoing_send:v1:{sector}:{cid}  TTL 72 h
+
+  application-whatsapp/internal/queue/message_worker.go
+    - aiMaxMessageAgeForEnqueue = 5 min
+
+  shared/prompts/sections.go
+    - WaitOrRespondDecisorSystemPrompt   (prompt do decisor)
+    - CoalesceInterruptMergeSystemPrompt (prompt do merge agent)
+    - UniversalRules                     (inclui regra do |||SPLIT|||)
+    - ContinuationRule                   (não reapresentar em conversa
+                                          em curso)
+================================================================================

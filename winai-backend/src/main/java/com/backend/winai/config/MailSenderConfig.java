@@ -22,11 +22,8 @@ public class MailSenderConfig {
     @ConditionalOnProperty(prefix = "spring.mail", name = "host")
     public JavaMailSender javaMailSender(Environment env) {
         String host = env.getProperty("spring.mail.host");
-        if (host == null || host.isBlank()) {
-            throw new IllegalStateException("spring.mail.host não pode estar vazio");
-        }
         JavaMailSenderImpl sender = new JavaMailSenderImpl();
-        sender.setHost(host.trim());
+        sender.setHost(host != null && !host.isBlank() ? host.trim() : "localhost");
         String portStr = env.getProperty("spring.mail.port", "587");
         try {
             sender.setPort(Integer.parseInt(portStr.trim()));

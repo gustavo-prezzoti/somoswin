@@ -59,4 +59,10 @@ public interface WhatsAppConversationRepository extends JpaRepository<WhatsAppCo
         @Query(value = "SELECT c FROM WhatsAppConversation c ORDER BY COALESCE(c.lastMessageTimestamp, 0) DESC",
                         countQuery = "SELECT count(c) FROM WhatsAppConversation c")
         Page<WhatsAppConversation> findAllOrderByLastMessageDesc(Pageable pageable);
+
+        @Query("SELECT c FROM WhatsAppConversation c LEFT JOIN FETCH c.lead LEFT JOIN FETCH c.company "
+                + "WHERE LOWER(c.supportMode) = 'ia' "
+                + "AND c.lastMessageTimestamp IS NOT NULL "
+                + "AND c.lastMessageTimestamp < :cutoffMs")
+        List<WhatsAppConversation> findIaConversationsIdleSince(@Param("cutoffMs") long cutoffMs);
 }

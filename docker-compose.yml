@@ -8,19 +8,46 @@ services:
   # Backend - Spring Boot
   # =====================================
   # =====================================
-  # Redis - Cache & Message Broker
-  # Para suprimir o aviso "Memory overcommit" no host: sysctl vm.overcommit_memory=1
+  # Redis - Cache + AI Pipeline Coordinator
+  # Mantém: inflight/buffer da IA, dedupe wa_message_id, cooldown distribuído.
+  # Memory overcommit no host (Linux): sysctl vm.overcommit_memory=1
   # =====================================
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
     container_name: winai-redis
     ports:
       - "16379:6379"
-    command: redis-server --save 60 1 --loglevel warning
+    # AOF + RDB. maxmemory-policy=allkeys-lru protege contra OOM (TTLs cobrem
+    # as chaves do pipeline da IA, mas LRU vira fail-safe).
+    command: >
+      redis-server
+      --save 60 1
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --loglevel warning
+      ${REDIS_PASSWORD:+--requirepass $$REDIS_PASSWORD}
     environment:
       - TZ=America/Sao_Paulo
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    volumes:
+      - redis-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 640M
+        reservations:
+          memory: 256M
     networks:
       - winai-network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a $$REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   # =====================================
@@ -107,6 +134,22 @@ services:
       # Redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+
+      # === AI pipeline tunables (LeadReplyAggregator + WaitRespondDecisor) ===
+      - AI_PIPELINE_ENABLED=${AI_PIPELINE_ENABLED:-true}
+      - AI_PIPELINE_DECISOR_MIN_WAIT_SEC=${AI_PIPELINE_DECISOR_MIN_WAIT_SEC:-5}
+      - AI_PIPELINE_DECISOR_MAX_WAIT_SEC=${AI_PIPELINE_DECISOR_MAX_WAIT_SEC:-12}
+      - AI_PIPELINE_AGGREGATOR_FLOOR_WAIT_SEC=${AI_PIPELINE_AGGREGATOR_FLOOR_WAIT_SEC:-5}
+      - AI_PIPELINE_AGGREGATOR_HARD_CAP_SEC=${AI_PIPELINE_AGGREGATOR_HARD_CAP_SEC:-24}
+      - AI_PIPELINE_DECISOR_HISTORY_COUNT=${AI_PIPELINE_DECISOR_HISTORY_COUNT:-10}
+      - AI_PIPELINE_DECISOR_MODEL=${AI_PIPELINE_DECISOR_MODEL:-gpt-4o-mini}
+      - AI_PIPELINE_MERGE_MODEL=${AI_PIPELINE_MERGE_MODEL:-gpt-4o-mini}
+      - AI_PIPELINE_PUBLISHER_STALE_MS=${AI_PIPELINE_PUBLISHER_STALE_MS:-300000}
+      - AI_PIPELINE_CONSUMER_STALE_MS=${AI_PIPELINE_CONSUMER_STALE_MS:-300000}
+      - AI_PIPELINE_REPLY_COOLDOWN_MS=${AI_PIPELINE_REPLY_COOLDOWN_MS:-5000}
+      - AI_PIPELINE_INACTIVITY_TIMEOUT_MIN=${AI_PIPELINE_INACTIVITY_TIMEOUT_MIN:-1440}
+      - AI_PIPELINE_INACTIVITY_CRON=${AI_PIPELINE_INACTIVITY_CRON:-0 0 * * * *}
 
       # Meta Sync
       - META_SYNC_ENABLED=false
@@ -465,3 +508,10 @@ services:
 networks:
   winai-network:
     driver: bridge
+
+# =====================================
+# Volumes (persistência Redis: AOF + RDB)
+# =====================================
+volumes:
+  redis-data:
+    driver: local
