@@ -212,6 +212,16 @@ public class DatabaseMigrationConfig {
                     log.warn("Erro ao criar lead_attribution_anchors: {}", e.getMessage());
                 }
 
+                try {
+                    jdbcTemplate.execute(
+                            "ALTER TABLE winai.leads ADD COLUMN IF NOT EXISTS ai_facts_summary TEXT");
+                    jdbcTemplate.execute(
+                            "ALTER TABLE winai.leads ADD COLUMN IF NOT EXISTS ai_intent_summary TEXT");
+                    log.info("Colunas ai_facts_summary / ai_intent_summary verificadas em winai.leads.");
+                } catch (Exception e) {
+                    log.warn("Erro ao adicionar colunas de summary no lead: {}", e.getMessage());
+                }
+
             } catch (Exception e) {
                 log.warn("Erro geral na migração: {}", e.getMessage());
             }

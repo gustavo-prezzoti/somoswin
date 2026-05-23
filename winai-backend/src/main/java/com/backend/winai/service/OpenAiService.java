@@ -1576,21 +1576,46 @@ public class OpenAiService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String summarizeConversationContext(String currentSummary, List<ChatMessage> recentMessages) {
-        if (!isChatEnabled() || recentMessages == null || recentMessages.isEmpty()) {
+        String facts = summarizeLeadFacts(currentSummary, recentMessages);
+        String intent = summarizeLeadIntent(currentSummary, recentMessages);
+        if ((facts == null || facts.isBlank()) && (intent == null || intent.isBlank())) {
             return currentSummary;
         }
+        StringBuilder out = new StringBuilder();
+        if (facts != null && !facts.isBlank()) out.append("FATOS: ").append(facts.trim());
+        if (intent != null && !intent.isBlank()) {
+            if (out.length() > 0) out.append('\n');
+            out.append("INTENÇÃO: ").append(intent.trim());
+        }
+        return out.toString();
+    }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public String summarizeLeadFacts(String currentFacts, List<ChatMessage> recentMessages) {
+        if (!isChatEnabled() || recentMessages == null || recentMessages.isEmpty()) {
+            return currentFacts;
+        }
         try {
             StringBuilder prompt = new StringBuilder();
-            prompt.append("Você atualiza um resumo de longo prazo sobre um lead (cliente WhatsApp).\n");
-            prompt.append("Foco: NOME, INTENÇÃO ATUAL, ESTÁGIO DO FUNIL, OBJEÇÕES, PRÓXIMOS PASSOS.\n");
-            prompt.append("Saída em pt-BR, texto corrido, sem cabeçalho, máximo 600 caracteres.\n");
-            prompt.append("Descarte saudações, agradecimentos e ruído. Não invente informação.\n\n");
+            prompt.append("Você mantém um DOSSIÊ DE FATOS sobre um lead (cliente WhatsApp).\n");
+            prompt.append("Saída em pt-BR, texto corrido SEM cabeçalho, máximo 800 caracteres.\n");
+            prompt.append("NÃO invente. NÃO descarte fatos já registrados. Apenas mescle e adicione novos.\n\n");
+            prompt.append("REGISTRE APENAS dados estruturados/objetivos:\n");
+            prompt.append("- Nome completo, apelido.\n");
+            prompt.append("- CPF, CNPJ, RG, Inscrição Estadual, Inscrição Municipal.\n");
+            prompt.append("- E-mail, telefone alternativo, redes sociais.\n");
+            prompt.append("- Endereço completo, CEP, cidade/UF.\n");
+            prompt.append("- Empresa, cargo, segmento, porte.\n");
+            prompt.append("- Produtos/SKUs/quantidades/valores que o lead mencionou.\n");
+            prompt.append("- Número de pedido, protocolo, contrato, datas relevantes.\n");
+            prompt.append("- Dados bancários/pagamento (apenas o que o lead enviou).\n\n");
+            prompt.append("NÃO INCLUA: opiniões, intenções, sentimentos, próximos passos, estágio do funil.\n");
+            prompt.append("Formato: 'CNPJ X, IE Y, CEP Z, e-mail W, cargo K, interesse no SKU N'.\n\n");
 
-            if (currentSummary != null && !currentSummary.isEmpty()) {
-                prompt.append("=== RESUMO EXISTENTE ===\n");
-                prompt.append(currentSummary).append("\n");
-                prompt.append("========================\n\n");
+            if (currentFacts != null && !currentFacts.isEmpty()) {
+                prompt.append("=== DOSSIÊ ATUAL (preserve TUDO) ===\n");
+                prompt.append(currentFacts).append("\n");
+                prompt.append("====================================\n\n");
             }
 
             prompt.append("=== MENSAGENS RECENTES ===\n");
@@ -1599,20 +1624,62 @@ public class OpenAiService {
             }
             prompt.append("==========================\n");
 
-            String updatedSummary = generateResponseWithModel("gpt-4o-mini", prompt.toString(),
-                    "Atualize ou crie o resumo do lead conforme as regras.");
-            if (updatedSummary == null || updatedSummary.isBlank()) {
-                return currentSummary;
+            String updated = generateResponseWithModel("gpt-4o-mini", prompt.toString(),
+                    "Atualize o DOSSIÊ DE FATOS. Mescle existente + novo. Nunca esqueça números/IDs.");
+            if (updated == null || updated.isBlank()) {
+                return currentFacts;
             }
-            String trimmed = updatedSummary.trim();
-            if (trimmed.length() > 600) {
-                trimmed = trimmed.substring(0, 600);
-            }
+            String trimmed = updated.trim();
+            if (trimmed.length() > 800) trimmed = trimmed.substring(0, 800);
             return trimmed;
-
         } catch (Exception e) {
-            log.error("Erro ao gerar resumo de conversa: {}", e.getMessage());
-            return currentSummary;
+            log.error("Erro ao gerar facts summary: {}", e.getMessage());
+            return currentFacts;
+        }
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public String summarizeLeadIntent(String currentIntent, List<ChatMessage> recentMessages) {
+        if (!isChatEnabled() || recentMessages == null || recentMessages.isEmpty()) {
+            return currentIntent;
+        }
+        try {
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("Você mantém um resumo de ESTADO/INTENÇÃO de um lead (cliente WhatsApp).\n");
+            prompt.append("Saída em pt-BR, texto corrido SEM cabeçalho, máximo 500 caracteres.\n");
+            prompt.append("Descarte saudações, agradecimentos e ruído. NÃO repita dados estruturados\n");
+            prompt.append("(CNPJ, CEP, e-mail etc — esses ficam em outro resumo).\n\n");
+            prompt.append("REGISTRE APENAS:\n");
+            prompt.append("- INTERESSE: produto/linha/serviço alvo da conversa atual.\n");
+            prompt.append("- ESTÁGIO DO FUNIL: descoberta, qualificação, negociação, fechamento, pós-venda.\n");
+            prompt.append("- OBJEÇÕES: preço, prazo, dúvida, comparação, etc.\n");
+            prompt.append("- TOM/EMOÇÃO: lead engajado, frio, frustrado, urgente, etc.\n");
+            prompt.append("- PRÓXIMO PASSO: o que falta para avançar (envio de catálogo, confirmar dados, etc).\n");
+            prompt.append("- HISTÓRICO RELEVANTE: 1-2 frases sobre como a conversa chegou até aqui.\n\n");
+
+            if (currentIntent != null && !currentIntent.isEmpty()) {
+                prompt.append("=== ESTADO ANTERIOR ===\n");
+                prompt.append(currentIntent).append("\n");
+                prompt.append("=======================\n\n");
+            }
+
+            prompt.append("=== MENSAGENS RECENTES ===\n");
+            for (ChatMessage msg : recentMessages) {
+                prompt.append(msg.getRole()).append(": ").append(msg.getContent()).append("\n");
+            }
+            prompt.append("==========================\n");
+
+            String updated = generateResponseWithModel("gpt-4o-mini", prompt.toString(),
+                    "Atualize o resumo de ESTADO/INTENÇÃO. Foco em onde a conversa está agora.");
+            if (updated == null || updated.isBlank()) {
+                return currentIntent;
+            }
+            String trimmed = updated.trim();
+            if (trimmed.length() > 500) trimmed = trimmed.substring(0, 500);
+            return trimmed;
+        } catch (Exception e) {
+            log.error("Erro ao gerar intent summary: {}", e.getMessage());
+            return currentIntent;
         }
     }
 

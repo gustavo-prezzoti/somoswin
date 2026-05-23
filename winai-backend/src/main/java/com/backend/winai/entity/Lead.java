@@ -90,10 +90,16 @@ public class Lead {
     private Integer leadScore = 0;
 
     @Column(columnDefinition = "TEXT")
-    private String aiSummary; // Memória de longo prazo da IA sobre este lead
+    private String aiSummary;
+
+    @Column(name = "ai_facts_summary", columnDefinition = "TEXT")
+    private String aiFactsSummary;
+
+    @Column(name = "ai_intent_summary", columnDefinition = "TEXT")
+    private String aiIntentSummary;
 
     @Column(name = "last_summary_at")
-    private LocalDateTime lastSummaryAt; // Controle para evitar atualizações excessivas
+    private LocalDateTime lastSummaryAt;
 
     @Column(name = "interaction_count")
     @Builder.Default

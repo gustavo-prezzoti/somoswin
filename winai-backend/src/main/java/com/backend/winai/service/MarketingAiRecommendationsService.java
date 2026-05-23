@@ -103,6 +103,7 @@ public class MarketingAiRecommendationsService {
      * Gera recomendações via IA e persiste no cache.
      * Chamado pelo worker em background.
      */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public void generateAndStoreForCompany(Company company) {
         try {
             CampaignsListResponse campaignsResponse = marketingService.getCampaignsForCompany(company);
@@ -163,7 +164,7 @@ public class MarketingAiRecommendationsService {
         try {
             String userRequest = "Aqui estão os dados das minhas campanhas do Meta Ads. Analise cada uma com cuidado e gere as 3 melhores recomendações possíveis acompanhando o formato JSON solicitado:\n\n"
                     + campaignsJson;
-            String aiResponse = openAiService.generateResponse(systemPrompt, userRequest, Collections.emptyList());
+            String aiResponse = openAiService.generateResponseWithModel("gpt-4o-mini", systemPrompt, userRequest);
             if (aiResponse == null || aiResponse.trim().isEmpty())
                 return Collections.emptyList();
 

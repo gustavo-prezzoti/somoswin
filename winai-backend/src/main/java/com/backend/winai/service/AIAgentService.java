@@ -206,13 +206,39 @@ public class AIAgentService {
 
             // --- INJEÇÃO DA MEMÓRIA DE LONGO PRAZO ---
             if (conv.getLead() != null) {
-                // Ensure lead is loaded or fetch it if lazy failed (though conv fetch above
-                // should help, but Lead is ManyToOne)
-                // Just safe check
-                String summary = conv.getLead().getAiSummary();
-                if (summary != null && !summary.isEmpty()) {
-                    contextBuilder.append("\n[MEMÓRIA DE LONGO PRAZO / RESUMO]\n").append(summary).append("\n");
+                com.backend.winai.entity.Lead l = conv.getLead();
+                String facts = l.getAiFactsSummary();
+                String intent = l.getAiIntentSummary();
+                boolean injectedAny = false;
+                if (facts != null && !facts.isBlank()) {
+                    contextBuilder.append("\n[DADOS DO LEAD — FATOS REGISTRADOS — NUNCA PEÇA NOVAMENTE]\n")
+                            .append(facts.trim()).append("\n");
+                    injectedAny = true;
                 }
+                if (intent != null && !intent.isBlank()) {
+                    contextBuilder.append("\n[ESTADO ATUAL DO ATENDIMENTO / INTENÇÃO]\n")
+                            .append(intent.trim()).append("\n");
+                    injectedAny = true;
+                }
+                if (!injectedAny) {
+                    String legacy = l.getAiSummary();
+                    if (legacy != null && !legacy.isBlank()) {
+                        contextBuilder.append("\n[MEMÓRIA DE LONGO PRAZO]\n").append(legacy).append("\n");
+                        injectedAny = true;
+                        log.info("[memory] lead={} usando summary LEGADO ({} chars) — facts/intent vazios",
+                                l.getId(), legacy.length());
+                    }
+                }
+                if (injectedAny) {
+                    log.info("[memory] injetado lead={} facts={} chars intent={} chars",
+                            l.getId(),
+                            facts != null ? facts.length() : 0,
+                            intent != null ? intent.length() : 0);
+                } else {
+                    log.info("[memory] lead={} SEM summary (facts/intent/legacy vazios)", l.getId());
+                }
+            } else {
+                log.info("[memory] conv={} SEM lead vinculado — não injetou summary", conv.getId());
             }
 
             if (contextBuilder.length() > 0) {
@@ -573,6 +599,13 @@ public class AIAgentService {
                 followUpService.resumeFollowUp(conv.getId());
             } catch (Exception ignored) {
             }
+
+            try {
+                updateLeadMemory(conv, "[SUMMARY]");
+                log.info("[memory] summary regenerado após HandoffReversion REVERT conv={}", conv.getId());
+            } catch (Exception e) {
+                log.warn("[memory] falha ao regenerar summary pós-revert conv {}: {}", conv.getId(), e.getMessage());
+            }
             return true;
         } catch (Exception e) {
             log.warn("tryRevertFromHumanIfLeadChangedTopic erro conv {}: {}", conv.getId(), e.getMessage());
@@ -654,17 +687,44 @@ public class AIAgentService {
 
             log.info("Updating Lead Memory. Reason: {}", triggerReason);
 
-            String currentSummary = lead.getAiSummary();
-            String newSummary = openAiService.summarizeConversationContext(currentSummary, history);
+            String currentFacts = lead.getAiFactsSummary();
+            String currentIntent = lead.getAiIntentSummary();
+            String legacy = lead.getAiSummary();
+            if ((currentFacts == null || currentFacts.isBlank()) && legacy != null && !legacy.isBlank()) {
+                currentFacts = legacy;
+            }
 
-            if (newSummary != null) {
-                lead.setAiSummary(newSummary);
+            String newFacts = openAiService.summarizeLeadFacts(currentFacts, history);
+            String newIntent = openAiService.summarizeLeadIntent(currentIntent, history);
+
+            boolean anyChange = false;
+            if (newFacts != null && !newFacts.isBlank()) {
+                lead.setAiFactsSummary(newFacts);
+                anyChange = true;
+            }
+            if (newIntent != null && !newIntent.isBlank()) {
+                lead.setAiIntentSummary(newIntent);
+                anyChange = true;
+            }
+
+            if (anyChange) {
+                StringBuilder combined = new StringBuilder();
+                if (lead.getAiFactsSummary() != null && !lead.getAiFactsSummary().isBlank()) {
+                    combined.append("FATOS: ").append(lead.getAiFactsSummary().trim());
+                }
+                if (lead.getAiIntentSummary() != null && !lead.getAiIntentSummary().isBlank()) {
+                    if (combined.length() > 0) combined.append('\n');
+                    combined.append("INTENÇÃO: ").append(lead.getAiIntentSummary().trim());
+                }
+                lead.setAiSummary(combined.toString());
                 lead.setLastSummaryAt(java.time.LocalDateTime.now());
-                lead.setInteractionCount(0); // Resetar contador após gerar resumo
+                lead.setInteractionCount(0);
                 leadRepository.save(lead);
-                log.info("Memória do Lead {} atualizada com sucesso.", lead.getId());
+                log.info("Memória do Lead {} atualizada (facts={} chars, intent={} chars)",
+                        lead.getId(),
+                        lead.getAiFactsSummary() != null ? lead.getAiFactsSummary().length() : 0,
+                        lead.getAiIntentSummary() != null ? lead.getAiIntentSummary().length() : 0);
             } else {
-                // Se falhar resumo mas incrementou count, salva o count
                 leadRepository.save(lead);
             }
         } catch (Exception e) {
