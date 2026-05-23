@@ -2,8 +2,9 @@ package com.backend.winai.service;
 
 import com.backend.winai.entity.*;
 import com.backend.winai.repository.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,33 +16,40 @@ import java.time.LocalTime;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
-@Transactional(readOnly = true)
 public class MetricsSyncService {
 
     private final DashboardMetricsRepository dashboardMetricsRepository;
     private final LeadRepository leadRepository;
-    // MetaInsightRepository removed
     private final MeetingRepository meetingRepository;
+    private final MetricsSyncService self;
 
-    /**
-     * Sincroniza as métricas do dashboard para uma empresa nos últimos N dias
-     * (REQUIRES_NEW: não força flush de outras entidades pendentes no webhook, nem falha o fluxo
-     * principal se métricas estiverem inconsistentes.)
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public MetricsSyncService(DashboardMetricsRepository dashboardMetricsRepository,
+                              LeadRepository leadRepository,
+                              MeetingRepository meetingRepository,
+                              @Lazy MetricsSyncService self) {
+        this.dashboardMetricsRepository = dashboardMetricsRepository;
+        this.leadRepository = leadRepository;
+        this.meetingRepository = meetingRepository;
+        this.self = self;
+    }
+
+    @Async("metricsExecutor")
     public void syncDashboardMetrics(Company company, int days) {
-        log.info("Sincronizando métricas do dashboard para a empresa {} nos últimos {} dias", company.getId(), days);
-
+        log.debug("[metrics] async sync empresa={} dias={}", company.getId(), days);
         LocalDate today = LocalDate.now();
         for (int i = 0; i < days; i++) {
             LocalDate date = today.minusDays(i);
-            updateMetricsForDate(company, date);
+            try {
+                self.updateMetricsForDate(company, date);
+            } catch (Exception e) {
+                log.warn("[metrics] falha empresa={} data={}: {}", company.getId(), date, e.getMessage());
+            }
         }
     }
 
-    private void updateMetricsForDate(Company company, LocalDate date) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateMetricsForDate(Company company, LocalDate date) {
         try {
             LocalDateTime startOfDay = date.atStartOfDay();
             LocalDateTime endOfDay = date.atTime(LocalTime.MAX);

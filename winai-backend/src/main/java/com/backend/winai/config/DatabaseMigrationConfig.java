@@ -222,6 +222,41 @@ public class DatabaseMigrationConfig {
                     log.warn("Erro ao adicionar colunas de summary no lead: {}", e.getMessage());
                 }
 
+                try {
+                    String[] indexes = new String[] {
+                            "CREATE INDEX IF NOT EXISTS idx_leads_company_created "
+                                    + "ON winai.leads(company_id, created_at)",
+                            "CREATE INDEX IF NOT EXISTS idx_leads_company_phone "
+                                    + "ON winai.leads(company_id, phone)",
+                            "CREATE INDEX IF NOT EXISTS idx_wa_msg_conv_ts "
+                                    + "ON winai.whatsapp_messages(conversation_id, message_timestamp DESC)",
+                            "CREATE INDEX IF NOT EXISTS idx_wa_msg_msgid "
+                                    + "ON winai.whatsapp_messages(message_id)",
+                            "CREATE INDEX IF NOT EXISTS idx_wa_conv_company_lastmsg "
+                                    + "ON winai.whatsapp_conversations(company_id, last_message_timestamp DESC NULLS LAST)",
+                            "CREATE INDEX IF NOT EXISTS idx_wa_conv_company_supportmode "
+                                    + "ON winai.whatsapp_conversations(company_id, support_mode)",
+                            "CREATE INDEX IF NOT EXISTS idx_wa_conv_phone_company "
+                                    + "ON winai.whatsapp_conversations(phone_number, company_id)",
+                            "CREATE INDEX IF NOT EXISTS idx_dashboard_metrics_company_date "
+                                    + "ON winai.dashboard_metrics(company_id, date)",
+                            "CREATE INDEX IF NOT EXISTS idx_meetings_company_date "
+                                    + "ON winai.meetings(company_id, meeting_date)"
+                    };
+                    int created = 0;
+                    for (String sql : indexes) {
+                        try {
+                            jdbcTemplate.execute(sql);
+                            created++;
+                        } catch (Exception ie) {
+                            log.warn("Falha em índice ({}): {}", sql, ie.getMessage());
+                        }
+                    }
+                    log.info("Índices de performance verificados/criados ({}/{}).", created, indexes.length);
+                } catch (Exception e) {
+                    log.warn("Erro geral ao criar índices de performance: {}", e.getMessage());
+                }
+
             } catch (Exception e) {
                 log.warn("Erro geral na migração: {}", e.getMessage());
             }
