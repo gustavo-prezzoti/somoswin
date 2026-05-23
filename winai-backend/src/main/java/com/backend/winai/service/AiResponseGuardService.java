@@ -26,8 +26,6 @@ public class AiResponseGuardService {
 
     private static final Duration MESSAGE_ID_TTL = Duration.ofHours(48);
     private static final Duration INBOUND_FP_TTL = Duration.ofMinutes(5);
-    private static final Duration OUTBOUND_TEXT_TTL = Duration.ofMinutes(3);
-    private static final Duration OUTBOUND_DOC_TTL = Duration.ofMinutes(10);
     private static final Duration PROCESSING_LOCK_TTL = Duration.ofMinutes(4);
     private static final Duration DEBOUNCE_GEN_TTL = Duration.ofMinutes(10);
     private static final long INBOUND_FP_BUCKET_MS = 30_000L;
@@ -133,42 +131,40 @@ public class AiResponseGuardService {
         if (normalized == null) {
             return false;
         }
-
-        long since = System.currentTimeMillis() - RECENT_DB_WINDOW_MS;
-        if (messageRepository.existsRecentOutboundText(conversationId, normalized, since)) {
-            log.warn("Outbound texto duplicado (DB) conv={}", conversationId);
-            return false;
-        }
-
-        String key = "ai_outbound_text:" + conversationId + ":" + sha256(normalized);
-        Boolean isNew = redisTemplate.opsForValue().setIfAbsent(key, "1", OUTBOUND_TEXT_TTL);
-        if (!Boolean.TRUE.equals(isNew)) {
-            log.warn("Outbound texto duplicado (Redis) conv={}", conversationId);
-            return false;
+        try {
+            String key = "ai_outbound_text_same_gen:" + conversationId + ":" + sha256(normalized);
+            Boolean isNew = redisTemplate.opsForValue().setIfAbsent(key, "1", Duration.ofSeconds(5));
+            if (!Boolean.TRUE.equals(isNew)) {
+                log.info("Outbound texto bloqueado (mesma geração <5s) conv={}", conversationId);
+                return false;
+            }
+        } catch (Exception e) {
+            log.debug("Trava same-gen (texto) falhou (fail-open) conv={}: {}", conversationId, e.getMessage());
         }
         return true;
     }
 
     /**
-     * @return true se o documento pode ser enviado; false se já foi enviado recentemente.
+     * Trava de mesma geração: bloqueia apenas envios do MESMO doc dentro de
+     * uma janela curta (5s) — só pega disparos acidentais quando a mesma
+     * resposta da IA tenta enviar duas vezes. Resends solicitados pelo lead
+     * minutos depois NÃO são bloqueados (princípio: nunca descartar pedido
+     * explícito do lead).
      */
     public boolean tryRegisterOutboundDocument(UUID conversationId, UUID documentId, String mediaUrl) {
         if (documentId == null) {
             return false;
         }
-
-        long since = System.currentTimeMillis() - RECENT_DB_WINDOW_MS;
-        if (mediaUrl != null && !mediaUrl.isBlank()
-                && messageRepository.existsRecentOutboundMedia(conversationId, mediaUrl, since)) {
-            log.warn("Outbound documento duplicado (DB mediaUrl) conv={} doc={}", conversationId, documentId);
-            return false;
-        }
-
-        String key = "ai_outbound_doc:" + conversationId + ":" + documentId;
-        Boolean isNew = redisTemplate.opsForValue().setIfAbsent(key, "1", OUTBOUND_DOC_TTL);
-        if (!Boolean.TRUE.equals(isNew)) {
-            log.warn("Outbound documento duplicado (Redis) conv={} doc={}", conversationId, documentId);
-            return false;
+        try {
+            String key = "ai_outbound_doc_same_gen:" + conversationId + ":" + documentId;
+            Boolean isNew = redisTemplate.opsForValue().setIfAbsent(key, "1", Duration.ofSeconds(5));
+            if (!Boolean.TRUE.equals(isNew)) {
+                log.info("Outbound documento bloqueado (mesma geração <5s) conv={} doc={}",
+                        conversationId, documentId);
+                return false;
+            }
+        } catch (Exception e) {
+            log.debug("Trava same-gen falhou (fail-open) conv={}: {}", conversationId, e.getMessage());
         }
         return true;
     }
