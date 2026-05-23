@@ -67,6 +67,7 @@ public class AIAgentService {
     private final AIAgentService self;
     private final AiResponseGuardService aiResponseGuardService;
     private final com.backend.winai.ai.pipeline.handoff.HandoffReversionClassifier handoffReversionClassifier;
+    private final com.backend.winai.ai.pipeline.memory.LeadSummaryReconciler leadSummaryReconciler;
 
     private static final int MAX_AGENT_DOC_SEND_BYTES = 25 * 1024 * 1024;
 
@@ -97,6 +98,7 @@ public class AIAgentService {
             RestTemplate restTemplate,
             AiResponseGuardService aiResponseGuardService,
             com.backend.winai.ai.pipeline.handoff.HandoffReversionClassifier handoffReversionClassifier,
+            com.backend.winai.ai.pipeline.memory.LeadSummaryReconciler leadSummaryReconciler,
             @org.springframework.context.annotation.Lazy AIAgentService self) {
         this.openAiService = openAiService;
         this.connectionRepository = connectionRepository;
@@ -116,6 +118,7 @@ public class AIAgentService {
         this.restTemplate = restTemplate;
         this.aiResponseGuardService = aiResponseGuardService;
         this.handoffReversionClassifier = handoffReversionClassifier;
+        this.leadSummaryReconciler = leadSummaryReconciler;
         this.self = self;
     }
 
@@ -694,16 +697,19 @@ public class AIAgentService {
                 currentFacts = legacy;
             }
 
-            String newFacts = openAiService.summarizeLeadFacts(currentFacts, history);
-            String newIntent = openAiService.summarizeLeadIntent(currentIntent, history);
+            String generatedFacts = openAiService.summarizeLeadFacts(currentFacts, history);
+            String generatedIntent = openAiService.summarizeLeadIntent(currentIntent, history);
+
+            String reconciledFacts = leadSummaryReconciler.reconcileFacts(currentFacts, generatedFacts);
+            String reconciledIntent = leadSummaryReconciler.reconcileIntent(currentIntent, generatedIntent);
 
             boolean anyChange = false;
-            if (newFacts != null && !newFacts.isBlank()) {
-                lead.setAiFactsSummary(newFacts);
+            if (reconciledFacts != null && !reconciledFacts.isBlank()) {
+                lead.setAiFactsSummary(reconciledFacts);
                 anyChange = true;
             }
-            if (newIntent != null && !newIntent.isBlank()) {
-                lead.setAiIntentSummary(newIntent);
+            if (reconciledIntent != null && !reconciledIntent.isBlank()) {
+                lead.setAiIntentSummary(reconciledIntent);
                 anyChange = true;
             }
 
