@@ -35,7 +35,8 @@ class InactivityClosureJobTest {
         props.setInactivityTimeoutMin(60L);
         repo = mock(WhatsAppConversationRepository.class);
         agent = mock(AIAgentService.class);
-        job = new InactivityClosureJob(props, repo, agent);
+        job = new InactivityClosureJob(props, repo, agent, null);
+        org.springframework.test.util.ReflectionTestUtils.setField(job, "self", job);
     }
 
     @Test

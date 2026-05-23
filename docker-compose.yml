@@ -430,8 +430,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
-          memory: 256M
+          cpus: '0.3'
+          memory: 384M
+        reservations:
+          memory: 192M
     environment:
       - TZ=America/Sao_Paulo
       - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -XX:+ExitOnOutOfMemoryError -XX:+UseSerialGC -Djava.net.preferIPv4Stack=true

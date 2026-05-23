@@ -1574,6 +1574,7 @@ public class OpenAiService {
         return tool;
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String summarizeConversationContext(String currentSummary, List<ChatMessage> recentMessages) {
         if (!isChatEnabled() || recentMessages == null || recentMessages.isEmpty()) {
             return currentSummary;
