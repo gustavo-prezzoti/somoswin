@@ -15,10 +15,13 @@ services:
   redis:
     image: redis:7-alpine
     container_name: winai-redis
-    ports:
-      - "16379:6379"
+    expose:
+      - "6379"
     # AOF + RDB. maxmemory-policy=allkeys-lru protege contra OOM (TTLs cobrem
     # as chaves do pipeline da IA, mas LRU vira fail-safe).
+    # Sem publicar porta no host: backend/workers acessam por DNS interno
+    # 'redis:6379'. Para debugar no host, use:
+    #   docker exec -it winai-redis redis-cli
     command: >
       redis-server
       --save 60 1
