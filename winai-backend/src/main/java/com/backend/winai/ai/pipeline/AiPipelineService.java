@@ -4,7 +4,6 @@ import com.backend.winai.ai.pipeline.aggregator.LeadReplyAggregator;
 import com.backend.winai.ai.pipeline.config.AiPipelineProperties;
 import com.backend.winai.ai.pipeline.decisor.WaitRespondDecisor;
 import com.backend.winai.ai.pipeline.filters.AiCooldownService;
-import com.backend.winai.ai.pipeline.filters.DuplicateUserEchoFilter;
 import com.backend.winai.ai.pipeline.filters.StalenessFilter;
 import com.backend.winai.ai.pipeline.merge.CoalesceInterruptMerger;
 import com.backend.winai.ai.pipeline.model.AiPayload;
@@ -44,12 +43,13 @@ import lombok.extern.slf4j.Slf4j;
  *  (6)  Flush → mergePayloads → processMerged():
  *        - stale (consumer)
  *        - dedupe processedWa
- *        - duplicate echo
+ *        - cooldown distribuído + local (se ativo, re-bufferiza, não descarta)
  *        - delega AIAgentService (intent + KB + GPT + sendSplit + persist)
  *        - durante geração: CoalesceInterruptMerger mescla mensagens novas
- *        - cooldown distribuído + local
  *        - release inflight + drain buffer
  *        - se buffer não vazio: loop com payloads mesclados
+ *
+ * Princípio: NUNCA descartar mensagem do lead — só agregar/coalescer.
  */
 @Service
 @RequiredArgsConstructor
@@ -61,7 +61,6 @@ public class AiPipelineService implements DisposableBean {
     private final LeadReplyAggregator aggregator;
     private final WaitRespondDecisor decisor;
     private final StalenessFilter staleness;
-    private final DuplicateUserEchoFilter echoFilter;
     private final AiCooldownService cooldown;
     private final CoalesceInterruptMerger coalescer;
     private final OpenAiService openAiService;
@@ -152,12 +151,8 @@ public class AiPipelineService implements DisposableBean {
                 log.info("[pipeline] wa_msg_id já processado por outra réplica: {}", current.getWaMessageId());
                 break;
             }
-            // (6.3) Echo duplicado
-            if (echoFilter.shouldSkip(current)) {
-                break;
-            }
 
-            // (6.4) Cooldown distribuído (entre réplicas)
+            // (6.3) Cooldown distribuído (entre réplicas)
             String contactKey = current.getCompanyId() + ":" + current.getConversationId();
             if (!inflight.tryRegisterOutboundCooldown(current.getCompanyId(),
                     current.getConversationId(), props.getReplyCooldownMs())) {
@@ -165,15 +160,17 @@ public class AiPipelineService implements DisposableBean {
                 inflight.pushBuffer(current.getCompanyId(), current.getConversationId(), current);
                 break;
             }
-            // (6.5) Cooldown em memória local
+            // (6.4) Cooldown em memória local — se ativo, re-bufferiza
             if (!cooldown.tryConsume(contactKey)) {
+                log.info("[pipeline] cooldown local ativo, agregando ao buffer");
+                inflight.pushBuffer(current.getCompanyId(), current.getConversationId(), current);
                 break;
             }
 
-            // (6.6) AIAgentService faz geração + envio + persistência
+            // (6.5) AIAgentService faz geração + envio + persistência
             invokeAgent(current);
 
-            // (6.7) Coalesce-interrupt: o agente já enviou, mas durante a geração
+            // (6.6) Coalesce-interrupt: o agente já enviou, mas durante a geração
             //  podem ter chegado msgs novas no buffer. Drenamos para mostrar uma
             //  segunda resposta unificada (não N).
             List<AiPayload> drained = inflight.drainBuffer(

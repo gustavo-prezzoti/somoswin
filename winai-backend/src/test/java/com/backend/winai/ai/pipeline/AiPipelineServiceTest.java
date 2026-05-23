@@ -4,7 +4,6 @@ import com.backend.winai.ai.pipeline.aggregator.LeadReplyAggregator;
 import com.backend.winai.ai.pipeline.config.AiPipelineProperties;
 import com.backend.winai.ai.pipeline.decisor.WaitRespondDecisor;
 import com.backend.winai.ai.pipeline.filters.AiCooldownService;
-import com.backend.winai.ai.pipeline.filters.DuplicateUserEchoFilter;
 import com.backend.winai.ai.pipeline.filters.StalenessFilter;
 import com.backend.winai.ai.pipeline.merge.CoalesceInterruptMerger;
 import com.backend.winai.ai.pipeline.model.AiPayload;
@@ -44,7 +43,6 @@ class AiPipelineServiceTest {
     private LeadReplyAggregator aggregator;
     private WaitRespondDecisor decisor;
     private StalenessFilter staleness;
-    private DuplicateUserEchoFilter echoFilter;
     private AiCooldownService cooldown;
     private CoalesceInterruptMerger coalescer;
     private OpenAiService openAi;
@@ -59,7 +57,6 @@ class AiPipelineServiceTest {
         inflight = mock(AiInflightService.class);
         decisor = mock(WaitRespondDecisor.class);
         staleness = new StalenessFilter(props);
-        echoFilter = mock(DuplicateUserEchoFilter.class);
         cooldown = new AiCooldownService(props);
         coalescer = mock(CoalesceInterruptMerger.class);
         openAi = mock(OpenAiService.class);
@@ -72,10 +69,9 @@ class AiPipelineServiceTest {
         when(inflight.tryRegisterOutboundCooldown(anyString(), anyString(), anyLong())).thenReturn(true);
         when(inflight.drainBuffer(anyString(), anyString())).thenReturn(Collections.emptyList());
         when(inflight.releaseInflightAndDrain(anyString(), anyString())).thenReturn(Collections.emptyList());
-        when(echoFilter.shouldSkip(any())).thenReturn(false);
         when(aiAgentService.getRecentConversationHistory(any(), anyInt())).thenReturn(List.of());
 
-        pipeline = new AiPipelineService(props, inflight, aggregator, decisor, staleness, echoFilter,
+        pipeline = new AiPipelineService(props, inflight, aggregator, decisor, staleness,
                 cooldown, coalescer, openAi, aiAgentService);
         pipeline.init();
     }
@@ -133,16 +129,19 @@ class AiPipelineServiceTest {
     }
 
     @Test
-    void echoDuplicateSkipsAgent() {
+    void localCooldownActiveRequeues() {
         UUID convId = UUID.randomUUID();
-        AiPayload p = newPayload("co", convId.toString(), "uma frase repetida e bem grande");
+        AiPayload first = newPayload("co", convId.toString(), "primeira");
+        AiPayload second = newPayload("co", convId.toString(), "segunda");
+        props.setReplyCooldownMs(10_000L);
         when(decisor.decideWaitSeconds(any(), any())).thenReturn(0);
-        when(echoFilter.shouldSkip(any())).thenReturn(true);
 
-        pipeline.enqueueIncoming(p);
+        pipeline.enqueueIncoming(first);
         Awaitility.await().atMost(Duration.ofSeconds(2)).untilAsserted(() ->
-                verify(inflight, atLeastOnce()).releaseInflightAndDrain(eq("co"), eq(convId.toString())));
-        verify(aiAgentService, never()).runFromPipeline(any(), any(), any(), any());
+                verify(aiAgentService, atLeastOnce()).runFromPipeline(eq(convId), any(), any(), any()));
+
+        pipeline.processMerged(second);
+        verify(inflight, atLeastOnce()).pushBuffer(eq("co"), eq(convId.toString()), any(AiPayload.class));
     }
 
     @Test

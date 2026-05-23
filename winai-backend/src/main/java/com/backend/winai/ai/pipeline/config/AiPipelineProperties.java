@@ -33,10 +33,6 @@ public class AiPipelineProperties {
 
     /** Cooldown mínimo entre respostas da IA para o mesmo contato (ms). */
     private long replyCooldownMs = 5_000L;
-    /** Limite mínimo de runes para considerar um echo duplicado do usuário. */
-    private int duplicateUserEchoMinRunes = 24;
-    /** Idade máxima do último turno comparado para echo duplicado (ms). */
-    private long duplicateUserEchoMaxAgeMs = 4 * 60 * 1000L;
 
     /** Iterações máximas do merge agent durante geração. */
     private int coalesceMaxIters = 24;
@@ -114,12 +110,6 @@ public class AiPipelineProperties {
 
     public long getReplyCooldownMs() { return replyCooldownMs; }
     public void setReplyCooldownMs(long replyCooldownMs) { this.replyCooldownMs = replyCooldownMs; }
-
-    public int getDuplicateUserEchoMinRunes() { return duplicateUserEchoMinRunes; }
-    public void setDuplicateUserEchoMinRunes(int duplicateUserEchoMinRunes) { this.duplicateUserEchoMinRunes = duplicateUserEchoMinRunes; }
-
-    public long getDuplicateUserEchoMaxAgeMs() { return duplicateUserEchoMaxAgeMs; }
-    public void setDuplicateUserEchoMaxAgeMs(long duplicateUserEchoMaxAgeMs) { this.duplicateUserEchoMaxAgeMs = duplicateUserEchoMaxAgeMs; }
 
     public int getCoalesceMaxIters() { return coalesceMaxIters; }
     public void setCoalesceMaxIters(int coalesceMaxIters) { this.coalesceMaxIters = coalesceMaxIters; }
