@@ -47,6 +47,7 @@ public class WhatsAppWebhookService {
     private final FollowUpService followUpService;
     private final OpenAiService openAiService;
     private final LeadAttributionAnchorService leadAttributionAnchorService;
+    private final AiResponseGuardService aiResponseGuardService;
 
     /**
      * Processa webhook do Uazap recebido via n8n
@@ -75,7 +76,9 @@ public class WhatsAppWebhookService {
             // Extrair dados do webhook (nome do contato só depois da empresa — para filtrar nome da instância/empresa)
             String phoneNumber = extractPhoneNumber(webhook);
             String messageText = extractMessageText(webhook);
-            String messageId = extractMessageId(webhook);
+            String rawMessageId = extractRawMessageId(webhook);
+            String alternateMessageId = extractAlternateMessageId(webhook);
+            String messageId = aiResponseGuardService.resolveMessageId(rawMessageId, alternateMessageId);
             boolean isFromMe = webhook.getMessage() != null
                     && Boolean.TRUE.equals(webhook.getMessage().getFromMe());
             Long timestamp = extractTimestamp(webhook);
@@ -110,6 +113,13 @@ public class WhatsAppWebhookService {
             Optional<WhatsAppMessage> existingMessage = messageRepository.findByMessageId(messageId);
             if (existingMessage.isPresent()) {
                 log.debug("Mensagem já existe: {}", messageId);
+                return;
+            }
+
+            if (!isFromMe && !aiResponseGuardService.shouldProcessInbound(
+                    conversation.getId(), messageText, timestamp, messageId)) {
+                log.info("Webhook inbound ignorado (duplicata detectada). MessageId: {}, conv: {}",
+                        messageId, conversation.getId());
                 return;
             }
 
@@ -793,15 +803,22 @@ public class WhatsAppWebhookService {
         return null;
     }
 
-    private String extractMessageId(UazapWebhookRequest webhook) {
+    private String extractRawMessageId(UazapWebhookRequest webhook) {
         if (webhook.getMessage() != null) {
             String id = webhook.getMessage().getMessageid();
-            if (id != null && !id.isEmpty())
+            if (id != null && !id.isEmpty()) {
                 return id;
+            }
+        }
+        return null;
+    }
 
-            id = webhook.getMessage().getId();
-            if (id != null && !id.isEmpty())
+    private String extractAlternateMessageId(UazapWebhookRequest webhook) {
+        if (webhook.getMessage() != null) {
+            String id = webhook.getMessage().getId();
+            if (id != null && !id.isEmpty()) {
                 return id;
+            }
         }
         return null;
     }

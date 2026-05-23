@@ -65,6 +65,7 @@ public class AIAgentService {
     private final RestTemplate restTemplate;
     /** Proxy para self-invocation e garantir REQUIRES_NEW em persistAndNotifyByConversationId */
     private final AIAgentService self;
+    private final AiResponseGuardService aiResponseGuardService;
 
     private static final int MAX_AGENT_DOC_SEND_BYTES = 25 * 1024 * 1024;
 
@@ -93,6 +94,7 @@ public class AIAgentService {
             KnowledgeBaseAgentDocumentRepository knowledgeBaseAgentDocumentRepository,
             CompanyAgentDocumentRepository companyAgentDocumentRepository,
             RestTemplate restTemplate,
+            AiResponseGuardService aiResponseGuardService,
             @org.springframework.context.annotation.Lazy AIAgentService self) {
         this.openAiService = openAiService;
         this.connectionRepository = connectionRepository;
@@ -110,6 +112,7 @@ public class AIAgentService {
         this.knowledgeBaseAgentDocumentRepository = knowledgeBaseAgentDocumentRepository;
         this.companyAgentDocumentRepository = companyAgentDocumentRepository;
         this.restTemplate = restTemplate;
+        this.aiResponseGuardService = aiResponseGuardService;
         this.self = self;
     }
 
@@ -284,7 +287,12 @@ public class AIAgentService {
                 return false;
             }
 
-            uazapService.sendTextMessage(phoneNumber, aiResponse, baseUrl, token, instanceName);
+            if (!aiResponseGuardService.tryRegisterOutboundText(conversation.getId(), aiResponse)) {
+                log.info("Texto outbound ignorado (duplicata recente) conv={}", conversation.getId());
+                return false;
+            }
+
+            uazapService.sendTextMessage(phoneNumber, aiResponse, baseUrl, token, instanceName, 1);
             log.info("AI response sent successfully to {} for conversation {}", phoneNumber, conversation.getId());
             return true;
 
@@ -306,20 +314,26 @@ public class AIAgentService {
         log.info(">>> [ASYNC DEBOUNCE] Received message for conversation {}. Scheduling/Rescheduling AI response...",
                 conversationId);
 
+        long debounceGeneration = aiResponseGuardService.nextDebounceGeneration(conversationId);
+
         // 1. Cancel previous task if exists (DEBOUNCING)
         java.util.concurrent.ScheduledFuture<?> existingTask = debounceMap.get(conversationId);
         if (existingTask != null && !existingTask.isDone()) {
-            boolean cancelled = existingTask.cancel(false);
+            boolean cancelled = existingTask.cancel(true);
             log.info(">>> [ASYNC DEBOUNCE] Previous task cancelled? {}", cancelled);
         }
 
         // 2. Set "Composing" immediately to acknowledge receipt
         // Typing indicator removed as per user request
 
-        // 3. Schedule new task (10s debounce - reduz latência)
+        // 3. Schedule new task (2s debounce local + geração Redis distribuída)
         java.util.concurrent.ScheduledFuture<?> newTask = scheduler.schedule(() -> {
             try {
-                // Remove self from map to clean up
+                if (!aiResponseGuardService.isDebounceGenerationCurrent(conversationId, debounceGeneration)) {
+                    log.info(">>> [ASYNC DEBOUNCE] Geração {} obsoleta para conv {}, ignorando execução",
+                            debounceGeneration, conversationId);
+                    return;
+                }
                 debounceMap.remove(conversationId);
                 executeScheduledAIProcessing(conversationId, leadName, imageUrl);
             } catch (Exception e) {
@@ -340,6 +354,18 @@ public class AIAgentService {
     protected void executeScheduledAIProcessing(UUID conversationId, String leadName, String imageUrl) {
         log.info(">>> [ASYNC EXECUTION] Starting delayed AI processing for conversation {}", conversationId);
 
+        if (!aiResponseGuardService.tryAcquireProcessingLock(conversationId)) {
+            return;
+        }
+
+        try {
+            executeScheduledAIProcessingLocked(conversationId, leadName, imageUrl);
+        } finally {
+            aiResponseGuardService.releaseProcessingLock(conversationId);
+        }
+    }
+
+    private void executeScheduledAIProcessingLocked(UUID conversationId, String leadName, String imageUrl) {
         // 1. Re-fetch conversation to ensure attached session and latest data
         WhatsAppConversation conv = conversationRepository.findByIdWithCompany(conversationId).orElse(null);
         if (conv == null) {
@@ -527,8 +553,15 @@ public class AIAgentService {
                 conversation.getId());
 
         boolean allSent = true;
+        java.util.Set<String> sentNormalizedChunks = new java.util.LinkedHashSet<>();
         for (int i = 0; i < chunks.size(); i++) {
             String chunk = chunks.get(i);
+            String normalizedChunk = AiResponseGuardService.normalizeContent(chunk);
+            if (normalizedChunk != null && !sentNormalizedChunks.add(normalizedChunk)) {
+                log.info("Chunk {}/{} ignorado (conteúdo repetido na mesma resposta) conv={}", i + 1, chunks.size(),
+                        conversation.getId());
+                continue;
+            }
             log.debug("Enviando chunk {}/{} ({} chars)", i + 1, chunks.size(), chunk.length());
 
             boolean sent = sendAIResponse(conversation, chunk);
@@ -570,8 +603,15 @@ public class AIAgentService {
                 conversation.getId());
 
         boolean allSent = true;
+        java.util.Set<String> sentNormalizedChunks = new java.util.LinkedHashSet<>();
         for (int i = 0; i < chunks.size(); i++) {
             String chunk = chunks.get(i);
+            String normalizedChunk = AiResponseGuardService.normalizeContent(chunk);
+            if (normalizedChunk != null && !sentNormalizedChunks.add(normalizedChunk)) {
+                log.info("Chunk {}/{} ignorado (conteúdo repetido) conv={} [remote persist]", i + 1, chunks.size(),
+                        conversation.getId());
+                continue;
+            }
             log.debug("Enviando chunk {}/{} ({} chars)", i + 1, chunks.size(), chunk.length());
 
             boolean sent = sendAIResponse(conversation, chunk);
@@ -990,6 +1030,11 @@ public class AIAgentService {
             }
             if (!doc.getCompany().getId().equals(conv.getCompany().getId())) {
                 log.warn("ATTACH_DOC: documento de outra empresa");
+                return;
+            }
+
+            if (!aiResponseGuardService.tryRegisterOutboundDocument(conv.getId(), documentId, doc.getPublicUrl())) {
+                log.info("ATTACH_DOC ignorado (duplicata recente) doc {} conv {}", documentId, conv.getId());
                 return;
             }
 

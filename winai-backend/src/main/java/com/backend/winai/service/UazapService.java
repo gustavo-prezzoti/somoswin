@@ -387,11 +387,18 @@ public class UazapService {
         sendTextMessage(phoneNumber, message, baseUrl, token, null);
     }
 
+    public void sendTextMessage(String phoneNumber, String message, String baseUrl, String token, String instanceName) {
+        sendTextMessage(phoneNumber, message, baseUrl, token, instanceName, 3);
+    }
+
     /**
      * Envia uma mensagem de texto via Uazap.
      * Usa sempre /send/text - instância identificada pelo token no header.
+     *
+     * @param maxRetries máximo de tentativas (IA usa 1 para evitar duplicata em retry)
      */
-    public void sendTextMessage(String phoneNumber, String message, String baseUrl, String token, String instanceName) {
+    public void sendTextMessage(String phoneNumber, String message, String baseUrl, String token, String instanceName,
+            int maxRetries) {
         String base = baseUrl != null ? baseUrl.replaceAll("/$", "") : "";
         String url = base + "/send/text";
         log.debug("Usando endpoint Uazap /send/text: {}", url);
@@ -411,10 +418,10 @@ public class UazapService {
 
         HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
 
-        int maxRetries = 3;
         int delayMs = 4000;
+        int safeMaxRetries = Math.max(1, maxRetries);
 
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        for (int attempt = 1; attempt <= safeMaxRetries; attempt++) {
             try {
                 @SuppressWarnings("unchecked")
                 ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -428,13 +435,13 @@ public class UazapService {
                     return;
                 } else {
                     log.error("Falha ao enviar mensagem de IA. Status: {}. Tentativa {}/{}",
-                            response.getStatusCode(), attempt, maxRetries);
+                            response.getStatusCode(), attempt, safeMaxRetries);
                 }
             } catch (Exception e) {
                 String errorMsg = e.getMessage() != null ? e.getMessage() : "";
-                log.warn("Tentativa {}/{} falhou para {}: {}", attempt, maxRetries, phoneNumber, errorMsg);
+                log.warn("Tentativa {}/{} falhou para {}: {}", attempt, safeMaxRetries, phoneNumber, errorMsg);
 
-                if (attempt < maxRetries && (errorMsg.contains("disconnected") || errorMsg.contains("503")
+                if (attempt < safeMaxRetries && (errorMsg.contains("disconnected") || errorMsg.contains("503")
                         || errorMsg.contains("500") || errorMsg.contains("404"))) {
                     try {
                         log.info("Aguardando {}ms para re-tentativa...", delayMs);
@@ -444,10 +451,10 @@ public class UazapService {
                         break;
                     }
                 } else {
-                    if (attempt == maxRetries) {
+                    if (attempt == safeMaxRetries) {
                         log.error("Esgotadas as tentativas de envio para {}", phoneNumber);
                         throw new RuntimeException(
-                                "Erro ao enviar mensagem de IA após " + maxRetries + " tentativas: " + e.getMessage(),
+                                "Erro ao enviar mensagem de IA após " + safeMaxRetries + " tentativas: " + e.getMessage(),
                                 e);
                     }
                 }

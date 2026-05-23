@@ -70,6 +70,24 @@ public interface WhatsAppMessageRepository extends JpaRepository<WhatsAppMessage
         @Query("SELECT COUNT(m) FROM WhatsAppMessage m WHERE m.lead.id = :leadId AND m.fromMe = false")
         long countInboundByLeadId(@Param("leadId") UUID leadId);
 
+        @Query("SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END FROM WhatsAppMessage m "
+                        + "WHERE m.conversation.id = :conversationId AND m.fromMe = false "
+                        + "AND LOWER(TRIM(m.content)) = :content AND m.messageTimestamp >= :since")
+        boolean existsRecentInboundText(@Param("conversationId") UUID conversationId,
+                        @Param("content") String content, @Param("since") Long since);
+
+        @Query("SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END FROM WhatsAppMessage m "
+                        + "WHERE m.conversation.id = :conversationId AND m.fromMe = true "
+                        + "AND m.content = :content AND m.messageTimestamp >= :since")
+        boolean existsRecentOutboundText(@Param("conversationId") UUID conversationId,
+                        @Param("content") String content, @Param("since") Long since);
+
+        @Query("SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END FROM WhatsAppMessage m "
+                        + "WHERE m.conversation.id = :conversationId AND m.fromMe = true "
+                        + "AND m.mediaUrl = :mediaUrl AND m.messageTimestamp >= :since")
+        boolean existsRecentOutboundMedia(@Param("conversationId") UUID conversationId,
+                        @Param("mediaUrl") String mediaUrl, @Param("since") Long since);
+
         void deleteByConversation(WhatsAppConversation conversation);
 
         void deleteByLead_Id(UUID leadId);

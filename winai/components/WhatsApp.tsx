@@ -293,6 +293,19 @@ const WhatsApp: React.FC = () => {
             console.log('Message duplicate, skipping');
             return prev;
           }
+          // Fallback: mesma conversa, mesmo autor, mesmo texto em janela de 2 min
+          const msgTs = msg.messageTimestamp || 0;
+          const normalizedContent = (msg.content || '').trim().replace(/\s+/g, ' ').toLowerCase();
+          if (normalizedContent && prev.some(m => {
+            const sameAuthor = Boolean(m.fromMe) === Boolean(msg.fromMe);
+            const sameContent = (m.content || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedContent;
+            const sameMedia = Boolean(msg.mediaUrl && m.mediaUrl && m.mediaUrl === msg.mediaUrl);
+            const ts = m.messageTimestamp || 0;
+            return sameAuthor && (sameContent || sameMedia) && Math.abs(msgTs - ts) <= 120_000;
+          })) {
+            console.log('Message duplicate by content window, skipping');
+            return prev;
+          }
           console.log('Adding new message to chat');
           setShouldScrollToBottom(true);
           return [...prev, msg].sort((a, b) => (a.messageTimestamp || 0) - (b.messageTimestamp || 0));

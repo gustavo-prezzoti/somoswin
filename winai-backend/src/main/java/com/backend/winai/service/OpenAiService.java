@@ -392,7 +392,7 @@ public class OpenAiService {
         systemPrompt.append("6. Use emojis de forma moderada para tornar a conversa mais amigável.\n");
         systemPrompt.append("7. Nunca invente informações que não estejam na base de conhecimento.\n");
         systemPrompt.append(
-                "8. Use a tag [SPLIT] para dividir mensagens longas em vários balões de conversa. Cada parte deve ser uma continuação direta sem repetir saudações ou introduções. O objetivo é um fluxo natural de mensagens sequenciais.\n");
+                "8. Use a tag [SPLIT] para dividir mensagens longas em vários balões de conversa. Cada parte deve ser uma continuação direta sem repetir saudações ou introduções. O objetivo é um fluxo natural de mensagens sequenciais. NÃO repita a mesma informação em balões diferentes (ex.: não diga duas vezes que encaminhou ao gerente).\n");
         systemPrompt.append("9. REGRAS DE OURO PARA EVITAR REPETIÇÃO E SAUDAÇÕES:\n");
         systemPrompt.append(
                 "   - Se houver histórico de conversa, NÃO comece com saudações (Olá, Oi, Tudo bem, etc.) nem reapresente o assistente.\n");
